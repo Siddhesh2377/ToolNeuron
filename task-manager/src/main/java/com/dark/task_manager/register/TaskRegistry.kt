@@ -1,8 +1,10 @@
 package com.dark.task_manager.register
 
+import android.content.Context
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskListModel
-import com.dark.task_manager.tasks.ApplicationOperator
+import com.dark.task_manager.tasks.TimeLogger
+import com.dark.task_manager.tasks.application_operator.ApplicationOperator
 import kotlinx.coroutines.*
 
 object TaskRegistry {
@@ -11,8 +13,8 @@ object TaskRegistry {
     private val jobMap = mutableMapOf<String, Job>()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    fun init() {
-        registerTask(ApplicationOperator())
+    fun init(context: Context) {
+        registerTask(ApplicationOperator(context), TimeLogger(context))
     }
 
     fun registerTask(vararg taskApis: TaskApi) {
@@ -37,7 +39,7 @@ object TaskRegistry {
         }
 
         val job = scope.launch {
-            taskModel.taskApi.onRun()
+            taskModel.taskApi.onRun("")
         }
         jobMap[taskName] = job
     }

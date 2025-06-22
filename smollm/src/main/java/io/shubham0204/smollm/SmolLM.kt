@@ -200,7 +200,7 @@ class SmolLM {
         ggufReader.load(modelPath)  // <- Don't wrap again
 
         val modelContextSize = DefaultInferenceParams.contextSize
-        val modelChatTemplate = ggufReader.getChatTemplate() ?: DefaultInferenceParams.chatTemplate
+        val modelChatTemplate =  DefaultInferenceParams.chatTemplate
 
         try {
             nativePtr = loadModel(

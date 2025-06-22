@@ -1,10 +1,8 @@
 package com.dark.ai_manager.ai.local
 
-import android.hardware.biometrics.BiometricPrompt
 import android.util.Log
 import com.dark.ai_manager.ai.types.NeuronVariant
 import io.shubham0204.smollm.SmolLM
-import io.shubham0204.smollm.SmolLM.DefaultInferenceParams
 import io.shubham0204.smollm.SmolLM.InferenceParams
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -14,7 +12,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
-import kotlin.collections.set
 
 object Neuron {
 
@@ -24,22 +21,16 @@ object Neuron {
         val instance: SmolLM
     )
 
-
     private var activeVariant: NeuronVariant? = null
     private val modelInstances = ConcurrentHashMap<String, Variant>()
     private val nvScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    fun init(onLoaded: (() -> Unit)? = null) {
-        val defaultModel = NeuronVariant.NVRouter
-        loadModel(defaultModel, onLoaded = onLoaded)
-    }
 
     fun loadModel(
         variant: NeuronVariant,
         contextLength: Long = 8024,
         chatTemplate: String? = null,
         forceReload: Boolean = false,
-        systemPrompt: String? = null,
+        systemPrompt: String,
         onLoaded: (() -> Unit)? = null // Optional callback
     ) {
 
@@ -73,7 +64,7 @@ object Neuron {
                     )
                 )
 
-                model.addSystemPrompt(systemPrompt ?: variant.systemPrompt)
+                model.addSystemPrompt(systemPrompt)
 
                 withContext(Dispatchers.Main) {
                     onLoaded?.invoke()
@@ -90,34 +81,28 @@ object Neuron {
         activeVariant = variant
     }
 
-
     suspend fun generateResponseBlocking(
         input: String,
     ): String {
         val variant = activeVariant ?: error("No active variant selected.")
         val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
-
-        modelEntry.job.join() // Wait until model is fully loaded
-
+        modelEntry.job.join()
         val model = modelEntry.instance
 
-        //model.addSystemPrompt(variant.systemPrompt)
-
         // Add user message
-        model.addUserMessage("${variant.systemPrompt} $input")
+        model.addUserMessage(input)
 
         // Run the actual inference in blocking mode
         val responseStr = withContext(Dispatchers.IO) {
-            model.getResponse("${variant.systemPrompt} $input")
+            model.getResponse(input)
         }
 
         // Add assistant reply to memory
         model.addAssistantMessage(responseStr)
-
         return responseStr
     }
 
-    suspend fun generateResponseStreaming(input: String? = null): String {
+    suspend fun generateResponseStreaming(input: String): String {
         val variant = activeVariant ?: error("No active variant selected.")
         val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
 
@@ -126,9 +111,9 @@ object Neuron {
         val model = modelEntry.instance
 
         // If needed, you can clean and re-add system prompt here
-        model.addUserMessage("${variant.systemPrompt} $input")
+        model.addUserMessage(input)
 
-        val outputFlow = model.getResponseAsFlow("${variant.systemPrompt} $input")
+        val outputFlow = model.getResponseAsFlow(input)
         val fullResponse = StringBuilder()
 
         // Collect streaming pieces
@@ -138,39 +123,6 @@ object Neuron {
 
         val responseStr = fullResponse.toString().trim()
         model.addAssistantMessage(responseStr)
-        return responseStr
-    }
-
-    suspend fun generateResponse(input: String, tools: List<Map<String, Any>>? = null): String {
-        val variant = activeVariant ?: error("No active variant selected.")
-        val modelEntry = modelInstances[variant.modelName] ?: error("Model not loaded.")
-
-        modelEntry.job.join()
-
-        val model = modelEntry.instance
-
-        if (tools != null) {
-            val toolBlock = """
-        <|im_start|>system
-        You can call tools based on the user's request.
-
-        <tools>
-        ${org.json.JSONArray(tools).toString(2)}
-        </tools>
-        <|im_end|>
-        """.trimIndent()
-            model.addSystemPrompt(toolBlock)
-        }
-
-        model.addUserMessage(input)
-
-        val outputFlow = model.getResponseAsFlow(input)
-        val fullResponse = StringBuilder()
-        outputFlow.collect { piece -> fullResponse.append(piece) }
-
-        val responseStr = fullResponse.toString()
-        model.addAssistantMessage(responseStr)
-
         return responseStr
     }
 

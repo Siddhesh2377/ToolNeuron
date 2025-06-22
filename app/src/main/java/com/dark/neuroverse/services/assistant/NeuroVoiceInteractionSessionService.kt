@@ -39,9 +39,6 @@ import kotlinx.coroutines.delay
  */
 class NeuroVoiceInteractionSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession {
-        Neuron.init() {
-            Log.d(TAG, "onNewSession")
-        }
         return NeuroSession(this)
     }
 
