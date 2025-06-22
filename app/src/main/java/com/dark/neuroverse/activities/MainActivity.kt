@@ -9,13 +9,11 @@ import androidx.compose.material3.Scaffold
 import androidx.core.view.WindowCompat
 import com.dark.neuroverse.compose.screens.home.HomeScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-import com.google.firebase.FirebaseApp
 
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        FirebaseApp.initializeApp(this)
         WindowCompat.setDecorFitsSystemWindows(window, false)
 
         enableEdgeToEdge()
