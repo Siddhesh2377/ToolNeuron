@@ -21,8 +21,8 @@ plugins {
 
 android {
     namespace = "io.shubham0204.smollm"
-    compileSdk = 35
-    ndkVersion = "27.2.12479018"
+    compileSdk = 36
+    ndkVersion = "29.0.13599879"
 
     defaultConfig {
         minSdk = 26
@@ -33,7 +33,6 @@ android {
                 arguments += "-DCMAKE_BUILD_TYPE=Release"
                 arguments += "-DCMAKE_VERBOSE_MAKEFILE=ON"
                 cppFlags += listOf()
-
             }
         }
     }
@@ -54,15 +53,15 @@ android {
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "4.0.2"
         }
     }
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
+    implementation(libs.kotlinx.coroutines.core)
     testImplementation(libs.junit)
-    androidTestImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.1")
-    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation(libs.kotlinx.coroutines.test)
+    androidTestImplementation(libs.androidx.runner)
     androidTestImplementation(libs.androidx.junit)
 }

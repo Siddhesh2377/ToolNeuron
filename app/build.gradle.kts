@@ -6,7 +6,6 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.kapt)
-    alias(libs.plugins.google.gms.google.services)
 }
 
 android {
@@ -68,9 +67,6 @@ dependencies {
 
     //DATABASE
     implementation(libs.androidx.room.runtime)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.database)
     // Navigation Compose (NOT Multiplatform)
     implementation("androidx.navigation:navigation-compose:2.9.0")
     // Accompanist Navigation Animation
@@ -79,13 +75,7 @@ dependencies {
     kapt(libs.androidx.room.compiler)
 
     //UTILS
-    implementation(libs.google.gson)
     implementation(libs.androidx.datastore.preferences)
-
-    //API
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.okhttp)
 
     //KTX
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -100,7 +90,9 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    implementation("androidx.compose.animation:animation:1.8.2")
+    implementation(libs.androidx.animation)
+    implementation(libs.material)
+
 
     //TESTING
     testImplementation(libs.junit)

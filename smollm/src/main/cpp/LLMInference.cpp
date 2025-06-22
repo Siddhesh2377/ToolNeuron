@@ -9,17 +9,25 @@
 #define LOGi(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGe(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
-std::vector<llama_token> common_tokenize(const struct llama_vocab *vocab, const std::string &text, bool add_special, bool parse_special = false);
-std::string common_token_to_piece(const struct llama_context *ctx, llama_token token, bool special = true);
+std::vector<llama_token>
+common_tokenize(const struct llama_vocab *vocab, const std::string &text, bool add_special,
+                bool parse_special = false);
 
-void LLMInference::loadModel(const char* model_path, float minP, float temperature, bool storeChats, long contextSize, const char* chatTemplate, int nThreads, bool useMmap, bool useMlock) {
-    LOGi("loading model with\n\tmodel_path = %s\n\tminP = %f\n\ttemperature = %f\n\tstoreChats = %d\n\tcontextSize = %li\n\tchatTemplate = %s\n\tnThreads = %d\n\tuseMmap = %d\n\tuseMlock = %d",model_path, minP, temperature, storeChats, contextSize, chatTemplate, nThreads, useMmap, useMlock);
+std::string
+common_token_to_piece(const struct llama_context *ctx, llama_token token, bool special = true);
+
+void LLMInference::loadModel(const char *model_path, float minP, float temperature, bool storeChats,
+                             long contextSize, const char *chatTemplate, int nThreads, bool useMmap,
+                             bool useMlock) {
+    LOGi("loading model with\n\tmodel_path = %s\n\tminP = %f\n\ttemperature = %f\n\tstoreChats = %d\n\tcontextSize = %li\n\tchatTemplate = %s\n\tnThreads = %d\n\tuseMmap = %d\n\tuseMlock = %d",
+         model_path, minP, temperature, storeChats, contextSize, chatTemplate, nThreads, useMmap,
+         useMlock);
 
     llama_model_params model_params = llama_model_default_params();
     model_params.use_mmap = useMmap;
     model_params.use_mlock = useMlock;
 
-    FILE* f = fopen(model_path, "rb");
+    FILE *f = fopen(model_path, "rb");
     if (!f) {
         LOGe("‼️ Model file not found or unreadable at path: %s", model_path);
         throw std::runtime_error("Model file not found");
@@ -49,8 +57,8 @@ void LLMInference::loadModel(const char* model_path, float minP, float temperatu
     _messages.clear();
 }
 
-void LLMInference::addChatMessage(const char* message, const char* role) {
-    _messages.push_back({ strdup(role), strdup(message) });
+void LLMInference::addChatMessage(const char *message, const char *role) {
+    _messages.push_back({strdup(role), strdup(message)});
 }
 
 float LLMInference::getResponseGenerationTime() const {
@@ -61,15 +69,15 @@ int LLMInference::getContextSizeUsed() const {
     return _nCtxUsed;
 }
 
-void LLMInference::startCompletion(const char* query) {
+void LLMInference::startCompletion(const char *query) {
     _response.clear();
     _cacheResponseTokens.clear();
 
     if (!_storeChats) {
         LOGi("clearing messages");
-        for (llama_chat_message& message : _messages) {
-            free(const_cast<char*>(message.role));
-            free(const_cast<char*>(message.content));
+        for (llama_chat_message &message: _messages) {
+            free(const_cast<char *>(message.role));
+            free(const_cast<char *>(message.content));
         }
         _messages.clear();
         _prevLen = 0;
@@ -81,10 +89,12 @@ void LLMInference::startCompletion(const char* query) {
 
     addChatMessage(query, "user");
 
-    int newLen = llama_chat_apply_template(_chatTemplate, _messages.data(), _messages.size(), true, _formattedMessages.data(), _formattedMessages.size());
+    int newLen = llama_chat_apply_template(_chatTemplate, _messages.data(), _messages.size(), true,
+                                           _formattedMessages.data(), _formattedMessages.size());
     if (newLen > static_cast<int>(_formattedMessages.size())) {
         _formattedMessages.resize(newLen);
-        newLen = llama_chat_apply_template(_chatTemplate, _messages.data(), _messages.size(), true, _formattedMessages.data(), _formattedMessages.size());
+        newLen = llama_chat_apply_template(_chatTemplate, _messages.data(), _messages.size(), true,
+                                           _formattedMessages.data(), _formattedMessages.size());
     }
     if (newLen < 0) throw std::runtime_error("llama_chat_apply_template() failed");
 
@@ -95,9 +105,9 @@ void LLMInference::startCompletion(const char* query) {
     _batch.n_tokens = _promptTokens.size();
 }
 
-bool LLMInference::_isValidUtf8(const char* response) {
+bool LLMInference::_isValidUtf8(const char *response) {
     if (!response) return true;
-    const unsigned char* bytes = reinterpret_cast<const unsigned char*>(response);
+    const unsigned char *bytes = reinterpret_cast<const unsigned char *>(response);
     int num;
     while (*bytes != 0x00) {
         if ((*bytes & 0x80) == 0x00) num = 1;
@@ -119,7 +129,6 @@ std::string LLMInference::completionLoop() {
 
     uint32_t contextSize = llama_n_ctx(_ctx);
     _nCtxUsed = llama_kv_self_used_cells(_ctx);
-
 
 
     LOGi("CTX USED: %d / %d", _nCtxUsed + _batch.n_tokens, contextSize);
@@ -160,7 +169,7 @@ std::string LLMInference::completionLoop() {
 }
 
 void LLMInference::stopCompletion() {
-    if (!_storeChats){
+    if (!_storeChats) {
         llama_kv_self_clear(_ctx);
     }
     if (_storeChats)
@@ -169,19 +178,20 @@ void LLMInference::stopCompletion() {
         _messages.clear();
     _response.clear();
 
-    const char* tmpl = llama_model_chat_template(_model, nullptr);
-    _prevLen = llama_chat_apply_template(tmpl, _messages.data(), _messages.size(), false, nullptr, 0);
+    const char *tmpl = llama_model_chat_template(_model, nullptr);
+    _prevLen = llama_chat_apply_template(tmpl, _messages.data(), _messages.size(), false, nullptr,
+                                         0);
     if (_prevLen < 0)
         throw std::runtime_error("llama_chat_apply_template() in stopCompletion() failed");
 }
 
 LLMInference::~LLMInference() {
     LOGi("deallocating LLMInference instance");
-    for (llama_chat_message& message : _messages) {
-        free(const_cast<char*>(message.role));
-        free(const_cast<char*>(message.content));
+    for (llama_chat_message &message: _messages) {
+        free(const_cast<char *>(message.role));
+        free(const_cast<char *>(message.content));
     }
-    free(const_cast<char*>(_chatTemplate));
+    free(const_cast<char *>(_chatTemplate));
     llama_model_free(_model);
     llama_free(_ctx);
 }

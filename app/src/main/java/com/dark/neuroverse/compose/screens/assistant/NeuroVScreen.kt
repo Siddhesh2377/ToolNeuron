@@ -26,9 +26,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -66,20 +64,18 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.GlitchTypingText
-import com.dark.neuroverse.neurov.mcp.ai.PluginRouter.process
+import com.dark.neuroverse.neurov.mcp.ai.TaskRouter.process
 import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
 import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
-import com.dark.plugin_runtime.engine.PluginManager
-import com.dark.plugin_runtime.model.PluginModel
 import kotlinx.coroutines.launch
 
 
 private val cardColor = Color(0xFFEFEFEF)
 
 enum class Action {
-    NONE, WRITE, SPEAK, PLUGINS
+    NONE, WRITE, SPEAK, TASKS
 }
 
 @Composable
@@ -117,7 +113,7 @@ fun NeuroVScreen(onClickOutside: () -> Unit) {
                 BottomBar(
                     action,
                     viewModel,
-                    onPluginSelected = { action = Action.PLUGINS })  // pass viewModel here too
+                    onPluginSelected = { action = Action.TASKS })  // pass viewModel here too
             }
         }
     }
@@ -227,7 +223,7 @@ fun Body(action: Action, onClick: (action: Action) -> Unit, viewModel: ChattingV
                 Toast.makeText(LocalContext.current, "Coming Soon....!", Toast.LENGTH_SHORT).show()
             }
 
-            Action.PLUGINS -> ResultComposable(viewModel, action)
+            Action.TASKS -> ResultComposable(viewModel, action)
         }
     }
 }
@@ -236,7 +232,7 @@ fun Body(action: Action, onClick: (action: Action) -> Unit, viewModel: ChattingV
 fun BottomBar(
     action: Action,
     viewModel: ChattingViewModel,
-    onPluginSelected: (PluginModel) -> Unit
+    onPluginSelected: () -> Unit
 ) {
     Row(
         Modifier
@@ -244,7 +240,7 @@ fun BottomBar(
             .clip(RoundedCornerShape(6.dp, 6.dp, 12.dp, 12.dp))
             .background(cardColor), verticalAlignment = Alignment.CenterVertically
     ) {
-        ActionBox(action, viewModel, onPluginSelected)
+        ActionBox(action, onPluginSelected)
     }
 }
 
@@ -366,7 +362,7 @@ fun ResultComposable(viewModel: ChattingViewModel, action: Action) {
     var pluginView by remember { mutableStateOf<ViewGroup?>(null) }
 
     when (action) {
-        Action.PLUGINS -> {
+        Action.TASKS -> {
             pluginView?.let { currentView ->
 
                 Column(
@@ -450,8 +446,7 @@ fun ResultComposable(viewModel: ChattingViewModel, action: Action) {
 @Composable
 fun ActionBox(
     action: Action,
-    viewModel: ChattingViewModel,
-    onPluginSelected: (PluginModel) -> Unit
+    onPluginSelected: () -> Unit
 ) {
     var text by remember { mutableStateOf("Open Youtube") }
     var isAguChecked by remember { mutableStateOf(false) }
@@ -582,7 +577,7 @@ fun ActionBox(
                     DefaultActionCompose(onPluginSelected)
                 }
 
-                Action.PLUGINS -> {
+                Action.TASKS -> {
                     DefaultActionCompose(onPluginSelected)
                 }
             }
@@ -591,23 +586,15 @@ fun ActionBox(
 }
 
 @Composable
-fun DefaultActionCompose(onPluginSelected: (PluginModel) -> Unit) {
+fun DefaultActionCompose(onPluginSelected: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .background(cardColor), verticalAlignment = Alignment.CenterVertically
     ) {
 
-        val pluginList = remember { mutableStateOf<List<PluginModel>>(emptyList()) }
+        //TODO SHOW ALL THE TASK HERE
 
-        PluginManager.updateInstalledPlugins()
-
-        LaunchedEffect(Unit) {
-            PluginManager.InstalledPlugins.collect { plugins ->
-                Log.d("MyService", "Loaded services: $plugins")
-                pluginList.value = plugins
-            }
-        }
 
         Text(
             "Plugins Actions",
@@ -624,9 +611,9 @@ fun DefaultActionCompose(onPluginSelected: (PluginModel) -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(start = 10.dp)
         ) {
-            items(pluginList.value) { it ->
-                BottomNavButton(it.pluginName, selected = false) {
-                    onPluginSelected(it)
+            items(4) { it ->
+                BottomNavButton(it.toString(), selected = false) {
+                    onPluginSelected()
                 }
             }
         }

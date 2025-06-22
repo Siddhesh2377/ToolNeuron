@@ -101,7 +101,7 @@ fun PermissionScreen(
                     onSkipClick = {
 
                     }
-                ){
+                ) {
                     val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
                     context.startActivity(intent)
                 }
@@ -117,7 +117,7 @@ fun PermissionScreen(
                             UserPrefs.setAssistantEnabled(context, false)
                         }
                     }
-                ){
+                ) {
                     val intent = Intent(Settings.ACTION_VOICE_INPUT_SETTINGS)
                     context.startActivity(intent)
                     scope.launch {

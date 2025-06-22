@@ -2,8 +2,6 @@ package com.dark.neuroverse.compose.screens.home.chat
 
 import android.Manifest
 import android.app.Activity
-import android.media.AudioRecord
-import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,13 +57,6 @@ import com.dark.neuroverse.compose.components.RichText
 import com.dark.neuroverse.utils.openAppSettings
 import com.dark.neuroverse.utils.rememberAudioPermissionState
 import com.dark.neuroverse.utils.vibrate
-import com.k2fsa.sherpa.onnx.ASRHelper.createAudioRecord
-import com.k2fsa.sherpa.onnx.ASRHelper.createOfflineRecognizer
-import com.k2fsa.sherpa.onnx.ASRHelper.createVad
-import com.k2fsa.sherpa.onnx.ASRHelper.recordAndRecognize
-import com.k2fsa.sherpa.onnx.ASRHelper.stopRecording
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
@@ -214,42 +205,7 @@ fun BottomBar() {
     val context = LocalContext.current
     var resultText by remember { mutableStateOf("") }
     val text by UserInput.text.collectAsState()
-
-    val vad = remember { createVad(context) }
-    val recognizer = remember { createOfflineRecognizer(context) }
-
-    var audioRecord by remember { mutableStateOf<AudioRecord?>(null) }
-    var scope by remember { mutableStateOf<CoroutineScope?>(null) }
     var startAudio by remember { mutableStateOf(false) }
-
-    LaunchedEffect(startAudio) {
-        if (startAudio) {
-            audioRecord = createAudioRecord()
-            resultText = ""
-            UserInput.updateSpeak(true)
-            scope = recordAndRecognize(
-                audioRecord = audioRecord!!, // now safely unwrapped
-                vad = vad,
-                offlineRecognizer = recognizer
-            ) { r ->
-                resultText += r
-                Log.d("Audio", "Result: $r")
-                UserInput.updateText(resultText)
-                UserInput.updateSpeak(false)
-            }
-        } else {
-            scope?.let {
-                Log.d("Audio", "Stopping recording")
-                audioRecord?.let { record ->
-                    stopRecording(it, record)
-                }
-                UserInput.updateSpeak(false)
-                it.cancel()
-                scope = null
-                audioRecord = null
-            }
-        }
-    }
 
 
     // Main container (mimics the Card with a pill shape)
@@ -283,7 +239,7 @@ fun BottomBar() {
                 ) {
                     BasicTextField(
                         value = text,
-                        onValueChange = {  UserInput.updateText(it) },
+                        onValueChange = { UserInput.updateText(it) },
                         singleLine = false,
                         decorationBox = { innerTextField ->
                             if (text.isEmpty()) {
@@ -384,7 +340,7 @@ object UserInput {
         _textState.value = newText
     }
 
-    fun updateSpeak(newSpeak: Boolean){
+    fun updateSpeak(newSpeak: Boolean) {
         _speakState.value = newSpeak
     }
 }

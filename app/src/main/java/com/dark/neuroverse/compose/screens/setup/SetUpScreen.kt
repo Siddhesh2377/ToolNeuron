@@ -25,12 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import com.dark.neuroverse.activities.MainActivity
 import com.dark.neuroverse.compose.screens.setup.intro.IntroScreen
 import com.dark.neuroverse.compose.screens.setup.permissions.PermissionScreen
-import com.dark.neuroverse.compose.screens.setup.plugins.InstallPluginsScreen
-import com.dark.neuroverse.data.backend.downloadAndInstall
-import com.dark.neuroverse.utils.StoragePermissionHandler
 import com.dark.neuroverse.utils.UserPrefs
-import com.dark.plugin_runtime.database.installed_plugin_db.PluginInstalledDatabase
-import com.dark.plugin_runtime.engine.PluginManager
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -78,29 +73,14 @@ fun SetUpCompose(paddingValues: PaddingValues) {
 
     val navController = rememberNavController()
     val context = LocalContext.current
-    val db = PluginInstalledDatabase.getInstance(context)
     val scope = rememberCoroutineScope()
-
-    if (!StoragePermissionHandler.hasManageExternalStoragePermission()) {
-        StoragePermissionHandler.requestManageExternalStoragePermission(context)
-    }
 
     NavHost(
         navController = navController,
-        startDestination = "install_plugins"
+        startDestination = "permission_screen"
     ) {
-        composable("install_plugins") {
-            InstallPluginsScreen(paddingValues = paddingValues) { pluginList ->
-                pluginList.forEach { plugins ->
-                    downloadAndInstall(plugins, context, db, onFailure = {}, onSuccess = {})
-                }
-                navController.navigate("permission_screen")
-            }
-        }
-
         composable("permission_screen") {
             PermissionScreen(paddingValues) {
-                PluginManager.init(context)
                 scope.launch {
                     UserPrefs.setOnboardingComplete(context, true)
                     Intent(context, MainActivity::class.java).apply {

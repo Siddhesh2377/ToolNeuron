@@ -8,7 +8,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import com.dark.neuroverse.compose.screens.setup.SetUpScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-import com.dark.neuroverse.utils.StoragePermissionHandler
 
 class SetUpActivity : ComponentActivity() {
 

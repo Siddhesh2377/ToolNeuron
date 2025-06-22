@@ -53,12 +53,7 @@ android {
 
 dependencies {
     //API
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.okhttp)
-
     implementation(project(":smollm"))
-
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.material3)
     testImplementation(libs.junit)

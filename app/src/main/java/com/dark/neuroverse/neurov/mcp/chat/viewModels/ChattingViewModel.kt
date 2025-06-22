@@ -3,12 +3,8 @@ package com.dark.neuroverse.neurov.mcp.chat.viewModels
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.dark.ai_manager.ai.api_calls.AiRouter
 import com.dark.neuroverse.neurov.mcp.chat.models.Message
 import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -43,20 +39,6 @@ class ChattingViewModel : ViewModel() {
         val jsonPayload = JSONObject()
         jsonPayload.put("messages", messagesJson)
         jsonPayload.put("response_format", "text")
-
-        val requestBody = AiRouter.submitStructuredRequest(jsonPayload)
-
-        AiRouter.processRequest(requestBody) { status, responseContent ->
-            viewModelScope.launch(Dispatchers.Main) {
-                if (status == 1) {
-                    val aiMessage = Message(ROLE.SYSTEM, responseContent, System.currentTimeMillis().toString())
-                    _messages.add(aiMessage)
-                } else {
-                    val errorMessage = Message(ROLE.SYSTEM, "⚠️ $responseContent", System.currentTimeMillis().toString())
-                    _messages.add(errorMessage)
-                }
-            }
-        }
     }
 }
 

@@ -8,6 +8,10 @@ import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.FragmentActivity
+import com.dark.neuroverse.utils.UserPrefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.util.concurrent.Executor
 
 class BiometricActivity : FragmentActivity() {
@@ -19,13 +23,32 @@ class BiometricActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val context = this
+
         Log.d("BiometricActivity", "Started biometric authentication")
 
-        executor = ContextCompat.getMainExecutor(this)
-        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
-        finish()
+        CoroutineScope(Dispatchers.Main).launch {
+            UserPrefs.isOnboardingComplete(context).collect {
+                when (it) {
+                    true -> {
+                        auth()
+                    }
 
-        biometricPrompt = BiometricPrompt(this, executor,
+                    false -> {
+                        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
+                        finish()
+                    }
+
+                }
+            }
+        }
+    }
+
+    private fun auth() {
+        executor = ContextCompat.getMainExecutor(this)
+
+        biometricPrompt = BiometricPrompt(
+            this, executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
@@ -36,7 +59,11 @@ class BiometricActivity : FragmentActivity() {
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                     super.onAuthenticationError(errorCode, errString)
                     Log.d("BiometricActivity", "Authentication error: $errString")
-                    Toast.makeText(this@BiometricActivity, "Authentication error: $errString", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(
+                        this@BiometricActivity,
+                        "Authentication error: $errString",
+                        Toast.LENGTH_SHORT
+                    ).show()
                     finish()
                 }
 
@@ -68,5 +95,6 @@ class BiometricActivity : FragmentActivity() {
             finish()
         }
     }
-
 }
+
+

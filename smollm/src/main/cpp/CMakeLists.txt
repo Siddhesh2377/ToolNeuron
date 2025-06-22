@@ -164,7 +164,7 @@ endfunction()
 build_library_universal("smollm")
 if (${ANDROID_ABI} STREQUAL "armeabi-v7a")
     build_library_armv7a("smollm_v7a" "-march=armv7-a" "-mfpu=neon-vfpv4" "-mfloat-abi=softfp")
-endif()
+endif ()
 if (${ANDROID_ABI} STREQUAL "arm64-v8a")
     build_library_arm64("smollm_v8" "-march=armv8-a")
     # Targets for Arm-v8.2a
@@ -176,7 +176,7 @@ if (${ANDROID_ABI} STREQUAL "arm64-v8a")
     build_library_arm64("smollm_v8_4_fp16_dotprod_sve" "-march=armv8.4-a+fp16+dotprod+sve")
     build_library_arm64("smollm_v8_4_fp16_dotprod_i8mm" "-march=armv8.4-a+fp16+dotprod+i8mm")
     build_library_arm64("smollm_v8_4_fp16_dotprod_i8mm_sve" "-march=armv8.4-a+fp16+dotprod+i8mm+sve")
-endif()
+endif ()
 
 # library target for GGUFReader
 set(TARGET_NAME_GGUF_READER ggufreader)

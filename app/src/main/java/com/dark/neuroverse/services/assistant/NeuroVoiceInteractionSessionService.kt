@@ -31,12 +31,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.dark.ai_manager.ai.local.Neuron
 import com.dark.neuroverse.compose.screens.assistant.NeuroVScreen
-import com.dark.neuroverse.neurov.mcp.ai.PluginRouter
-import com.dark.plugin_runtime.engine.PluginManager
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 
 /**
  * A VoiceInteractionSessionService that hosts a Compose-based AssistantScreen.
@@ -44,10 +39,8 @@ import kotlinx.coroutines.launch
  */
 class NeuroVoiceInteractionSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession {
-        Neuron.init(){
+        Neuron.init() {
             Log.d(TAG, "onNewSession")
-            PluginRouter.init(applicationContext)
-            PluginManager.init(applicationContext)
         }
         return NeuroSession(this)
     }
@@ -97,8 +90,13 @@ class NeuroSession(context: Context) : VoiceInteractionSession(context) {
                 AnimatedContent(
                     targetState = close.value,
                     transitionSpec = {
-                        (slideInVertically(tween(durationMillis = 500, easing = FastOutLinearInEasing)) + fadeIn()).togetherWith(
-                             fadeOut(tween(durationMillis = 500, easing = FastOutSlowInEasing))
+                        (slideInVertically(
+                            tween(
+                                durationMillis = 500,
+                                easing = FastOutLinearInEasing
+                            )
+                        ) + fadeIn()).togetherWith(
+                            fadeOut(tween(durationMillis = 500, easing = FastOutSlowInEasing))
                         )
                     },
                     label = "Animated Content"

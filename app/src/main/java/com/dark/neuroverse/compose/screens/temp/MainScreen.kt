@@ -341,7 +341,9 @@ fun CarouselExample_MultiBrowse(modifier: Modifier = Modifier) {
 
     Text(
         "Latest News",
-        modifier = Modifier.padding(horizontal = 24.dp).fillMaxWidth(),
+        modifier = Modifier
+            .padding(horizontal = 24.dp)
+            .fillMaxWidth(),
         style = MaterialTheme.typography.headlineMedium,
         fontFamily = FontFamily.Serif,
         fontWeight = FontWeight.Bold

@@ -43,10 +43,10 @@ class SmolLM {
             val hasI8mm = cpuFeatures.contains("i8mm")
             val isAtLeastArmV82 =
                 cpuFeatures.contains("asimd") &&
-                    cpuFeatures.contains("crc32") &&
-                    cpuFeatures.contains(
-                        "aes",
-                    )
+                        cpuFeatures.contains("crc32") &&
+                        cpuFeatures.contains(
+                            "aes",
+                        )
             val isAtLeastArmV84 = cpuFeatures.contains("dcpop") && cpuFeatures.contains("uscat")
 
             Log.d(logTag, "CPU features: $cpuFeatures")
@@ -200,7 +200,7 @@ class SmolLM {
         ggufReader.load(modelPath)  // <- Don't wrap again
 
         val modelContextSize = DefaultInferenceParams.contextSize
-        val modelChatTemplate =  ggufReader.getChatTemplate() ?: DefaultInferenceParams.chatTemplate
+        val modelChatTemplate = ggufReader.getChatTemplate() ?: DefaultInferenceParams.chatTemplate
 
         try {
             nativePtr = loadModel(

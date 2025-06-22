@@ -8,11 +8,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.core.view.WindowCompat
 import com.dark.neuroverse.compose.screens.home.HomeScreen
-import com.dark.neuroverse.neurov.mcp.ai.PluginRouter
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-import com.dark.plugin_runtime.engine.PluginManager
 import com.google.firebase.FirebaseApp
-import com.dark.neuroverse.compose.screens.temp.NeuronDemoScreen
 
 
 class MainActivity : ComponentActivity() {
@@ -32,11 +29,11 @@ class MainActivity : ComponentActivity() {
 
                     //NeuronDemoScreen(it)
 
-                       // ChatScreen(it)
-                        //STTScreen(it)
+                    // ChatScreen(it)
+                    //STTScreen(it)
 
-                         HomeScreen(it)
-                        // runPluginInSandbox(this, "List Applications Plugin")
+                    HomeScreen(it)
+                    // runPluginInSandbox(this, "List Applications Plugin")
 
                 }
             }
