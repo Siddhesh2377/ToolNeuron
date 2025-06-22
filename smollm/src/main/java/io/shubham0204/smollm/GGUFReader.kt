@@ -34,7 +34,7 @@ class GGUFReader {
         }
 
     fun getContextSize(): Long? {
-        assert(nativeHandle != 0L) { "Use GGUFReader.load() to initialize the reader" }
+        assert(nativeHandle == 0L) { "Use GGUFReader.load() to initialize the reader" }
         val contextSize = getContextSize(nativeHandle)
         return if (contextSize == -1L) {
             null

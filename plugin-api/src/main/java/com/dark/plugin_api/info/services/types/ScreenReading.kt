@@ -14,7 +14,7 @@ open class ScreenReading(context: Context) : PluginService(context) {
 
     }
 
-    open fun onDestroy() {
+    override fun onDestroy() {
 
     }
 }

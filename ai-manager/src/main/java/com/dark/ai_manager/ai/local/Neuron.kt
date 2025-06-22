@@ -38,7 +38,10 @@ object Neuron {
         forceReload: Boolean = false,
         onLoaded: (() -> Unit)? = null // Optional callback
     ) {
+
         val file = File(variant.path)
+        Log.d("Neuron", "Model file exists=${file.exists()}, size=${file.length()}")
+
         require(file.exists()) { "Model file does not exist at path: \${variant.path}" }
 
         // If already loaded, skip unless forceReload is true

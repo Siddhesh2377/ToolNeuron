@@ -64,7 +64,6 @@ import com.k2fsa.sherpa.onnx.ASRHelper.createOfflineRecognizer
 import com.k2fsa.sherpa.onnx.ASRHelper.createVad
 import com.k2fsa.sherpa.onnx.ASRHelper.recordAndRecognize
 import com.k2fsa.sherpa.onnx.ASRHelper.stopRecording
-import io.shubham0204.smollm.SmollHelper
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -76,10 +75,7 @@ fun ChatScreen(paddingValues: PaddingValues) {
     val (hasPermission, requestPermission) = rememberAudioPermissionState()
     val context = LocalContext.current
     LaunchedEffect(Unit) {
-        SmollHelper.loadModel(
-            "test",
-            "/storage/emulated/0/Download/smollm2-360m-instruct-q8_0.gguf"
-        )
+
     }
     AnimatedContent(
         targetState = hasPermission.value,

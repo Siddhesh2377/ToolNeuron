@@ -42,9 +42,8 @@ android {
     }
 }
 
-afterEvaluate {
     tasks.register<Copy>("exportPluginAar") {
-        dependsOn("build", "assembleRelease") // Ensure release AAR is built
+        dependsOn("assembleRelease") // Ensure release AAR is built
 
         val aarFile = layout.buildDirectory.file("outputs/aar/plugin-api-release.aar").get().asFile
 
@@ -61,7 +60,7 @@ afterEvaluate {
             println("✅ Exported plugin AAR to libs/plugin-1.0.0.aar")
         }
     }
-}
+
 
 
 dependencies {

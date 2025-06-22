@@ -29,5 +29,5 @@ data class ScreenReadingServicePlugins(
     val pluginName: String,
     val serviceType: ServiceType,
     val serviceClass: String,
-    val service: ScreenReading
+    val service: PluginService
 )

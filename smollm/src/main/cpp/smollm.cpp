@@ -11,8 +11,7 @@ Java_io_shubham0204_smollm_SmolLM_loadModel(JNIEnv* env, jobject thiz, jstring m
     const char* chatTemplateCstr = env->GetStringUTFChars(chatTemplate, &isCopy);
 
     try {
-        llmInference->loadModel(modelPathCstr, minP, temperature, storeChats, contextSize, chatTemplateCstr, nThreads,
-                                useMmap, useMlock);
+        llmInference->loadModel(modelPathCstr, minP, temperature, storeChats, contextSize, chatTemplateCstr, nThreads, useMmap, useMlock);
     } catch (std::runtime_error& error) {
         env->ThrowNew(env->FindClass("java/lang/IllegalStateException"), error.what());
     }

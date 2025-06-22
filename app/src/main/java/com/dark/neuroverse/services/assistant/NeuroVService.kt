@@ -1,8 +1,7 @@
-package com.dark.neuroverse.services
+package com.dark.neuroverse.services.assistant
 
 import android.service.voice.VoiceInteractionService
 import android.util.Log
-import com.dark.ai_manager.ai.local.Neuron
 import com.dark.ai_manager.ai.local.STT
 import com.dark.ai_manager.ai.local.TTS
 import kotlinx.coroutines.CoroutineScope

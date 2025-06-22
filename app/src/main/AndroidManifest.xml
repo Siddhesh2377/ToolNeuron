@@ -7,17 +7,16 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.INTERNET" />
 
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.MAIN" />
-            <category android:name="android.intent.category.LAUNCHER" />
-        </intent>
-    </queries>
+<!--    <queries>-->
+<!--        <intent>-->
+<!--            <action android:name="android.intent.action.MAIN" />-->
+<!--            <category android:name="android.intent.category.LAUNCHER" />-->
+<!--        </intent>-->
+<!--    </queries>-->
 
-    <uses-permission-sdk-23 android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
 
     <uses-permission android:name="android.permission.VIBRATE"/>
-
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <application
@@ -57,14 +56,8 @@
             android:exported="true"
             android:theme="@style/Theme.NeuroVerse" />
 
-        <!--        <service-->
-        <!--            android:name=".services.PluginSandboxService"-->
-        <!--            android:process=":sandbox_plugin"-->
-        <!--            android:permission="com.dark.neurov.SAFE_SANDBOX" />-->
-
-
         <service
-            android:name=".services.NeuroVService"
+            android:name=".services.assistant.NeuroVService"
             android:enabled="true"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
@@ -80,7 +73,7 @@
 
 
         <service
-            android:name=".services.NeuroVAccessibilityService"
+            android:name=".services.accessibility.NeuroVAccessibilityService"
             android:exported="true"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             tools:ignore="AccessibilityPolicy">
@@ -94,7 +87,7 @@
         </service>
 
         <service
-            android:name=".services.NeuroVoiceInteractionSessionService"
+            android:name=".services.assistant.NeuroVoiceInteractionSessionService"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
 

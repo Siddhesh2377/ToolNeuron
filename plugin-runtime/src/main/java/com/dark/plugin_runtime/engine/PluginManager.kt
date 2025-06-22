@@ -37,6 +37,7 @@ import java.util.zip.ZipInputStream
 object PluginManager {
 
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     private val _getInstalledPlugins = MutableStateFlow<List<PluginModel>>(emptyList())
 
     /**
@@ -44,19 +45,15 @@ object PluginManager {
      */
     val InstalledPlugins: StateFlow<List<PluginModel>> = _getInstalledPlugins.asStateFlow()
 
-    private val _getSTTPlugins = MutableStateFlow<List<PluginModel>>(emptyList())
+    private val _serviceBasedPluginsScreenReading = MutableStateFlow<List<ScreenReadingServicePlugins>>(emptyList())
 
-    val STTPlugins: StateFlow<List<PluginModel>> = _getSTTPlugins.asStateFlow()
-
-    private val _serviceBasedPluginsScreenReading =
-        MutableStateFlow<List<ScreenReadingServicePlugins>>(emptyList())
     /**
      * Public accessor for service-based plugins as StateFlow.
      */
-    val serviceBasedPluginsScreenReading: StateFlow<List<ScreenReadingServicePlugins>> =
-        _serviceBasedPluginsScreenReading.asStateFlow()
+    val serviceBasedPluginsScreenReading: StateFlow<List<ScreenReadingServicePlugins>> = _serviceBasedPluginsScreenReading.asStateFlow()
 
     private lateinit var context: Context
+
     private lateinit var db: PluginInstalledDatabase
 
     /**
@@ -180,10 +177,11 @@ object PluginManager {
     /**
      * Uninstalls the given plugin.
      */
-    fun unInstallPlugin(name: String, onResult: (Boolean) -> Unit) {
+    fun unInstallPlugin(path: String, onResult: (Boolean) -> Unit) {
         pluginScope.launch {
             withContext(Dispatchers.IO) {
-                val path = db.pluginDao().getPluginFolderByName(name)
+                Log.d(TAG, "📦 Uninstalling plugin $path at: $path")
+
                 val file = File(path)
 
                 Log.d(TAG, "❌ Deleting plugin at: $path")
@@ -315,27 +313,6 @@ object PluginManager {
             withContext(Dispatchers.IO) {
                 PluginExecutionManager.stopPlugin(name)
                 onResult(true)
-            }
-        }
-    }
-
-    fun loadSTTPlugins(){
-        pluginScope.launch {
-            withContext(Dispatchers.IO) {
-                val sPlugins = db.pluginDao().getEnabledPlugins()
-                val newSTTPlugins = mutableListOf<PluginModel>()
-
-                for (plugin in sPlugins) {
-                    val manifest = File(plugin.manifestFile)
-                    val manifestJson = JSONObject(manifest.readText())
-                    val permissions = manifestJson.getJSONArray("permissions")
-
-                    for (i in 0 until permissions.length()){
-                        Log.d("PluginManager", "✅ Found permissions: ${permissions[i]}")
-                        if (permissions.getString(i) == "STT") newSTTPlugins.add(plugin)
-                    }
-                }
-                _getSTTPlugins.value = newSTTPlugins
             }
         }
     }

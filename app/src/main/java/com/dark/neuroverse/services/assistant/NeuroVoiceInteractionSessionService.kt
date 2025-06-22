@@ -1,4 +1,4 @@
-package com.dark.neuroverse.services
+package com.dark.neuroverse.services.assistant
 
 import android.app.assist.AssistContent
 import android.app.assist.AssistStructure
@@ -33,6 +33,10 @@ import com.dark.ai_manager.ai.local.Neuron
 import com.dark.neuroverse.compose.screens.assistant.NeuroVScreen
 import com.dark.neuroverse.neurov.mcp.ai.PluginRouter
 import com.dark.plugin_runtime.engine.PluginManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * A VoiceInteractionSessionService that hosts a Compose-based AssistantScreen.
@@ -40,9 +44,11 @@ import com.dark.plugin_runtime.engine.PluginManager
  */
 class NeuroVoiceInteractionSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession {
-        Log.d(TAG, "onNewSession")
-        PluginRouter.init(applicationContext)
-        PluginManager.init(applicationContext)
+        Neuron.init(){
+            Log.d(TAG, "onNewSession")
+            PluginRouter.init(applicationContext)
+            PluginManager.init(applicationContext)
+        }
         return NeuroSession(this)
     }
 
@@ -63,10 +69,6 @@ class NeuroSession(context: Context) : VoiceInteractionSession(context) {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "Session onCreate")
-        Neuron.init()
-        PluginManager.init(context)
-        PluginManager.updateInstalledPlugins()
-
         // Restore saved state (if any) without passing a bundle for now
         savedStateRegistryOwner.performRestore(null)
 
@@ -83,16 +85,11 @@ class NeuroSession(context: Context) : VoiceInteractionSession(context) {
             // Dispose composition when detached to free resources
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
             setContent {
-//                AssistantScreen(
-//                    onClickOutside = { finish() },
-//                    onActionCompleted = { finish() }
-//                )
                 val close = remember { mutableStateOf(false) }
 
                 LaunchedEffect(close.value) {
                     if (close.value) {
-                        // Wait for the animation to complete (match duration in tween)
-                        kotlinx.coroutines.delay(520L)
+                        delay(520L)
                         finish()
                     }
                 }

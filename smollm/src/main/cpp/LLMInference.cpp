@@ -18,6 +18,14 @@ void LLMInference::loadModel(const char* model_path, float minP, float temperatu
     llama_model_params model_params = llama_model_default_params();
     model_params.use_mmap = useMmap;
     model_params.use_mlock = useMlock;
+
+    FILE* f = fopen(model_path, "rb");
+    if (!f) {
+        LOGe("‼️ Model file not found or unreadable at path: %s", model_path);
+        throw std::runtime_error("Model file not found");
+    }
+    fclose(f);
+
     _model = llama_model_load_from_file(model_path, model_params);
     if (!_model) throw std::runtime_error("loadModel() failed");
 

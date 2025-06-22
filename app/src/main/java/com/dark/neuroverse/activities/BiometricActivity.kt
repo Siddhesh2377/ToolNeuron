@@ -22,14 +22,15 @@ class BiometricActivity : FragmentActivity() {
         Log.d("BiometricActivity", "Started biometric authentication")
 
         executor = ContextCompat.getMainExecutor(this)
+        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
+        finish()
 
         biometricPrompt = BiometricPrompt(this, executor,
             object : BiometricPrompt.AuthenticationCallback() {
                 override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                     super.onAuthenticationSucceeded(result)
                     Log.d("BiometricActivity", "Authentication succeeded")
-                    startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
-                    finish()
+
                 }
 
                 override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {

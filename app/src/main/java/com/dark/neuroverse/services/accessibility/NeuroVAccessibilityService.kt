@@ -1,4 +1,4 @@
-package com.dark.neuroverse.services
+package com.dark.neuroverse.services.accessibility
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.AccessibilityServiceInfo
@@ -6,6 +6,7 @@ import android.annotation.SuppressLint
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.dark.plugin_api.info.services.types.ScreenReading
 import com.dark.plugin_runtime.engine.PluginManager
 import com.dark.plugin_runtime.model.ScreenReadingServicePlugins
 import kotlinx.coroutines.CoroutineScope
@@ -35,7 +36,6 @@ class NeuroVAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-
         Log.d("MyService", "Accessibility service connected")
         this.serviceInfo = this.serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
@@ -62,14 +62,16 @@ class NeuroVAccessibilityService : AccessibilityService() {
         }
 
         currentServiceList.forEach { service ->
-            service.service.onKeyEvent(event)
+            if (service.service is ScreenReading) (service.service as ScreenReading).onKeyEvent(event)
             Log.d("MyService", "Key event sent to service: ${service.service.getServiceType()}")
         }
 
         return super.onKeyEvent(event)
     }
 
-    override fun onInterrupt() {}
+    override fun onInterrupt() {
+
+    }
 
     override fun onDestroy() {
         super.onDestroy()

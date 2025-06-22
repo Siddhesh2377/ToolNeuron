@@ -180,7 +180,7 @@ class SmolLM {
         val storeChats: Boolean = false,
         val contextSize: Long? = null,
         val chatTemplate: String? = null,
-        val numThreads: Int = 6,
+        val numThreads: Int = 4,
         val useMmap: Boolean = true,
         val useMlock: Boolean = false,
     )
@@ -204,25 +204,31 @@ class SmolLM {
         modelPath: String,
         params: InferenceParams = InferenceParams(),
     ) = withContext(Dispatchers.IO) {
+
+
         val ggufReader = GGUFReader()
         ggufReader.load(modelPath)  // <- Don't wrap again
 
-        Log.e("MODEL", "Model KA Size - > ${ggufReader.getContextSize()}")
-
-        val modelContextSize = ggufReader.getContextSize() ?: DefaultInferenceParams.contextSize
+        val modelContextSize = DefaultInferenceParams.contextSize
         val modelChatTemplate =  DefaultInferenceParams.chatTemplate
         //ggufReader.getChatTemplate() ?:
-        nativePtr = loadModel(
-            modelPath,
-            params.minP,
-            params.temperature,
-            params.storeChats,
-            params.contextSize ?: modelContextSize,
-            params.chatTemplate ?: modelChatTemplate,
-            params.numThreads,
-            params.useMmap,
-            params.useMlock,
-        )
+        try {
+            nativePtr = loadModel(
+                modelPath,
+                params.minP,
+                params.temperature,
+                params.storeChats,
+                params.contextSize ?: modelContextSize,
+                params.chatTemplate ?: modelChatTemplate,
+                params.numThreads,
+                params.useMmap,
+                params.useMlock,
+            )
+        } catch (e: IllegalStateException) {
+            Log.e("SmolLM", "Failed to load model: ${e.message}", e)
+        }
+
+
     }
 
 

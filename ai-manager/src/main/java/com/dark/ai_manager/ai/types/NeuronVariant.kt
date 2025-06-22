@@ -1,7 +1,7 @@
 package com.dark.ai_manager.ai.types
 
 enum class NeuronVariant( val modelName: String,  val  path: String,  val  systemPrompt: String){
-    NVRouter("nv-router", "/storage/emulated/0/Download/Kodify_Nano_q4_k_s.gguf", NVRI),
+    NVRouter("nv-router", "/storage/emulated/0/Download/smollm2-360m-instruct-q8_0.gguf", NVRI),
     NVGeneral("nv-general", "/storage/emulated/0/Download/smollm2-360m-instruct-q8_0.gguf", NVGI)
 }
 

@@ -27,6 +27,7 @@ import com.dark.neuroverse.compose.screens.setup.intro.IntroScreen
 import com.dark.neuroverse.compose.screens.setup.permissions.PermissionScreen
 import com.dark.neuroverse.compose.screens.setup.plugins.InstallPluginsScreen
 import com.dark.neuroverse.data.backend.downloadAndInstall
+import com.dark.neuroverse.utils.StoragePermissionHandler
 import com.dark.neuroverse.utils.UserPrefs
 import com.dark.plugin_runtime.database.installed_plugin_db.PluginInstalledDatabase
 import com.dark.plugin_runtime.engine.PluginManager
@@ -79,6 +80,10 @@ fun SetUpCompose(paddingValues: PaddingValues) {
     val context = LocalContext.current
     val db = PluginInstalledDatabase.getInstance(context)
     val scope = rememberCoroutineScope()
+
+    if (!StoragePermissionHandler.hasManageExternalStoragePermission()) {
+        StoragePermissionHandler.requestManageExternalStoragePermission(context)
+    }
 
     NavHost(
         navController = navController,
