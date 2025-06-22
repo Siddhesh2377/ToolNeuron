@@ -60,28 +60,24 @@ dependencies {
     implementation(project(":ai-manager"))
     implementation(project(":smollm"))
 
-    implementation("com.google.accompanist:accompanist-insets:0.30.1")
-    implementation("com.google.accompanist:accompanist-insets-ui:0.36.0")
-
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
-
     //DATABASE
     implementation(libs.androidx.room.runtime)
-    // Navigation Compose (NOT Multiplatform)
-    implementation("androidx.navigation:navigation-compose:2.9.0")
-    // Accompanist Navigation Animation
-    implementation("com.google.accompanist:accompanist-navigation-animation:0.36.0")
     //noinspection KaptUsageInsteadOfKsp
     kapt(libs.androidx.room.compiler)
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.biometric)
 
     //KTX
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     //CORE-UI-LIBS
+    implementation(libs.accompanist.insets)
+    implementation(libs.accompanist.insets.ui)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.accompanist.navigation.animation)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.material.icons.extended)
     implementation(libs.androidx.core.ktx)
@@ -92,8 +88,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.animation)
     implementation(libs.material)
-
-
+    
     //TESTING
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -1,4 +1,4 @@
-package com.dark.neuroverse.compose.screens.temp
+package com.dark.neuroverse.compose.screens.main
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.core.FastOutSlowInEasing

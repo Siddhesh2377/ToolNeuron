@@ -23,3 +23,4 @@ rootProject.name = "NeuroVerse"
 include(":app")
 include(":ai-manager")
 include(":smollm")
+include(":task-manager")

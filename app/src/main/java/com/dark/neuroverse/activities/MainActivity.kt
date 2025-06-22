@@ -7,7 +7,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.core.view.WindowCompat
-import com.dark.neuroverse.compose.screens.home.HomeScreen
+import com.dark.neuroverse.compose.screens.temp.TaskDemoScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 
 
@@ -20,24 +20,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             NeuroVerseTheme {
                 Scaffold(containerColor = MaterialTheme.colorScheme.surface) { it ->
-
-//                    NeuroVScreen(onClickOutside = {
-//                        PluginManager.loadSTTPlugins()
-//                    })
-
-                    //NeuronDemoScreen(it)
-
-                    // ChatScreen(it)
-                    //STTScreen(it)
-
-                    HomeScreen(it)
-                    // runPluginInSandbox(this, "List Applications Plugin")
-
+                    TaskDemoScreen(it)
                 }
             }
         }
     }
-
 }
 
 
