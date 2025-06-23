@@ -14,7 +14,7 @@
 ## Key Features
 
 * **Natural Language Understanding**
-  Converts spoken or written prompts into structured JSON commands using OpenRouter AI.
+  Converts spoken or written prompts into structured JSON commands using **llama.cpp** & **SmolChat-Android**
 
 * **Encrypted Local Memory**
   All NeuronTree memory is stored and processed locally with robust encryption. Hardware-backed keys ensure maximum security.
@@ -160,10 +160,10 @@ Android Developer | AI Enthusiast | Open Source Contributor
 
 ## Acknowledgements
 
-* OpenRouter AI for prompt parsing and structured command generation
-* JetBrains for Kotlin and developer tools
-* Android Open Source Project for enabling deep system integrations
-* Firebase for real-time syncing and secure storage
-* The GitHub community for fostering open-source innovation
+* https://github.com/ggml-org/llama.cpp
+* https://github.com/shubham0204/SmolChat-Android
+* https://www.jetbrains.com/
+* https://source.android.com/
+* https://github.com/
 
 ---
