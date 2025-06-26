@@ -16,13 +16,17 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-@Suppress("UNCHECKED_CAST")
 class AutoReply(context: Context) : TaskApi(context) {
+
+    private var lastMessageId = ""
+    private var lastSender = ""
+    private var lastMessage = ""
+    private var isGenerating = false
 
     override fun getTaskInfo(): TaskInfo {
         return TaskInfo(
             taskName = "Auto Reply",
-            description = "",
+            description = "Automatically replies to WhatsApp messages when user is unavailable.",
             systemPrompt = "",
             taskType = TaskType.BACKGROUND
         )
@@ -32,52 +36,60 @@ class AutoReply(context: Context) : TaskApi(context) {
         if (isGenerating) return
         Neuron.unloadAllModels()
         Neuron.loadModel(
-            NeuronVariant.NVRunner,
-            systemPrompt = "You are an AI assistant that sends automatic replies when the user is unavailable. Respond briefly, politely, and relevant to the incoming message. Keep all replies under 1-2 short sentences. Never generate long paragraphs, filler, or unrelated text. Assume the user is busy, driving, or in a meeting.\n"
+            NeuronVariant.NVGeneral,
+            systemPrompt = """
+                You are an AI assistant that sends automatic replies when the user is unavailable.
+                Respond briefly, politely, and relevant to the incoming message.
+                Keep all replies under 1-2 short sentences.
+                Never generate long paragraphs, filler, or unrelated text.
+                Assume the user is busy, driving, or in a meeting.
+            """.trimIndent()
         )
     }
 
-
     override fun onRun(any: Any) {
         if (isGenerating) return
-        onReceived(any as Pair<NotificationListener, StatusBarNotification>)
+        if (any is Pair<*, *> && any.first is NotificationListener && any.second is StatusBarNotification) {
+            onReceived(any.first as NotificationListener, any.second as StatusBarNotification)
+        }
     }
 
+    private fun onReceived(listener: NotificationListener, sbn: StatusBarNotification) {
+        val packageName = sbn.packageName ?: return
+        if (!packageName.contains("whatsapp", ignoreCase = true)) return
 
-    private var lastMessageId = ""
-    private var isGenerating = false
+        val extras = sbn.notification.extras ?: return
+        val sender = extras.getString("android.title") ?: return
+        val message = extras.getString("android.text") ?: return
+        val key = sbn.key ?: return
 
-    fun onReceived(pair: Pair<NotificationListener, StatusBarNotification>) {
-        val listener = pair.first
-        val sbn = pair.second
+        // Avoid replying to self or duplicates
+        if (sender.equals("You", ignoreCase = true)) return
+        if (key == lastMessageId && sender == lastSender && message == lastMessage) return
 
-        val packageName = sbn.packageName
-        val extras = sbn.notification.extras
-        val title = extras.getString("android.title") ?: ""
-        val message = extras.getString("android.text") ?: ""
-        val key = sbn.key
-
-        if (!packageName.contains("whatsapp", true)) return
-        if (key == lastMessageId) return
-
-        lastMessageId = key
-
-        Log.d("NotificationListener", "🔔 Message from $title: $message")
+        Log.d("AutoReply", "🔔 New Message from $sender: $message")
 
         val actions = sbn.notification.actions ?: return
+        lastMessageId = key
+        lastSender = sender
+        lastMessage = message
 
         for (action in actions) {
             val remoteInputs = action.remoteInputs ?: continue
+
             for (remoteInput in remoteInputs) {
                 if (remoteInput.resultKey.lowercase().contains("reply")) {
 
                     CoroutineScope(Dispatchers.IO).launch {
+                        isGenerating = true
                         try {
-                            // Get AI-generated reply
-                            isGenerating = true
-                            val aiResponse = Neuron.generateResponseStreaming("Keep the Response Small here is the Message  $message") { }
+                            val aiPrompt = "Here is a message for which a short auto-reply is needed: $message"
+                            val aiResponse = Neuron.generateResponseStreaming(aiPrompt) {}
 
-                            val finalReply = aiResponse.ifBlank { "I'm busy, will reply later." }
+                            val cleanedText = aiResponse.replace(Regex("<think>[\\s\\S]*?</think>"), "").trim()
+                            val finalReply = cleanedText.ifBlank { "I'm currently busy, will reply later." }
+
+                            Log.d("AutoReply", "✅ AI Auto-Reply: $finalReply")
 
                             val replyIntent = action.actionIntent
                             val replyBundle = Bundle().apply {
@@ -87,12 +99,12 @@ class AutoReply(context: Context) : TaskApi(context) {
                             RemoteInput.addResultsToIntent(arrayOf(remoteInput), intent, replyBundle)
 
                             replyIntent.send(listener, 0, intent)
-
-                            Log.d("NotificationListener", "✅ Auto-reply sent: $finalReply")
                             listener.cancelNotification(sbn.key)
-                            isGenerating = false
+
                         } catch (e: Exception) {
-                            Log.e("NotificationListener", "❌ Failed to send AI reply", e)
+                            Log.e("AutoReply", "❌ Failed to send AI reply", e)
+                        } finally {
+                            isGenerating = false
                         }
                     }
                     return
@@ -100,6 +112,4 @@ class AutoReply(context: Context) : TaskApi(context) {
             }
         }
     }
-
-
 }
