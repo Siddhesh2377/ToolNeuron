@@ -135,3 +135,8 @@ class NeuronTree(internal val root: NeuronNode) {
     }
 
 }
+
+fun getDefaultBrainStructure(){
+    val root = NeuronNode("root", NodeData("", NodeType.ROOT))
+    val tree = NeuronTree(root)
+}
