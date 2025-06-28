@@ -22,7 +22,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             NeuroVerseTheme {
                 Scaffold(containerColor = MaterialTheme.colorScheme.surface) { it ->
-                    NeuronTreeScreen(it)
+                    MainScreen(it)
                 }
             }
         }

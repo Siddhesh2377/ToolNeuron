@@ -9,9 +9,10 @@ import com.dark.userdata.neuron_tree.NeuronTree
 import com.dark.userdata.neuron_tree.NodeData
 import com.dark.userdata.neuron_tree.NodeType
 import com.dark.userdata.saveEncryptedTree
+import com.dark.userdata.schema.NodeContentSchema
 
 object UserData {
-    var rootTree: NeuronTree? = NeuronTree(NeuronNode("root", NodeData("Root Node Data", NodeType.ROOT)))
+    var rootTree: NeuronTree? = NeuronTree(NeuronNode("root", NodeData(NodeContentSchema(), NodeType.ROOT)))
 
     fun init(context: Context){
         rootTree = loadEncryptedTree(getBrainFilePath(context), getOrCreateHardwareBackedAesKey())

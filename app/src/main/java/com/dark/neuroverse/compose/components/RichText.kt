@@ -1,5 +1,6 @@
 package com.dark.neuroverse.compose.components
 
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -163,16 +164,17 @@ fun RichText(
             }
         }
     }
-
-    Text(
-        text = annotatedText,
-        modifier = modifier,
-        style = style,
-        color = color,
-        textAlign = TextAlign.Justify,
-        fontFamily = fontFamily,
-        fontWeight = fontWeight
-    )
+    SelectionContainer {
+        Text(
+            text = annotatedText,
+            modifier = modifier,
+            style = style,
+            color = color,
+            textAlign = TextAlign.Justify,
+            fontFamily = fontFamily,
+            fontWeight = fontWeight
+        )
+    }
 }
 
 private fun AnnotatedString.Builder.appendStyledSegment(text: String) {

@@ -31,7 +31,7 @@ fun decrypt(encrypted: ByteArray, key: SecretKey): ByteArray {
  */
 fun getOrCreateHardwareBackedAesKey(
     alias: String = "brain_key",
-    requireStrongBox: Boolean = true // Set true if you strictly need StrongBox hardware isolation
+    requireStrongBox: Boolean = false
 ): SecretKey {
     val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     ks.getKey(alias, null)?.let { return it as SecretKey }

@@ -27,23 +27,23 @@ class BiometricActivity : FragmentActivity() {
 
         Log.d("BiometricActivity", "Started biometric authentication")
 
-        startActivity(Intent(this@BiometricActivity, MainActivity::class.java))
-        finish()
+//        startActivity(Intent(this@BiometricActivity, MainActivity::class.java))
+//        finish()
 
-//        CoroutineScope(Dispatchers.Main).launch {
-//            UserPrefs.isOnboardingComplete(context).collect {
-//                when (it) {
-//                    true -> {
-//                        auth()
-//                    }
-//
-//                    false -> {
-//                        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
-//                        finish()
-//                    }
-//                }
-//            }
-//        }
+        CoroutineScope(Dispatchers.Main).launch {
+            UserPrefs.isOnboardingComplete(context).collect {
+                when (it) {
+                    true -> {
+                        auth()
+                    }
+
+                    false -> {
+                        startActivity(Intent(this@BiometricActivity, SetUpActivity::class.java))
+                        finish()
+                    }
+                }
+            }
+        }
     }
 
     private fun auth() {
@@ -94,7 +94,9 @@ class BiometricActivity : FragmentActivity() {
         if (canAuthenticate == BiometricManager.BIOMETRIC_SUCCESS) {
             biometricPrompt.authenticate(promptInfo)
         } else {
+            Toast.makeText(this, "Biometric not Enabled, Any One Can See Your Data ...", Toast.LENGTH_LONG).show()
             Log.d("BiometricActivity", "Biometric not available or not enrolled")
+            startActivity(Intent(this@BiometricActivity, MainActivity::class.java))
             finish()
         }
     }

@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.UserData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.userdata.collectAllNodes
@@ -75,7 +76,7 @@ fun BrainScreen(paddingValues: PaddingValues) {
     val brainFile = getBrainFilePath(context)
 
     LaunchedEffect(Unit) {
-        val key = getOrCreateHardwareBackedAesKey()
+        val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
         val nodeTree: NeuronTree? = loadEncryptedTree(brainFile, key)
 
         nodeTree?.collectAllNodes()?.let {

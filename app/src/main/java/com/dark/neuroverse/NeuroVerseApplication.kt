@@ -14,9 +14,6 @@ class NeuroVerseApplication : Application() {
         super.onCreate()
         Log.d("NeuroVerseApplication", "✅ Application started")
         TaskRegistry.init(this)
-        Neuron.loadModel(
-            variant = NeuronVariant.NVChat,
-            systemPrompt = CHATTING_SYSTEM_PROMPT
-        )
+        //Neuron.loadModel(variant = NeuronVariant.NVChat, systemPrompt = CHATTING_SYSTEM_PROMPT)
     }
 }

@@ -44,63 +44,63 @@ fun NeuronTreeScreen(paddingValues: PaddingValues) {
     val keyAlias = "brain_key"
 
     Column(Modifier.padding(paddingValues)) {
-
-        Button(onClick = {
-            scope.launch(Dispatchers.Default) {
-                currentProgress = "Generating NeuronTree..."
-
-                val key = getOrCreateHardwareBackedAesKey(keyAlias)
-
-                val root = NeuronNode("root", NodeData("Root Node Data", NodeType.ROOT))
-                val tree = NeuronTree(root)
-
-                val totalNodes = 10  // Adjust for your testing
-
-                val add = measureTimeMillis {
-                    repeat(totalNodes) { index ->
-                        if (index % 100 == 0) {
-                            currentProgress = "Adding Node $index"
-                        }
-
-                        val node = if (index == 20) {
-                            NeuronNode(
-                                "nodeU",
-                                NodeData(
-                                    "Unique Special Node with ID=${UUID.randomUUID()}",
-                                    NodeType.HOLDER
-                                )
-                            )
-                        } else {
-                            NeuronNode(
-                                "node-$index",
-                                NodeData(generateRandomData(128), randomNodeType())
-                            )
-                        }
-
-                        tree.addChild("root", node)
-                    }
-                }
-
-                addTime = add
-
-                currentProgress = "Encrypting & Saving..."
-                val save = measureTimeMillis {
-                    saveEncryptedTree(tree, brainFile, key)
-                }
-                saveTime = save
-
-                currentProgress = "Memory Mapping File..."
-                val load = measureTimeMillis {
-                    memoryMapFile(brainFile)
-                }
-                loadTime = load
-
-                currentProgress = "Completed"
-            }
-
-        }) {
-            Text("Start NeuronTree Test")
-        }
+//
+//        Button(onClick = {
+//            scope.launch(Dispatchers.Default) {
+//                currentProgress = "Generating NeuronTree..."
+//
+//                val key = getOrCreateHardwareBackedAesKey(keyAlias)
+//
+//                val root = NeuronNode("root", NodeData("Root Node Data", NodeType.ROOT))
+//                val tree = NeuronTree(root)
+//
+//                val totalNodes = 10  // Adjust for your testing
+//
+//                val add = measureTimeMillis {
+//                    repeat(totalNodes) { index ->
+//                        if (index % 100 == 0) {
+//                            currentProgress = "Adding Node $index"
+//                        }
+//
+//                        val node = if (index == 20) {
+//                            NeuronNode(
+//                                "nodeU",
+//                                NodeData(
+//                                    "Unique Special Node with ID=${UUID.randomUUID()}",
+//                                    NodeType.HOLDER
+//                                )
+//                            )
+//                        } else {
+//                            NeuronNode(
+//                                "node-$index",
+//                                NodeData(generateRandomData(128), randomNodeType())
+//                            )
+//                        }
+//
+//                        tree.addChild("root", node)
+//                    }
+//                }
+//
+//                addTime = add
+//
+//                currentProgress = "Encrypting & Saving..."
+//                val save = measureTimeMillis {
+//                    saveEncryptedTree(tree, brainFile, key)
+//                }
+//                saveTime = save
+//
+//                currentProgress = "Memory Mapping File..."
+//                val load = measureTimeMillis {
+//                    memoryMapFile(brainFile)
+//                }
+//                loadTime = load
+//
+//                currentProgress = "Completed"
+//            }
+//
+//        }) {
+//            Text("Start NeuronTree Test")
+//        }
 
         Spacer(Modifier.height(16.dp))
 
