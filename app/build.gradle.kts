@@ -103,8 +103,8 @@ fun getProperty(value: String): String {
         val localProps = Properties().apply {
             load(FileInputStream(localPropertiesFile))
         }
-        localProps.getProperty(value) ?: "sample_val"
+        localProps.getProperty(value) ?: "\"sample_val\""
     } else {
-        System.getenv(value) ?: "sample_val"
+        System.getenv(value) ?: "\"sample_val\""
     }
 }
