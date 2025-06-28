@@ -14,3 +14,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+/app/release/app-release.apk
+/app/release/baselineProfiles/0/app-release.dm
+/app/release/baselineProfiles/1/app-release.dm
+/.idea/codeStyles/codeStyleConfig.xml
+/.idea/jsonSchemas.xml
+/app/release/output-metadata.json
+/.idea/codeStyles/Project.xml
