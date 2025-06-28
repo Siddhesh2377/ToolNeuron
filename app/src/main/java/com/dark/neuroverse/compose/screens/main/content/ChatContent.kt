@@ -338,7 +338,6 @@ fun BottomChat(viewModel: ChattingViewModel) {
                             }
                         }
                     }
-
                 }
             }
         }
