@@ -23,10 +23,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.dark.neurov" />
-                  <option name="mobileSdkAppId" value="1:464451455248:android:b83a49346ee8942d13fd95" />
-                  <option name="projectId" value="neurov0" />
-                  <option name="projectNumber" value="464451455248" />
+                  <option name="appId" value="PLACEHOLDER" />
+                  <option name="mobileSdkAppId" value="" />
+                  <option name="projectId" value="" />
+                  <option name="projectNumber" value="" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

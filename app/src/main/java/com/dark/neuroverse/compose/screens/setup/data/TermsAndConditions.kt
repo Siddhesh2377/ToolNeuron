@@ -1,9 +1,15 @@
 package com.dark.neuroverse.compose.screens.setup.data
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -12,21 +18,17 @@ import com.dark.neuroverse.compose.components.RichText
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TermsAndConditionScreen(onAgree: () -> Unit = {}) {
-    Scaffold(
-        topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Terms & Conditions") }
-            )
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .padding(innerPadding)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
 
-            RichText("""
+    Column(
+        modifier = Modifier
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
+
+        RichText(
+            style = MaterialTheme.typography.bodyLarge,
+            text = """
                 Neuro V — Terms & Conditions & Privacy Policy
                 Effective Date: 29-06-2025
 
@@ -111,21 +113,21 @@ fun TermsAndConditionScreen(onAgree: () -> Unit = {}) {
                 For questions or concerns, contact us at:
 
                 * **Email:** siddheshsonar2377@gmail.com
-                * **Project Page:** https://github.com/siddheshsonar2377/NeuroV
+                * **ProjectPage:** https://github.com/siddheshsonar2377/NeuroV
 
                 By using Neuro V, you accept this agreement and acknowledge your understanding of our privacy and security practices.
 
                 *--- End of Terms ---*
-                *--- Thank You... ---*
+                ***--- Thank You For Downloading The App... ---***
 
-            """.trimIndent())
+            """.trimIndent()
+        )
 
-            Button(
-                onClick = onAgree,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("I Agree")
-            }
+        Button(
+            onClick = onAgree,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("I Agree")
         }
     }
 }

@@ -4,6 +4,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -17,32 +18,51 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.BuildConfig
+import com.dark.userdata.getBrainFilePath
+import com.dark.userdata.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.neuron_tree.getDefaultBrainStructure
+import com.dark.userdata.saveEncryptedTree
 import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun IntroScreen() {
+fun IntroScreen(paddingValues: PaddingValues, onIntroFinished: () -> Unit) {
     var showLoading by remember { mutableStateOf(false) }
 
+
+    val context = LocalContext.current
+    val key = remember { getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS) }
+    val brainFile = remember { getBrainFilePath(context) }
+
     LaunchedEffect(Unit) {
+
+        if (!brainFile.exists()) {
+            val brain = getDefaultBrainStructure()
+            saveEncryptedTree(brain, brainFile, key)
+        }
+
         delay(500)
         showLoading = true
         delay(2400)
         showLoading = false
+        onIntroFinished()
     }
 
     Box(
         Modifier
+            .padding(paddingValues)
             .fillMaxSize()
     ) {
         Card(
             modifier = Modifier.align(Alignment.Center),
             shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onPrimary)
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
         ) {
             Column(
                 modifier = Modifier

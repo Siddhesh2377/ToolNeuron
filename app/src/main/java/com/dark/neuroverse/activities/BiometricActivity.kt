@@ -31,7 +31,7 @@ class BiometricActivity : FragmentActivity() {
 //        finish()
 
         CoroutineScope(Dispatchers.Main).launch {
-            UserPrefs.isOnboardingComplete(context).collect {
+            UserPrefs.isTermsAccepted(context).collect {
                 when (it) {
                     true -> {
                         auth()

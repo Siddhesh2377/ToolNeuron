@@ -43,12 +43,4 @@ object UserPrefs {
     suspend fun setAGU(context: Context, enabled: Boolean) {
         context.dataStore.edit { it[ARTIFICIAL_GRENDEL_UNDERSTANDING_KEY] = enabled }
     }
-
-    fun isOnboardingComplete(context: Context): Flow<Boolean> {
-        return context.dataStore.data.map { it[IS_ONBOARDING_COMPLETE_KEY] == true }
-    }
-
-    suspend fun setOnboardingComplete(context: Context, complete: Boolean) {
-        context.dataStore.edit { it[IS_ONBOARDING_COMPLETE_KEY] = complete }
-    }
 }
