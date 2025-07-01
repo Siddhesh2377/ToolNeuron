@@ -42,6 +42,7 @@ import com.dark.neuroverse.data.model.ModelsData
 import com.dark.neuroverse.data.repo.ModelsList.getModelList
 import com.dark.neuroverse.worker.downloadFile
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Composable
 fun ModelsScreen() {
@@ -64,7 +65,7 @@ fun ModelsScreen() {
                         isDownloading = true
                         downloadFile(
                             fileUrl = modelData.modelLink,
-                            outputFile = modelData.modelPath,
+                            outputFile = File(modelData.modelPath),
                             onProgress = { prog ->
                                 progress = prog
                             },
