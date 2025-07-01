@@ -60,6 +60,7 @@ dependencies {
     //DATABASE
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)
+    implementation("androidx.room:room-ktx:2.7.2")
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)
