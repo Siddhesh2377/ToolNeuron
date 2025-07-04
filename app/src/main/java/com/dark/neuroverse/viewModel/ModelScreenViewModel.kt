@@ -2,14 +2,13 @@ package com.dark.neuroverse.viewModel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.neuroverse.data.model.ModelsData
+import com.dark.ai_manager.ai.data.ModelsData
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.content.Context
 import androidx.lifecycle.ViewModelProvider
-import com.dark.neuroverse.data.db.DatabaseProvider
 import com.dark.neuroverse.worker.model.ModelManager
 
 class ModelScreenViewModel(context: Context) : ViewModel() {

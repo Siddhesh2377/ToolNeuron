@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.ksp)
 }
 
 android {
@@ -45,6 +46,12 @@ android {
 dependencies {
     //API
     implementation(project(":smollm"))
+
+    //DATABASE
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+    implementation("androidx.room:room-ktx:2.7.2")
+
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.material3)
     testImplementation(libs.junit)

@@ -58,6 +58,7 @@
         <activity
             android:name=".activities.IntroActivity"
             android:exported="true"
+
             android:theme="@style/Theme.NeuroVerse">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

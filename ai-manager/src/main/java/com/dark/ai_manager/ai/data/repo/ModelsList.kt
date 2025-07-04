@@ -1,7 +1,7 @@
-package com.dark.neuroverse.data.repo
+package com.dark.ai_manager.ai.data.repo
 
 import android.content.Context
-import com.dark.neuroverse.data.model.ModelsData
+import com.dark.ai_manager.ai.data.ModelsData
 import java.io.File
 
 object ModelsList {

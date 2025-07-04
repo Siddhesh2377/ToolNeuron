@@ -1,11 +1,10 @@
 package com.dark.neuroverse.worker.model
 
 import android.content.Context
-import com.dark.neuroverse.data.db.DatabaseProvider
-import com.dark.neuroverse.data.db.ModelDAO
-import com.dark.neuroverse.data.model.ModelsData
+import com.dark.ai_manager.ai.data.db.DatabaseProvider
+import com.dark.ai_manager.ai.data.db.ModelDAO
+import com.dark.ai_manager.ai.data.ModelsData
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.first
 
 object ModelManager {

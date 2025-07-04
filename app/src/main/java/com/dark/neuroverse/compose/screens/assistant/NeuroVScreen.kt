@@ -64,7 +64,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.ai_manager.ai.local.NeuronVariant
+import com.dark.neuroverse.neurov.data.NeuronVariant
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.GlitchTypingText
 import com.dark.neuroverse.neurov.mcp.ai.TaskRouter.process

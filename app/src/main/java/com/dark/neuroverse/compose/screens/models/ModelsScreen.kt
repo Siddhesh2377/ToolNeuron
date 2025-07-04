@@ -45,8 +45,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.compose.screens.home.chat.BottomBar
-import com.dark.neuroverse.data.model.ModelsData
-import com.dark.neuroverse.data.repo.ModelsList.getModelList
+import com.dark.ai_manager.ai.data.ModelsData
+import com.dark.ai_manager.ai.data.repo.ModelsList.getModelList
 import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
 import com.dark.neuroverse.viewModel.ModelScreenViewModel

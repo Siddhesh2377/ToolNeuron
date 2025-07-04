@@ -1,4 +1,4 @@
-package com.dark.neuroverse.data.db
+package com.dark.ai_manager.ai.data.db
 
 import androidx.room.Insert
 import androidx.room.Dao
@@ -6,7 +6,7 @@ import androidx.room.Database
 import androidx.room.Delete
 import androidx.room.Query
 import androidx.room.RoomDatabase
-import com.dark.neuroverse.data.model.ModelsData
+import com.dark.ai_manager.ai.data.ModelsData
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -22,7 +22,7 @@ interface ModelDAO {
     suspend fun getModelByName(modelName: String): ModelsData?
 
     @Query("SELECT * FROM local_models")
-    fun getAllModels(): kotlinx.coroutines.flow.Flow<List<ModelsData>>
+    fun getAllModels(): Flow<List<ModelsData>>
 }
 
 

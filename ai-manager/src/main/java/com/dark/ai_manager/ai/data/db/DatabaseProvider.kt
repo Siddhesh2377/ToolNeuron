@@ -1,4 +1,4 @@
-package com.dark.neuroverse.data.db
+package com.dark.ai_manager.ai.data.db
 
 import android.content.Context
 import androidx.room.Room

@@ -1,5 +1,6 @@
 package com.dark.neuroverse.compose.screens.main
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,6 +22,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.neuroverse.compose.screens.main.Actions.CHAT
+import com.dark.neuroverse.compose.screens.main.Actions.EXPLORE
+import com.dark.neuroverse.compose.screens.main.Actions.MAIN
 import com.dark.neuroverse.compose.screens.main.content.BodyChat
 import com.dark.neuroverse.compose.screens.main.content.BottomBarMain
 import com.dark.neuroverse.compose.screens.main.content.BottomChat
@@ -33,29 +37,52 @@ import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 @Composable
 fun MainScreen(paddingValues: PaddingValues) {
 
-    var action by remember { mutableStateOf(Actions.MAIN) }
+    var action by remember { mutableStateOf(MAIN) }
     val navController = rememberNavController()
+    BackHandler(onBack = {
+        when (action) {
+            CHAT -> {
+                navController.navigate(MAIN.name) {
+                    launchSingleTop = true
+                    popUpTo(MAIN.name) { inclusive = true }
+                }
+            }
 
+            EXPLORE -> {
+                navController.navigate(MAIN.name) {
+                    launchSingleTop = true
+                    popUpTo(MAIN.name) { inclusive = true }
+                }
+            }
+
+            MAIN -> {
+                navController.navigate(MAIN.name) {
+                    launchSingleTop = true
+                    popUpTo(MAIN.name) { inclusive = true }
+                }
+            }
+        }
+    })
     Column {
         NavHost(
             navController = navController,
             startDestination = action.name
         ) {
-            composable(Actions.MAIN.name) {
+            composable(MAIN.name) {
                 MainScreenContent(paddingValues = paddingValues, onAction = {
                     action = it
                     navController.navigate(it.name) {
                         launchSingleTop = true
-                        popUpTo(Actions.MAIN.name) { inclusive = true }
+                        popUpTo(MAIN.name) { inclusive = true }
                     }
                 })
             }
 
-            composable(Actions.CHAT.name) {
+            composable(CHAT.name) {
                 ChatScreenContent(paddingValues, onBack = {
-                    navController.navigate(Actions.MAIN.name) {
+                    navController.navigate(MAIN.name) {
                         launchSingleTop = true
-                        popUpTo(Actions.MAIN.name) { inclusive = true }
+                        popUpTo(MAIN.name) { inclusive = true }
                     }
                 })
             }
@@ -75,9 +102,7 @@ fun MainScreenContent(onAction: (Actions) -> Unit, paddingValues: PaddingValues)
         HeaderMain()
         MainCards()
         CarouselExample_MultiBrowse(Modifier.weight(1f))
-        BottomBarMain {
-            onAction(it)
-        }
+        BottomBarMain { onAction(it) }
     }
 }
 

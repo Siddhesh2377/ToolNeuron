@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.ai_manager.ai.local.NeuronVariant
 import com.dark.task_manager.api.TaskApi
 import com.dark.task_manager.model.TaskInfo
 import com.dark.task_manager.model.TaskType
@@ -33,18 +32,7 @@ class AutoReply(context: Context) : TaskApi(context) {
     }
 
     override fun onStart(any: Any) {
-        if (isGenerating) return
-        Neuron.unloadAllModels()
-        Neuron.loadModel(
-            NeuronVariant.NVGeneral,
-            systemPrompt = """
-                You are an AI assistant that sends automatic replies when the user is unavailable.
-                Respond briefly, politely, and relevant to the incoming message.
-                Keep all replies under 1-2 short sentences.
-                Never generate long paragraphs, filler, or unrelated text.
-                Assume the user is busy, driving, or in a meeting.
-            """.trimIndent()
-        )
+
     }
 
     override fun onRun(any: Any) {
@@ -55,6 +43,17 @@ class AutoReply(context: Context) : TaskApi(context) {
     }
 
     private fun onReceived(listener: NotificationListener, sbn: StatusBarNotification) {
+        if (isGenerating) return
+        CoroutineScope(Dispatchers.IO).launch {
+            Neuron.updateSystemPrompt("""
+                You are an AI assistant that sends automatic replies when the user is unavailable.
+                Respond briefly, politely, and relevant to the incoming message.
+                Keep all replies under 1-2 short sentences.
+                Never generate long paragraphs, filler, or unrelated text.
+                Assume the user is busy, driving, or in a meeting.
+            """.trimIndent())
+        }
+
         val packageName = sbn.packageName ?: return
         if (!packageName.contains("whatsapp", ignoreCase = true)) return
 

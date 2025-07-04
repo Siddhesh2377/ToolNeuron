@@ -1,4 +1,4 @@
-package com.dark.neuroverse.data.model
+package com.dark.ai_manager.ai.data
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

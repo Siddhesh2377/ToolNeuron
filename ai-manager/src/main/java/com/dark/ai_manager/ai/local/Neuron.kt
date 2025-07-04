@@ -11,28 +11,28 @@ object Neuron {
 
     data class Variant(
         val job: Job,
-        val variant: NeuronVariant,
+        val modelPath: File,
         val instance: SmolLM
     )
 
-    private var activeVariant: NeuronVariant? = null
+    private var activeVariant: File? = null
     private val modelInstances = ConcurrentHashMap<String, Variant>()
     private val nvScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     fun loadModel(
-        variant: NeuronVariant,
+        path: File,
         contextLength: Long = 8024,
         chatTemplate: String? = null,
         forceReload: Boolean = false,
         systemPrompt: String,
         onLoaded: (() -> Unit)? = null
     ) {
-        val file = File(variant.path)
-        require(file.exists()) { "Model file missing at: ${variant.path}" }
+        val file = File(path.path)
+        require(file.exists()) { "Model file missing at: ${path.path}" }
         Log.d("Neuron", "Loading ${file.name}, size=${file.length()}")
 
-        if (!forceReload && modelInstances.containsKey(variant.modelName)) {
-            activeVariant = variant
+        if (!forceReload && modelInstances.containsKey(path.name)) {
+            activeVariant = path
             onLoaded?.invoke()
             return
         }
@@ -43,7 +43,7 @@ object Neuron {
         val job = nvScope.launch {
             runCatching {
                 model.load(
-                    variant.path,
+                    path.path,
                     InferenceParams(
                         contextSize = contextLength,
                         chatTemplate = chatTemplate,
@@ -61,8 +61,8 @@ object Neuron {
             }
         }
 
-        modelInstances[variant.modelName] = Variant(job, variant, model)
-        activeVariant = variant
+        modelInstances[path.name] = Variant(job, path, model)
+        activeVariant = path
     }
 
     suspend fun generateResponseBlocking(input: String): String {
@@ -72,6 +72,11 @@ object Neuron {
         val response = withContext(Dispatchers.IO) { model.getResponse(input) }
         model.addAssistantMessage(response)
         return response.trim()
+    }
+
+    suspend fun updateSystemPrompt(systemPrompt: String){
+        val model = getActiveModel()
+        model.addSystemPrompt(systemPrompt)
     }
 
     suspend fun generateResponseStreaming(input: String, onTokenReceived: (String) -> Unit): String {
@@ -90,14 +95,14 @@ object Neuron {
 
     fun unloadActiveModel() {
         activeVariant?.let {
-            modelInstances.remove(it.modelName)?.instance?.close()
+            modelInstances.remove(it.name)?.instance?.close()
         }
         activeVariant = null
     }
 
     fun stopGeneration(immediate: Boolean = false) {
         activeVariant?.let {
-            modelInstances[it.modelName]?.instance?.let { model ->
+            modelInstances[it.name]?.instance?.let { model ->
                 if (immediate) model.stopGenerationImmediately() else model.stopGeneration()
             }
         }
@@ -113,7 +118,7 @@ object Neuron {
 
     private suspend fun getActiveModel(): SmolLM {
         val variant = activeVariant ?: error("No active model selected.")
-        val entry = modelInstances[variant.modelName] ?: error("Model not loaded.")
+        val entry = modelInstances[variant.name] ?: error("Model not loaded.")
         entry.job.join()
         return entry.instance
     }
