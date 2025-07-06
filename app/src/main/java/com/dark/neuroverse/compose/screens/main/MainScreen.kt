@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.ime
@@ -101,7 +102,8 @@ fun MainScreenContent(onAction: (Actions) -> Unit, paddingValues: PaddingValues)
     ) {
         HeaderMain()
         MainCards()
-        CarouselExample_MultiBrowse(Modifier.weight(1f))
+        //CarouselExample_MultiBrowse(Modifier.weight(1f))
+        Spacer(Modifier.weight(1f))
         BottomBarMain { onAction(it) }
     }
 }

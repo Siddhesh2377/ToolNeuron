@@ -3,6 +3,7 @@ package com.dark.task_manager.register
 import android.util.Log
 import com.dark.ai_manager.ai.local.Neuron
 import com.dark.task_manager.data.taskRouterSystemPrompt
+import com.dark.task_manager.data.toolsDefinition
 
 object TaskRouter {
 
@@ -18,20 +19,24 @@ object TaskRouter {
         Log.d("TaskDemoScreen", "Task String: $taskString")
 
         val input = buildString {
-            appendLine(taskRouterSystemPrompt)
+            appendLine(toolsDefinition)
             appendLine()
-            appendLine("Tasks:")
+            appendLine("TASK LIST:")
             appendLine(taskString)
             appendLine()
-            appendLine("User Prompt: $userPrompt")
+            appendLine("USER PROMPT: $userPrompt")
         }
 
-        val response = Neuron.generateResponseStreaming(input , {})
+        Neuron.updateSystemPrompt(toolsDefinition)
+
+        val response = Neuron.generateResponseStreaming(input) {}
 
         Log.d("TaskDemoScreen", "UserPrompt: $userPrompt")
         Log.d("TaskDemoScreen", "Response: $response")
 
         return response
     }
+
+
 
 }

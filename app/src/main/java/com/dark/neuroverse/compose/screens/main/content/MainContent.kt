@@ -129,7 +129,7 @@ fun BottomBarMain(onAction: (Actions) -> Unit) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.padding(horizontal = 18.dp, vertical = 8.dp)
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Text(
                 "Neuro V",
@@ -143,7 +143,7 @@ fun BottomBarMain(onAction: (Actions) -> Unit) {
                 onAction(Actions.CHAT)
             }
 
-            CollapsableButton(collapse = false, text = "EXPLORE", icon = Icons.TwoTone.Explore) {
+            CollapsableButton(collapse = true, text = "EXPLORE", icon = Icons.TwoTone.Explore) {
                 onAction(Actions.EXPLORE)
             }
         }
@@ -207,7 +207,7 @@ fun MainCards() {
                 Icon(painterResource(R.drawable.activity), "", iconModifier)
                 Text(
                     "Your Activity",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Light
                 )
@@ -225,7 +225,7 @@ fun MainCards() {
                 Icon(painterResource(R.drawable.movies), "", iconModifier)
                 Text(
                     "Fav Movies",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Light
                 )
@@ -248,7 +248,7 @@ fun MainCards() {
                 Icon(painterResource(R.drawable.apps), "", iconModifier)
                 Text(
                     "Favourite Apps",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Light
                 )
@@ -266,7 +266,7 @@ fun MainCards() {
                 Icon(painterResource(R.drawable.neurov), "", iconModifier)
                 Text(
                     "Your Chat’s",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MaterialTheme.typography.titleMedium,
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Light
                 )

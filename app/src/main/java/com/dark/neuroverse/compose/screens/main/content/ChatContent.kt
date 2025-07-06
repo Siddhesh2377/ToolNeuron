@@ -217,7 +217,7 @@ fun BottomChat(viewModel: ChattingViewModel) {
                 bottomEnd = 24.dp,
                 bottomStart = 24.dp
             ),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background),
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Row(
@@ -228,7 +228,7 @@ fun BottomChat(viewModel: ChattingViewModel) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Box(
+                Row(
                     modifier = Modifier
                         .weight(1f)
                         .padding(8.dp)
@@ -237,6 +237,7 @@ fun BottomChat(viewModel: ChattingViewModel) {
                         value = text,
                         onValueChange = { UserInput.updateText(it) },
                         singleLine = false,
+                        modifier = Modifier.fillMaxWidth(),
                         textStyle = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Normal),
                         decorationBox = { innerTextField ->
                             if (text.isEmpty()) {
@@ -245,6 +246,7 @@ fun BottomChat(viewModel: ChattingViewModel) {
                                     style = MaterialTheme.typography.titleMedium,
                                     fontFamily = FontFamily.Serif,
                                     fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.fillMaxWidth(),
                                     color = Color.Gray
                                 )
                             }

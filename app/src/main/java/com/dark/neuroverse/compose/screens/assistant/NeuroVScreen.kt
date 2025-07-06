@@ -63,21 +63,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import com.dark.ai_manager.ai.local.Neuron
-import com.dark.neuroverse.neurov.data.NeuronVariant
 import com.dark.neuroverse.R
 import com.dark.neuroverse.compose.components.GlitchTypingText
-import com.dark.neuroverse.neurov.mcp.ai.TaskRouter.process
 import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
 import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
-import com.dark.task_manager.data.taskRouterSystemPrompt
 import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 
 
 private val cardColor = Color(0xFFEFEFEF)
@@ -459,7 +456,6 @@ fun ActionBox(
     var text by remember { mutableStateOf("Open Youtube") }
     var isAguChecked by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         UserPrefs.isAGU(context).collect {
@@ -533,8 +529,18 @@ fun ActionBox(
                                 if (text.isNotBlank()) {
                                     val safePrompt = text  // ✨ capture current value before launch
                                     text = ""              // ✨ clear the input after capturing
-                                    scope.launch {
-                                      TaskRegistry.startTask(TaskRouter.processUserPrompt(safePrompt), safePrompt)
+                                    CoroutineScope(Dispatchers.IO ).launch {
+                                        val jsonObject = JSONObject(
+                                            TaskRouter.processUserPrompt(
+                                                safePrompt
+                                            )
+                                        )
+
+                                        val name = jsonObject.getJSONObject("tool_call")
+
+                                        TaskRegistry.startTask(
+                                            name.getJSONObject("args").getString("app_name"), safePrompt
+                                        )
                                     }
                                 }
                             })

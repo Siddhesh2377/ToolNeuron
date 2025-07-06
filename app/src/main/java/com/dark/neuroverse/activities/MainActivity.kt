@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import com.dark.neuroverse.compose.screens.assistant.NeuroVScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-
+import com.dark.neuroverse.compose.screens.main.MainScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,12 +22,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NeuroVerseTheme {
-                Scaffold(containerColor = MaterialTheme.colorScheme.background) { it ->
-                    Box(Modifier.padding(it)) {
-                        NeuroVScreen {
-
-                        }
-                    }
+                Scaffold(containerColor = MaterialTheme.colorScheme.surface) { it ->
+                    MainScreen(it)
                 }
             }
         }

@@ -12,7 +12,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 
+@Suppress("NULLABILITY_MISMATCH_BASED_ON_JAVA_ANNOTATIONS")
 class NeuroVerseApplication : Application() {
 
     override fun onCreate() {
@@ -22,17 +24,25 @@ class NeuroVerseApplication : Application() {
         ModelManager.init(this)
 
         val db = DatabaseProvider.getDatabase(this)
-        val modelName = UserPrefs.getCurrentModel(this)
+
+
 
         CoroutineScope(Dispatchers.IO).launch {
-            if (modelName.first()?.isNotEmpty() ?: true){
+            if (!UserPrefs.isTermsAccepted(applicationContext).first()) return@launch
+
+            val modelName = UserPrefs.getCurrentModel(applicationContext).first() ?: ""
+
+            if (modelName.isNotEmpty()) {
                 Neuron.loadModel(
-                    db.ModelDAO().getModelByName()?.modelPath,
+                    File(
+                        db.ModelDAO().getModelByName(modelName)?.modelPath
+                    ),
                     systemPrompt = taskRouterSystemPrompt
                 )
-            }else{
+
+            } else {
                 Neuron.loadModel(
-                    db.ModelDAO().getAllModels().first()[0].modelPath,
+                    File(db.ModelDAO().getAllModels().first()[0].modelPath),
                     systemPrompt = taskRouterSystemPrompt
                 )
             }
