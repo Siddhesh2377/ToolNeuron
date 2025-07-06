@@ -26,7 +26,7 @@ class AutoReply(context: Context) : TaskApi(context) {
         return TaskInfo(
             taskName = "Auto Reply",
             description = "Automatically replies to WhatsApp messages when user is unavailable.",
-            systemPrompt = "",
+            args = "",
             taskType = TaskType.BACKGROUND
         )
     }

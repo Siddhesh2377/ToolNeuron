@@ -47,7 +47,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -69,6 +68,7 @@ import com.dark.neuroverse.neurov.mcp.chat.models.ROLE
 import com.dark.neuroverse.neurov.mcp.chat.viewModels.ChattingViewModel
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
+import com.dark.neuroverse.utils.extractPureJson
 import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.CoroutineScope
@@ -527,20 +527,19 @@ fun ActionBox(
                             contentDescription = "Send",
                             modifier = Modifier.clickable {
                                 if (text.isNotBlank()) {
-                                    val safePrompt = text  // ✨ capture current value before launch
-                                    text = ""              // ✨ clear the input after capturing
-                                    CoroutineScope(Dispatchers.IO ).launch {
-                                        val jsonObject = JSONObject(
-                                            TaskRouter.processUserPrompt(
-                                                safePrompt
-                                            )
-                                        )
+                                    val safePrompt = text
+                                    text = ""
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        val raw = TaskRouter.processUserPrompt(safePrompt)
 
-                                        val name = jsonObject.getJSONObject("tool_call")
+                                        val jsonText = extractPureJson(raw)
 
-                                        TaskRegistry.startTask(
-                                            name.getJSONObject("args").getString("app_name"), safePrompt
-                                        )
+                                        val jsonObject = JSONObject(jsonText)
+                                        val toolCall = jsonObject.getJSONObject("tool_call")
+
+                                        val args = toolCall.getJSONObject("args")
+                                        val pkgName = args.getString("app_name")
+                                        TaskRegistry.startTask(pkgName, safePrompt)
                                     }
                                 }
                             })

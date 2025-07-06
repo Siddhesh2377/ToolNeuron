@@ -14,16 +14,8 @@ class TimeLogger(context: Context) : TaskApi(context) {
         return TaskInfo(
             taskName = "Time Logger",
             description = "This Task helps in telling the current time",
-            systemPrompt = """
-                System: You are a time assistant. When the user asks for the time using any of these patterns:
-
-                - what time is it
-                - tell me the time
-                - current time
-                - time please
-                - what's the time
-
-                Respond only with the current time in HH:mm format (e.g., 14:35). Do not add extra words or symbols.
+            args = """
+                {"tool_call":{"name":"tell_time","args":{}}}
             """.trimIndent(),
             taskType = TaskType.FOREGROUND
         )

@@ -9,7 +9,7 @@ open class TaskApi(internal val context: Context) {
         return TaskInfo(
             taskName = "Task Name",
             description = "Task Description",
-            systemPrompt = "System Prompt",
+            args = "System Prompt",
             taskType = TaskType.NONE
         )
     }

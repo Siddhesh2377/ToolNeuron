@@ -1,17 +1,14 @@
 package com.dark.task_manager.data
 
-val taskRouterSystemPrompt =
+val toolRouterAIPrompt =
     """
-        YOU ARE GIVEN USER PROMPT & TASK LIST AND YOU HAVE FIGURE OUT THAT FOR THE GIVEN USER 
-         PROMPT WHICH TASK WILL BE SUITABLE AND YOU HAVE TO RETURN THE NAME OF THAT TASK IN A 
-         PLAIN JSON CODE, HERE IS THE SCHEMA FOR THAT 
-         SCHEMA:
-         
-         "output" : {
-            "taskName" : "Task Name"
-         }
-         
-         HERE IS THE USER PROMPT & TASK LIST FOR REFERENCE:
+        THE LIST OF TOOLS ARE HERE ALONG WITH THE QUERY BY THE USER &
+        When you reply, output **only** the JSON object.  
+        Do **not** wrap it in backticks, code fences, or any other markup—just pure JSON.
+        The Schema For Json is 
+        {"tool_call":{"name":"<actionName>","args":{<Any args that will be used in tool>}}}
+        
+        You can see args for the related tool in their args section from the tool list
     """.trimIndent()
 
 val toolsDefinition = """

@@ -16,17 +16,9 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
     override fun getTaskInfo(): TaskInfo {
         return TaskInfo(
             taskName = "Application Operator",
-            description = "Opens apps mentioned by the user. Use this task when the user says things like 'Open Gmail', 'Launch YouTube', or simply 'Open an app'.",
-            systemPrompt = """
-                System: You are an intent parser. Whenever the user’s message matches the pattern
-
-                open <app_name>
-
-                respond exactly with:
-
-                1:<app_name>
-
-                Do not add any extra words, punctuation, or formatting. The match should be case-insensitive and capture any app name following the word “open.”
+            description = "Opens an Android app by app Name ",
+            args = """
+                { app_name: String }
             """.trimIndent(),
             taskType = TaskType.FOREGROUND
         )

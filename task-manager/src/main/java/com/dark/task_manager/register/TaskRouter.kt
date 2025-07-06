@@ -2,7 +2,7 @@ package com.dark.task_manager.register
 
 import android.util.Log
 import com.dark.ai_manager.ai.local.Neuron
-import com.dark.task_manager.data.taskRouterSystemPrompt
+import com.dark.task_manager.data.toolRouterAIPrompt
 import com.dark.task_manager.data.toolsDefinition
 
 object TaskRouter {
@@ -10,24 +10,24 @@ object TaskRouter {
     val taskList = TaskRegistry.getTasks()
 
     // Build the task string: "Task1: Description1, Task2: Description2, ..."
-    val taskString = taskList.joinToString(separator = ", ") { task ->
+    val toolListStr = taskList.joinToString(separator = ", ") { task ->
         "${task.taskInfo.taskName}: ${task.taskInfo.description}"
     }
 
     suspend fun processUserPrompt(userPrompt: String): String {
         // Print or log it (optional)
-        Log.d("TaskDemoScreen", "Task String: $taskString")
+        Log.d("TaskDemoScreen", "Task String: $toolListStr")
 
         val input = buildString {
-            appendLine(toolsDefinition)
+            appendLine(toolRouterAIPrompt)
             appendLine()
-            appendLine("TASK LIST:")
-            appendLine(taskString)
+            appendLine("TOOLS LIST:")
+            appendLine(toolListStr)
             appendLine()
             appendLine("USER PROMPT: $userPrompt")
         }
 
-        Neuron.updateSystemPrompt(toolsDefinition)
+        Neuron.updateSystemPrompt(toolRouterAIPrompt)
 
         val response = Neuron.generateResponseStreaming(input) {}
 
