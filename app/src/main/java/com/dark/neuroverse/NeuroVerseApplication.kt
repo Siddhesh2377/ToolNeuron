@@ -1,6 +1,9 @@
 package com.dark.neuroverse
 
 import android.app.Application
+import android.content.Intent
+import android.os.Environment
+import android.provider.Settings
 import android.util.Log
 import com.dark.ai_manager.ai.data.db.DatabaseProvider
 import com.dark.ai_manager.ai.local.Neuron

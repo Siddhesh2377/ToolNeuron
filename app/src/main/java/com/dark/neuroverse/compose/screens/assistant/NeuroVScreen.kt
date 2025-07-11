@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,7 +33,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Send
-import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.MicOff
 import androidx.compose.material3.Card
@@ -70,7 +71,7 @@ import com.dark.ai_manager.ai.data.db.DatabaseProvider
 import com.dark.ai_manager.ai.local.Neuron
 import com.dark.mylibrary.STTManager
 import com.dark.neuroverse.R
-import com.dark.neuroverse.compose.components.GlitchTypingText
+import com.dark.neuroverse.compose.components.ShimmerText
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.utils.UserPrefs
 import com.dark.neuroverse.utils.extractPureJson
@@ -80,7 +81,6 @@ import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -421,7 +421,7 @@ internal object ComposeComponents {
         val isListening by stt.isListening.collectAsState()
 
         val context = LocalContext.current
-        val scope = rememberCoroutineScope()
+        rememberCoroutineScope()
 
         var lastSpeechTimestamp by remember { mutableLongStateOf(0L) }
         var speechOngoing by remember { mutableStateOf(false) }
@@ -443,7 +443,8 @@ internal object ComposeComponents {
 
         LaunchedEffect(finalResults) {
             if (finalResults.isNotBlank()) {
-                Toast.makeText(context, "Final Speech Text: $finalResults", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Final Speech Text: $finalResults", Toast.LENGTH_SHORT)
+                    .show()
 
                 // You can also trigger your model, save text, or whatever:
                 Log.d("SpeechOutput", "Final text is: $finalResults")
@@ -463,7 +464,8 @@ internal object ComposeComponents {
 
                     if (speechOngoing && timeSinceLastSpeech > 2000) {
                         speechOngoing = false
-                        Toast.makeText(context, "Speech Paused (End Segment)", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Speech Paused (End Segment)", Toast.LENGTH_SHORT)
+                            .show()
                         stt.stop()
                     }
                 }
@@ -471,7 +473,9 @@ internal object ComposeComponents {
         }
 
         Box(
-            Modifier.fillMaxWidth().height(200.dp),
+            Modifier
+                .fillMaxWidth()
+                .height(200.dp),
             contentAlignment = Alignment.Center
         ) {
             if (isListening) {
@@ -479,7 +483,7 @@ internal object ComposeComponents {
                     LoadingIndicator()
                 }
             } else {
-                if(finalResults.isNotEmpty()){
+                if (finalResults.isNotEmpty()) {
                     CoroutineScope(Dispatchers.IO).launch {
                         Neuron.updateSystemPrompt("YOU ARE A HELP FULL AI ASSISTANT AND YOU REPLY FOR EVERY RESPONSE IN A VERY POLITE MANNER")
 
@@ -490,21 +494,22 @@ internal object ComposeComponents {
                             $finalResults
                         """.trimIndent()
 
-                        output = Neuron.generateResponseStreaming(temp){
+                        output = Neuron.generateResponseStreaming(temp) {
                             output += it
                         }
                     }
                 }
-                if (output.isNotEmpty()){
+                if (output.isNotEmpty()) {
                     Text(output)
                     finalResults = ""
-                }else{
+                } else {
                     Text("Tap mic below to start speaking", color = Color.Gray)
                 }
             }
         }
     }
 
+    @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     fun ResultComposable(viewModel: NeuroVScreenViewModel, action: Action) {
         val scrollState = rememberScrollState()
@@ -516,20 +521,52 @@ internal object ComposeComponents {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(200.dp)
+                        .heightIn(min = 200.dp, max = 450.dp)
                         .clip(RoundedCornerShape(6.dp))
                         .background(cardColor)
                         .verticalScroll(scrollState)
                 ) {
                     val resultText = viewModel.result.collectAsState().value.optString("result", "")
+                    val isGenerating = viewModel.isGenerating.collectAsState().value
 
-                    GlitchTypingText(
-                        finalText = resultText,
-                        delayPerChar = 1L,
+
+                    AnimatedVisibility(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 8.dp, vertical = 12.dp)
-                    )
+                            .height(200.dp),
+                        visible = isGenerating,
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                LoadingIndicator()
+                                ShimmerText(text = "Generating...")
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(
+                        modifier = Modifier
+                            .fillMaxWidth(),
+                        visible = !isGenerating && resultText.isNotBlank(),
+                        enter = fadeIn(),
+                        exit = fadeOut()
+                    ) {
+                        ResultCompose.SearchResultComposable(JSONObject(resultText))
+                    }
+
+//                    GlitchTypingText(
+//                        finalText = resultText,
+//                        delayPerChar = 1L,
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(horizontal = 8.dp, vertical = 12.dp)
+//                    )
                 }
             }
         }
@@ -538,7 +575,7 @@ internal object ComposeComponents {
     @OptIn(ExperimentalMaterial3ExpressiveApi::class)
     @Composable
     fun BottomBarActionWrite(viewModel: NeuroVScreenViewModel) {
-        var text by remember { mutableStateOf("Just Create a Text File With Random Data") }
+        var text by remember { mutableStateOf("Search Online For What is Brain ?") }
         var isAguChecked by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
@@ -619,6 +656,7 @@ internal object ComposeComponents {
                         text = ""
 
                         coroutineScope.launch(Dispatchers.IO) {
+                            viewModel.setIsGenerating(true)
                             val raw = TaskRouter.processUserPrompt(safePrompt)
                             Log.d("TaskDemoScreen", "Raw output: $raw")
                             val jsonText = extractPureJson(raw)
@@ -629,6 +667,7 @@ internal object ComposeComponents {
                                 val args = toolCall.getJSONObject("args")
 
                                 TaskRegistry.startTask(toolCall.getString("name"), args) {
+                                    viewModel.setIsGenerating(false)
                                     viewModel.updateResult(it)
                                 }
                             } catch (e: Exception) {
@@ -647,7 +686,9 @@ internal object ComposeComponents {
         val isListening by stt.isListening.collectAsState()
 
         Box(
-            Modifier.fillMaxWidth().height(200.dp),
+            Modifier
+                .fillMaxWidth()
+                .height(200.dp),
             contentAlignment = Alignment.Center
         ) {
             IconButton(
@@ -671,7 +712,6 @@ internal object ComposeComponents {
             }
         }
     }
-
 
     @Composable
     fun DefaultActionCompose(onPluginSelected: () -> Unit) {
@@ -702,6 +742,82 @@ internal object ComposeComponents {
                 }
             }
         }
+    }
+
+    internal object ResultCompose {
+        @Composable
+        fun SearchResultComposable(
+            content: JSONObject
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp)
+            ) {
+                // Top Bar Title
+                Text(
+                    text = "Search Results",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 24.sp
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Main Title
+                Text(
+                    text = content.getString("title"),
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 22.sp
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Abstract Summary
+                Text(
+                    text = content.getString("summary"),
+                    fontSize = 16.sp,
+                    lineHeight = 22.sp,
+                    color = Color.Black.copy(alpha = 0.8f)
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Related Topics
+                Text(
+                    text = "Related Topics",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+
+                Column {
+                    val jsonArray = content.getJSONArray("related_items")
+                    val relatedList = List(jsonArray.length()) { index ->
+                        val jsonObject = jsonArray.getJSONObject(index)
+                        RelatedTopics(
+                            jsonObject.getString("text"),
+                            jsonObject.getString("url")
+                        )
+                    }
+
+                    relatedList.forEach {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        ) {
+                            Icon(Icons.Default.Search, contentDescription = "Related Topic")
+                            Text(text = it.text, maxLines = 1)
+                        }
+                    }
+                }
+            }
+        }
+
+
+        internal data class RelatedTopics(
+            val text: String,
+            val url: String
+        )
     }
 }
 

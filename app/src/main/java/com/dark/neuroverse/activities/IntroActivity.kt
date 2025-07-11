@@ -2,6 +2,8 @@ package com.dark.neuroverse.activities
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.Environment
+import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,21 +23,44 @@ class IntroActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val context = this
-
             enableEdgeToEdge()
             NeuroVerseTheme {
                 Scaffold(containerColor = MaterialTheme.colorScheme.background) {
                     IntroScreen(it) {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            if (UserPrefs.isTermsAccepted(context).first()) {
-                                startActivity(Intent(context, MainActivity::class.java))
-                            } else {
-                                startActivity(Intent(context, SetUpActivity::class.java))
+                        if (!Environment.isExternalStorageManager()){
+                            val intent = Intent()
+                            intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+                            startActivity(intent)
+                        }else{
+                            CoroutineScope(Dispatchers.IO).launch {
+                                if (UserPrefs.isTermsAccepted(context).first()) {
+                                    startActivity(Intent(context, MainActivity::class.java))
+                                } else {
+                                    startActivity(Intent(context, SetUpActivity::class.java))
+                                }
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (!Environment.isExternalStorageManager()){
+            val intent = Intent()
+            intent.setAction(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
+            startActivity(intent)
+        }else{
+            CoroutineScope(Dispatchers.IO).launch {
+                if (UserPrefs.isTermsAccepted(this@IntroActivity).first()) {
+                    startActivity(Intent(this@IntroActivity, MainActivity::class.java))
+                } else {
+                    startActivity(Intent(this@IntroActivity, SetUpActivity::class.java))
+                }
+            }
+        }
+
     }
 }

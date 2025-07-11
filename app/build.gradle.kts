@@ -52,6 +52,8 @@ dependencies {
     implementation("net.java.dev.jna:jna:5.13.0@aar")
     implementation("org.jsoup:jsoup:1.21.1")
 
+
+
     //PROJECTS
     implementation(project(":task-manager"))
     implementation(project(":ai-manager"))

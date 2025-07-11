@@ -19,7 +19,7 @@ object TaskRouter {
 
         val input = buildString {
             appendLine("SYSTEM INSTRUCTION:")
-            appendLine("You are a strict tool-calling AI.")
+            appendLine("You are a strict tool-calling AI. When It is About Search, Them You Should Provide A Prompt Query For The Tool. & Always Read System Instruction First.")
             appendLine()
             appendLine("Output format:")
             appendLine("- JSON ONLY.")
@@ -32,6 +32,7 @@ object TaskRouter {
 
             taskList.forEach { task ->
                 appendLine("Tool: ${task.taskInfo.taskName}")
+                if (task.taskInfo.taskName == "Wiki Search") appendLine("System Instruction: ${task.taskInfo.description}")
                 appendLine("Args: ${task.taskInfo.args}")
                 appendLine()
             }
