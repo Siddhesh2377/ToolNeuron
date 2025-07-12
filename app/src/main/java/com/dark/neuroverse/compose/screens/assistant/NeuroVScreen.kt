@@ -71,14 +71,13 @@ import com.dark.ai_manager.ai.data.db.DatabaseProvider
 import com.dark.ai_manager.ai.local.Neuron
 import com.dark.mylibrary.STTManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.compose.components.GlitchTypingText
 import com.dark.neuroverse.compose.components.ShimmerText
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.utils.UserPrefs
-import com.dark.neuroverse.utils.extractPureJson
 import com.dark.neuroverse.utils.taskRouterSystemPrompt
 import com.dark.neuroverse.viewModel.NeuroVScreenViewModel
-import com.dark.task_manager.register.TaskRegistry
-import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -526,9 +525,9 @@ internal object ComposeComponents {
                         .background(cardColor)
                         .verticalScroll(scrollState)
                 ) {
+                    val typeText = viewModel.result.collectAsState().value.optString("type", "")
                     val resultText = viewModel.result.collectAsState().value.optString("result", "")
                     val isGenerating = viewModel.isGenerating.collectAsState().value
-
 
                     AnimatedVisibility(
                         modifier = Modifier
@@ -557,16 +556,24 @@ internal object ComposeComponents {
                         enter = fadeIn(),
                         exit = fadeOut()
                     ) {
-                        ResultCompose.SearchResultComposable(JSONObject(resultText))
-                    }
+                        when (typeText) {
+                            "wiki_search" -> ResultCompose.SearchResultComposable(
+                                JSONObject(
+                                    resultText
+                                )
+                            )
 
-//                    GlitchTypingText(
-//                        finalText = resultText,
-//                        delayPerChar = 1L,
-//                        modifier = Modifier
-//                            .fillMaxWidth()
-//                            .padding(horizontal = 8.dp, vertical = 12.dp)
-//                    )
+                            else -> {
+                                GlitchTypingText(
+                                    finalText = resultText,
+                                    delayPerChar = 1L,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp, vertical = 12.dp)
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -576,14 +583,10 @@ internal object ComposeComponents {
     @Composable
     fun BottomBarActionWrite(viewModel: NeuroVScreenViewModel) {
         var text by remember { mutableStateOf("Search Online For What is Brain ?") }
-        var isAguChecked by remember { mutableStateOf(false) }
         val context = LocalContext.current
         val coroutineScope = rememberCoroutineScope()
+        var isSearchOnline by remember { mutableStateOf(false) }
 
-        // Collect AGU preference once
-        LaunchedEffect(Unit) {
-            UserPrefs.isAGU(context).collect { isAguChecked = it }
-        }
 
         Row(
             modifier = Modifier
@@ -592,7 +595,6 @@ internal object ComposeComponents {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            val context = LocalContext.current
             val stt = remember(context) { STTManager(context) }
             val speechResults by stt.speechResults.collectAsState()
             val isListening by stt.isListening.collectAsState()
@@ -621,6 +623,14 @@ internal object ComposeComponents {
                 }
             )
 
+            Icon(
+                painterResource(R.drawable.web_search),
+                contentDescription = "Search",
+                tint = if (isSearchOnline) Success else MaterialTheme.colorScheme.primary,
+                modifier = Modifier.clickable {
+                    isSearchOnline = !isSearchOnline
+                })
+
             // SPEAK
             when (isListening) {
                 true -> {
@@ -645,7 +655,6 @@ internal object ComposeComponents {
                 }
             }
 
-
             //SEND
             Icon(
                 Icons.AutoMirrored.Outlined.Send,
@@ -656,23 +665,7 @@ internal object ComposeComponents {
                         text = ""
 
                         coroutineScope.launch(Dispatchers.IO) {
-                            viewModel.setIsGenerating(true)
-                            val raw = TaskRouter.processUserPrompt(safePrompt)
-                            Log.d("TaskDemoScreen", "Raw output: $raw")
-                            val jsonText = extractPureJson(raw)
-
-                            try {
-                                val jsonObject = JSONObject(jsonText)
-                                val toolCall = jsonObject.getJSONObject("tool_call")
-                                val args = toolCall.getJSONObject("args")
-
-                                TaskRegistry.startTask(toolCall.getString("name"), args) {
-                                    viewModel.setIsGenerating(false)
-                                    viewModel.updateResult(it)
-                                }
-                            } catch (e: Exception) {
-                                Log.e("TaskRouter", "Failed to parse tool_call JSON: ${e.message}")
-                            }
+                            viewModel.processUserPrompt(isSearchOnline, safePrompt)
                         }
                     }
                 }
@@ -782,31 +775,34 @@ internal object ComposeComponents {
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Related Topics
-                Text(
-                    text = "Related Topics",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
-                )
 
                 Column {
-                    val jsonArray = content.getJSONArray("related_items")
-                    val relatedList = List(jsonArray.length()) { index ->
-                        val jsonObject = jsonArray.getJSONObject(index)
-                        RelatedTopics(
-                            jsonObject.getString("text"),
-                            jsonObject.getString("url")
-                        )
-                    }
+                    if (content.has("related_items")) {
+                        val jsonArray = content.getJSONArray("related_items")
+                        val relatedList = List(jsonArray.length()) { index ->
+                            val jsonObject = jsonArray.getJSONObject(index)
+                            RelatedTopics(
+                                jsonObject.getString("text"),
+                                jsonObject.getString("url")
+                            )
+                        }
 
-                    relatedList.forEach {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(vertical = 8.dp)
-                        ) {
-                            Icon(Icons.Default.Search, contentDescription = "Related Topic")
-                            Text(text = it.text, maxLines = 1)
+                        // Related Topics
+                        Text(
+                            text = "Related Topics",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 20.sp
+                        )
+
+                        relatedList.forEach {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Search, contentDescription = "Related Topic")
+                                Text(text = it.text, maxLines = 1)
+                            }
                         }
                     }
                 }

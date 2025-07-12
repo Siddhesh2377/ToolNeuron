@@ -19,7 +19,7 @@ object TaskRouter {
 
         val input = buildString {
             appendLine("SYSTEM INSTRUCTION:")
-            appendLine("You are a strict tool-calling AI. When It is About Search, Them You Should Provide A Prompt Query For The Tool. & Always Read System Instruction First.")
+            appendLine("You are a strict tool-calling AI. Always Read System Instruction First.")
             appendLine()
             appendLine("Output format:")
             appendLine("- JSON ONLY.")
@@ -31,10 +31,11 @@ object TaskRouter {
             appendLine("List of Available Tools:\n")
 
             taskList.forEach { task ->
-                appendLine("Tool: ${task.taskInfo.taskName}")
-                if (task.taskInfo.taskName == "Wiki Search") appendLine("System Instruction: ${task.taskInfo.description}")
-                appendLine("Args: ${task.taskInfo.args}")
-                appendLine()
+                if (task.taskInfo.taskName != "Wiki Search"){
+                    appendLine("Tool: ${task.taskInfo.taskName}")
+                    appendLine("Args: ${task.taskInfo.args}")
+                    appendLine()
+                }
             }
 
             appendLine("User Request: $userPrompt")
@@ -52,6 +53,45 @@ object TaskRouter {
         return response
     }
 
+    suspend fun processSearchRequest(userPrompt: String): String {
+        val systemPrompt = """
+You are an AI that rewrites casual user prompts into strict Wikipedia-style search questions.
 
+📌 Always return a **single line question** in this format:  
+"What is <topic>?"
+
+🛑 Do NOT:
+- Add quotes
+- Ask vague or open-ended questions like "How does..." or "Why..."
+- Add meta text like "search" or "look up"
+- Output anything other than a one-line question
+
+Examples:
+- Input: "Tell me about machine learning" → "What is machine learning?"
+- Input: "Search Online For What is Brain?" → "What is the brain?"
+- Input: "Info about hydrogen bomb" → "What is a hydrogen bomb?"
+
+Only return the final question. No quotes. No prefix. Just the line.
+
+""".trimIndent()
+
+
+
+        val input = buildString {
+            appendLine("SYSTEM INSTRUCTION:")
+            appendLine(systemPrompt)
+            appendLine()
+            appendLine("User Prompt: $userPrompt")
+        }
+
+        Neuron.updateSystemPrompt(systemPrompt)
+
+        val response = Neuron.generateResponseStreaming(input) {}
+
+        Log.d("TaskDemoScreen", "UserPrompt: $userPrompt")
+        Log.d("TaskDemoScreen", "Response: $response")
+
+        return response.trim()
+    }
 
 }

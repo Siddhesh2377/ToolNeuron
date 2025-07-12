@@ -52,7 +52,7 @@ class FileManager(context: Context): TaskApi(context) {
         val args: JSONObject = any as JSONObject
         processRequest(args)
 
-        return JSONObject().put("result", "Success")
+        return JSONObject().put("result", "Success").put("type", "file_manager")
     }
 
 

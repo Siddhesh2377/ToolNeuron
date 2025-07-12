@@ -16,11 +16,7 @@ class WikiSearchTask(context: Context) : TaskApi(context) {
     override fun getTaskInfo(): TaskInfo {
         return TaskInfo(
             taskName = "Wiki Search",
-            description = """
-            Given a user request, extract the most relevant complete **search question** for Wikipedia.
-            The query must be in **full question form**, like "What is the brain?" or "Who discovered gravity?".
-            Avoid keywords, avoid short phrases. Use the user’s exact intention and reframe it as a question.
-        """.trimIndent(),
+            description = """Given a user request, rephrase it as a complete question suitable for Wikipedia, such as "What is the brain?" or "Who discovered gravity?". Avoid using keywords or short phrases.""".trimIndent(),
             args = """{ "query": "String (Full search question to pass to Wikipedia)" }""".trimIndent(),
             taskType = TaskType.FOREGROUND
         )

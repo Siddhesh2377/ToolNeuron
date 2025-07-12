@@ -53,7 +53,7 @@ class ApplicationOperator(context: Context) : TaskApi(context) {
 
 
         Log.d(getTaskInfo().taskName, "ApplicationTask completed")
-        return JSONObject().put("result", "Success")
+        return JSONObject().put("result", "Success").put("type", "application")
     }
 
 
