@@ -12,14 +12,14 @@ junitVersion = "1.2.1"
 espressoCore = "3.6.1"
 kotlinxCoroutinesCore = "1.10.2"
 kotlinxCoroutinesTest = "1.10.2"
-kotlinxSerializationJson = "1.8.1"
+kotlinxSerializationJson = "1.9.0"
 lifecycleRuntimeKtx = "2.9.1"
 activityCompose = "1.10.1"
 composeBom = "2025.06.01"
 lifecycleViewmodelCompose = "2.9.1"
 materialIconsExtended = "1.7.8"
-material3 = "1.4.0-alpha16"
-navigationCompose = "2.9.0"
+material3 = "1.4.0-alpha17"
+navigationCompose = "2.9.1"
 roomRuntime = "2.7.2"
 ksp = "2.2.0-2.0.2"
 material = "1.12.0"
@@ -41,6 +41,7 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastorePreferences" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigationCompose" }
 androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "roomRuntime" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "roomRuntime" }
 androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "roomRuntime" }
 androidx-runner = { module = "androidx.test:runner", version.ref = "runner" }
 
