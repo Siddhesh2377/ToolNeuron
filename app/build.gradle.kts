@@ -48,23 +48,6 @@ android {
 }
 
 dependencies {
-    implementation("com.alphacephei:vosk-android:0.3.47@aar")
-    implementation("net.java.dev.jna:jna:5.13.0@aar")
-    implementation("org.jsoup:jsoup:1.21.1")
-
-
-
-    //PROJECTS
-    implementation(project(":task-manager"))
-    implementation(project(":ai-manager"))
-    implementation(project(":smollm"))
-    implementation(project(":userData"))
-    implementation(project(":vosk"))
-
-    //DATABASE
-    implementation(libs.androidx.room.runtime)
-    ksp(libs.androidx.room.compiler)
-    implementation("androidx.room:room-ktx:2.7.2")
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)

@@ -138,8 +138,7 @@ internal fun NeuroVHeader(action: Action, onBack: () -> Unit = {}) {
                 contentDescription = "Send",
                 modifier = Modifier
                     .size(40.dp)
-                    .clickable { onBack() }
-            )
+                    .clickable { onBack() })
         }
 
         Spacer(Modifier.width(20.dp))
@@ -161,8 +160,7 @@ internal fun NeuroVHeader(action: Action, onBack: () -> Unit = {}) {
             },
             modifier = Modifier.padding(end = 16.dp),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = Color.Black,
-                contentColor = Color.White
+                containerColor = Color.Black, contentColor = Color.White
             )
         ) {
             Icon(
@@ -174,9 +172,7 @@ internal fun NeuroVHeader(action: Action, onBack: () -> Unit = {}) {
 
 @Composable
 internal fun NeuroVBody(
-    action: Action,
-    onClick: (action: Action) -> Unit,
-    viewModel: NeuroVScreenViewModel
+    action: Action, onClick: (action: Action) -> Unit, viewModel: NeuroVScreenViewModel
 ) {
     AnimatedContent(action, transitionSpec = {
         (fadeIn()).togetherWith(fadeOut())
@@ -202,8 +198,7 @@ internal fun NeuroVBody(
 @Composable
 internal fun NeuroVBottomBar(action: Action, viewModel: NeuroVScreenViewModel, plg: () -> Unit) {
     Row(
-        ComposeConfig.NeuroVBottomBar_rootModifier,
-        verticalAlignment = Alignment.CenterVertically
+        ComposeConfig.NeuroVBottomBar_rootModifier, verticalAlignment = Alignment.CenterVertically
     ) {
         ActionBox(action, viewModel, plg)
     }
@@ -211,14 +206,12 @@ internal fun NeuroVBottomBar(action: Action, viewModel: NeuroVScreenViewModel, p
 
 @Composable
 internal fun BottomNavButton(text: String, selected: Boolean, onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .clickable { onClick() }
-            .padding(vertical = 12.dp)
-            .clip(RoundedCornerShape(6.dp))
-            .background(if (selected) Color.Black else Color.White)
-            .padding(horizontal = 18.dp, vertical = 8.dp)
-    ) {
+    Box(modifier = Modifier
+        .clickable { onClick() }
+        .padding(vertical = 12.dp)
+        .clip(RoundedCornerShape(6.dp))
+        .background(if (selected) Color.Black else Color.White)
+        .padding(horizontal = 18.dp, vertical = 8.dp)) {
         Text(
             text,
             color = if (selected) Color.White else Color.Black,
@@ -230,13 +223,10 @@ internal fun BottomNavButton(text: String, selected: Boolean, onClick: () -> Uni
 
 @Composable
 internal fun ActionBox(
-    action: Action,
-    viewModel: NeuroVScreenViewModel,
-    onPluginSelected: () -> Unit
+    action: Action, viewModel: NeuroVScreenViewModel, onPluginSelected: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -258,28 +248,32 @@ internal fun ActionBox(
 
 internal object ComposeConfig {
 
-    val NeuroVScreen_rootModifier = Modifier
-        .fillMaxSize()
-        .padding(horizontal = 12.dp)
-        .padding(bottom = 34.dp)
+    val NeuroVScreen_rootModifier =
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 12.dp)
+            .padding(bottom = 34.dp)
 
-    val NeuroVScreen_holderModifier = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(24.dp))
-        .background(Color.White)
-        .padding(20.dp)
-
-
-    val NeuroVHeader_rootModifier = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(12.dp, 12.dp, 6.dp, 6.dp))
-        .background(cardColor)
+    val NeuroVScreen_holderModifier =
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(Color.White)
+            .padding(20.dp)
 
 
-    val NeuroVBottomBar_rootModifier = Modifier
-        .fillMaxWidth()
-        .clip(RoundedCornerShape(6.dp, 6.dp, 12.dp, 12.dp))
-        .background(cardColor)
+    val NeuroVHeader_rootModifier =
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp, 12.dp, 6.dp, 6.dp))
+            .background(cardColor)
+
+
+    val NeuroVBottomBar_rootModifier =
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(6.dp, 6.dp, 12.dp, 12.dp))
+            .background(cardColor)
 
 }
 
@@ -380,8 +374,7 @@ internal object ComposeComponents {
     @Composable
     fun BodyContentNone(onClick: (action: Action) -> Unit) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             QuickActionCard(
                 modifier = Modifier.weight(1f),
@@ -390,8 +383,7 @@ internal object ComposeComponents {
                 desc = "Feel to be Private..? Try Typing Your Task To AI....",
                 onClick = {
                     onClick(Action.WRITE)
-                }
-            )
+                })
             QuickActionCard(
                 modifier = Modifier.weight(1f),
                 icon = painterResource(R.drawable.mic),
@@ -399,8 +391,7 @@ internal object ComposeComponents {
                 desc = "No Need To Type, Just Click And Let the Magic Happen",
                 onClick = {
                     onClick(Action.SPEAK)
-                }
-            )
+                })
 //            QuickActionCard(
 //                modifier = Modifier.weight(1f),
 //                icon = painterResource(R.drawable.brain), // swap for your AGU icon
@@ -474,8 +465,7 @@ internal object ComposeComponents {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(200.dp),
-            contentAlignment = Alignment.Center
+                .height(200.dp), contentAlignment = Alignment.Center
         ) {
             if (isListening) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -550,8 +540,7 @@ internal object ComposeComponents {
                     }
 
                     AnimatedVisibility(
-                        modifier = Modifier
-                            .fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth(),
                         visible = !isGenerating && resultText.isNotBlank(),
                         enter = fadeIn(),
                         exit = fadeOut()
@@ -613,15 +602,12 @@ internal object ComposeComponents {
                     Box {
                         if (text.isEmpty()) {
                             Text(
-                                "Write Message Here...",
-                                color = Color.Gray,
-                                fontSize = 16.sp
+                                "Write Message Here...", color = Color.Gray, fontSize = 16.sp
                             )
                         }
                         innerTextField()
                     }
-                }
-            )
+                })
 
             Icon(
                 painterResource(R.drawable.web_search),
@@ -650,8 +636,7 @@ internal object ComposeComponents {
                                 Toast.makeText(context, "Model loading...", Toast.LENGTH_SHORT)
                                     .show()
                             }
-                        }
-                    )
+                        })
                 }
             }
 
@@ -668,8 +653,7 @@ internal object ComposeComponents {
                             viewModel.processUserPrompt(isSearchOnline, safePrompt)
                         }
                     }
-                }
-            )
+                })
         }
     }
 
@@ -681,8 +665,7 @@ internal object ComposeComponents {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(200.dp),
-            contentAlignment = Alignment.Center
+                .height(200.dp), contentAlignment = Alignment.Center
         ) {
             IconButton(
                 onClick = {
@@ -691,9 +674,7 @@ internal object ComposeComponents {
                     } else {
                         Toast.makeText(context, "Model loading...", Toast.LENGTH_SHORT).show()
                     }
-                },
-                modifier = Modifier.size(54.dp),
-                colors = IconButtonDefaults.iconButtonColors(
+                }, modifier = Modifier.size(54.dp), colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary
                 )
@@ -711,7 +692,8 @@ internal object ComposeComponents {
         Row(
             Modifier
                 .fillMaxWidth()
-                .background(cardColor), verticalAlignment = Alignment.CenterVertically
+                .background(cardColor),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
                 "Plugins Actions",
@@ -749,9 +731,7 @@ internal object ComposeComponents {
             ) {
                 // Top Bar Title
                 Text(
-                    text = "Search Results",
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 24.sp
+                    text = "Search Results", fontWeight = FontWeight.Bold, fontSize = 24.sp
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -782,16 +762,13 @@ internal object ComposeComponents {
                         val relatedList = List(jsonArray.length()) { index ->
                             val jsonObject = jsonArray.getJSONObject(index)
                             RelatedTopics(
-                                jsonObject.getString("text"),
-                                jsonObject.getString("url")
+                                jsonObject.getString("text"), jsonObject.getString("url")
                             )
                         }
 
                         // Related Topics
                         Text(
-                            text = "Related Topics",
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
+                            text = "Related Topics", fontWeight = FontWeight.Bold, fontSize = 20.sp
                         )
 
                         relatedList.forEach {
@@ -811,8 +788,7 @@ internal object ComposeComponents {
 
 
         internal data class RelatedTopics(
-            val text: String,
-            val url: String
+            val text: String, val url: String
         )
     }
 }

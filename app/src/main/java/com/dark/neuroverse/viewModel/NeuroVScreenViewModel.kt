@@ -2,11 +2,14 @@ package com.dark.neuroverse.viewModel
 
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.dark.ai_manager.ai.local.Neuron
 import com.dark.neuroverse.utils.extractPureJson
 import com.dark.task_manager.register.TaskRegistry
 import com.dark.task_manager.register.TaskRouter
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 class NeuroVScreenViewModel : ViewModel() {
@@ -34,8 +37,15 @@ class NeuroVScreenViewModel : ViewModel() {
                 val json = JSONObject().put("query", raw)
 
                 TaskRegistry.startTask(TaskRegistry.getTasks()[0].taskInfo.taskName, json) {
-                    setIsGenerating(false)
-                    updateResult(it)
+                  //  viewModelScope.launch {
+//                        Log.d("TaskDemoScreen", "Raw output: $it")
+//                        val summary = it.getString("summary")
+//                        val articleText = summarizeFetchedArticle(summary)
+//                        it.remove("summary")
+//                        it.put("summary", articleText)
+                        updateResult(it)
+                        setIsGenerating(false)
+                   // }
                 }
             }
             false -> {
@@ -57,5 +67,16 @@ class NeuroVScreenViewModel : ViewModel() {
                 }
             }
         }
+    }
+
+    suspend fun summarizeFetchedArticle(articleText: String): String {
+        val prompt = """
+        Summarize the following article in a detailed but concise way, like a Wikipedia intro paragraph:
+        
+        "$articleText"
+    """.trimIndent()
+        Neuron.updateSystemPrompt("Summarize the given article in a detailed but concise way, like a Wikipedia intro paragraph")
+
+        return Neuron.generateResponseStreaming(prompt) {}
     }
 }
