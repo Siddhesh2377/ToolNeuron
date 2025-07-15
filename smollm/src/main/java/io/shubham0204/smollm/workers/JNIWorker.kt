@@ -6,80 +6,78 @@ import io.shubham0204.smollm.repo.Architecture
 import io.shubham0204.smollm.repo.JNILIB
 import io.shubham0204.smollm.repo.jniLibs
 import java.io.File
-import java.io.FileNotFoundException
 
 object JNIWorker {
 
-    suspend fun downloadLib(context: Context, onDownloadComplete: () -> Unit) {
-        var libToDownload = JNILIB("", "", Architecture.ARM64)
-        val nativeJniPath = File(context.filesDir, "jniLibs")
+    fun getCompatibleJniLibName(): String {
+        val (abi, isEmulated, features) = getCpuInfo()
+        val (hasFp16, hasDotProd, hasSve, hasI8mm, isArmV82, isArmV84) = decodeFeatures(features)
 
-        val cpuFeatures = getCPUFeatures()
-        val hasFp16 = cpuFeatures.contains("fp16") || cpuFeatures.contains("fphp")
-        val hasDotProd = cpuFeatures.contains("dotprod") || cpuFeatures.contains("asimddp")
-        val hasSve = cpuFeatures.contains("sve")
-        val hasI8mm = cpuFeatures.contains("i8mm")
-        val isAtLeastArmV82 =
-            cpuFeatures.contains("asimd") && cpuFeatures.contains("crc32") && cpuFeatures.contains(
-                "aes",
-            )
-        val isAtLeastArmV84 = cpuFeatures.contains("dcpop") && cpuFeatures.contains("uscat")
-
-        val isEmulated = (Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu"))
-
-        if (!isEmulated) {
-            if (supportsArm64V8a()) {
-                libToDownload = if (isAtLeastArmV84 && hasSve && hasI8mm && hasFp16 && hasDotProd) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_4_fp16_dotprod_i8mm_sve" }!!
-                } else if (isAtLeastArmV84 && hasSve && hasFp16 && hasDotProd) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_4_fp16_dotprod_sve" }!!
-                } else if (isAtLeastArmV84 && hasI8mm && hasFp16 && hasDotProd) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_4_fp16_dotprod_i8mm" }!!
-                } else if (isAtLeastArmV84 && hasFp16 && hasDotProd) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_4_fp16_dotprod" }!!
-                } else if (isAtLeastArmV82 && hasFp16 && hasDotProd) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_2_fp16_dotprod" }!!
-                } else if (isAtLeastArmV82 && hasFp16) {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8_2_fp16" }!!
-                } else {
-                    jniLibs.find { it.architecture == Architecture.ARM64 && it.name == "libsmollm_v8" }!!
-                }
-            } else if (Build.SUPPORTED_32_BIT_ABIS[0]?.equals("armeabi-v7a") == true) {
-                System.loadLibrary("smollm_v7a")
-                libToDownload =
-                    jniLibs.find { it.architecture == Architecture.ARM && it.name == "smollm_v7a" }!!
-            }
-        } else {
-            libToDownload =
-                jniLibs.find { it.architecture == Architecture.X86_64 && it.name == "smollm" }!!
+        return when {
+            isEmulated -> "smollm"
+            !abi.contains("arm64-v8a") -> "smollm_v7a"
+            isArmV84 && hasSve && hasI8mm && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_i8mm_sve"
+            isArmV84 && hasSve && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_sve"
+            isArmV84 && hasI8mm && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod_i8mm"
+            isArmV84 && hasFp16 && hasDotProd -> "smollm_v8_4_fp16_dotprod"
+            isArmV82 && hasFp16 && hasDotProd -> "smollm_v8_2_fp16_dotprod"
+            isArmV82 && hasFp16 -> "smollm_v8_2_fp16"
+            else -> "smollm_v8"
         }
+    }
 
+    suspend fun downloadLib(context: Context, onDownloadComplete: () -> Unit) {
+        val nativeJniPath = File(context.filesDir, "jniLibs").apply { mkdirs() }
+
+        val libName = getCompatibleJniLibName()
+        val matchedLib = jniLibs.find {
+            it.name == "lib$libName" // match full filename (without .so)
+        } ?: error("Compatible JNI lib not found for $libName")
 
         jniLibsDownloader(
-            fileUrl = libToDownload.link,
-            outputFile = File(nativeJniPath, "${libToDownload.name}.so"),
-            onProgress = {
-
-            },
-            onComplete = {
-                onDownloadComplete()
-            },
-            onError = {
-
-            })
+            fileUrl = matchedLib.link,
+            outputFile = File(nativeJniPath, "${matchedLib.name}.so"),
+            onProgress = {},
+            onComplete = { onDownloadComplete() },
+            onError = {}
+        )
     }
 
-    private fun getCPUFeatures(): String {
-        val cpuInfo = try {
+    // Helper: full CPU feature info
+    private fun getCpuInfo(): Triple<String, Boolean, String> {
+        val abi = Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"
+        val isEmulated = Build.HARDWARE.contains("goldfish") || Build.HARDWARE.contains("ranchu")
+        val features = try {
             File("/proc/cpuinfo").readText()
-        } catch (e: FileNotFoundException) {
+                .substringAfter("Features").substringAfter(":")
+                .substringBefore("\n").trim()
+        } catch (_: Exception) {
             ""
         }
-        val cpuFeatures =
-            cpuInfo.substringAfter("Features").substringAfter(":").substringBefore("\n").trim()
-        return cpuFeatures
+        return Triple(abi, isEmulated, features)
     }
 
-    private fun supportsArm64V8a(): Boolean = Build.SUPPORTED_ABIS[0].equals("arm64-v8a")
-}
+    // Helper: CPU capabilities
+    private fun decodeFeatures(cpuFeatures: String): FeatureSet {
+        return FeatureSet(
+            hasFp16 = cpuFeatures.contains("fp16") || cpuFeatures.contains("fphp"),
+            hasDotProd = cpuFeatures.contains("dotprod") || cpuFeatures.contains("asimddp"),
+            hasSve = cpuFeatures.contains("sve"),
+            hasI8mm = cpuFeatures.contains("i8mm"),
+            isArmV82 = cpuFeatures.contains("asimd") &&
+                    cpuFeatures.contains("crc32") &&
+                    cpuFeatures.contains("aes"),
+            isArmV84 = cpuFeatures.contains("dcpop") &&
+                    cpuFeatures.contains("uscat")
+        )
+    }
 
+    data class FeatureSet(
+        val hasFp16: Boolean,
+        val hasDotProd: Boolean,
+        val hasSve: Boolean,
+        val hasI8mm: Boolean,
+        val isArmV82: Boolean,
+        val isArmV84: Boolean,
+    )
+}
