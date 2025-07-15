@@ -4,8 +4,13 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import com.dark.ai_module.ai.Neuron
+import com.dark.ai_module.workers.ModelManager
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollm.workers.JNIWorker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.io.File
 
 object JNILibHelper {
@@ -31,7 +36,6 @@ object JNILibHelper {
         val soFile = File(nativeJniPath, "lib$fileName.so")
         if (soFile.exists()) {
             Log.d("JNILibLoad", "Loading JNI lib from: ${soFile.absolutePath}")
-            System.load(soFile.absolutePath)
             onComplete()
         } else {
             JNIWorker.downloadLib(context){
