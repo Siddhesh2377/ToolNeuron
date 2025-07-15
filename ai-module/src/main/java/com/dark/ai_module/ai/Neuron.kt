@@ -1,5 +1,6 @@
 package com.dark.ai_module.ai
 
+import android.content.Context
 import android.util.Log
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollm.SmolLM.InferenceParams
@@ -21,6 +22,7 @@ object Neuron {
 
     fun loadModel(
         path: File,
+        context: Context,
         contextLength: Long = 8024,
         chatTemplate: String? = null,
         forceReload: Boolean = false,
@@ -38,7 +40,7 @@ object Neuron {
         }
 
         unloadActiveModel()
-        val model = SmolLM()
+        val model = SmolLM(context)
 
         val job = nvScope.launch {
             runCatching {

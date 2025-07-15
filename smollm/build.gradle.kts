@@ -24,25 +24,11 @@ plugins {
 android {
     namespace = "io.shubham0204.smollm"
     compileSdk = 35
-   // ndkVersion = "29.0.13599879"
 
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-
-//        externalNativeBuild {
-//            cmake {
-//                cppFlags += listOf()
-//                arguments += "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
-//                arguments += "-DCMAKE_BUILD_TYPE=Release"
-//                arguments += "-DCMAKE_VERBOSE_MAKEFILE=ON"
-//            }
-//        }
-
-        ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
-        }
     }
 
     fun Packaging.() {
@@ -51,13 +37,9 @@ android {
         }
     }
 
-
     buildTypes {
         release {
             isMinifyEnabled = true
-            ndk {
-                debugSymbolLevel = "none"  // Strip native debug symbols
-            }
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

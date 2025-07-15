@@ -8,13 +8,17 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 
-class NVApplication: Application() {
+class NVApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
         ModelManager.init(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
-            Neuron.loadModel(File(ModelManager.getFirstModel()?.modelPath ?: ""), systemPrompt = "You are a helpful assistant.")
+            Neuron.loadModel(
+                File(ModelManager.getFirstModel()?.modelPath ?: ""),
+                context = applicationContext,
+                systemPrompt = "You are a helpful assistant."
+            )
         }
     }
 }
