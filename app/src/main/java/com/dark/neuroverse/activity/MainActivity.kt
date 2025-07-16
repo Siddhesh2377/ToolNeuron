@@ -40,6 +40,17 @@ class MainActivity : ComponentActivity() {
 
             // Launch once: check & load JNI
             LaunchedEffect(Unit) {
+                when(JNILibHelper.checkIfJNILibExists(this@MainActivity)){
+                    true -> {
+                        loadJNI {
+                            isJNIReady = true
+                        }
+                    }
+                    false -> {
+                        isJNIDownloading = true
+                    }
+                }
+
                 // Optional delay for visual intro
                 delay(3500)
 
@@ -47,17 +58,9 @@ class MainActivity : ComponentActivity() {
                 isJNIDownloading = !JNILibHelper.checkIfJNILibExists(this@MainActivity)
 
                 // Start downloading/loading
-                JNILibHelper.loadJNILib(this@MainActivity) {
-                    CoroutineScope(Dispatchers.IO).launch {
-                        Neuron.loadModel(
-                            File(ModelManager.getFirstModel()?.modelPath ?: ""),
-                            context = this@MainActivity,
-                            systemPrompt = "You are a helpful assistant."
-                        ){
-                            isJNIReady = true
-                            isJNIDownloading = false
-                        }
-                    }
+                loadJNI {
+                    isJNIDownloading = false
+                    isJNIReady = true
                 }
             }
 
@@ -96,6 +99,20 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private suspend fun loadJNI(onLoaded: () -> Unit){
+        JNILibHelper.loadJNILib(this@MainActivity) {
+            CoroutineScope(Dispatchers.IO).launch {
+                Neuron.loadModel(
+                    File(ModelManager.getFirstModel()?.modelPath ?: ""),
+                    context = this@MainActivity,
+                    systemPrompt = "You are a helpful assistant."
+                ){
+                    onLoaded()
                 }
             }
         }
