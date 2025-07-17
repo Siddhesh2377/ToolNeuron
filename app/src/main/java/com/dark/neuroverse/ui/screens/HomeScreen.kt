@@ -1,9 +1,16 @@
 package com.dark.neuroverse.ui.screens
 
+import android.util.Log
+import android.widget.Toast
+import androidx.annotation.DrawableRes
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -14,9 +21,17 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -24,7 +39,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -32,37 +50,33 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.ai.Neuron
+import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
+import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.ui.screens.UIComponents.ActionButton
+import com.dark.neuroverse.ui.screens.UIComponents.ActionButtonWithCircleProgressIndicator
+import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
+import java.io.File
 
 @Composable
-fun HomeScreen(viewModel: ChattingViewModel = viewModel()) {
-    var text by remember { mutableStateOf("") }
-
-    LaunchedEffect(Unit) {
-        try {
-            CoroutineScope(Dispatchers.IO).launch {
-                Neuron.generateResponseStreaming("Greet The User") { token ->
-                    text += token
-                }
-            }
-        } catch (e: Exception) {
-            text = "Error: ${e.message}"
-        }
-    }
+fun HomeScreen(viewModel: ChattingViewModel = viewModel(), onModelScreen: () -> Unit){
 
     WindowInsets.ime.getBottom(LocalDensity.current) > 0
 
@@ -73,19 +87,52 @@ fun HomeScreen(viewModel: ChattingViewModel = viewModel()) {
             .padding(top = rDP(8.dp))
             .imePadding() // this pushes BottomBar above keyboard
     ) {
-        TopBar()
-        Conversations(Modifier.weight(1f))
-        BottomBar() // Don't apply weight here!
+        TopBar(viewModel, onModelScreen)
+        Conversations(Modifier.weight(1f), viewModel)
+        BottomBar(viewModel) // Don't apply weight here!
     }
 }
 
 @Composable
-internal fun TopBar() {
+internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit){
+    var expanded by remember { mutableStateOf(false) }
+    val density = LocalDensity.current
+    val screenWidthDp = LocalWindowInfo.current.containerSize.width.dp
+    var menuWidthPx by remember { mutableIntStateOf(0) }
+    var currentModel by remember { mutableStateOf("") }
+    val modelList = remember { mutableStateListOf<ModelsData>() }
+
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        ModelManager.observeModels().collectLatest { data ->
+            modelList.clear()
+            modelList += data
+            Log.d("ModelManager", "Model list updated: $data")
+        }
+    }
+
+    LaunchedEffect(currentModel) {
+        val tempModel = File(ModelManager.getModel(currentModel)?.modelPath ?: "")
+        if (currentModel != "") {
+            Neuron.loadModel(
+                path = tempModel,
+                context = context,
+                systemPrompt = "You are a helpful assistant."
+            ) {
+                Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        IconButton(onClick = {}) {
+        IconButton(onClick = {
+            onModelScreen()
+        }) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
         }
 
@@ -97,38 +144,98 @@ internal fun TopBar() {
 
         Spacer(Modifier.weight(1f))
 
-        IconButton(onClick = {}) {
+        IconButton(onClick = {
+            viewModel.newChat()
+        }) {
             Icon(painter = painterResource(R.drawable.new_chat), contentDescription = "New Chat")
         }
 
-        IconButton(onClick = {}) {
+        // “More” button that toggles the dropdown
+        IconButton(onClick = { expanded = true }, modifier = Modifier) {
             Icon(painter = painterResource(R.drawable.more), contentDescription = "More")
+        }
+
+        // The actual dropdown menu
+        DropdownMenu(
+            expanded = expanded,
+            offset = with(density) {
+                val menuWidthDp = menuWidthPx.toDp()
+                DpOffset(x = (screenWidthDp - menuWidthDp) - 26.dp, y = 0.dp)
+            },
+            modifier = Modifier.onGloballyPositioned { coords -> menuWidthPx = coords.size.width },
+            onDismissRequest = { expanded = false }) {
+
+            repeat(modelList.size) { index ->
+                DropdownMenuItem(text = { Text(modelList[index].modeName) }, onClick = {
+                    expanded = false
+                    currentModel = modelList[index].modeName
+                })
+            }
         }
     }
 }
 
 @Composable
-internal fun Conversations(modifier: Modifier = Modifier) {
+internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingViewModel) {
     @Composable
     fun ChatBubble(message: Message) {
+        val isThinkingMessage = remember(message.content) {
+            message.content.trimStart().startsWith("<think>")
+        }
+
+        // Detect and clean reasoning part
+        val raw = message.content.trim()
+        val cleanThinking = remember(raw) {
+            if (isThinkingMessage) {
+                val withoutOpen = raw.removePrefix("<think>").trimStart()
+                if (withoutOpen.endsWith("</think>")) {
+                    withoutOpen.removeSuffix("</think>").trimEnd()
+                } else {
+                    withoutOpen
+                }
+            } else ""
+        }
+
+        val actualResponse = remember(raw) {
+            if (isThinkingMessage && raw.contains("</think>")) {
+                // Extract actual response that comes after </think>
+                raw.substringAfter("</think>").trimStart()
+            } else if (!isThinkingMessage) {
+                // Normal system message
+                raw
+            } else {
+                "" // if still thinking and no closing tag yet
+            }
+        }
+
         Column(
             modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
         ) {
-            Text(
-                text = message.content, style = MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
-                ), modifier = Modifier
-                    .then(
-                        if (message.role == ROLE.USER) Modifier.background(
-                            color = MaterialTheme.colorScheme.surface,
-                            shape = MaterialTheme.shapes.extraLarge
-                        ) else Modifier
-                    )
-                    .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
-            )
+            if (isThinkingMessage) {
+                ThinkingBubble(message.copy(content = cleanThinking))
+            }
 
-            if (message.role != ROLE.USER) {
+            if (actualResponse.isNotBlank()) {
+                MarkdownText(
+                    text = actualResponse,
+                    canCopy = message.role != ROLE.USER,
+                    style = MaterialTheme.typography.bodyLarge.copy(
+                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
+                    ),
+                    modifier = Modifier
+                        .then(
+                            if (message.role == ROLE.USER) Modifier.background(
+                                color = MaterialTheme.colorScheme.surface,
+                                shape = MaterialTheme.shapes.extraLarge
+                            ) else Modifier
+                        )
+                        .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
+                )
+            }
+
+            if (message.role != ROLE.USER && actualResponse.isNotBlank()) {
                 Row(
                     modifier = Modifier.padding(
                         top = rDP(4.dp), start = rDP(18.dp)
@@ -150,21 +257,15 @@ internal fun Conversations(modifier: Modifier = Modifier) {
         }
     }
 
-    val messages = listOf(
-        Message(
-            ROLE.USER, "So What Can You Do?", "12:00 PM"
-        ), Message(
-            ROLE.SYSTEM,
-            "I am Ai Assistant, I can search web and work with offline tools for The Device",
-            "12:00 PM"
-        )
-    )
+
+    val messages = viewModel.messages.collectAsState().value.toMutableList()
 
     LazyColumn(
         modifier = modifier
             .fillMaxWidth()
             .padding(top = rDP(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+        verticalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+        contentPadding = PaddingValues(bottom = rDP(26.dp))
     ) {
         items(messages.size) { index ->
             ChatBubble(message = messages[index])
@@ -172,14 +273,17 @@ internal fun Conversations(modifier: Modifier = Modifier) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-internal fun BottomBar(modifier: Modifier = Modifier) {
+internal fun BottomBar(viewModel: ChattingViewModel) {
 
-    var text by remember {
+    var userInput by remember {
         mutableStateOf("")
     }
 
-    Box(modifier) {
+    val isGenerating = viewModel.isGenerating.collectAsState().value
+
+    Box(Modifier.padding(8.dp)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -198,16 +302,16 @@ internal fun BottomBar(modifier: Modifier = Modifier) {
                     .padding(8.dp)
             ) {
                 BasicTextField(
-                    value = text,
+                    value = userInput,
                     textStyle = MaterialTheme.typography.titleMedium.copy(
                         color = MaterialTheme.colorScheme.onPrimary
                     ),
                     onValueChange = {
-                        text = it
+                        userInput = it
                     },
                     singleLine = false,
                     decorationBox = { innerTextField ->
-                        if (text.isEmpty()) {
+                        if (userInput.isEmpty()) {
                             Text(
                                 "Say Anything...",
                                 style = MaterialTheme.typography.titleMedium,
@@ -220,39 +324,130 @@ internal fun BottomBar(modifier: Modifier = Modifier) {
                     })
             }
 
+            //Attachment Button
+            ActionButton(R.drawable.attachment, "Attachment") {
 
-            IconButton(
-                modifier = Modifier.size(rDP(26.dp)), onClick = {
+            }
 
-                }, colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.onPrimary,
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
+            //Send Button
+            ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
+                if (isGenerating) {
+                    viewModel.stopGenerating()
+                    return@ActionButtonWithCircleProgressIndicator
+                }
 
-                Icon(
-                    painter = painterResource(R.drawable.attachment),
-                    contentDescription = "Audio",
-                    modifier = Modifier.size(rDP(14.dp))
-                )
+                if (userInput.isNotEmpty()) {
+                    viewModel.sendMessage(userInput)
+                    userInput = ""
+                }
+            }
+        }
+    }
+}
+
+internal object UIComponents {
+
+    @Composable
+    fun ActionButton(
+        @DrawableRes icon: Int, contentDescription: String, onClick: () -> Unit
+    ) {
+        IconButton(
+            modifier = Modifier.size(rDP(26.dp)), onClick = {
+                onClick()
+            }, colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.onPrimary,
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = contentDescription,
+                modifier = Modifier.size(rDP(14.dp))
+            )
+        }
+    }
+
+    @Composable
+    fun ActionButtonWithCircleProgressIndicator(
+        @DrawableRes icon: Int, contentDescription: String, show: Boolean, onClick: () -> Unit
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            AnimatedVisibility(show) {
+                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
             }
 
             IconButton(
                 modifier = Modifier.size(rDP(26.dp)), onClick = {
-
+                    onClick()
                 }, colors = IconButtonDefaults.iconButtonColors(
                     containerColor = MaterialTheme.colorScheme.onPrimary,
                     contentColor = MaterialTheme.colorScheme.primary
                 )
             ) {
+                AnimatedContent(show) { isGeneratingText ->
+                    when {
+                        isGeneratingText -> {
+                            Icon(
+                                imageVector = Icons.Default.Stop, contentDescription = "Mic"
+                            )
+                        }
 
+                        else -> {
+                            Icon(
+                                painter = painterResource(icon),
+                                contentDescription = contentDescription,
+                                modifier = Modifier.size(rDP(14.dp))
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    fun ThinkingBubble(message: Message) {
+        var expanded by remember { mutableStateOf(false) }
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDP(16.dp))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .clickable { expanded = !expanded }
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium
+                    )
+                    .padding(rDP(10.dp))
+            ) {
                 Icon(
-                    painter = painterResource(R.drawable.send_chat),
-                    contentDescription = "Audio",
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = "Expand",
                     modifier = Modifier.size(rDP(16.dp))
+                )
+                Spacer(modifier = Modifier.width(rDP(8.dp)))
+                Text(
+                    text = if (expanded) "AI Reasoning (tap to hide)" else "AI is thinking...",
+                    style = MaterialTheme.typography.labelMedium
+                )
+            }
+
+            AnimatedVisibility(visible = expanded) {
+                MarkdownText(
+                    text = message.content,
+                    canCopy = message.role != ROLE.USER,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(rDP(12.dp))
                 )
             }
         }
     }
+
 }
 

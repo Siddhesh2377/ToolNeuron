@@ -38,33 +38,12 @@
 
 ---
 
-## Task System Overview
-
-The Task system enables intelligent automation through pre-coded modules:
-
-**Current Tasks:**
-
-* App Launchers
-* Time Logger
-
-**Planned Tasks:**
-
-* Screen Reader and Accessibility Assistant
-* Secure, Private Web Browser
-* Offline AI Text Generation
-
-Tasks are modular, isolated, and designed with privacy and performance in mind.
-
----
-
-## Screenshots
+## DEMO
 
 > Experimental UI Previews
 
 <p align="center">
-  <img src="web/Screenshot_1.png" alt="Preview 1" width="200" />
-  <img src="web/Screenshot_2.png" alt="Preview 2" width="200" />
-  <img src="web/Screenshot_3.png" alt="Preview 3" width="200" />
+  ![Demo](RES/output.gif)
 </p>
 
 ---
@@ -76,30 +55,6 @@ Tasks are modular, isolated, and designed with privacy and performance in mind.
 * Smollm & Llama.CPP for AI inference
 * Accessibility Services for enhanced automation
 * Compose Navigation + State Management
-
----
-
-## Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/yourusername/NeuroVerse.git
-
-# Open in Android Studio
-# Build & run on Android 11+ device
-```
-
-**Note:**
-Some advanced features require enabling Accessibility Services and permitting unknown sources for plugin installation.
-
----
-
-## Example AI Prompts
-
-* "Open WhatsApp"
-* "What is the time?"
-
-NeuroVerse will parse these prompts, convert them into structured JSON commands, and execute relevant plugins or actions.
 
 ---
 

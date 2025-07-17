@@ -95,7 +95,9 @@ class MainActivity : ComponentActivity() {
                             }
 
                             HomeUiState.MAIN -> {
-                                HomeScreen()
+                                HomeScreen{
+                                    currentScreen = HomeUiState.MODELS
+                                }
                             }
                         }
                     }
