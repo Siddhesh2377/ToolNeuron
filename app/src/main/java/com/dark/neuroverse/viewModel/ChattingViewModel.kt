@@ -71,22 +71,40 @@ class ChattingViewModel : ViewModel() {
                             put("role", msg.role.name.lowercase())
                             put("content", cleanedContent)
                             put("timestamp", msg.timeStamp)
-                            if (fileData.value.path.isNotEmpty()) {
-                                put("Has User Shared A Document ?", "Yes")
-                                put("document.name", fileData.value.name)
-                                put("document.type", fileData.value.type)
-                                put("document.content", fileData.value.content)
-                            }
                         })
                     }
                 }
             }
 
+            val sanitizedContent = sanitizeForModel(fileData.value.content)
+
+            // Optional: prevent crash by skipping overly large token payloads
+            if (roughTokenEstimate(sanitizedContent) > 6048) {
+                Log.w("ChattingViewModel", "Document content too large after sanitization – skipping attachment.")
+                _isGenerating.value = false
+                return@launch
+            }
+
+            fileData.value = fileData.value.copy(content = sanitizedContent)
+
 
             val jsonPayload = JSONObject().apply {
                 put("messages", messagesJson)
                 put("response_format", "text")
+
+                if (fileData.value.path.isNotEmpty()) {
+                    put("document", JSONObject().apply {
+                        put("name", fileData.value.name)
+                        put("type", fileData.value.type)
+                        put("content", fileData.value.content)
+                    })
+                }
             }
+
+
+            Log.d("ChattingViewModel", "Sending payload: ${jsonPayload.toString().length}")
+            Log.d("ChattingViewModel", "Payload content: $jsonPayload")
+
 
             val fullResponse = Neuron.generateResponseStreaming(jsonPayload.toString()) { chunk ->
                 viewModelScope.launch(Dispatchers.Main) {
@@ -188,4 +206,18 @@ class ChattingViewModel : ViewModel() {
         _isGenerating.value = false
         Neuron.stopGeneration(true)
     }
+
+    private fun sanitizeForModel(input: String): String {
+        return input
+            .replace(Regex("[ ]{2,}"), " ") // collapse extra spaces
+            .replace(Regex("\\n{2,}"), "\n") // collapse empty newlines
+            .replace(Regex("(?<=\\w)[ ](?=\\w)"), "") // remove letter-spacing (A I → AI)
+            .trim()
+            .take(3000) + "\n\n[TRUNCATED]"
+    }
+
+    private fun roughTokenEstimate(text: String): Int {
+        return (text.split(Regex("\\s+")).size * 1.5).toInt()
+    }
+
 }

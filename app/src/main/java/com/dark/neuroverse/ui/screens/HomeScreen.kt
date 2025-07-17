@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
@@ -239,10 +240,13 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
                     ),
                     modifier = Modifier
                         .then(
-                            if (message.role == ROLE.USER) Modifier.background(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = MaterialTheme.shapes.extraLarge
-                            ) else Modifier
+                            if (message.role == ROLE.USER) {
+                                Modifier.background(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = MaterialTheme.shapes.extraLarge
+                                )
+                                    .widthIn(max = rDP(300.dp))
+                            } else Modifier
                         )
                         .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
                 )
