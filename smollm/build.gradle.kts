@@ -31,12 +31,6 @@ android {
         consumerProguardFiles("consumer-rules.pro")
     }
 
-    fun Packaging.() {
-        jniLibs {
-            useLegacyPackaging = true
-        }
-    }
-
     buildTypes {
         release {
             isMinifyEnabled = true

@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.chaquo.py)
     kotlin("plugin.serialization") version "2.1.21"
 }
 val localPropertiesFile = rootProject.file("local.properties")
@@ -23,6 +24,10 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+        }
     }
     buildTypes {
         release {
@@ -46,6 +51,32 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+    }
+
+    flavorDimensions += "pyVersion"
+    productFlavors {
+        create("py310") { dimension = "pyVersion" }
+    }
+}
+
+chaquopy {
+    productFlavors {
+        getByName("py310") { version = "3.10" }
+    }
+
+    sourceSets.getByName("main") {
+        setSrcDirs(listOf("src/main/python"))
+    }
+
+    defaultConfig {
+        pip {
+            install("python-docx")
+            install("python-pptx")
+            install("openpyxl")
+            install("pdfminer.six==20221105")
+            install("pandas")
+            install("chardet")
+        }
     }
 }
 

@@ -1,7 +1,10 @@
 package com.dark.neuroverse.ui.screens
 
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -276,12 +279,16 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun BottomBar(viewModel: ChattingViewModel) {
-
-    var userInput by remember {
-        mutableStateOf("")
-    }
-
+    var userInput by remember { mutableStateOf("") }
     val isGenerating = viewModel.isGenerating.collectAsState().value
+
+    // STEP 1: File picker launcher
+    val context = LocalContext.current
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        viewModel.handleFileUri(context, uri ?: return@rememberLauncherForActivityResult)
+    }
 
     Box(Modifier.padding(8.dp)) {
         Row(
@@ -296,19 +303,13 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
         ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp)
-            ) {
+            Box(modifier = Modifier.weight(1f).padding(8.dp)) {
                 BasicTextField(
                     value = userInput,
                     textStyle = MaterialTheme.typography.titleMedium.copy(
                         color = MaterialTheme.colorScheme.onPrimary
                     ),
-                    onValueChange = {
-                        userInput = it
-                    },
+                    onValueChange = { userInput = it },
                     singleLine = false,
                     decorationBox = { innerTextField ->
                         if (userInput.isEmpty()) {
@@ -321,15 +322,16 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
                             )
                         }
                         innerTextField()
-                    })
+                    }
+                )
             }
 
-            //Attachment Button
+            // Attachment Button
             ActionButton(R.drawable.attachment, "Attachment") {
-
+                filePickerLauncher.launch("*/*") // or "application/pdf", "application/msword", etc.
             }
 
-            //Send Button
+            // Send Button
             ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
                 if (isGenerating) {
                     viewModel.stopGenerating()

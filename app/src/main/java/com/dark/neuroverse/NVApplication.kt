@@ -1,6 +1,8 @@
 package com.dark.neuroverse
 
 import android.app.Application
+import com.chaquo.python.Python
+import com.chaquo.python.android.AndroidPlatform
 import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.helpers.JNILibHelper
 import com.dark.ai_module.workers.ModelManager
@@ -14,6 +16,9 @@ class NVApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        if (!Python.isStarted()) {
+            Python.start(AndroidPlatform(this))
+        }
         ModelManager.init(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
             UserPrefs.isJNIInstalled(applicationContext).collect {
