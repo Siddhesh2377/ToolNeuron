@@ -99,7 +99,9 @@ fun HomeScreen(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 viewModel,
-                onClose = { scope.launch { drawerState.close() } })
+                onSettingsClick = onRequestSettingsChange,
+                onModelsClick = onRequestModelChange
+            )
         }) {
         Column(
             modifier = Modifier

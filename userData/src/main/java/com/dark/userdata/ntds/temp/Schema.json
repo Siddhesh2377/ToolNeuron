@@ -1,0 +1,26 @@
+{
+  "personalInfo": {
+    "relations": {
+      "father": {
+        "name" : "jon-deo",
+        "age" : 50,
+        "gender" : "Male"
+      }
+    },
+    "favourites": {
+      "games" : ["CS-GO", "Valorant", "GTA V"],
+      "colors" : ["BLACK"],
+      "movies" : ["The Dark Knight", "The Dark Knight Rises", "Batman Begins"]
+    }
+  },
+  "conversation": {
+    "casual": {
+      "jon-deo": {
+        "20-02-2025:08-15-47": {
+          "jon-deo": "Hello, how are you?",
+          "jou": "I'm fine, thank you."
+        }
+      }
+    }
+  }
+}
