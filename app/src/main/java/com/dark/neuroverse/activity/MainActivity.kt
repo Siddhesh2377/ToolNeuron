@@ -4,25 +4,34 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
-import androidx.compose.runtime.*
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.helpers.JNILibHelper
 import com.dark.ai_module.workers.ModelManager
-import com.dark.neuroverse.model.HomeUiState
+import com.dark.neuroverse.BuildConfig
+import com.dark.neuroverse.model.Screen
 import com.dark.neuroverse.ui.screens.HomeScreen
 import com.dark.neuroverse.ui.screens.IntroScreen
 import com.dark.neuroverse.ui.screens.ModelsScreen
+import com.dark.neuroverse.ui.screens.SettingsScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import com.dark.userdata.getDefaultBrainStructure
+import com.dark.userdata.ntds.getBrainFilePath
+import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.saveEncryptedTree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -32,88 +41,99 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        CoroutineScope(Dispatchers.IO).launch {
+            val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+            val brainFile = getBrainFilePath(this@MainActivity)
+
+            if (!brainFile.exists()) {
+                val brain = getDefaultBrainStructure()
+                saveEncryptedTree(brain, brainFile, key)
+            }
+        }
+
         setContent {
-            // UI states
-            var currentScreen by remember { mutableStateOf(HomeUiState.INTRO) }
+            val navController = rememberNavController()
+
             var isJNIReady by remember { mutableStateOf(false) }
             var isJNIDownloading by remember { mutableStateOf(false) }
 
-            // Launch once: check & load JNI
+            // Initial JNI + model check
             LaunchedEffect(Unit) {
-                when(JNILibHelper.checkIfJNILibExists(this@MainActivity)){
-                    true -> {
-                        loadJNI {
-                            isJNIReady = true
-                        }
-                    }
-                    false -> {
-                        isJNIDownloading = true
-                    }
-                }
-
-                // Optional delay for visual intro
-                delay(3500)
-
-                // Check if native lib exists
                 isJNIDownloading = !JNILibHelper.checkIfJNILibExists(this@MainActivity)
 
-                // Start downloading/loading
                 loadJNI {
                     isJNIDownloading = false
                     isJNIReady = true
                 }
             }
 
-            // Once JNI is ready, go to next screen
+            // Navigate once JNI is ready
             LaunchedEffect(isJNIReady) {
                 if (isJNIReady) {
-                    currentScreen = if (ModelManager.isAnyModelInstalled()) {
-                        HomeUiState.MAIN
-                    } else {
-                        HomeUiState.MODELS
+                    val startScreen = if (ModelManager.isAnyModelInstalled()) Screen.Home.route
+                    else Screen.Model.route
+
+                    navController.navigate(startScreen) {
+                        popUpTo(Screen.Intro.route) { inclusive = true }
                     }
                 }
             }
 
-            // Composable Tree
             NeuroVerseTheme {
                 Scaffold { innerPadding ->
-                    Crossfade(
-                        modifier = Modifier.padding(innerPadding),
-                        targetState = currentScreen,
-                        animationSpec = tween(durationMillis = 500, easing = FastOutLinearInEasing)
-                    ) { screen ->
-                        when (screen) {
-                            HomeUiState.INTRO -> {
-                                IntroScreen(isJNIDownloading)
-                            }
+                    NavHost(
+                        navController = navController,
+                        startDestination = Screen.Intro.route,
+                        modifier = Modifier.padding(innerPadding)
+                    ) {
+                        composable(Screen.Intro.route) {
+                            IntroScreen(isJNIDownloading)
+                        }
 
-                            HomeUiState.MODELS -> {
-                                ModelsScreen {
-                                    currentScreen = HomeUiState.MAIN
-                                }
-                            }
+                        composable(Screen.Model.route) {
+                            ModelsScreen(
+                                onNext = {
+                                    navController.navigate(Screen.Home.route) {
+                                        popUpTo(Screen.Model.route) { inclusive = true }
+                                    }
+                                })
+                        }
 
-                            HomeUiState.MAIN -> {
-                                HomeScreen{
-                                    currentScreen = HomeUiState.MODELS
-                                }
-                            }
+                        composable(Screen.Home.route) {
+                            HomeScreen(onRequestModelChange = {
+                                navController.navigate(Screen.Model.route)
+                            }, onRequestSettingsChange = {
+                                navController.navigate(Screen.Settings.route)
+                            })
+                        }
+
+                        composable(Screen.Settings.route) {
+                            SettingsScreen(
+                                onClearChat = { /* logic */ },
+                                onClearPrefs = { /* logic */ },
+                                onClearAllData = { /* logic */ },
+                                onChangeModel = {
+                                    navController.navigate(Screen.Model.route)
+                                },
+                                modelName = "gte-small-fp32",
+                                appVersion = "v0.0.1-beta"
+                            )
                         }
                     }
                 }
             }
         }
+
     }
 
-    private suspend fun loadJNI(onLoaded: () -> Unit){
+    private suspend fun loadJNI(onLoaded: () -> Unit) {
         JNILibHelper.loadJNILib(this@MainActivity) {
             CoroutineScope(Dispatchers.IO).launch {
                 Neuron.loadModel(
                     File(ModelManager.getFirstModel()?.modelPath ?: ""),
                     context = this@MainActivity,
                     systemPrompt = "You are a helpful assistant."
-                ){
+                ) {
                     onLoaded()
                 }
             }

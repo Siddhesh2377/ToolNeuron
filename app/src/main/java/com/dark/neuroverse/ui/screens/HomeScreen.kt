@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,11 +17,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -33,6 +32,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -40,7 +40,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -49,6 +51,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,34 +74,54 @@ import com.dark.neuroverse.R
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
 import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButton
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButtonWithCircleProgressIndicator
 import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
+import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.io.File
 
 @Composable
-fun HomeScreen(viewModel: ChattingViewModel = viewModel(), onModelScreen: () -> Unit) {
+fun HomeScreen(
+    onRequestModelChange: () -> Unit, // For navigating to model screen
+    onRequestSettingsChange: () -> Unit // Optional, if needed outside
+) {
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val viewModel: ChattingViewModel = viewModel(factory = ChattingViewModelFactory(context))
 
-    WindowInsets.ime.getBottom(LocalDensity.current) > 0
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = rDP(12.dp))
-            .padding(top = rDP(8.dp))
-            .imePadding() // this pushes BottomBar above keyboard
-    ) {
-        TopBar(viewModel, onModelScreen)
-        Conversations(Modifier.weight(1f), viewModel)
-        BottomBar(viewModel) // Don't apply weight here!
+    ModalNavigationDrawer(
+        drawerState = drawerState, drawerContent = {
+            SettingsDrawerContent(
+                onClose = { scope.launch { drawerState.close() } })
+        }) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = rDP(12.dp))
+                .padding(top = rDP(8.dp))
+                .imePadding()
+        ) {
+            TopBar(
+                viewModel = viewModel,
+                onDrawerOpen = {
+                    scope.launch { drawerState.open() }
+                },
+            )
+            Conversations(Modifier.weight(1f), viewModel)
+            BottomBar(viewModel)
+        }
     }
 }
 
+
 @Composable
-internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit) {
+internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val density = LocalDensity.current
     val screenWidthDp = LocalWindowInfo.current.containerSize.width.dp
@@ -133,16 +156,24 @@ internal fun TopBar(viewModel: ChattingViewModel, onModelScreen: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         IconButton(onClick = {
-            onModelScreen()
+            onDrawerOpen()
         }) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
         }
 
-        Text(
-            "NeuroV Chat", style = MaterialTheme.typography.headlineSmall.copy(
-                fontFamily = FontFamily.Serif, fontWeight = FontWeight.W100
+        val chatTitle = viewModel.chatTitle.collectAsState()
+
+        Crossfade(chatTitle.value.ifEmpty { "NeuroV Chat" }) { title ->
+            Text(
+                title,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.W100
+                )
             )
-        )
+        }
+
 
         Spacer(Modifier.weight(1f))
 
@@ -242,10 +273,9 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
                         .then(
                             if (message.role == ROLE.USER) {
                                 Modifier.background(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = MaterialTheme.shapes.extraLarge
-                                )
-                                    .widthIn(max = rDP(300.dp))
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shape = MaterialTheme.shapes.extraLarge
+                                    ).widthIn(max = rDP(300.dp))
                             } else Modifier
                         )
                         .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
@@ -296,7 +326,7 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
     var userInput by remember { mutableStateOf("") }
     val isGenerating = viewModel.isGenerating.collectAsState().value
 
-    // STEP 1: File picker launcher
+
     val context = LocalContext.current
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -317,9 +347,11 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
         ) {
-            Box(modifier = Modifier
-                .weight(1f)
-                .padding(8.dp)) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(8.dp)
+            ) {
                 BasicTextField(
                     value = userInput,
                     textStyle = MaterialTheme.typography.titleMedium.copy(

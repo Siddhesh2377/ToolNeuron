@@ -6,12 +6,19 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.ai.Neuron
+import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.DocReader
 import com.dark.neuroverse.model.DOC
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
+import com.dark.neuroverse.util.extractPureJson
+import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.userdata.readBrainFile
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,8 +27,31 @@ import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import javax.crypto.SecretKey
 
-class ChattingViewModel : ViewModel() {
+class ChattingViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
+    @Suppress("UNCHECKED_CAST")
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        if (modelClass.isAssignableFrom(ChattingViewModel::class.java)) {
+            return ChattingViewModel(context) as T
+        }
+        throw IllegalArgumentException("Unknown ViewModel class")
+    }
+}
+
+class ChattingViewModel(context: Context) : ViewModel() {
+
+    private lateinit var key: MutableStateFlow<SecretKey>
+    private lateinit var rootNode: MutableStateFlow<NeuronTree>
+    private val _chatTitle = MutableStateFlow("")
+    val chatTitle: StateFlow<String> = _chatTitle
+
+    init {
+        CoroutineScope(Dispatchers.IO).launch {
+            key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
+            rootNode = MutableStateFlow(readBrainFile(key.value, context))
+        }
+    }
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
@@ -130,6 +160,8 @@ class ChattingViewModel : ViewModel() {
                     ROLE.SYSTEM, fullResponse, System.currentTimeMillis().toString()
                 )
             }
+
+            generateTitle()
         }
     }
 
@@ -200,11 +232,35 @@ class ChattingViewModel : ViewModel() {
         }
     }
 
+    private suspend fun generateTitle() {
+        val latestAIResponse = getLatestAIResponse()
+        if (latestAIResponse.isNotEmpty() && _chatTitle.value.isEmpty()) {
+            val prompt = """
+                Generate a concise json output with a for Provided Conversation
+                Rules : 
+                - Title Should be less than 2 words
+                - Title Should be in English
+                
+                Schema :
+                { title: String } 
+                
+                Conversation :
+                $latestAIResponse
+                
+            """.trimIndent()
+            val rwa = extractPureJson(Neuron.generateResponseBlocking(prompt))
+            val jsonCode = JSONObject(rwa)
+            _chatTitle.value = jsonCode.getString("title")
+        }
+    }
+
     fun newChat() {
         _messages.value = emptyList()
         _streamingBuffer.value = ""
         _isGenerating.value = false
         Neuron.stopGeneration(true)
+        _chatTitle.value = ""
+        //addNewChat(rootNode.value.getNodeDirect("root"), chatTitle.value, JSONObject())
     }
 
     private fun sanitizeForModel(input: String): String {

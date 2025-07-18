@@ -26,7 +26,8 @@ android {
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
 
         ndk {
-            abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86", "x86_64")
+            //noinspection ChromeOsAbiSupport
+            abiFilters += listOf("arm64-v8a")
         }
     }
     buildTypes {
@@ -52,7 +53,6 @@ android {
         compose = true
         buildConfig = true
     }
-
     flavorDimensions += "pyVersion"
     productFlavors {
         create("py310") { dimension = "pyVersion" }
@@ -83,6 +83,7 @@ chaquopy {
 dependencies {
     //PROJECTS
     implementation(project(":ai-module"))
+    implementation(project(":userData"))
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)
