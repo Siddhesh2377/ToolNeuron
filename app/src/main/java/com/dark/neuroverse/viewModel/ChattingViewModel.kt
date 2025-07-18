@@ -321,5 +321,33 @@ class ChattingViewModel(private val context: Context) : ViewModel() {
         return (text.split(Regex("\\s+")).size * 1.5).toInt()
     }
 
+    fun deleteChatById(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // 1. Delete the node from the tree
+                rootNode.value.deleteNodeById(id)
+
+                // 2. Save updated tree to disk
+                saveTree(rootNode.value, context, BuildConfig.ALIAS)
+
+                // 3. Update chat list for UI
+                updateChatList()
+
+                // 4. If deleted chat was active, reset UI state
+                if (chatId.value == id) {
+                    withContext(Dispatchers.Main) {
+                        _messages.value = emptyList()
+                        _chatTitle.value = ""
+                        chatId.value = ""
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("deleteChatById", "Failed to delete chat $id", e)
+            }
+        }
+    }
+
+
+
     //endregion
 }

@@ -110,6 +110,29 @@ class NeuronTree(internal val root: NeuronNode) {
         return result
     }
 
+    fun deleteNodeById(id: String) {
+        if (id == "root") return // Never delete root
+
+        val nodeToDelete = nodeMap[id] ?: return
+        val path = nodeIndex[id] ?: return
+
+        // Step 1: Find parent path (e.g., from "root/0/2" → "root/0")
+        val parentPath = path.substringBeforeLast("/", missingDelimiterValue = "")
+        val parentNode = nodeIndex.entries.find { it.value == parentPath }?.key?.let { nodeMap[it] }
+
+        // Step 2: Remove from parent's children
+        parentNode?.children?.removeIf { it.id == id }
+
+        // Step 3: Remove this node and all descendants from maps
+        fun removeRecursively(node: NeuronNode) {
+            nodeMap.remove(node.id)
+            nodeIndex.remove(node.id)
+            node.children.forEach { removeRecursively(it) }
+        }
+
+        removeRecursively(nodeToDelete)
+    }
+
 
     /**
      * Prints the entire tree structure to the console with indentation for hierarchy.

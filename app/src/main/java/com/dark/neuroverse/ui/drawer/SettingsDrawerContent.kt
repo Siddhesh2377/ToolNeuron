@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,10 +28,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
 
 @Composable
-fun SettingsDrawerContent(viewModel: ChattingViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit){
+fun SettingsDrawerContent(
+    viewModel: ChattingViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit
+) {
     val chatList = viewModel.chatList.collectAsState(emptyList())
 
     Column(
@@ -46,42 +50,57 @@ fun SettingsDrawerContent(viewModel: ChattingViewModel, onSettingsClick: () -> U
             ), modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)
         )
 
-        LazyColumn(Modifier.weight(1f)) {
+        LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
 
             item {
                 Text(
                     text = "Chats", style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
-                    ), modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)
+                    ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
             }
 
             items(chatList.value) { chat ->
-                Text(
-                    text = chat.name,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically, modifier = Modifier
                         .clickable {
                             viewModel.loadChatById(chat.id)
-                        })
+                        }
+                        .background(
+                            MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small
+                        )
+                        .padding(rDP(10.dp))) {
+                    Text(
+                        text = chat.name,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Icon(
+                        Icons.TwoTone.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clickable {
+                                viewModel.deleteChatById(chat.id)
+                            })
+                }
+
             }
         }
 
-        Row(
-            Modifier
-                .clickable{
-                    onModelsClick()
-                }
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
-                .padding(14.dp),
+        Row(Modifier
+            .clickable {
+                onModelsClick()
+            }
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
+            .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+            horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "Models",
                 style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
@@ -91,17 +110,15 @@ fun SettingsDrawerContent(viewModel: ChattingViewModel, onSettingsClick: () -> U
 
         Spacer(Modifier.height(16.dp))
 
-        Row(
-            Modifier
-                .clickable{
-                    onSettingsClick()
-                }
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
-                .padding(14.dp),
+        Row(Modifier
+            .clickable {
+                onSettingsClick()
+            }
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
+            .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+            horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "Settings",
                 style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
