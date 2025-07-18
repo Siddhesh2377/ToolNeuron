@@ -11,19 +11,24 @@ import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.ai.Neuron
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.DocReader
+import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.model.DOC
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
 import com.dark.neuroverse.util.extractPureJson
+import com.dark.userdata.addNewChat
+import com.dark.userdata.getDefaultChatHistory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
+import com.dark.userdata.saveTree
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -39,18 +44,38 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
     }
 }
 
-class ChattingViewModel(context: Context) : ViewModel() {
+class ChattingViewModel(private val context: Context) : ViewModel() {
 
     private lateinit var key: MutableStateFlow<SecretKey>
     private lateinit var rootNode: MutableStateFlow<NeuronTree>
     private val _chatTitle = MutableStateFlow("")
     val chatTitle: StateFlow<String> = _chatTitle
+    private val _chatList = MutableStateFlow(emptyList<ChatINFO>())
+    val chatList: StateFlow<List<ChatINFO>> = _chatList
 
     init {
         CoroutineScope(Dispatchers.IO).launch {
             key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
-            rootNode = MutableStateFlow(readBrainFile(key.value, context))
+            val brainTree = readBrainFile(key.value, context)
+            rootNode = MutableStateFlow(brainTree)
+
+            val root = rootNode.value.getNodeDirect("root")
+            val chatHistory = getDefaultChatHistory(root)
+            val validChats = NeuronTree(chatHistory).getAllChildrenRecursive().filter {
+                it.data.content.isNotBlank()
+            }
+
+            if (validChats.isNotEmpty()) {
+                val firstChat = validChats.first()
+                Log.d("init", "Auto-loading first valid chat ID: ${firstChat.id}")
+                loadChatById(firstChat.id)
+                rootNode.value.printTree()
+                getChatInfo()
+            } else {
+                Log.d("init", "No valid chats found. Starting fresh.")
+            }
         }
+
     }
 
     private val _messages = MutableStateFlow<List<Message>>(emptyList())
@@ -65,6 +90,7 @@ class ChattingViewModel(context: Context) : ViewModel() {
 
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating
+    val chatId = MutableStateFlow("")
 
     fun sendMessage(userInput: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -162,6 +188,11 @@ class ChattingViewModel(context: Context) : ViewModel() {
             }
 
             generateTitle()
+
+                updateConversation()
+                rootNode.value.printTree()
+
+
         }
     }
 
@@ -230,6 +261,7 @@ class ChattingViewModel(context: Context) : ViewModel() {
         Neuron.stopGeneration(true).also {
             _isGenerating.value = false
         }
+        updateConversation()
     }
 
     private suspend fun generateTitle() {
@@ -260,7 +292,9 @@ class ChattingViewModel(context: Context) : ViewModel() {
         _isGenerating.value = false
         Neuron.stopGeneration(true)
         _chatTitle.value = ""
-        //addNewChat(rootNode.value.getNodeDirect("root"), chatTitle.value, JSONObject())
+        chatId.value = ""  // Reset ID to force new chat creation
+
+        Log.d("newChat", "Started new chat")
     }
 
     private fun sanitizeForModel(input: String): String {
@@ -275,5 +309,149 @@ class ChattingViewModel(context: Context) : ViewModel() {
     private fun roughTokenEstimate(text: String): Int {
         return (text.split(Regex("\\s+")).size * 1.5).toInt()
     }
+
+    private fun updateConversation() {
+        Log.d("updateConversation", "Starting updateConversation()")
+
+        val root = rootNode.value.getNodeDirect("root")
+        Log.d("updateConversation", "Fetched root node")
+
+        val chatHistory = getDefaultChatHistory(root)
+        Log.d("updateConversation", "Retrieved chat history node")
+
+        val tree = NeuronTree(chatHistory)
+        Log.d("updateConversation", "Created NeuronTree from chat history")
+
+        val chatNode = if (chatId.value.isBlank()) {
+            Log.d("updateConversation", "chatId is blank — will create a new chat node.")
+            null
+        } else {
+            try {
+                val node = tree.getNodeDirect(chatId.value)
+                Log.d("updateConversation", "Found existing chat node with ID: ${chatId.value}")
+                node
+            } catch (e: Exception) {
+                Log.w("updateConversation", "No existing chat node found with ID: ${chatId.value}, will create new")
+                null
+            }
+        }
+
+
+        val json = Json
+        var combinedMessages: List<Message>
+
+        if (chatNode != null && chatNode.data.content.isNotBlank()) {
+            val oldChat = chatNode.data.content
+            Log.d("updateConversation", "Old chat content: $oldChat")
+
+            try {
+                val jsonArrayString = JSONObject(oldChat).getJSONArray("conversations").toString()
+                val oldMessages: List<Message> = json.decodeFromString(jsonArrayString)
+                Log.d("updateConversation", "Parsed old messages count: ${oldMessages.size}")
+                combinedMessages = oldMessages + _messages.value
+            } catch (e: Exception) {
+                Log.e("updateConversation", "Failed to parse old chat JSON. Fallback to current messages only.", e)
+                combinedMessages = _messages.value
+            }
+        } else {
+            Log.d("updateConversation", "No existing content found. Using current messages only.")
+            combinedMessages = _messages.value
+        }
+
+
+        val updatedJson = json.encodeToString(combinedMessages)
+        Log.d("updateConversation", "Serialized combined messages to JSON string of length: ${updatedJson.length}")
+
+        val jsonData = JSONObject().apply {
+            put("title", _chatTitle.value)
+            put("conversations", JSONArray(updatedJson))
+        }
+        Log.d("updateConversation", "Final JSON object to store: $jsonData")
+
+        if (chatNode != null) {
+            chatNode.data.content = jsonData.toString()
+            Log.d("updateConversation", "Updated existing chat node content.")
+        } else {
+            addNewChat(chatHistory, jsonData).also { newNode ->
+                chatId.value = newNode.id
+                Log.d("updateConversation", "Created new chat node with ID: ${newNode.id}")
+            }
+        }
+
+        // ✅ Save the updated tree
+        saveTree(rootNode.value, context, BuildConfig.ALIAS)
+        Log.d("updateConversation", "NeuronTree saved to encrypted file.")
+
+        Log.d("updateConversation", "CHAT ID: ${chatId.value}")
+
+        Log.d("updateConversation", "Finished updateConversation()")
+    }
+
+    fun loadChatById(chatIdToLoad: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                Log.d("loadChatById", "Loading chat with ID: $chatIdToLoad")
+
+                val root = rootNode.value.getNodeDirect("root")
+                val chatHistory = getDefaultChatHistory(root)
+                val tree = NeuronTree(chatHistory)
+                val chatNode = tree.getNodeDirect(chatIdToLoad)
+
+                val chatContent = chatNode.data.content
+                Log.d("loadChatById", "Found chat node, content: $chatContent")
+
+                if (chatContent.isBlank()) {
+                    Log.w("loadChatById", "Chat content is empty for ID: $chatIdToLoad — skipping load.")
+                    return@launch
+                }
+
+                val jsonObject = JSONObject(chatContent)
+                val conversationsArray = jsonObject.getJSONArray("conversations").toString()
+                val title = jsonObject.optString("title", "")
+
+                val loadedMessages: List<Message> = Json.decodeFromString(conversationsArray)
+                Log.d("loadChatById", "Loaded ${loadedMessages.size} messages")
+
+                // Update state
+                _messages.value = loadedMessages
+                _chatTitle.value = title
+                chatId.value = chatIdToLoad
+
+                Log.d("loadChatById", "Chat successfully loaded")
+
+            } catch (e: Exception) {
+                Log.e("loadChatById", "Failed to load chat with ID: $chatIdToLoad", e)
+            }
+        }
+    }
+
+    fun getChatInfo(): List<ChatINFO> {
+        val list = mutableListOf<ChatINFO>()
+
+        try {
+            val root = rootNode.value.getNodeDirect("root")
+            val chatHistory = getDefaultChatHistory(root)
+            val tree = NeuronTree(chatHistory)
+
+            tree.getAllChildrenRecursive().forEach { node ->
+                val content = node.data.content
+                if (content.isNotBlank()) {
+                    val title = try {
+                        JSONObject(content).optString("title", "Untitled")
+                    } catch (e: Exception) {
+                        "Untitled"
+                    }
+                    list.add(ChatINFO(node.id, title))
+                }
+            }
+
+        } catch (e: Exception) {
+            Log.e("getChatInfo", "Failed to load chat info", e)
+        }
+
+        _chatList.value = list
+        return list
+    }
+
 
 }

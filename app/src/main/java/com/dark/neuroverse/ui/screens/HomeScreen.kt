@@ -98,6 +98,7 @@ fun HomeScreen(
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
+                viewModel,
                 onClose = { scope.launch { drawerState.close() } })
         }) {
         Column(
