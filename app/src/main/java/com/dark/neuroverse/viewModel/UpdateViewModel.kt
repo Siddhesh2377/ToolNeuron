@@ -29,7 +29,7 @@ data class AppUpdateInfo(
     val updateLink: String = "",
     val version: String = "",
     val whatsNew: List<String> = emptyList(),
-    val downloadProgress: Int = 0,
+    val downloadProgress: Long = 0,
     val apkFilePath: String = "",
     val status: UpdateStatus = UpdateStatus.IDLE
 )
@@ -78,7 +78,9 @@ class UpdateViewModel : ViewModel() {
                 withContext(Dispatchers.IO) {
                     _updateInfo.value = _updateInfo.value.copy(status = UpdateStatus.DOWNLOADING)
                     val connection = URL(url).openConnection()
-                    val totalSize = connection.contentLength
+                    val totalSize = connection.contentLengthLong
+                    if (totalSize <= 0L) throw IllegalStateException("Invalid content length: $totalSize")
+
                     val input = BufferedInputStream(connection.getInputStream())
 
                     val file = File(context.cacheDir, "update_${System.currentTimeMillis()}.apk")
