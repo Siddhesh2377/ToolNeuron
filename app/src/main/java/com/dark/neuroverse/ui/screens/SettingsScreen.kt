@@ -321,7 +321,7 @@ fun SettingsScreen(
                         UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
 
                         UpdateStatus.IDLE -> {
-                            updateViewModel.fetchUpdateInfo("https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json")
+                            updateViewModel.fetchUpdateInfo("https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}")
                             showCard = true
 
                             // 💥 After fetching, start download in 1 second to allow Flow to emit new state

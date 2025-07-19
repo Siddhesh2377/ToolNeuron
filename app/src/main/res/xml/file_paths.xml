@@ -1,6 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <cache-path
-        name="plugin_files"
-        path="." />
+    <cache-path name="apk" path="." /> <!-- Allows APK to be shared from cache dir -->
 </paths>

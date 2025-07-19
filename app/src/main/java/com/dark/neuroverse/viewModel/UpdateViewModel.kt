@@ -2,7 +2,11 @@ package com.dark.neuroverse.viewModel
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -17,6 +21,7 @@ import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
 import java.io.File
 import java.net.URL
+import androidx.core.net.toUri
 
 // --- UpdateStatus.kt ---
 enum class UpdateStatus {
@@ -114,18 +119,54 @@ class UpdateViewModel : ViewModel() {
     }
 
     fun triggerInstall(context: Context) {
+
+        val canInstall =
+            context.packageManager.canRequestPackageInstalls()
+
+        if (!canInstall) {
+            val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).apply {
+                data = "package:${context.packageName}".toUri()
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        }
+
+
         val apkPath = updateInfo.value.apkFilePath
-        if (apkPath.isBlank()) return
+        if (apkPath.isBlank()) {
+            Log.e("UpdateViewModel", "APK path is blank.")
+            return
+        }
 
         val apkFile = File(apkPath)
+        if (!apkFile.exists()) {
+            Log.e("UpdateViewModel", "APK file does not exist at path: $apkPath")
+            return
+        }
+
         val apkUri = FileProvider.getUriForFile(
-            context, "${BuildConfig.APPLICATION_ID}.provider", apkFile
+            context,
+            "${BuildConfig.APPLICATION_ID}.provider",
+            apkFile
         )
 
         val intent = Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(apkUri, "application/vnd.android.package-archive")
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP)
         }
-        context.startActivity(intent)
+
+        // Check if any app can handle this intent
+        val pm = context.packageManager
+        if (intent.resolveActivity(pm) != null) {
+            Log.d("UpdateViewModel", "Launching install for URI: $apkUri")
+            context.startActivity(intent)
+        } else {
+            Log.e("UpdateViewModel", "No app can handle the install intent.")
+            Toast.makeText(context, "Installer not available on device", Toast.LENGTH_LONG).show()
+        }
     }
+
+
 }
