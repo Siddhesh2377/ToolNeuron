@@ -292,33 +292,49 @@ fun SettingsScreen(
                 })
         }
 
-        // ---- APP SETTINGS ----
+// ---- APP SETTINGS ----
         item {
+            val context = LocalContext.current
+            val updateInfo by updateViewModel.updateInfo.collectAsState()
+            var showCard by remember { mutableStateOf(false) }
+
             Text(
                 "App Settings",
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
             )
-            val context = LocalContext.current
-            var showCard by remember { mutableStateOf(false) }
 
             SettingCard(
-                title = "App Version : $appVersion", actionLabel = when (updateInfo.status) {
+                title = "App Version : $appVersion",
+                actionLabel = when (updateInfo.status) {
                     UpdateStatus.DOWNLOADING -> "${updateInfo.downloadProgress}%"
                     UpdateStatus.READY_TO_INSTALL -> "Install"
-                    UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else null
+                    UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else "Check"
                     UpdateStatus.FAILED -> "Retry"
-                }, showCard = showCard, onAction = {
-                    updateViewModel.fetchUpdateInfo("")
-                    showCard = true
+                },
+                showCard = showCard,
+                onAction = {
+                    when (updateInfo.status) {
+                        UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
+                        UpdateStatus.IDLE -> {
+                            updateViewModel.fetchUpdateInfo("https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json")
+                            showCard = true
+                        }
+                        UpdateStatus.FAILED -> {
+                            updateViewModel.downloadApk(context)
+                            showCard = true
+                        }
+                        UpdateStatus.DOWNLOADING -> {
+                            updateViewModel.downloadApk(context)
+                        }
+                    }
+                }
 
-                }) {
-
+            ) {
                 when (updateInfo.status) {
                     UpdateStatus.IDLE -> {}
 
                     UpdateStatus.DOWNLOADING -> {
-                        updateViewModel.downloadApkAndInstall(context)
                         Column {
                             Text(
                                 "Downloading...",
@@ -333,21 +349,20 @@ fun SettingsScreen(
                             Text(
                                 buildAnnotatedString {
                                     withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                        append("Whats New:\n")
+                                        append("What's New:\n")
                                     }
                                     updateInfo.whatsNew.forEach {
                                         append("\u2023 $it\n")
                                     }
-                                }, modifier = Modifier.padding(12.dp)
+                                },
+                                modifier = Modifier.padding(12.dp)
                             )
                         }
-
                     }
 
                     UpdateStatus.FAILED -> {
-                        Log.d("Update", "Failed")
                         Text(
-                            "Failed",
+                            "Download failed. Please try again.",
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(bottom = 8.dp)
                         )
@@ -357,32 +372,19 @@ fun SettingsScreen(
                         Text(
                             buildAnnotatedString {
                                 withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("Whats New:\n")
+                                    append("What's New:\n")
                                 }
                                 updateInfo.whatsNew.forEach {
                                     append("\u2023 $it\n")
                                 }
-                            }, modifier = Modifier.padding(12.dp)
+                            },
+                            modifier = Modifier.padding(12.dp)
                         )
-
-                        val apkFile = File(updateInfo.apkFilePath)
-                        val apkUri = FileProvider.getUriForFile(
-                            context, "${BuildConfig.APPLICATION_ID}.provider", apkFile
-                        )
-
-                        val intent = Intent(Intent.ACTION_VIEW).apply {
-                            setDataAndType(apkUri, "application/vnd.android.package-archive")
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        context.startActivity(intent)
-
                     }
                 }
-
             }
-
-
         }
+
     }
 }
 
