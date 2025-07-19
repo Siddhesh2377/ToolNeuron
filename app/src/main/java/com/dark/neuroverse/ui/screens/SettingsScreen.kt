@@ -1,7 +1,9 @@
 package com.dark.neuroverse.ui.screens
 
+import android.content.Intent
 import android.util.Log
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -19,6 +21,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -44,6 +48,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
@@ -51,6 +57,8 @@ import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.viewModel.UpdateStatus
+import com.dark.neuroverse.viewModel.UpdateViewModel
 import com.dark.userdata.getDefaultChatHistory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
@@ -60,9 +68,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import org.json.JSONObject
+import java.io.File
 import javax.crypto.SecretKey
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     onResetTweaks: () -> Unit = {},
@@ -76,6 +85,9 @@ fun SettingsScreen(
     var key: MutableStateFlow<SecretKey>
     val _chatList = MutableStateFlow(emptyList<ChatINFO>())
     val context = LocalContext.current
+
+    val updateViewModel: UpdateViewModel = viewModel()
+    val updateInfo by updateViewModel.updateInfo.collectAsState()
 
     LaunchedEffect(Unit) {
         key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
@@ -287,21 +299,89 @@ fun SettingsScreen(
                 modifier = Modifier.padding(vertical = 12.dp),
                 style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
             )
+            val context = LocalContext.current
+            var showCard by remember { mutableStateOf(false) }
+
             SettingCard(
-                title = "App Version : $appVersion", actionLabel = "Update", onAction = onUpdateApp
-            ) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                            append("Whats New ..?\n")
+                title = "App Version : $appVersion", actionLabel = when (updateInfo.status) {
+                    UpdateStatus.DOWNLOADING -> "${updateInfo.downloadProgress}%"
+                    UpdateStatus.READY_TO_INSTALL -> "Install"
+                    UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else null
+                    UpdateStatus.FAILED -> "Retry"
+                }, showCard = showCard, onAction = {
+                    updateViewModel.fetchUpdateInfo("")
+                    showCard = true
+
+                }) {
+
+                when (updateInfo.status) {
+                    UpdateStatus.IDLE -> {}
+
+                    UpdateStatus.DOWNLOADING -> {
+                        updateViewModel.downloadApkAndInstall(context)
+                        Column {
+                            Text(
+                                "Downloading...",
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(bottom = 8.dp)
+                            )
+
+                            LinearWavyProgressIndicator(progress = {
+                                updateInfo.downloadProgress.toFloat()
+                            })
+
+                            Text(
+                                buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                        append("Whats New:\n")
+                                    }
+                                    updateInfo.whatsNew.forEach {
+                                        append("\u2023 $it\n")
+                                    }
+                                }, modifier = Modifier.padding(12.dp)
+                            )
                         }
 
-                        append("\u2023 Context Size: \n")
-                        append("\u2023 Model Size: \n")
-                        append("\u2023 Tool Call: ")
-                    }, modifier = Modifier.padding(12.dp)
-                )
+                    }
+
+                    UpdateStatus.FAILED -> {
+                        Log.d("Update", "Failed")
+                        Text(
+                            "Failed",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+
+                    UpdateStatus.READY_TO_INSTALL -> {
+                        Text(
+                            buildAnnotatedString {
+                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                    append("Whats New:\n")
+                                }
+                                updateInfo.whatsNew.forEach {
+                                    append("\u2023 $it\n")
+                                }
+                            }, modifier = Modifier.padding(12.dp)
+                        )
+
+                        val apkFile = File(updateInfo.apkFilePath)
+                        val apkUri = FileProvider.getUriForFile(
+                            context, "${BuildConfig.APPLICATION_ID}.provider", apkFile
+                        )
+
+                        val intent = Intent(Intent.ACTION_VIEW).apply {
+                            setDataAndType(apkUri, "application/vnd.android.package-archive")
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        context.startActivity(intent)
+
+                    }
+                }
+
             }
+
+
         }
     }
 }
@@ -346,6 +426,7 @@ fun SettingCard(
     actionLabel: String? = null,
     roundedCornerShape: RoundedCornerShape = RoundedCornerShape(18.dp),
     onAction: (() -> Unit)? = null,
+    showCard: Boolean = true,
     content: @Composable ColumnScope.() -> Unit = { }
 ) {
     Column(
@@ -373,12 +454,14 @@ fun SettingCard(
             }
         }
         Spacer(Modifier.height(12.dp))
-        Card(
-            Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
-        ) {
-            Column(Modifier.padding(12.dp)) {
-                content()
+        AnimatedVisibility(showCard) {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.background)
+            ) {
+                Column(Modifier.padding(12.dp)) {
+                    content()
+                }
             }
         }
     }
