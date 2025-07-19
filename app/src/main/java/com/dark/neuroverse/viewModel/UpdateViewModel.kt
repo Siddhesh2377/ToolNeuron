@@ -55,7 +55,8 @@ class UpdateViewModel : ViewModel() {
                     whatsNew = jsonObject.optJSONArray("whatsNew")?.let { arr ->
                         List(arr.length()) { i -> arr.getString(i) }
                     } ?: emptyList(),
-                    status = UpdateStatus.DOWNLOADING
+                    status = UpdateStatus.IDLE
+
                 )
 
                 _updateInfo.value = info
@@ -69,38 +70,40 @@ class UpdateViewModel : ViewModel() {
 
     fun downloadApk(context: Context) {
         val url = updateInfo.value.updateLink
+        Log.d("UpdateViewModel", "Downloading APK from: $url")
         if (url.isBlank()) return
 
         viewModelScope.launch {
             try {
-                _updateInfo.value = _updateInfo.value.copy(status = UpdateStatus.DOWNLOADING)
-                val connection = URL(url).openConnection()
-                val totalSize = connection.contentLength
-                val input = BufferedInputStream(connection.getInputStream())
+                withContext(Dispatchers.IO) {
+                    _updateInfo.value = _updateInfo.value.copy(status = UpdateStatus.DOWNLOADING)
+                    val connection = URL(url).openConnection()
+                    val totalSize = connection.contentLength
+                    val input = BufferedInputStream(connection.getInputStream())
 
-                val file = File(context.cacheDir, "update_${System.currentTimeMillis()}.apk")
-                val output = BufferedOutputStream(file.outputStream())
+                    val file = File(context.cacheDir, "update_${System.currentTimeMillis()}.apk")
+                    val output = BufferedOutputStream(file.outputStream())
 
-                val buffer = ByteArray(8192)
-                var downloaded = 0
-                var read: Int
+                    val buffer = ByteArray(8192)
+                    var downloaded = 0
+                    var read: Int
 
-                while (input.read(buffer).also { read = it } != -1) {
-                    output.write(buffer, 0, read)
-                    downloaded += read
-                    val progress = (downloaded * 100 / totalSize).coerceIn(0, 100)
-                    _updateInfo.value = _updateInfo.value.copy(downloadProgress = progress)
+                    while (input.read(buffer).also { read = it } != -1) {
+                        output.write(buffer, 0, read)
+                        downloaded += read
+                        val progress = (downloaded * 100 / totalSize).coerceIn(0, 100)
+                        _updateInfo.value = _updateInfo.value.copy(downloadProgress = progress)
+                    }
+
+                    output.flush()
+                    output.close()
+                    input.close()
+
+                    _updateInfo.value = _updateInfo.value.copy(
+                        status = UpdateStatus.READY_TO_INSTALL,
+                        apkFilePath = file.absolutePath
+                    )
                 }
-
-                output.flush()
-                output.close()
-                input.close()
-
-                _updateInfo.value = _updateInfo.value.copy(
-                    status = UpdateStatus.READY_TO_INSTALL,
-                    apkFilePath = file.absolutePath
-                )
-
             } catch (e: Exception) {
                 Log.e("UpdateViewModel", "Download failed", e)
                 _updateInfo.value = _updateInfo.value.copy(status = UpdateStatus.FAILED)
