@@ -1,0 +1,2 @@
+-keepclasseswithmembernames class com.dark.neuroverse.model.*
+-keepclasseswithmembernames class com.dark.ai_module.model.ModelsDataKt

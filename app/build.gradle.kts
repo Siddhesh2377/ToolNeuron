@@ -43,6 +43,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
         compilerOptions {
@@ -55,13 +56,13 @@ android {
     }
     flavorDimensions += "pyVersion"
     productFlavors {
-        create("py310") { dimension = "pyVersion" }
+        create("neuroV") { dimension = "pyVersion" }
     }
 }
 
 chaquopy {
     productFlavors {
-        getByName("py310") { version = "3.10" }
+        getByName("neuroV") { version = "3.10" }
     }
 
     sourceSets.getByName("main") {
@@ -81,6 +82,9 @@ chaquopy {
 }
 
 dependencies {
+    //CORE
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
+
     //PROJECTS
     implementation(project(":ai-module"))
     implementation(project(":userData"))

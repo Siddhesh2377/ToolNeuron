@@ -26,15 +26,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,7 +48,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,22 +57,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.model.DOC
+import com.dark.neuroverse.model.FileAttachment
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
 import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButton
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButtonWithCircleProgressIndicator
@@ -92,6 +91,10 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val viewModel: ChattingViewModel = viewModel(factory = ChattingViewModelFactory(context))
+
+    LaunchedEffect(Unit) {
+        viewModel.updateChatList()
+    }
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
@@ -124,10 +127,7 @@ fun HomeScreen(
 @Composable
 internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val density = LocalDensity.current
-    val screenWidthDp = LocalWindowInfo.current.containerSize.width.dp
-    var menuWidthPx by remember { mutableIntStateOf(0) }
-    var currentModel by remember { mutableStateOf("") }
+    val currentModel = ModelManager.getModel().collectAsState()
     val modelList = remember { mutableStateListOf<ModelsData>() }
 
     val context = LocalContext.current
@@ -141,8 +141,8 @@ internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
     }
 
     LaunchedEffect(currentModel) {
-        val tempModel = ModelManager.getModel(currentModel)
-        if (currentModel != "") {
+        val tempModel = ModelManager.getModel(currentModel.value.modeName)
+        if (currentModel.value.modeName != "") {
             if (tempModel != null) {
                 ModelManager.loadModel(context, tempModel) {
                     Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
@@ -189,22 +189,19 @@ internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
         IconButton(onClick = { expanded = true }, modifier = Modifier) {
             Icon(painter = painterResource(R.drawable.more), contentDescription = "More")
         }
-
-        // The actual dropdown menu
-        DropdownMenu(
-            expanded = expanded,
-            offset = with(density) {
-                val menuWidthDp = menuWidthPx.toDp()
-                DpOffset(x = (screenWidthDp - menuWidthDp) - 26.dp, y = 0.dp)
-            },
-            modifier = Modifier.onGloballyPositioned { coords -> menuWidthPx = coords.size.width },
-            onDismissRequest = { expanded = false }) {
-
-            repeat(modelList.size) { index ->
-                DropdownMenuItem(text = { Text(modelList[index].modeName) }, onClick = {
-                    expanded = false
-                    currentModel = modelList[index].modeName
-                })
+        if (expanded) {
+            ModelDialog(modelList, context) {
+                expanded = false
+                if (it != null) {
+                    Toast.makeText(
+                        context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
+                    ).show()
+                    ModelManager.loadModel(context, it) {
+                        Toast.makeText(
+                            context, "Model loaded successfully", Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             }
         }
     }
@@ -249,13 +246,17 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
             horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
         ) {
             if (message.role == ROLE.USER) {
-                if (message.document?.name != "") {
-                    Box(Modifier.padding(start = rDP(12.dp)), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = message.document?.name ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                if (message.document.isNotEmpty()){
+                    Row {
+                        repeat(message.document.size) {
+                            Box(Modifier.padding(start = rDP(12.dp)), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = message.document[it].doc.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -305,8 +306,6 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
             }
         }
     }
-
-
     val messages = viewModel.messages.collectAsState().value.toMutableList()
 
     LazyColumn(
@@ -326,8 +325,8 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
 @Composable
 internal fun BottomBar(viewModel: ChattingViewModel) {
     var userInput by remember { mutableStateOf("") }
-    val isGenerating = viewModel.isGenerating.collectAsState().value
-
+    val isGenerating by viewModel.isGenerating.collectAsState()
+    val attachedFiles by viewModel.attachedFiles.collectAsState()
 
     val context = LocalContext.current
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -336,7 +335,16 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
         viewModel.handleFileUri(context, uri ?: return@rememberLauncherForActivityResult)
     }
 
-    Box(Modifier.padding(8.dp)) {
+    Column(Modifier.padding(8.dp)) {
+
+        AnimatedVisibility(attachedFiles.isNotEmpty()) {
+            LazyRow {
+                itemsIndexed(attachedFiles) { index, item ->
+                    FileItem(item, onRemove = { viewModel.clearAttachment(index) })
+                }
+            }
+        }
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -372,15 +380,14 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
                             )
                         }
                         innerTextField()
-                    })
+                    }
+                )
             }
 
-            // Attachment Button
             ActionButton(R.drawable.attachment, "Attachment") {
-                filePickerLauncher.launch("*/*") // or "application/pdf", "application/msword", etc.
+                filePickerLauncher.launch("*/*")
             }
 
-            // Send Button
             ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
                 if (isGenerating) {
                     viewModel.stopGenerating()
@@ -395,6 +402,53 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
         }
     }
 }
+
+@Composable
+fun FileItem(fileAttachment: FileAttachment, onRemove: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
+            .clip(MaterialTheme.shapes.medium)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            painter = painterResource(id = R.drawable.attachment),
+            contentDescription = "Attached",
+            modifier = Modifier.size(rDP(16.dp)),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.width(rDP(6.dp)))
+
+        Text(
+            text = fileAttachment.doc.name,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        if (fileAttachment.isLoading) {
+            Spacer(Modifier.width(rDP(6.dp)))
+            CircularProgressIndicator(
+                modifier = Modifier.size(rDP(14.dp)),
+                strokeWidth = rDP(2.dp),
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Spacer(modifier = Modifier.width(rDP(6.dp)))
+            Icon(
+                Icons.Default.Close,
+                contentDescription = "Remove",
+                modifier = Modifier
+                    .size(rDP(12.dp))
+                    .clickable { onRemove() },
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
+    }
+}
+
+
 
 internal object UIComponents {
 

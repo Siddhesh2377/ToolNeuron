@@ -1,4 +1,5 @@
 import com.android.build.api.dsl.Packaging
+import org.gradle.kotlin.dsl.coreLibraryDesugaring
 
 /*
  * Copyright (C) 2024 Shubham Panchal
@@ -41,6 +42,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+        isCoreLibraryDesugaringEnabled = true
     }
 
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
@@ -52,4 +54,5 @@ android {
 
 dependencies {
     implementation(libs.kotlinx.coroutines.core)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
 }

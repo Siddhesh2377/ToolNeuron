@@ -5,9 +5,9 @@ import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.db.DatabaseProvider
 import com.dark.ai_module.db.ModelDAO
 import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.model.getDefaultModelData
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import java.io.File
 
@@ -15,8 +15,9 @@ object ModelManager {
 
     private var daoInitialized = false
     private lateinit var dao: ModelDAO
-    private lateinit var currentModel: MutableStateFlow<ModelsData>
-    private var modelParams = MutableStateFlow(Pair(ModelParams.Professional(), ModelParams.Emotional()))
+    private var currentModel: MutableStateFlow<ModelsData> = MutableStateFlow(getDefaultModelData())
+    private var modelParams =
+        MutableStateFlow(Pair(ModelParams.Professional(), ModelParams.Emotional()))
 
     fun getModel() = currentModel
 
@@ -35,17 +36,17 @@ object ModelManager {
 
     fun loadModel(context: Context, modelData: ModelsData, onLoaded: () -> Unit) {
         Neuron.loadModel(
-            File(modelData.modelPath), context = context,
+            File(modelData.modelPath),
+            context = context,
             systemPrompt = "You are a helpful assistant.",
             contextLength = modelData.modelCtxSize.toLong(),
             chatTemplate = modelData.chatTemplate
         ) {
-            onLoaded()
             currentModel = MutableStateFlow(modelData)
+            currentModel.value = modelData
+            onLoaded()
         }
     }
-
-
 
 
     fun init(context: Context) {

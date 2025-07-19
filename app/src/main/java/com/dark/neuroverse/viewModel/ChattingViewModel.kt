@@ -33,6 +33,7 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
 class ChattingViewModel( private val context: Context) : ViewModel() {
 
     //region -- State Variables
+
     private lateinit var key: MutableStateFlow<SecretKey>
     private lateinit var rootNode: MutableStateFlow<NeuronTree>
 
@@ -51,7 +52,10 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     private val _chatList = MutableStateFlow(emptyList<ChatINFO>())
     val chatList: StateFlow<List<ChatINFO>> = _chatList
 
-    private val fileData = MutableStateFlow(DOC("", "", "", ""))
+    private val _attachedFiles = MutableStateFlow<List<FileAttachment>>(emptyList())
+    val attachedFiles: StateFlow<List<FileAttachment>> = _attachedFiles
+
+
     val chatId = MutableStateFlow("")
     //endregion
 
@@ -77,25 +81,83 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             }
 
             updateChatList()
+            clearAttachment()
             rootNode.value.printTree()
         }
     }
     //endregion
 
     //region -- Public Functions
+    fun handleFileUri(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (cursor.moveToFirst()) cursor.getString(index) else "unknown_file"
+                } ?: "unknown_file"
+
+                val placeholder = FileAttachment(doc = DOC(fileName, "", "", ""), isLoading = true)
+
+                // Add and capture its index
+                val index = _attachedFiles.updateAndGet { it + placeholder }.lastIndex
+
+                val tempFile = File(context.cacheDir, fileName)
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output -> input.copyTo(output) }
+                }
+
+                val summary = DocReader.read(tempFile)
+
+                _attachedFiles.update { currentList ->
+                    currentList.toMutableList().apply {
+                        this[index] = FileAttachment(doc = summary, isLoading = false)
+                    }
+                }
+
+            } catch (e: Exception) {
+                Log.e("FilePicker", "Failed to load file", e)
+            }
+        }
+    }
+
+    private inline fun <T> MutableStateFlow<T>.updateAndGet(update: (T) -> T): T {
+        val newValue = update(this.value)
+        this.value = newValue
+        return newValue
+    }
+
+    fun clearAttachment() {
+        _attachedFiles.value = emptyList()
+    }
+
+    fun clearAttachment(index: Int) {
+        _attachedFiles.update { it.toMutableList().apply { removeAt(index) } }
+    }
 
     fun sendMessage(userInput: String) {
         viewModelScope.launch(Dispatchers.IO) {
             _isGenerating.value = true
             _streamingBuffer.value = ""
+            // Filter only fully summarized files
+            val finalizedDocs = _attachedFiles.value.filter { !it.isLoading && it.doc.path.isNotBlank() }
+
+            clearAttachment()
+            Log.d("FilePicker", "Finalized docs: $finalizedDocs")
 
             val time = System.currentTimeMillis().toString()
-            val userMessage = Message(ROLE.USER, userInput, time, fileData.value)
+            val userMessage = Message(
+                role = ROLE.USER,
+                content = userInput,
+                timeStamp = time,
+                document = finalizedDocs as MutableList<FileAttachment>
+            )
+
             val placeholder = Message(ROLE.SYSTEM, "", "streaming")
 
             _messages.update { it + userMessage + placeholder }
 
-            val inputJson = buildInputPayload()
+            val inputJson = buildInputPayload(finalizedDocs)
+
             val fullResponse = Neuron.generateResponseStreaming(inputJson.toString()) { chunk ->
                 viewModelScope.launch(Dispatchers.Main) {
                     _streamingBuffer.update { it + chunk }
@@ -110,7 +172,6 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             }
 
             _isGenerating.value = false
-            fileData.value = DOC("", "", "", "")
 
             _messages.update {
                 it.filterNot { m -> m.role == ROLE.SYSTEM && m.timeStamp == "streaming" } +
@@ -120,8 +181,10 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             generateTitle()
             updateConversation()
             updateChatList()
+            _attachedFiles.value = emptyList() // Clear files after sending
         }
     }
+
 
     fun loadChatById(chatIdToLoad: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -162,34 +225,13 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         _isGenerating.value = false
         updateConversation()
     }
-
-    fun handleFileUri(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst()) cursor.getString(index) else "unknown_file"
-                } ?: "unknown_file"
-
-                val tempFile = File(context.cacheDir, fileName)
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    tempFile.outputStream().use { output -> input.copyTo(output) }
-                }
-
-                fileData.value = DocReader.read(tempFile)
-            } catch (e: Exception) {
-                Log.e("FilePicker", "Failed to load file", e)
-            }
-        }
-    }
-
-    fun getChatInfo(): List<ChatINFO> = _chatList.value
     //endregion
 
     //region -- Private Helpers
 
-    private fun updateChatList() {
+    fun updateChatList() {
         try {
+            _chatList.value = emptyList()
             val chatInfo = mutableListOf<ChatINFO>()
             val root = rootNode.value.getNodeDirect("root")
             val history = getDefaultChatHistory(root)
@@ -243,38 +285,6 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         return _messages.value.lastOrNull { it.role == ROLE.SYSTEM }?.content.orEmpty()
     }
 
-    private fun buildInputPayload(): JSONObject {
-        val arr = JSONArray()
-
-        arr.put(JSONObject().apply {
-            put("role", "system")
-            put("content", "You are NeuroV AI assistant.")
-        })
-
-        _messages.value.forEach { msg ->
-            val clean = msg.content.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
-            if (clean.isNotBlank()) {
-                arr.put(JSONObject().apply {
-                    put("role", msg.role.name.lowercase())
-                    put("content", clean)
-                    put("timestamp", msg.timeStamp)
-                })
-            }
-        }
-
-        return JSONObject().apply {
-            put("messages", arr)
-            put("response_format", "text")
-            fileData.value.takeIf { it.path.isNotBlank() }?.let {
-                put("document", JSONObject().apply {
-                    put("name", it.name)
-                    put("type", it.type)
-                    put("content", sanitizeForModel(it.content))
-                })
-            }
-        }
-    }
-
     private fun updateConversation() {
         try {
             val root = rootNode.value.getNodeDirect("root")
@@ -307,6 +317,42 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             saveTree(rootNode.value, context, BuildConfig.ALIAS)
         } catch (e: Exception) {
             Log.e("updateConversation", "Failed updating chat", e)
+        }
+    }
+
+    private fun buildInputPayload(finalizedDocs: List<FileAttachment>): JSONObject {
+        val arr = JSONArray()
+
+        arr.put(JSONObject().apply {
+            put("role", "system")
+            put("content", "You are NeuroV AI assistant.")
+        })
+
+        _messages.value.forEach { msg ->
+            val clean = msg.content.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
+            if (clean.isNotBlank()) {
+                arr.put(JSONObject().apply {
+                    put("role", msg.role.name.lowercase())
+                    put("content", clean)
+                    put("timestamp", msg.timeStamp)
+                })
+            }
+        }
+
+        return JSONObject().apply {
+            put("messages", arr)
+            put("response_format", "text")
+            if (finalizedDocs.isNotEmpty()) {
+                put("documents", JSONArray().apply {
+                    finalizedDocs.forEach {
+                        put(JSONObject().apply {
+                            put("name", it.doc.name)
+                            put("type", it.doc.type)
+                            put("content", sanitizeForModel(it.doc.content))
+                        })
+                    }
+                })
+            }
         }
     }
 

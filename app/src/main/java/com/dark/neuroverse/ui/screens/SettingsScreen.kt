@@ -1,13 +1,7 @@
 package com.dark.neuroverse.ui.screens
 
-import android.content.Context
 import android.util.Log
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -17,25 +11,18 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,14 +44,23 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
+import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.UserPrefs
+import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.userdata.getDefaultChatHistory
+import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.userdata.readBrainFile
+import com.dark.userdata.saveTree
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
+import org.json.JSONObject
+import javax.crypto.SecretKey
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,10 +68,55 @@ fun SettingsScreen(
     onResetTweaks: () -> Unit = {},
     onClearUserData: () -> Unit = {},
     appVersion: String = "0.0.1",
-    onUpdateApp: () -> Unit = {}
+    onUpdateApp: () -> Unit = {},
 ) {
     val innerCorner = 8.dp
     val outerCorner = 20.dp
+    var rootNode: MutableStateFlow<NeuronTree>? = null
+    var key: MutableStateFlow<SecretKey>
+    val _chatList = MutableStateFlow(emptyList<ChatINFO>())
+    val context = LocalContext.current
+
+    LaunchedEffect(Unit) {
+        key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
+        rootNode = MutableStateFlow(readBrainFile(key.value, context))
+
+        try {
+            val chatInfo = mutableListOf<ChatINFO>()
+            val root = rootNode.value.getNodeDirect("root")
+            val history = getDefaultChatHistory(root)
+
+            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
+                if (node.data.content.isNotBlank()) {
+                    val title = runCatching {
+                        JSONObject(node.data.content).optString("title", "Untitled")
+                    }.getOrElse { "Untitled" }
+
+                    chatInfo.add(ChatINFO(node.id, title))
+                }
+            }
+
+            _chatList.value = chatInfo
+
+        } catch (e: Exception) {
+            Log.e("updateChatList", "Failed loading chat titles", e)
+        }
+        rootNode.value.printTree()
+    }
+
+    fun clearChatHistory() {
+        if (rootNode == null) return
+        try {
+            for (chat in _chatList.value) {
+                rootNode.value.deleteNodeById(chat.id)
+            }
+            saveTree(rootNode.value, context, BuildConfig.ALIAS)
+            Log.d("clearChatHistory", "Chat history cleared")
+            Toast.makeText(context, "Chat history cleared", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Log.e("deleteChatById", "Failed to delete chats", e)
+        }
+    }
 
 
     LazyColumn(
@@ -120,6 +161,10 @@ fun SettingsScreen(
                 }
             }
 
+            LaunchedEffect(currentModel) {
+                Log.d("ModelManager", "Current model updated: ${currentModel.value}")
+            }
+
             LaunchedEffect(professionalism, emotionalTone) {
                 UserPrefs.setModelPParams(context, professionalism)
                 UserPrefs.setModelEParams(context, emotionalTone)
@@ -154,8 +199,13 @@ fun SettingsScreen(
                     ModelDialog(modelList, context) {
                         expanded = false
                         if (it != null) {
+                            Toast.makeText(
+                                context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
+                            ).show()
                             ModelManager.loadModel(context, it) {
-
+                                Toast.makeText(
+                                    context, "Model loaded successfully", Toast.LENGTH_SHORT
+                                ).show()
                             }
                         }
                     }
@@ -219,15 +269,24 @@ fun SettingsScreen(
 
         // ---- USER SETTINGS ----
         item {
-            Text("User Settings", style = MaterialTheme.typography.titleLarge)
-            SettingCard(
-                title = "Clear User Data", actionLabel = "Clear", onAction = onClearUserData
+            Text(
+                "User Settings",
+                modifier = Modifier.padding(vertical = 12.dp),
+                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
             )
+            SettingCard(
+                title = "Clear User Data", actionLabel = "Clear", onAction = {
+                    clearChatHistory()
+                })
         }
 
         // ---- APP SETTINGS ----
         item {
-            Text("App Settings", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "App Settings",
+                modifier = Modifier.padding(vertical = 12.dp),
+                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
+            )
             SettingCard(
                 title = "App Version : $appVersion", actionLabel = "Update", onAction = onUpdateApp
             ) {
@@ -320,92 +379,6 @@ fun SettingCard(
         ) {
             Column(Modifier.padding(12.dp)) {
                 content()
-            }
-        }
-    }
-}
-
-
-@Composable
-fun ModelDialog(
-    modelList: List<ModelsData>,
-    context: Context,
-    onDismissRequest: (ModelsData?) -> Unit
-) {
-    Dialog(
-        onDismissRequest = { onDismissRequest(null) },
-        properties = DialogProperties(usePlatformDefaultWidth = false) // full-width on small screens
-    ) {
-        AnimatedVisibility(
-            visible = true, enter = fadeIn(animationSpec = tween(300)) + scaleIn(
-                initialScale = 0.9f, animationSpec = tween(300)
-            ), exit = fadeOut(animationSpec = tween(200)) + scaleOut(
-                targetScale = 0.9f, animationSpec = tween(200)
-            )
-        ) {
-            Surface(
-                shape = MaterialTheme.shapes.large,
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 8.dp,
-                modifier = Modifier
-                    .padding(horizontal = 24.dp)
-                    .wrapContentHeight()
-                    .fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .wrapContentHeight()
-                ) {
-                    // Title
-                    Text(
-                        text = "Select Model",
-                        style = MaterialTheme.typography.headlineSmall,
-                        modifier = Modifier.padding(bottom = 16.dp)
-                    )
-
-                    // Scrollable model list
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 300.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        modelList.forEachIndexed { index, model ->
-                            Button(
-                                onClick = {
-                                    onDismissRequest(model)
-                                    ModelManager.loadModel(context, model) {}
-                                },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp),
-                                shape = MaterialTheme.shapes.large
-                            ) {
-                                Text(
-                                    text = model.modeName,
-                                    modifier = Modifier.padding(vertical = 8.dp)
-                                )
-                            }
-
-                            if (index != modelList.lastIndex) {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(horizontal = 8.dp),
-                                    thickness = 0.5.dp
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Cancel button
-                    TextButton(
-                        onClick = { onDismissRequest(null) },
-                        modifier = Modifier.align(Alignment.End)
-                    ) {
-                        Text("Cancel")
-                    }
-                }
             }
         }
     }
