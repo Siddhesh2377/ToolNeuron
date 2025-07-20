@@ -8,7 +8,6 @@ import android.provider.OpenableColumns
 import android.util.Log
 import androidx.lifecycle.*
 import com.dark.ai_module.ai.Neuron
-import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.data.DocReader
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.*
@@ -35,8 +34,9 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
 
     //region -- State Variables
 
-    private lateinit var key: MutableStateFlow<SecretKey>
-    private lateinit var rootNode: MutableStateFlow<NeuronTree>
+    private val key =
+        MutableStateFlow<SecretKey>(getOrCreateHardwareBackedAesKey(com.dark.neuroverse.BuildConfig.ALIAS))
+    private val rootNode = MutableStateFlow<NeuronTree>(readBrainFile(key.value, context))
 
     private val _chatTitle = MutableStateFlow("")
     val chatTitle: StateFlow<String> = _chatTitle
@@ -66,8 +66,8 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     //region -- Init
     init {
         CoroutineScope(Dispatchers.IO).launch {
-            key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
-            rootNode = MutableStateFlow(readBrainFile(key.value, context))
+            key.value = getOrCreateHardwareBackedAesKey(com.dark.neuroverse.BuildConfig.ALIAS)
+            rootNode.value = readBrainFile(key.value, context)
 
             val root = rootNode.value.getNodeDirect("root")
             val chatHistory = getDefaultChatHistory(root)
@@ -87,9 +87,11 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             updateChatList()
             clearAttachment()
             rootNode.value.printTree()
+            val p = UserPrefs.getModelPParams(context).firstOrNull() ?: 5.0f
+            val e = UserPrefs.getModelEParams(context).firstOrNull() ?: 5.0f
 
-            professionalism.value = UserPrefs.getModelPParams(context).first()!!
-            emotional.value = UserPrefs.getModelEParams(context).first()!!
+            professionalism.value = p
+            emotional.value = e
         }
     }
     //endregion
@@ -142,56 +144,69 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     }
 
     fun sendMessage(userInput: String) {
+        if (userInput.isBlank()) {
+            Log.w("ChatVM", "sendMessage() skipped due to blank input")
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
-            _isGenerating.value = true
-            _streamingBuffer.value = ""
-            // Filter only fully summarized files
-            val finalizedDocs = _attachedFiles.value.filter { !it.isLoading && it.doc.path.isNotBlank() }
+            try {
+                _isGenerating.value = true
+                _streamingBuffer.value = ""
 
-            clearAttachment()
-            Log.d("FilePicker", "Finalized docs: $finalizedDocs")
+                val finalizedDocs = _attachedFiles.value.filter { !it.isLoading && it.doc.path.isNotBlank() }
+                clearAttachment()
 
-            val time = System.currentTimeMillis().toString()
-            val userMessage = Message(
-                role = ROLE.USER,
-                content = userInput,
-                timeStamp = time,
-                document = finalizedDocs as MutableList<FileAttachment>
-            )
+                val time = System.currentTimeMillis().toString()
+                val userMessage = Message(
+                    role = ROLE.USER,
+                    content = userInput,
+                    timeStamp = time,
+                    document = finalizedDocs as MutableList<FileAttachment>
+                )
 
-            val placeholder = Message(ROLE.SYSTEM, "", "streaming")
+                val placeholder = Message(ROLE.SYSTEM, "", "streaming")
+                _messages.update { it + userMessage + placeholder }
 
-            _messages.update { it + userMessage + placeholder }
+                val inputJson = buildInputPayload(finalizedDocs)
+                val inputStr = inputJson.toString()
 
-            val inputJson = buildInputPayload(finalizedDocs)
+                if (inputStr.isBlank()) {
+                    Log.e("ChatVM", "Input JSON is blank. Cancelling inference.")
+                    _isGenerating.value = false
+                    return@launch
+                }
 
-            val fullResponse = Neuron.generateResponseStreaming(inputJson.toString()) { chunk ->
-                viewModelScope.launch(Dispatchers.Main) {
-                    _streamingBuffer.update { it + chunk }
-                    _messages.update {
-                        it.map { msg ->
-                            if (msg.role == ROLE.SYSTEM && msg.timeStamp == "streaming")
-                                msg.copy(content = _streamingBuffer.value)
-                            else msg
+                val fullResponse = Neuron.generateResponseStreaming(inputStr) { chunk ->
+                    viewModelScope.launch(Dispatchers.Main) {
+                        _streamingBuffer.update { it + chunk }
+                        _messages.update {
+                            it.map { msg ->
+                                if (msg.role == ROLE.SYSTEM && msg.timeStamp == "streaming")
+                                    msg.copy(content = _streamingBuffer.value)
+                                else msg
+                            }
                         }
                     }
                 }
+
+                _isGenerating.value = false
+
+                _messages.update {
+                    it.filterNot { m -> m.role == ROLE.SYSTEM && m.timeStamp == "streaming" } +
+                            Message(ROLE.SYSTEM, fullResponse, System.currentTimeMillis().toString())
+                }
+
+                generateTitle()
+                updateConversation()
+                updateChatList()
+                _attachedFiles.value = emptyList()
+            } catch (e: Exception) {
+                Log.e("ChatVM", "sendMessage failed", e)
+                _isGenerating.value = false
             }
-
-            _isGenerating.value = false
-
-            _messages.update {
-                it.filterNot { m -> m.role == ROLE.SYSTEM && m.timeStamp == "streaming" } +
-                        Message(ROLE.SYSTEM, fullResponse, System.currentTimeMillis().toString())
-            }
-
-            generateTitle()
-            updateConversation()
-            updateChatList()
-            _attachedFiles.value = emptyList() // Clear files after sending
         }
     }
-
 
     fun loadChatById(chatIdToLoad: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -321,7 +336,7 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
                 chatId.value = newNode.id
             }
 
-            saveTree(rootNode.value, context, BuildConfig.ALIAS)
+            saveTree(rootNode.value, context, com.dark.neuroverse.BuildConfig.ALIAS)
         } catch (e: Exception) {
             Log.e("updateConversation", "Failed updating chat", e)
         }
@@ -385,7 +400,7 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
                 rootNode.value.deleteNodeById(id)
 
                 // 2. Save updated tree to disk
-                saveTree(rootNode.value, context, BuildConfig.ALIAS)
+                saveTree(rootNode.value, context, com.dark.neuroverse.BuildConfig.ALIAS)
 
                 // 3. Update chat list for UI
                 updateChatList()

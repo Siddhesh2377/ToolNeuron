@@ -1,21 +1,19 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# -- Keep all AI module core/model/worker/helper classes (and their members) --
+-keep class com.dark.ai_module.model.** { *; }
+-keep class com.dark.ai_module.workers.** { *; }
+-keep class com.dark.ai_module.helpers.** { *; }
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# -- If you use Python/Chaquopy or JNI from NeuroVerse or AI module classes --
+-keep class com.chaquo.python.** { *; }
+-keep class com.dark.neurov.** { *; }
+-keep class com.dark.neuroverse.** { *; }
+-keep class com.dark.neuroverse.activity.** { *; }
+-keep class com.dark.neuroverse.viewModel.** { *; }
+-keep class com.dark.neuroverse.ui.** { *; }
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# -- General, keep all native and JNI-related classes --
+-keep class * extends java.lang.Exception
+-keep class * extends java.lang.Throwable
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# -- (Optional) Keep annotations, required by some reflection/Python/JNI libs --
+-keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature

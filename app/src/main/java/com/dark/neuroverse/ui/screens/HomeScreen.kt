@@ -93,7 +93,9 @@ fun HomeScreen(
     val viewModel: ChattingViewModel = viewModel(factory = ChattingViewModelFactory(context))
 
     LaunchedEffect(Unit) {
+        Log.d("HomeScreen", "LaunchedEffect triggered")
         viewModel.updateChatList()
+        Log.d("HomeScreen", "Chat list updated")
     }
 
     ModalNavigationDrawer(
