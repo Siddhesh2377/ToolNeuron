@@ -1,9 +1,12 @@
 package com.dark.neuroverse.ui.screens
 
-import android.content.Intent
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -22,7 +26,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -39,6 +43,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -48,7 +53,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
@@ -71,26 +75,21 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import org.json.JSONObject
-import java.io.File
 import javax.crypto.SecretKey
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
     onResetTweaks: () -> Unit = {},
-    onClearUserData: () -> Unit = {},
-    appVersion: String = "0.0.1",
-    onUpdateApp: () -> Unit = {},
 ) {
     val innerCorner = 8.dp
     val outerCorner = 20.dp
     var rootNode: MutableStateFlow<NeuronTree>? = null
     var key: MutableStateFlow<SecretKey>
-    val _chatList = MutableStateFlow(emptyList<ChatINFO>())
+    val chatList = MutableStateFlow(emptyList<ChatINFO>())
     val context = LocalContext.current
 
     val updateViewModel: UpdateViewModel = viewModel()
-    val updateInfo by updateViewModel.updateInfo.collectAsState()
 
     LaunchedEffect(Unit) {
         key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
@@ -111,7 +110,7 @@ fun SettingsScreen(
                 }
             }
 
-            _chatList.value = chatInfo
+            chatList.value = chatInfo
 
         } catch (e: Exception) {
             Log.e("updateChatList", "Failed loading chat titles", e)
@@ -122,7 +121,7 @@ fun SettingsScreen(
     fun clearChatHistory() {
         if (rootNode == null) return
         try {
-            for (chat in _chatList.value) {
+            for (chat in chatList.value) {
                 rootNode.value.deleteNodeById(chat.id)
             }
             saveTree(rootNode.value, context, BuildConfig.ALIAS)
@@ -308,15 +307,12 @@ fun SettingsScreen(
             )
 
             SettingCard(
-                title = "App Version : $appVersion",
-                actionLabel = when (updateInfo.status) {
+                title = "Check for Updates", actionLabel = when (updateInfo.status) {
                     UpdateStatus.DOWNLOADING -> "${updateInfo.downloadProgress}%"
                     UpdateStatus.READY_TO_INSTALL -> "Install"
                     UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else "Check"
                     UpdateStatus.FAILED -> "Retry"
-                },
-                showCard = showCard,
-                onAction = {
+                }, showCard = showCard, onAction = {
                     when (updateInfo.status) {
                         UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
 
@@ -346,57 +342,82 @@ fun SettingsScreen(
 
 
             ) {
-                when (updateInfo.status) {
-                    UpdateStatus.IDLE -> {}
+                Crossfade(
+                    targetState = updateInfo.status, label = "UpdateStatusCrossfade"
+                ) { status ->
+                    when (status) {
+                        UpdateStatus.IDLE -> {}
 
-                    UpdateStatus.DOWNLOADING -> {
-                        Column {
-                            Text(
-                                "Downloading...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                modifier = Modifier.padding(bottom = 8.dp)
-                            )
+                        UpdateStatus.DOWNLOADING -> {
+                            AnimatedVisibility(
+                                visible = true, enter = fadeIn(), exit = fadeOut()
+                            ) {
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight()
+                                ) {
+                                    Text(
+                                        "Downloading...",
+                                        style = MaterialTheme.typography.titleLarge,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
 
-                            LinearWavyProgressIndicator(progress = {
-                                updateInfo.downloadProgress.toFloat()
-                            })
+                                    val animatedProgress = animateFloatAsState(
+                                        targetValue = updateInfo.downloadProgress,
+                                        label = "ProgressAnim"
+                                    )
 
-                            Text(
-                                buildAnnotatedString {
-                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                        append("What's New:\n")
+                                    if (animatedProgress.value > 0f) {
+                                        LinearProgressIndicator(
+                                            progress = { animatedProgress.value },
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.fillMaxWidth(),
+                                            strokeCap = StrokeCap.Round
+                                        )
                                     }
-                                    updateInfo.whatsNew.forEach {
-                                        append("\u2023 $it\n")
-                                    }
-                                },
-                                modifier = Modifier.padding(12.dp)
-                            )
+
+                                    Text(
+                                        buildAnnotatedString {
+                                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                append("What's New:\n")
+                                            }
+                                            updateInfo.whatsNew.forEach {
+                                                append("\u2023 $it\n")
+                                            }
+                                        }, modifier = Modifier.padding(top = 12.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        UpdateStatus.FAILED -> {
+                            AnimatedVisibility(visible = true) {
+                                Text(
+                                    "Download failed. Please try again.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    modifier = Modifier.padding(bottom = 8.dp)
+                                )
+                            }
+                        }
+
+                        UpdateStatus.READY_TO_INSTALL -> {
+                            AnimatedVisibility(visible = true) {
+                                Text(
+                                    buildAnnotatedString {
+                                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                            append("What's New:\n")
+                                        }
+                                        updateInfo.whatsNew.forEach {
+                                            append("\u2023 $it\n")
+                                        }
+                                    }, modifier = Modifier.padding(12.dp)
+                                )
+                            }
                         }
                     }
-
-                    UpdateStatus.FAILED -> {
-                        Text(
-                            "Download failed. Please try again.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
-
-                    UpdateStatus.READY_TO_INSTALL -> {
-                        Text(
-                            buildAnnotatedString {
-                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                    append("What's New:\n")
-                                }
-                                updateInfo.whatsNew.forEach {
-                                    append("\u2023 $it\n")
-                                }
-                            },
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
                 }
+
             }
         }
 

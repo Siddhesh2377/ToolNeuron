@@ -34,7 +34,7 @@ data class AppUpdateInfo(
     val updateLink: String = "",
     val version: String = "",
     val whatsNew: List<String> = emptyList(),
-    val downloadProgress: Long = 0,
+    val downloadProgress: Float = 0f,
     val apkFilePath: String = "",
     val status: UpdateStatus = UpdateStatus.IDLE
 )
@@ -84,7 +84,7 @@ class UpdateViewModel : ViewModel() {
                     _updateInfo.value = _updateInfo.value.copy(status = UpdateStatus.DOWNLOADING)
                     val connection = URL(url).openConnection()
                     val totalSize = connection.contentLengthLong
-                    if (totalSize <= 0L) throw IllegalStateException("Invalid content length: $totalSize")
+                    val isKnownSize = totalSize > 0
 
                     val input = BufferedInputStream(connection.getInputStream())
 
@@ -92,15 +92,32 @@ class UpdateViewModel : ViewModel() {
                     val output = BufferedOutputStream(file.outputStream())
 
                     val buffer = ByteArray(8192)
-                    var downloaded = 0
+                    var downloaded = 0f
                     var read: Int
+
+                    var lastProgress = -1f
+
+                    if (isKnownSize) {
+                        val progress = (downloaded.toDouble() / totalSize).coerceIn(0.0, 1.0).toFloat()
+                        if (progress != lastProgress) {
+                            _updateInfo.value = _updateInfo.value.copy(downloadProgress = progress.toFloat())
+                            lastProgress = progress
+                        }
+                    }
 
                     while (input.read(buffer).also { read = it } != -1) {
                         output.write(buffer, 0, read)
                         downloaded += read
-                        val progress = (downloaded * 100 / totalSize).coerceIn(0, 100)
-                        _updateInfo.value = _updateInfo.value.copy(downloadProgress = progress)
+
+                        val progress = (downloaded.toDouble() / totalSize).coerceIn(0.0, 1.0).toFloat()
+
+                        if (progress != lastProgress) {
+                            _updateInfo.value = _updateInfo.value.copy(downloadProgress = progress)
+                            lastProgress = progress
+                        }
                     }
+
+
 
                     output.flush()
                     output.close()
