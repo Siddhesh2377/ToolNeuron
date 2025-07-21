@@ -7,6 +7,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.ModelParams.Emotional
 import com.dark.ai_module.workers.ModelParams.Professional
 import com.dark.neuroverse.data.UserPrefs
+import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
@@ -20,6 +21,7 @@ class NVApplication : Application() {
             Python.start(AndroidPlatform(this))
         }
         ModelManager.init(applicationContext)
+        UpdateScheduler.scheduleTestUpdateCheck(applicationContext, 10)
         CoroutineScope(Dispatchers.IO).launch {
             ModelManager.updateModelParams(
                 Professional(

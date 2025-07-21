@@ -1,9 +1,13 @@
 package com.dark.neuroverse.activity
 
+import android.Manifest
+import android.content.Context
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -25,10 +29,12 @@ import com.dark.neuroverse.ui.screens.IntroScreen
 import com.dark.neuroverse.ui.screens.ModelsScreen
 import com.dark.neuroverse.ui.screens.SettingsScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import com.dark.neuroverse.util.makeToast
 import com.dark.userdata.getDefaultBrainStructure
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.saveEncryptedTree
+import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -38,6 +44,12 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val permission = Manifest.permission.POST_NOTIFICATIONS
+        val requestNotificationPermission =
+            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+                if (!isGranted) "Permission denied".makeToast(this@MainActivity)
+            }
 
         CoroutineScope(Dispatchers.IO).launch {
             val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
@@ -54,6 +66,9 @@ class MainActivity : ComponentActivity() {
 
             var isJNIReady by remember { mutableStateOf(false) }
             var isJNIDownloading by remember { mutableStateOf(false) }
+
+            //ASK FOR NOTIFICATION PERMISSION
+            requestNotificationPermission.launch(permission)
 
             // Initial JNI + model check
             LaunchedEffect(Unit) {
@@ -131,3 +146,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

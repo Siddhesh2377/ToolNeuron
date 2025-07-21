@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Neuro V</string>
+    <string name="service_name">Notification reader</string>
+</resources>

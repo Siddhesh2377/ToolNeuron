@@ -88,6 +88,7 @@ dependencies {
     //PROJECTS
     implementation(project(":ai-module"))
     implementation(project(":userData"))
+    implementation(project(":updateManager"))
 
     //UTILS
     implementation(libs.androidx.datastore.preferences)

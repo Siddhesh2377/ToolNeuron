@@ -1,0 +1,5 @@
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:recognitionService="com.dark.neuroverse.services.assistant.NeuroVService"
+    android:sessionService="com.dark.neuroverse.services.assistant.NeuroVoiceInteractionSessionService"
+    android:supportsAssist="true"
+    android:supportsLaunchVoiceAssistFromKeyguard="true" />

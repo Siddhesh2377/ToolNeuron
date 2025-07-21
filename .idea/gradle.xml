@@ -13,6 +13,7 @@
             <option value="$PROJECT_DIR$/ai-module" />
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/smollm" />
+            <option value="$PROJECT_DIR$/updateManager" />
             <option value="$PROJECT_DIR$/userData" />
           </set>
         </option>
