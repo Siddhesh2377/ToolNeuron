@@ -2,6 +2,7 @@ package com.dark.neuroverse.activity
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -34,6 +35,7 @@ import com.dark.userdata.getDefaultBrainStructure
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.saveEncryptedTree
+import com.mp.updatemanager.UpdateActionReceiver
 import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
