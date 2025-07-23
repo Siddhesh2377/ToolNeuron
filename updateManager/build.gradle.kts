@@ -9,7 +9,7 @@ android {
 
     defaultConfig {
         minSdk = 26
-
+        buildConfigField("String", "VERSION_NAME", "\"0.0.2-Beta\"")
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
     }
@@ -29,6 +29,9 @@ android {
     }
     kotlinOptions {
         jvmTarget = "11"
+    }
+    buildFeatures {
+        buildConfig = true
     }
 }
 

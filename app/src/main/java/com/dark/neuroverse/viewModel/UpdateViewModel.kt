@@ -22,6 +22,7 @@ import java.io.BufferedOutputStream
 import java.io.File
 import java.net.URL
 import androidx.core.net.toUri
+import com.mp.updatemanager.UpdateChecker
 
 // --- UpdateStatus.kt ---
 enum class UpdateStatus {
@@ -185,5 +186,24 @@ class UpdateViewModel : ViewModel() {
         }
     }
 
+    fun checkForUpdateAndStartDownload(context: Context, jsonUrl: String) {
+        viewModelScope.launch {
+            val result = UpdateChecker.checkForUpdate(context, jsonUrl)
+
+            if (result != null && result.hasUpdate) {
+                _updateInfo.value = _updateInfo.value.copy(
+                    hasUpdate = true,
+                    version = result.version,
+                    whatsNew = result.whatsNew,
+                    status = UpdateStatus.IDLE
+                )
+
+                // Wait briefly for UI state to update (optional)
+                kotlinx.coroutines.delay(1000)
+
+                downloadApk(context)
+            }
+        }
+    }
 
 }

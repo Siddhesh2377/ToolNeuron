@@ -68,12 +68,9 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.launch
 import org.json.JSONObject
 import javax.crypto.SecretKey
 
@@ -317,16 +314,10 @@ fun SettingsScreen(
                         UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
 
                         UpdateStatus.IDLE -> {
-                            updateViewModel.fetchUpdateInfo("https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}")
-                            showCard = true
-
-                            // 💥 After fetching, start download in 1 second to allow Flow to emit new state
-                            CoroutineScope(Dispatchers.Main).launch {
-                                kotlinx.coroutines.delay(1000)
-                                if (updateViewModel.updateInfo.value.hasUpdate) {
-                                    updateViewModel.downloadApk(context)
-                                }
-                            }
+                            updateViewModel.checkForUpdateAndStartDownload(
+                                context,
+                                "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
+                            )
                         }
 
                         UpdateStatus.FAILED -> {
