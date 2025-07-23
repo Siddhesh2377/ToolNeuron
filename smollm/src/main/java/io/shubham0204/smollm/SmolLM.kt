@@ -36,42 +36,40 @@ class SmolLM(private val context: Context) {
         libraryLoaded = true
     }
 
-    suspend fun load(modelPath: String, params: InferenceParams) =
-        withContext(Dispatchers.IO) {
-            if (!libraryLoaded) init()
-            val ctxSize = params.contextSize ?: DefaultInferenceParams.contextSize
-            val template = params.chatTemplate ?: DefaultInferenceParams.chatTemplate
+    suspend fun load(modelPath: String, params: InferenceParams) = withContext(Dispatchers.IO) {
+        if (!libraryLoaded) init()
+        val ctxSize = params.contextSize ?: DefaultInferenceParams.contextSize
+        val template = params.chatTemplate ?: DefaultInferenceParams.chatTemplate
 
-            try {
-                Log.d("Template", template)
-                nativePtr = loadModel(
-                    modelPath,
-                    params.minP,
-                    params.temperature,
-                    params.storeChats,
-                    ctxSize,
-                    template,
-                    params.numThreads,
-                    params.useMmap,
-                    params.useMlock
-                )
-
-            } catch (e: IllegalStateException) {
-                Log.e(logTag, "Model load failed: ${e.message}", e)
-            }
+        try {
+            Log.d("Template", template)
+            nativePtr = loadModel(
+                modelPath,
+                params.minP,
+                params.temperature,
+                params.storeChats,
+                ctxSize,
+                template,
+                params.numThreads,
+                params.useMmap,
+                params.useMlock
+            )
+        } catch (e: IllegalStateException) {
+            Log.e(logTag, "Model load failed: ${e.message}", e)
         }
+    }
 
     object DefaultInferenceParams {
         const val contextSize: Long = 8024L
         val chatTemplate: String = """
-            {% for message in messages %}
-                {% if loop.first and messages[0]['role'] != 'system' %}
-                    {{ '<|im_start|>system Your Name is Neuron Developed By NeuroV. Your only job is to send short, polite, relevant auto-replies when the user is unavailable. Never overthink, reason, or generate long responses. Keep replies under 10 words.<|im_end|> ' }}
-                {% endif %}
-                {{ '<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|> ' }}
-            {% endfor %}
-            {% if add_generation_prompt %}{{ '<|im_start|>assistant ' }}{% endif %}
-        """.trimIndent()
+        {% for message in messages %}
+            {% if loop.first and messages[0]['role'] != 'system' %}
+                {{ '<|im_start|>system Your Name is Neuron Developed By NeuroV. Your only job is to send short, polite, relevant auto-replies when the user is unavailable. Never overthink, reason, or generate long responses. Keep replies under 10 words.<|im_end|> ' }}
+            {% endif %}
+            {{ '<|im_start|>' + message['role'] + ' ' + message['content'] + '<|im_end|> ' }}
+        {% endfor %}
+        {% if add_generation_prompt %}{{ '<|im_start|>assistant ' }}{% endif %}
+    """.trimIndent()
     }
 
     data class InferenceParams(
@@ -123,6 +121,7 @@ class SmolLM(private val context: Context) {
     }
 
     fun stopGeneration() = stopCompletion(nativePtr)
+
     fun stopGenerationImmediately() {
         verifyHandle()
         stopGenerationImmediately(nativePtr)
@@ -140,10 +139,11 @@ class SmolLM(private val context: Context) {
 
     fun close() {
         if (nativePtr != 0L) {
-            close(nativePtr)
+            close(nativePtr) // native cleanup
             nativePtr = 0L
         }
     }
+
 
     // Native methods
     private external fun loadModel(
@@ -167,5 +167,5 @@ class SmolLM(private val context: Context) {
     private external fun stopCompletion(modelPtr: Long)
     private external fun stopGenerationImmediately(modelPtr: Long)
     private external fun clearChatMemory(modelPtr: Long)
-}
 
+}

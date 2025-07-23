@@ -4,17 +4,20 @@ import android.content.Context
 import android.util.Log
 import io.shubham0204.smollm.SmolLM
 import io.shubham0204.smollm.SmolLM.InferenceParams
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 object Neuron {
-
-    data class Variant(
-        val job: Job,
-        val modelPath: File,
-        val instance: SmolLM
-    )
+    private data class Variant(val job: Job, val modelPath: File, val instance: SmolLM)
 
     private var activeVariant: File? = null
     private val modelInstances = ConcurrentHashMap<String, Variant>()
@@ -29,28 +32,29 @@ object Neuron {
         systemPrompt: String,
         onLoaded: (() -> Unit)? = null
     ) {
-        val file = path
-        require(file.exists()) { "Model file missing at: ${path.path}" }
-        Log.d("Neuron", "Loading ${file.name}, size=${file.length()}")
 
-        if (!forceReload && modelInstances.containsKey(path.name)) {
+        require(path.exists()) { "Model file missing at: ${path.path}" }
+        val modelId = path.absolutePath
+        Log.d("Neuron", "Loading ${path.name}, size=${path.length()}")
+
+        if (!forceReload && modelInstances.containsKey(modelId)) {
             activeVariant = path
             onLoaded?.invoke()
             return
         }
 
-        unloadActiveModel()
+        unloadAllModels()
         val model = SmolLM(context)
+
 
         val job = nvScope.launch {
             runCatching {
                 model.load(
-                    path.path,
-                    InferenceParams(
+                    path.path, InferenceParams(
                         contextSize = contextLength,
                         chatTemplate = chatTemplate,
                         storeChats = false,
-                        numThreads = 6,
+                        numThreads = maxOf(2, Runtime.getRuntime().availableProcessors() / 2),
                         useMmap = true,
                         useMlock = false
                     )
@@ -63,28 +67,28 @@ object Neuron {
             }
         }
 
-        modelInstances[path.name] = Variant(job, path, model)
+        modelInstances[modelId] = Variant(job, path, model)
         activeVariant = path
     }
 
     suspend fun generateResponseBlocking(input: String): String {
         val model = getActiveModel()
         model.addUserMessage(input)
-
         val response = withContext(Dispatchers.IO) { model.getResponse(input) }
         model.addAssistantMessage(response)
         return response.trim()
     }
 
-    suspend fun updateSystemPrompt(systemPrompt: String){
+    suspend fun updateSystemPrompt(systemPrompt: String) {
         val model = getActiveModel()
         model.addSystemPrompt(systemPrompt)
     }
 
-    suspend fun generateResponseStreaming(input: String, onTokenReceived: (String) -> Unit): String {
+    suspend fun generateResponseStreaming(
+        input: String, onTokenReceived: (String) -> Unit
+    ): String {
         val model = getActiveModel()
         model.addUserMessage(input)
-
         val fullResponse = StringBuilder()
         model.getResponseAsFlow(input).collect { token ->
             onTokenReceived(token)
@@ -95,18 +99,16 @@ object Neuron {
         return response
     }
 
-
-
     fun unloadActiveModel() {
         activeVariant?.let {
-            modelInstances.remove(it.name)?.instance?.close()
+            modelInstances.remove(it.absolutePath)?.instance?.close()
         }
         activeVariant = null
     }
 
     fun stopGeneration(immediate: Boolean = false) {
         activeVariant?.let {
-            modelInstances[it.name]?.instance?.let { model ->
+            modelInstances[it.absolutePath]?.instance?.let { model ->
                 if (immediate) model.stopGenerationImmediately() else model.stopGeneration()
             }
         }
@@ -122,8 +124,8 @@ object Neuron {
 
     private suspend fun getActiveModel(): SmolLM {
         val variant = activeVariant ?: error("No active model selected.")
-        val entry = modelInstances[variant.name] ?: error("Model not loaded.")
-        entry.job.join()
+        val entry = modelInstances[variant.absolutePath] ?: error("Model not loaded.")
         return entry.instance
     }
+
 }
