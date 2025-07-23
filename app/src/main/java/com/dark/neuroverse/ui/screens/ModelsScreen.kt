@@ -33,11 +33,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,21 +51,17 @@ import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelsData
-import com.dark.ai_module.workers.ModelManager
-import com.dark.ai_module.workers.downloadFile
 import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.StandardBottomBar
 import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.viewModel.DownloadState
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
-import kotlinx.coroutines.launch
-import java.io.File
 
 @Composable
 fun ModelsScreen(onNext: () -> Unit) {
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val models = getModelList(context)
     val factory = remember { ModelScreenViewModelFactory(context) }
@@ -74,9 +69,12 @@ fun ModelsScreen(onNext: () -> Unit) {
 
     var isEnabled by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        isEnabled = ModelManager.isAnyModelInstalled()
+    val installedModels by viewModel.models.collectAsState()
+
+    LaunchedEffect(installedModels) {
+        isEnabled = installedModels.isNotEmpty()
     }
+
 
     Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
 
@@ -90,44 +88,24 @@ fun ModelsScreen(onNext: () -> Unit) {
             )
         )
 
+        val downloadStates by viewModel.downloadStates.collectAsState()
+
         LazyColumn(Modifier.weight(1f)) {
             items(models) { modelData ->
-                var progress by remember { mutableFloatStateOf(0f) }
-                var isDownloading by remember { mutableStateOf(false) }
-                var message by remember { mutableStateOf("") }
-                var onDownloadComplete by remember { mutableStateOf(false) }
+                val state = downloadStates[modelData.modeName] ?: DownloadState()
 
                 ModelCard(
                     modelsData = modelData,
-                    isDownloading = isDownloading,
-                    progress = progress,
-                    onDownloadComplete = onDownloadComplete,
+                    isDownloading = state.isDownloading,
+                    progress = state.progress,
+                    onDownloadComplete = state.isComplete,
                     viewModel = viewModel,
                     onDownload = {
-                        scope.launch {
-                            isDownloading = true
-                            downloadFile(
-                                fileUrl = modelData.modelLink,
-                                outputFile = File(modelData.modelPath),
-                                onProgress = { prog ->
-                                    progress = prog
-                                },
-                                onComplete = {
-                                    isDownloading = false
-                                    message = "Download Complete"
-                                    viewModel.addModel(modelData)
-                                    onDownloadComplete = true
-                                    isEnabled = true
-                                },
-                                onError = { e ->
-                                    isDownloading = false
-                                    message = "Failed: ${e.message}"
-                                    onDownloadComplete = false
-                                })
-                        }
+                        viewModel.startDownload(modelData)
                     })
             }
         }
+
 
         StandardBottomBar(Modifier.padding(bottom = 14.dp)) {
             CollapsableButton(
@@ -193,19 +171,25 @@ fun ModelCard(
             )
 
             Card(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ){
+            ) {
                 Text(
                     buildAnnotatedString {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, fontSize = MaterialTheme.typography.titleMedium.fontSize)) {
+                        withStyle(
+                            style = SpanStyle(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = MaterialTheme.typography.titleMedium.fontSize
+                            )
+                        ) {
                             append("Details\n")
                         }
                         append("\u2023 Context Size: ${modelsData.modelCtxSize}\n")
                         append("\u2023 Model Size: ${modelsData.modelSize} MB\n")
                         append("\u2023 Tool Call: ${modelsData.toolUse.uppercase()}")
-                    }
-                )
+                    })
             }
 
             AnimatedVisibility(isDownloading) {
@@ -215,8 +199,15 @@ fun ModelCard(
                 )
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+
                 Button(onClick = {
-                    if (!isInstalled) onDownload()
+                    if (!isInstalled) {
+                        if (isDownloading) {
+                            viewModel.cancelDownload(modelsData.modeName, modelsData.modelPath)
+                        } else {
+                            onDownload()
+                        }
+                    }
                 }, colors = buttonColor) {
                     Crossfade(isInstalled) {
                         when (it) {
@@ -230,14 +221,14 @@ fun ModelCard(
                                         true -> {
                                             Icon(
                                                 Icons.Default.Stop,
-                                                contentDescription = "",
+                                                contentDescription = "Cancel Download",
                                             )
                                         }
 
                                         false -> {
                                             Icon(
                                                 Icons.Default.ArrowCircleDown,
-                                                contentDescription = ""
+                                                contentDescription = "Download",
                                             )
                                         }
                                     }
@@ -254,8 +245,7 @@ fun ModelCard(
                         onClick = {
                             viewModel.removeModel(modelsData.modeName)
                             isInstalled = false
-                        },
-                        colors = ButtonDefaults.buttonColors(
+                        }, colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.error
                         )

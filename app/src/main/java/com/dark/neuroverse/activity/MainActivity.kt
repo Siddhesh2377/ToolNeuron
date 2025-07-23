@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -39,9 +40,15 @@ import com.mp.updatemanager.UpdateActionReceiver
 import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private val activityJob = SupervisorJob()
+    private val activityScope = CoroutineScope(activityJob + Dispatchers.IO)
+
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,44 +57,45 @@ class MainActivity : ComponentActivity() {
         val permission = Manifest.permission.POST_NOTIFICATIONS
         val requestNotificationPermission =
             registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-                if (!isGranted) "Permission denied".makeToast(this@MainActivity)
+                if (!isGranted) "Permission denied".makeToast(this)
             }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        // Save brain structure in IO scope
+        activityScope.launch {
             val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
             val brainFile = getBrainFilePath(this@MainActivity)
 
             if (!brainFile.exists()) {
                 val brain = getDefaultBrainStructure()
                 saveEncryptedTree(brain, brainFile, key)
+                cancel()
             }
         }
 
         setContent {
             val navController = rememberNavController()
-
             var isJNIReady by remember { mutableStateOf(false) }
             var isJNIDownloading by remember { mutableStateOf(false) }
 
-            //ASK FOR NOTIFICATION PERMISSION
             requestNotificationPermission.launch(permission)
 
-            // Initial JNI + model check
             LaunchedEffect(Unit) {
                 isJNIDownloading = !JNILibHelper.checkIfJNILibExists(this@MainActivity)
 
-                loadJNI {
-                    isJNIDownloading = false
-                    isJNIReady = true
+                // Run JNI + model load
+                withContext(Dispatchers.IO) {
+                    loadJNI {
+                        isJNIDownloading = false
+                        isJNIReady = true
+                        cancel()
+                    }
                 }
             }
 
-            // Navigate once JNI is ready
             LaunchedEffect(isJNIReady) {
                 if (isJNIReady) {
-                    val startScreen = if (ModelManager.isAnyModelInstalled()) Screen.Home.route
-                    else Screen.Model.route
-
+                    val startScreen = if (ModelManager.isAnyModelInstalled())
+                        Screen.Home.route else Screen.Model.route
                     navController.navigate(startScreen) {
                         popUpTo(Screen.Intro.route) { inclusive = true }
                     }
@@ -102,26 +110,28 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Intro.route) {
+                            Log.d("Screen", "Intro")
                             IntroScreen(isJNIDownloading)
                         }
-
                         composable(Screen.Model.route) {
-                            ModelsScreen(
-                                onNext = {
-                                    navController.navigate(Screen.Home.route) {
-                                        popUpTo(Screen.Model.route) { inclusive = true }
-                                    }
-                                })
+                            Log.d("Screen", "Model")
+                            ModelsScreen {
+                                navController.navigate(Screen.Home.route) {
+                                    popUpTo(Screen.Model.route) { inclusive = true }
+                                }
+                            }
                         }
-
                         composable(Screen.Home.route) {
-                            HomeScreen(onRequestModelChange = {
-                                navController.navigate(Screen.Model.route)
-                            }, onRequestSettingsChange = {
-                                navController.navigate(Screen.Settings.route)
-                            })
+                            Log.d("Screen", "Home")
+                            HomeScreen(
+                                onRequestModelChange = {
+                                    navController.navigate(Screen.Model.route)
+                                },
+                                onRequestSettingsChange = {
+                                    navController.navigate(Screen.Settings.route)
+                                }
+                            )
                         }
-
                         composable(Screen.Settings.route) {
                             SettingsScreen()
                         }
@@ -129,23 +139,25 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-
     }
 
     private suspend fun loadJNI(onLoaded: () -> Unit) {
-        JNILibHelper.loadJNILib(this@MainActivity) {
-            CoroutineScope(Dispatchers.IO).launch {
-                val model = ModelManager.getFirstModel()
-                if (model != null) {
-                    ModelManager.loadModel(this@MainActivity, model) {
-                        onLoaded()
-                        return@loadModel
-                    }
+        val model = ModelManager.getFirstModel()
+        JNILibHelper.loadJNILib(this) {
+            if (model != null) {
+                ModelManager.loadModel(this, model) {
+                    onLoaded()
                 }
-
+            } else {
                 onLoaded()
             }
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        activityScope.cancel()
+    }
 }
+
 

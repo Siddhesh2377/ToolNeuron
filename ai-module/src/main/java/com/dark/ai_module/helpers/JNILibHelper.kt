@@ -14,36 +14,27 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 object JNILibHelper {
-
     fun checkIfJNILibExists(context: Context): Boolean {
         val nativeJniPath = File(context.filesDir, "jniLibs")
-        if (!nativeJniPath.exists() || !nativeJniPath.isDirectory) {
-            Log.d("JNILibCheck", "Directory does not exist.")
-            return false
+        val soFiles = nativeJniPath.listFiles { it.name.endsWith(".so") }
+        return !soFiles.isNullOrEmpty().also {
+            Log.d("JNILibCheck", "Found JNI libs: ${soFiles?.map { it.name }}")
         }
-
-        val soFiles = nativeJniPath.listFiles { file -> file.name.endsWith(".so") }
-        val exists = !soFiles.isNullOrEmpty()
-
-        Log.d("JNILibCheck", "Found JNI .so files: ${soFiles?.map { it.name }}")
-        return exists
     }
 
-    @SuppressLint("UnsafeDynamicallyLoadedCode")
     suspend fun loadJNILib(context: Context, onComplete: () -> Unit) {
-        val nativeJniPath = File(context.filesDir, "jniLibs").apply { mkdirs() }
-        val fileName = JNIWorker.getCompatibleJniLibName()
-        val soFile = File(nativeJniPath, "lib$fileName.so")
+        val path = File(context.filesDir, "jniLibs").apply { mkdirs() }
+        val libName = JNIWorker.getCompatibleJniLibName()
+        val soFile = File(path, "lib$libName.so")
+
         if (soFile.exists()) {
-            Log.d("JNILibLoad", "Loading JNI lib from: ${soFile.absolutePath}")
+            Log.d("JNILibLoad", "Lib already exists: ${soFile.absolutePath}")
             onComplete()
         } else {
-            JNIWorker.downloadLib(context){
-                Log.d("JNILibLoad", "Downloaded JNI lib: $fileName")
+            JNIWorker.downloadLib(context, libName) {
+                Log.d("JNILibLoad", "Downloaded lib: $libName")
                 onComplete()
             }
         }
     }
-
-
 }

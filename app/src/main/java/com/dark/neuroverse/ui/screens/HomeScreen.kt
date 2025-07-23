@@ -129,7 +129,6 @@ fun HomeScreen(
 @Composable
 internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    val currentModel = ModelManager.getModel().collectAsState()
     val modelList = remember { mutableStateListOf<ModelsData>() }
 
     val context = LocalContext.current
@@ -139,18 +138,6 @@ internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
             modelList.clear()
             modelList += data
             Log.d("ModelManager", "Model list updated: $data")
-        }
-    }
-
-    LaunchedEffect(currentModel) {
-        val tempModel = ModelManager.getModel(currentModel.value.modeName)
-        if (currentModel.value.modeName != "") {
-            if (tempModel != null) {
-                ModelManager.loadModel(context, tempModel) {
-                    Toast.makeText(context, "$currentModel Model loaded", Toast.LENGTH_SHORT).show()
-                }
-                return@LaunchedEffect
-            }
         }
     }
 
@@ -192,7 +179,7 @@ internal fun TopBar(viewModel: ChattingViewModel, onDrawerOpen: () -> Unit) {
             Icon(painter = painterResource(R.drawable.more), contentDescription = "More")
         }
         if (expanded) {
-            ModelDialog(modelList, context) {
+            ModelDialog(modelList) {
                 expanded = false
                 if (it != null) {
                     Toast.makeText(

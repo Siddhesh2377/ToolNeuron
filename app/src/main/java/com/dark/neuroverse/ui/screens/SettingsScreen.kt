@@ -210,7 +210,7 @@ fun SettingsScreen(
                     expanded = true
                 }) {
                 if (expanded) {
-                    ModelDialog(modelList, context) {
+                    ModelDialog(modelList) {
                         expanded = false
                         if (it != null) {
                             Toast.makeText(

@@ -33,7 +33,7 @@ import com.dark.ai_module.workers.ModelManager
 
 @Composable
 fun ModelDialog(
-    modelList: List<ModelsData>, context: Context, onDismissRequest: (ModelsData?) -> Unit
+    modelList: List<ModelsData>, onDismissRequest: (ModelsData?) -> Unit
 ) {
     Dialog(
         onDismissRequest = { onDismissRequest(null) },
@@ -77,7 +77,6 @@ fun ModelDialog(
                             Button(
                                 onClick = {
                                     onDismissRequest(model)
-                                    ModelManager.loadModel(context, model) {}
                                 },
                                 modifier = Modifier
                                     .fillMaxWidth()

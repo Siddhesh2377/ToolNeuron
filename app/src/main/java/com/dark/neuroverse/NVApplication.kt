@@ -21,7 +21,7 @@ class NVApplication : Application() {
             Python.start(AndroidPlatform(this))
         }
         ModelManager.init(applicationContext)
-        UpdateScheduler.scheduleTestUpdateCheck(applicationContext, 10)
+        UpdateScheduler.scheduleDailyUpdateCheck(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
             ModelManager.updateModelParams(
                 Professional(

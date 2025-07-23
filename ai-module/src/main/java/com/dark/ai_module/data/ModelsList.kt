@@ -69,6 +69,20 @@ object ModelsList {
             912
         )
 
-        return listOf(janNanoGuff, kodifyNano, llamaToolCallV2)
+
+        val lucy128K = ModelsData(
+            id = 0,
+            "Lucy-128k-gguf",
+            "Lucy is a compact but capable 1.7B model focused on agentic web search and lightweight browsing. Built on Qwen3-1.7B, Lucy inherits deep research capabilities from larger models while being optimized to run efficiently on mobile devices, even with CPU-only configurations.",
+            131072,
+            "YES",
+            "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
+            "https://huggingface.co/Menlo/Lucy-128k-gguf",
+            File(modelsDir, "lucy_128k-Q3_K_S.gguf").absolutePath,
+            chatTemplate,
+            940
+        )
+
+        return listOf(lucy128K, kodifyNano, janNanoGuff, llamaToolCallV2)
     }
 }

@@ -1,7 +1,7 @@
 package com.dark.ai_module.workers
 
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileOutputStream
@@ -17,6 +17,9 @@ suspend fun downloadFile(
 ) {
     withContext(Dispatchers.IO) {
         try {
+            if (outputFile.exists()) {
+                outputFile.delete()
+            }
             // First, try to get the size with HEAD
             val headConn = (URL(fileUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "HEAD"
@@ -40,14 +43,18 @@ suspend fun downloadFile(
             var total: Long = 0
             var count: Int
             while (input.read(data).also { count = it } != -1) {
+                // Cancellation check
+                ensureActive()
+
                 total += count
                 output.write(data, 0, count)
                 if (fileLength > 0) {
                     onProgress(total.toFloat() / fileLength.toFloat())
                 } else {
-                    onProgress(-1f) // indeterminate
+                    onProgress(-1f)
                 }
             }
+
             output.flush()
             output.close()
             input.close()

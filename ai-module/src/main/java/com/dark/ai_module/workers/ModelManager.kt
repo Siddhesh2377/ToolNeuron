@@ -35,11 +35,12 @@ object ModelManager {
     }
 
     fun loadModel(context: Context, modelData: ModelsData, onLoaded: () -> Unit) {
+
         Neuron.loadModel(
             File(modelData.modelPath),
             context = context,
             systemPrompt = "You are a helpful assistant.",
-            contextLength = modelData.modelCtxSize.toLong(),
+            contextLength = 8024,
             chatTemplate = modelData.chatTemplate
         ) {
             currentModel = MutableStateFlow(modelData)
