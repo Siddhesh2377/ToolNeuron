@@ -1,9 +1,12 @@
 {
   "hasUpdate": true,
   "updateLink" : "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/app-neuroV-release.apk?ts=${System.currentTimeMillis()}",
-  "version" : "1.2.4",
+  "version" : "0.0.2-Beta",
   "whatsNew": [
-    "Added New Screen",
-    "Can Use More Models"
+    "Fix The Memory Crash",
+    "Fixed Model Download Problem",
+    "Improved In-App-Update",
+    "Downgraded The Context Size",
+    "Added A new Thinking Model"
   ]
 }
