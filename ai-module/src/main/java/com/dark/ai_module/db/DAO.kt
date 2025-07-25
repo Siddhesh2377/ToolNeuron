@@ -4,6 +4,7 @@ import androidx.room.Insert
 import androidx.room.Dao
 import androidx.room.Database
 import androidx.room.Delete
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.RoomDatabase
 import com.dark.ai_module.model.ModelsData
@@ -12,7 +13,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface ModelDAO {
 
-    @Insert
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertModel(model: ModelsData)
 
     @Delete

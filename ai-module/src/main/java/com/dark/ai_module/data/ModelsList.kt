@@ -30,6 +30,8 @@ object ModelsList {
             {% endif %}
         """.trimIndent()
 
+
+
         val janNanoGuff = ModelsData(
             id = 0,
             "Jan-Nano-Guff",
@@ -57,7 +59,7 @@ object ModelsList {
         )
 
         val llamaToolCallV2 = ModelsData(
-            id = 0,
+            id = 2,
             "Llama_3.2_1B_Intruct-TC-V2",
             "A specialized fine-tuned version of the meta-llama/Llama-3.2-1B-Instruct model enhanced with function/tool calling capabilities. The model leverages the nguyenthanhthuan/function-calling-sharegpt dataset for training.",
             131072,
@@ -71,7 +73,7 @@ object ModelsList {
 
 
         val lucy128K = ModelsData(
-            id = 0,
+            id = 3,
             "Lucy-128k-gguf",
             "Lucy is a compact but capable 1.7B model focused on agentic web search and lightweight browsing. Built on Qwen3-1.7B, Lucy inherits deep research capabilities from larger models while being optimized to run efficiently on mobile devices, even with CPU-only configurations.",
             131072,
@@ -83,6 +85,19 @@ object ModelsList {
             940
         )
 
-        return listOf(lucy128K, kodifyNano, janNanoGuff, llamaToolCallV2)
+        val smolJson = ModelsData(
+            id = 4,
+            "SmolLM2-360M-Instruct-Text-2-JSON",
+            "This model is fine-tuned on SmolLM2-360M-Instruct-bnb-4bit using QLoRA to extract structured calendar event information from natural language text. It identifies and structures key scheduling entities like action, date, time, attendees, location, duration, recurrence, and notes.",
+            8192,
+            "YES",
+            "https://huggingface.co/pramodkoujalagi/SmolLM2-360M-Instruct-Text-2-JSON/resolve/main/SmolLM2-360M-Instruct-Text-2-JSON.Q4_K_M.gguf?download=true",
+            "https://huggingface.co/pramodkoujalagi/SmolLM2-360M-Instruct-Text-2-JSON",
+            File(modelsDir, "SmolLM2-JSON.Q4_K_M.gguf").absolutePath,
+            chatTemplate,
+            303
+        )
+
+        return listOf(smolJson, lucy128K, kodifyNano, janNanoGuff, llamaToolCallV2)
     }
 }

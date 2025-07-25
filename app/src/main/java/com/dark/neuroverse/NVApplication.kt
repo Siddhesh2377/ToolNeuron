@@ -7,6 +7,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.ModelParams.Emotional
 import com.dark.ai_module.workers.ModelParams.Professional
 import com.dark.neuroverse.data.UserPrefs
+import com.dark.plugins.repo.PluginRegistry
 import com.mp.updatemanager.UpdateScheduler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,6 +24,8 @@ class NVApplication : Application() {
         ModelManager.init(applicationContext)
         UpdateScheduler.scheduleDailyUpdateCheck(applicationContext)
         CoroutineScope(Dispatchers.IO).launch {
+            PluginRegistry.init(applicationContext)
+
             ModelManager.updateModelParams(
                 Professional(
                     UserPrefs.getModelPParams(applicationContext).firstOrNull() ?: 2.5f
