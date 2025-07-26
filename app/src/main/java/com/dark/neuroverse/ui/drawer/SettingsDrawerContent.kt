@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.drawer
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +16,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.Icon
@@ -24,10 +26,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
 
@@ -36,6 +40,7 @@ fun SettingsDrawerContent(
     viewModel: ChattingViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit
 ) {
     val chatList = viewModel.chatList.collectAsState(emptyList())
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -91,6 +96,24 @@ fun SettingsDrawerContent(
 
             }
         }
+
+        Row(Modifier
+            .clickable {
+                context.startActivity(Intent(context, TempActivity::class.java))
+            }
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
+            .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(
+                "Plugin-Preview",
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+            )
+            Icon(Icons.Outlined.Build, contentDescription = "Settings")
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         Row(Modifier
             .clickable {
