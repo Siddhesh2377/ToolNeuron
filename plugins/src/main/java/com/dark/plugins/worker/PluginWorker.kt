@@ -2,9 +2,12 @@ package com.dark.plugins.worker
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import com.dark.plugins.engine.PluginApi
 import com.dark.plugins.engine.PluginManifest
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.util.zip.ZipInputStream
 
@@ -12,12 +15,31 @@ data class LoadedZip(
     val manifest: PluginManifest, val dexBuffer: ByteBuffer
 )
 
+data class LoadedPlugin(
+    val manifest: PluginManifest? = null, val api: PluginApi? = null, val content: (@Composable () -> Unit)? = null, val throwable: Throwable? = null
+)
+
 /** Reads plugin zip from assets, parses Manifest.json and extracts classes.dex. */
 fun loadPluginZipFromAssets(ctx: Context, assetName: String): LoadedZip {
+    val pluginFile = File(ctx.cacheDir, assetName)
+
+    // Copy asset to cacheDir
+    ctx.assets.open(assetName).use { input ->
+        pluginFile.outputStream().use { output ->
+            input.copyTo(output)
+        }
+    }
+
+    // Assuming LoadedZip takes a File as a constructor argument
+    return loadPluginZipFromPath(pluginFile)
+}
+
+
+fun loadPluginZipFromPath(path: File): LoadedZip {
     var manifest: PluginManifest? = null
     var dexBuf: ByteBuffer? = null
 
-    ctx.assets.open(assetName).use { input ->
+    path.inputStream().use { input ->
         ZipInputStream(input).use { zis ->
             var e = zis.nextEntry
             while (e != null) {
@@ -47,8 +69,8 @@ fun loadPluginZipFromAssets(ctx: Context, assetName: String): LoadedZip {
         }
     }
 
-    checkNotNull(manifest) { "Manifest.json not found in $assetName." }
-    checkNotNull(dexBuf) { "classes.dex not found in $assetName (directly or inside plugin.dex.jar)." }
+    checkNotNull(manifest) { "Manifest.json not found in ${path.name}." }
+    checkNotNull(dexBuf) { "classes.dex not found in ${path.name} (directly or inside plugin.dex.jar)." }
     return LoadedZip(manifest, dexBuf)
 }
 
@@ -69,14 +91,14 @@ fun extractClassesDexFromJar(jarBytes: ByteArray): ByteBuffer {
 @Suppress("UNCHECKED_CAST")
 fun instantiatePlugin(
     cl: ClassLoader, className: String, appCtx: Context
-): Pair<Any, (@Composable () -> Unit)> {
+): Pair<PluginApi, (@Composable () -> Unit)> {
     val clazz = cl.loadClass(className)
 
     // Prefer cast to your shared interface for type-safety
     val composePluginIface =
         Class.forName("com.dark.plugins.engine.ComposePlugin", false, appCtx.classLoader)
 
-    val instance: Any = createInstanceSmart(clazz, appCtx)
+    val instance = createInstanceSmart(clazz, appCtx) as PluginApi
 
     // Optional onCreate(data)
     runCatching {

@@ -27,6 +27,8 @@ object ModelManager {
         currentModel.value = model
     }
 
+
+
     fun updateModelParams(
         professional: ModelParams.Professional = ModelParams.Professional(),
         emotional: ModelParams.Emotional = ModelParams.Emotional()

@@ -9,6 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.dark.plugins.repo.PluginRegistry
+import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit
 
@@ -18,10 +19,6 @@ interface ComposePlugin {
     fun content(): ComposableBlock
 }
 
-interface PLG {
-    fun callPlugin(name: String, data: Any)
-}
-
 @Immutable
 data class PluginInfo(
     val name: String = "",
@@ -29,11 +26,9 @@ data class PluginInfo(
 )
 
 @Keep
-open class PluginApi(ctx: Context) : PLG, ComposePlugin {
+open class PluginApi(ctx: Context) : ComposePlugin {
 
     protected val appContext: Context = ctx.applicationContext
-
-    var pluginInterface: PLG = this
 
     open fun getPluginInfo(): PluginInfo = PluginInfo()
 
@@ -45,7 +40,7 @@ open class PluginApi(ctx: Context) : PLG, ComposePlugin {
     @CallSuper
     open fun onDestroy() {}
 
-    override fun callPlugin(name: String, data: Any) {
+    open fun callPlugin(name: String, data: Any) {
         // default dispatcher; hosts may override by subclassing or injection
         PluginRegistry.runPlugin(name, data)
     }
@@ -54,6 +49,10 @@ open class PluginApi(ctx: Context) : PLG, ComposePlugin {
     open fun AppContent() {
         Text("Hello From Default Plugin :)")
     }
+
+    protected fun aiCall(response: JSONObject): JSONObject{
+        return response
+}
 
     private val cachedContent: ComposableBlock = { AppContent() }
 
