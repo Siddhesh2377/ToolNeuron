@@ -7,16 +7,22 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,12 +42,10 @@ import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.util.extractPureJson
-import com.dark.plugins.engine.PluginManifest
 import com.dark.plugins.repo.PluginRegistry
 import com.dark.plugins.ui.theme.NeuroVersePluginTheme
-import com.dark.plugins.worker.instantiatePlugin
+import com.dark.plugins.worker.PluginManager
 import com.dark.plugins.worker.loadPluginZipFromAssets
-import dalvik.system.InMemoryDexClassLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -65,18 +69,14 @@ class TempActivity : ComponentActivity() {
 @Composable
 fun PluginHostScreen(paddingValues: PaddingValues) {
     val ctx = LocalContext.current.applicationContext
-    val assetZipName = "app-io-plugin.zip"          // put this in assets/
 
-    val (ui, manifest, error) = remember(assetZipName) {
-        try {
-            val (mf, dexBuf) = loadPluginZipFromAssets(ctx, assetZipName)
-            val cl = InMemoryDexClassLoader(dexBuf, ctx.classLoader)
+    val loadedPlugins = PluginManager.plugins.collectAsState().value
+    val currentPlugin = PluginManager.currentPlugin.collectAsState().value
 
-            val (_, block) = instantiatePlugin(cl, mf.mainClass, ctx)
-            Triple(block, mf, null)
-        } catch (t: Throwable) {
-            Log.e("PluginHost", "Load failed", t)
-            Triple<(@Composable () -> Unit)?, PluginManifest?, Throwable?>(null, null, t)
+    if (loadedPlugins.isEmpty()) {
+        LaunchedEffect(Unit) {
+            PluginManager.runPlugin(ctx, "app-io-plugin.zip", Unit)
+            PluginManager.runPlugin(ctx, "app-plugin.zip", Unit)
         }
     }
 
@@ -86,17 +86,41 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
             .padding(paddingValues)
             .padding(16.dp)
     ) {
-        when {
-            ui != null -> {
-                Text(
-                    "Loaded plugin: ${manifest?.name ?: "Unknown"}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                ui.invoke()
+        LazyRow {
+            items(loadedPlugins) {
+                Box(
+                    Modifier
+                        .padding(8.dp)
+                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        it.loadedPlugin?.manifest?.name ?: "Unknown",
+                        color = MaterialTheme.colorScheme.onPrimary
+                    )
+                }
             }
-
-            else -> ErrorBox(error)
         }
+        if (currentPlugin != null) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                when {
+                    currentPlugin.content != null -> {
+                        Text(
+                            "Loaded plugin: ${currentPlugin.manifest?.name ?: "Unknown"}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        currentPlugin.content!!.invoke()
+                    }
+
+                    else -> ErrorBox(currentPlugin.throwable)
+                }
+            }
+        }
+
     }
 }
 
