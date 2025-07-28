@@ -54,7 +54,6 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         return response
 }
 
-    private val cachedContent: ComposableBlock = { AppContent() }
+    override fun content(): ComposableBlock = { AppContent() }
 
-    override fun content(): ComposableBlock = cachedContent
 }
