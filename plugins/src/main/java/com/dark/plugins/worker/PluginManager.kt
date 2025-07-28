@@ -2,6 +2,8 @@ package com.dark.plugins.worker
 
 import android.content.Context
 import android.util.Log
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import dalvik.system.InMemoryDexClassLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +21,8 @@ data class Plugin(
 object PluginManager {
 
     private val pluginScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val pluginViewModelStores = mutableMapOf<String, ViewModelStore>()
 
     private val _plugins = MutableStateFlow<List<Plugin>>(emptyList())
     val plugins = _plugins.asStateFlow()
@@ -59,12 +63,33 @@ object PluginManager {
         }
     }
 
+    fun getViewModelStoreOwner(pluginName: String): ViewModelStoreOwner {
+        return object : ViewModelStoreOwner {
+            override val viewModelStore: ViewModelStore =
+                pluginViewModelStores.getOrPut(pluginName) { ViewModelStore() }
+        }
+    }
+
+    fun clearPluginViewModels() {
+        pluginViewModelStores.values.forEach { it.clear() }
+        pluginViewModelStores.clear()
+    }
+
     fun cancelAll() {
         pluginScope.coroutineContext.cancelChildren()
         _plugins.value = emptyList()
     }
 
-    fun loadPlugin(assetZipName: String, ctx: Context): LoadedPlugin {
+    fun setCurrentPluginByName(pluginName: String) {
+        val plugin = _plugins.value.find {
+            it.loadedPlugin?.manifest?.name == pluginName
+        }?.loadedPlugin
+
+        _currentPlugin.value = plugin
+    }
+
+
+    private fun loadPlugin(assetZipName: String, ctx: Context): LoadedPlugin {
         return try {
             val (manifest, dexBuf) = loadPluginZipFromAssets(ctx, assetZipName)
             val classLoader = InMemoryDexClassLoader(dexBuf, ctx.classLoader)

@@ -5,7 +5,9 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -21,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,7 +36,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.intl.Locale
+import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
@@ -45,7 +52,6 @@ import com.dark.neuroverse.util.extractPureJson
 import com.dark.plugins.repo.PluginRegistry
 import com.dark.plugins.ui.theme.NeuroVersePluginTheme
 import com.dark.plugins.worker.PluginManager
-import com.dark.plugins.worker.loadPluginZipFromAssets
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -76,7 +82,7 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
     if (loadedPlugins.isEmpty()) {
         LaunchedEffect(Unit) {
             PluginManager.runPlugin(ctx, "app-io-plugin.zip", Unit)
-            PluginManager.runPlugin(ctx, "app-plugin.zip", Unit)
+            PluginManager.runPlugin(ctx, "demo-macro-plugin.zip", Unit)
         }
     }
 
@@ -86,16 +92,18 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
             .padding(paddingValues)
             .padding(16.dp)
     ) {
-        LazyRow {
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(loadedPlugins) {
                 Box(
                     Modifier
-                        .padding(8.dp)
-                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape),
-                    contentAlignment = Alignment.Center
+                        .size(50.dp)
+                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+                        .clickable {
+                            PluginManager.setCurrentPluginByName(it.loadedPlugin?.manifest?.name ?: "Unknown")
+                        }, contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        it.loadedPlugin?.manifest?.name ?: "Unknown",
+                        it.loadedPlugin?.manifest?.name[0].toString().toUpperCase(Locale.current),
                         color = MaterialTheme.colorScheme.onPrimary
                     )
                 }
@@ -107,20 +115,23 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
                     .fillMaxWidth()
                     .weight(1f)
             ) {
-                when {
-                    currentPlugin.content != null -> {
-                        Text(
-                            "Loaded plugin: ${currentPlugin.manifest?.name ?: "Unknown"}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        currentPlugin.content!!.invoke()
-                    }
+                val pluginName = currentPlugin.manifest?.name
+                val storeOwner = remember(pluginName) {
+                    pluginName?.let { PluginManager.getViewModelStoreOwner(it) }
+                }
 
-                    else -> ErrorBox(currentPlugin.throwable)
+                if (storeOwner != null)
+                CompositionLocalProvider(LocalViewModelStoreOwner provides storeOwner) {
+                    Crossfade(currentPlugin) {
+                        if (it.content != null) {
+                            it.content!!.invoke()
+                        } else {
+                            ErrorBox(it.throwable)
+                        }
+                    }
                 }
             }
         }
-
     }
 }
 
