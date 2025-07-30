@@ -12,29 +12,29 @@
 
 ## Key Features
 
-* **Natural Language Understanding**
-  Converts spoken or written prompts into structured JSON commands using **llama.cpp** & **SmolChat-Android**
+**Natural Language Understanding**
+Converts spoken or written prompts into structured JSON commands using **llama.cpp** & **SmolChat-Android**
 
-* **Encrypted Local Memory**
-  All NeuronTree memory is stored and processed locally with robust encryption. Hardware-backed keys ensure maximum security.
+**Encrypted Local Memory**
+All NeuronTree memory is stored and processed locally with robust encryption. Hardware-backed keys ensure maximum security.
 
-* **Offline-First Privacy**
-  Your data never leaves your device. Memory, tasks, and processing are handled offline.
+**Offline-First Privacy**
+Your data never leaves your device. Memory, tasks, and processing are handled offline.
 
-* **Dynamic Task System**
-  Tasks respond to AI-generated commands, user triggers
+**Dynamic Task System**
+Tasks respond to AI-generated commands, user triggers
 
-* **Advanced UI**
-  Modern design with Jetpack Compose and Material 3.
+**Advanced UI**
+Modern design with Jetpack Compose and Material 3.
 
-* **Expandable Roadmap**
-  Upcoming additions include:
+**Expandable Roadmap**
+Upcoming additions include:
 
-    * Native Text-to-Speech (TTS)
-    * Offline Speech-to-Text (STT)
-    * Toggle tasks on or off as needed
-    * Expanded Task library
-    * Automated, sandboxed web browser with enhanced privacy
+* Native Text-to-Speech (TTS)
+* Offline Speech-to-Text (STT)
+* Toggle tasks on or off as needed
+* Expanded Task library
+* Automated, sandboxed web browser with enhanced privacy
 
 ---
 
@@ -45,6 +45,7 @@
 <p align="center">
   <img src="RES/output.gif" alt="Demo" width="260"/>
 </p>
+
 ---
 
 ## Technical Stack
@@ -101,17 +102,14 @@ Unauthorized commercial use may result in legal action.
 
 **Siddhesh Sonar (DARK)**
 Android Developer | AI Enthusiast | Open Source Contributor
-
 [GitHub Profile](https://github.com/Siddhesh2377)
 
 ---
 
 ## Acknowledgements
 
-* https://github.com/ggml-org/llama.cpp
-* https://github.com/shubham0204/SmolChat-Android
-* https://www.jetbrains.com/
-* https://source.android.com/
-* https://github.com/
-
----
+* [https://github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
+* [https://github.com/shubham0204/SmolChat-Android](https://github.com/shubham0204/SmolChat-Android)
+* [https://www.jetbrains.com/](https://www.jetbrains.com/)
+* [https://source.android.com/](https://source.android.com/)
+* [https://github.com/](https://github.com/)
