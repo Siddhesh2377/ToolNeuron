@@ -5,29 +5,34 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -39,12 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.intl.Locale
 import androidx.compose.ui.text.toUpperCase
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
-import com.dark.neuroverse.ui.components.ErrorBox
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
@@ -72,17 +75,30 @@ class TempActivity : ComponentActivity() {
     }
 }
 
+// ✅ UPDATED PluginHostScreen Composable
 @Composable
 fun PluginHostScreen(paddingValues: PaddingValues) {
     val ctx = LocalContext.current.applicationContext
 
-    val loadedPlugins = PluginManager.plugins.collectAsState().value
-    val currentPlugin = PluginManager.currentPlugin.collectAsState().value
+    val loadedPlugins by PluginManager.plugins.collectAsState()
+    val currentPlugin by PluginManager.currentPlugin.collectAsState()
 
-    if (loadedPlugins.isEmpty()) {
-        LaunchedEffect(Unit) {
+    val (start, end) = (12.dp to 12.dp)
+
+    LaunchedEffect(loadedPlugins.isEmpty()) {
+        if (loadedPlugins.isEmpty()) {
             PluginManager.runPlugin(ctx, "app-io-plugin.zip", Unit)
             PluginManager.runPlugin(ctx, "demo-macro-plugin.zip", Unit)
+        }
+    }
+
+    // Auto select fallback plugin if none selected
+    LaunchedEffect(loadedPlugins, currentPlugin) {
+        if (currentPlugin == null && loadedPlugins.isNotEmpty()) {
+            val fallback = loadedPlugins.first().loadedPlugin
+            fallback?.api?.getPluginInfo()?.name?.let {
+                PluginManager.setCurrentPluginByName(it)
+            }
         }
     }
 
@@ -90,235 +106,74 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
         Modifier
             .fillMaxSize()
             .padding(paddingValues)
-            .padding(16.dp)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(loadedPlugins) {
-                Box(
-                    Modifier
-                        .size(50.dp)
-                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
-                        .clickable {
-                            PluginManager.setCurrentPluginByName(it.loadedPlugin?.manifest?.name ?: "Unknown")
-                        }, contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        it.loadedPlugin?.manifest?.name[0].toString().toUpperCase(Locale.current),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
-        }
-        if (currentPlugin != null) {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-            ) {
-                val pluginName = currentPlugin.manifest?.name
-                val storeOwner = remember(pluginName) {
-                    pluginName?.let { PluginManager.getViewModelStoreOwner(it) }
-                }
+        val isPluginActive = currentPlugin?.api?.getPluginInfo()?.name?.let { name ->
+            loadedPlugins.any { it.loadedPlugin?.api?.getPluginInfo()?.name == name }
+        } ?: false
 
-                if (storeOwner != null)
-                CompositionLocalProvider(LocalViewModelStoreOwner provides storeOwner) {
-                    Crossfade(currentPlugin) {
-                        if (it.content != null) {
-                            it.content!!.invoke()
-                        } else {
-                            ErrorBox(it.throwable)
-                        }
+        if (currentPlugin != null && isPluginActive) {
+            val pluginName = currentPlugin?.api?.getPluginInfo()?.name
+            val storeOwner = remember(pluginName) {
+                pluginName?.let { PluginManager.getViewModelStoreOwner(it) }
+            }
+
+            storeOwner?.let {
+                key(pluginName!!) {
+                    Box(Modifier.fillMaxWidth().weight(1f)) {
+                        currentPlugin?.content?.invoke()
                     }
                 }
             }
         }
-    }
-}
 
-
-private fun openPlayStoreToApps() {
-
-    PluginRegistry.runPlugin("AppIOPlugin", JSONObject().apply {
-        put("tasks", JSONArray().apply {
-            put(JSONObject().apply {
-                put("task", "checkForAppUpdates")
-            })
-        })
-
-        put("actions", JSONArray().apply {
-//                                put(JSONObject().apply {
-//                                    put("action", "clickButton")
-//                                    put("parents", 1)
-//                                    put("buttonText", "All apps up to date")
-//                                    put("fallBackText", "Checking for updates...")
-//                                })
-            put(JSONObject().apply {
-                put("action", "scrollDown")
-                put("times", 4)
-            })
-        })
-    })
-}
-
-@Composable
-fun TemOScreen(paddingValues: PaddingValues) {
-
-    val context = LocalContext.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(paddingValues)
-            .background(MaterialTheme.colorScheme.background),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        var response by remember { mutableStateOf("") }
-
-        // Load model on launch
-        LaunchedEffect(Unit) {
-            ModelManager.loadModel(
-                context, ModelManager.getModel("Qwen3-Zero-Coder-Reasoning-0.8B")!!
-            ) {
-                Log.d("Model", "Tiny-JSON-0.5B Model loaded")
-            }
-        }
-
-        Text(
-            "Tap to Open Play Store > Manage Apps & Device",
-            style = MaterialTheme.typography.titleMedium
-        )
-
-        val isThinkingMessage = remember(response) {
-            response.trimStart().startsWith("<think>")
-        }
-
-        // Detect and clean reasoning part
-        val raw = response.trim()
-        val cleanThinking = remember(raw) {
-            if (isThinkingMessage) {
-                val withoutOpen = raw.removePrefix("<think>").trimStart()
-                if (withoutOpen.endsWith("</think>")) {
-                    withoutOpen.removeSuffix("</think>").trimEnd()
-                } else {
-                    withoutOpen
-                }
-            } else ""
-        }
-
-        val actualResponse = remember(raw) {
-            if (isThinkingMessage && raw.contains("</think>")) {
-                // Extract actual response that comes after </think>
-                raw.substringAfter("</think>").trimStart()
-            } else if (!isThinkingMessage) {
-                // Normal system message
-                raw
-            } else {
-                "" // if still thinking and no closing tag yet
-            }
-        }
-
-        Button(onClick = {
-
-
-            //openPlayStoreToApps()
-            CoroutineScope(Dispatchers.IO).launch {
-                val final = Neuron.generateResponseStreaming(
-                    """
-                                    You are an automation planner AI.
-                                    Your job is to convert user commands into JSON that follows the schema provided below.
-
-                                    RULES:
-                                    - Output only valid JSON
-                                    - No extra text, no explanation, no markdown
-                                    - Use only tools and arguments as defined
-
-                                    TOOLS:
-                                    1. AppIOPlugin
-                                       - Actions: "open", "close"
-                                       - Args: {
-                                           "action": "open" or "close",
-                                           "packageName": "<app name>"
-                                       }
-
-                                    2. UiActionPlugin
-                                       - Actions: "scrollDown", "clickButton"
-                                       - Args for scrollDown: {
-                                           "action": "scrollDown",
-                                           "times": "<number>"
-                                       }
-                                       - Args for clickButton: {
-                                           "action": "clickButton",
-                                           "buttonText": "<text>",
-                                           "fallBackText": "<fallback text>",
-                                           "parents": <int>
-                                       }
-
-                                    OUTPUT JSON FORMAT:
-                                    {
-                                      "title": "<short title>",
-                                      "description": "<description>",
-                                      "tools_called": ["AppIOPlugin", "UiActionPlugin"],
-                                      "steps": [
-                                        {
-                                          "tool": "<tool name>",
-                                          "args": {
-                                            "action": "open",
-                                            "packageName": "PlayStore"
-                                          }
-                                        },
-                                        {
-                                          "tool": "<tool name>",
-                                          "args": {
-                                            "action": "scrollDown",
-                                            "times": "4"
-                                          }
-                                        }
-                                      ]
-                                    }
-
-                                    USER-INPUT:
-                                    open WhatsApp and Scroll down 5 times
-                                    """.trimIndent()
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            items(loadedPlugins, key = { it.loadedPlugin?.api?.getPluginInfo()?.name ?: it.hashCode() }) { plugin ->
+                val name = plugin.loadedPlugin?.api?.getPluginInfo()?.name ?: "Unknown"
+                Row(
+                    Modifier
+                        .height(50.dp)
+                        .width(100.dp)
+                        .background(
+                            MaterialTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(16.dp)
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
                 ) {
-                    response += it
+                    Box(
+                        modifier = Modifier
+                            .clickable { PluginManager.setCurrentPluginByName(name) }
+                            .fillMaxHeight()
+                            .weight(1f)
+                            .background(
+                                MaterialTheme.colorScheme.primary,
+                                shape = RoundedCornerShape(topStart = start, bottomStart = start)
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.padding(horizontal = 8.dp)
+                        )
+                    }
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Close",
+                        modifier = Modifier
+                            .clickable { PluginManager.stopPlugin(name) }
+                            .fillMaxHeight()
+                            .weight(1f)
+                            .background(
+                                MaterialTheme.colorScheme.error,
+                                shape = RoundedCornerShape(bottomEnd = end, topEnd = end)
+                            ),
+                        tint = MaterialTheme.colorScheme.onPrimary
+                    )
                 }
-
-
-                val res = if (isThinkingMessage && final.contains("</think>")) {
-                    // Extract actual response that comes after </think>
-                    final.substringAfter("</think>").trimStart()
-                } else if (!isThinkingMessage) {
-                    // Normal system message
-                    final
-                } else {
-                    "" // if still thinking and no closing tag yet
-                }
-
-                Log.d("Response", final)
-                PluginRegistry.runComplexPlugins(JSONObject(extractPureJson(res)))
             }
-
-
-        }) {
-            Text("Run")
-        }
-
-
-
-        if (isThinkingMessage) {
-            ThinkingBubble(Message(ROLE.SYSTEM, cleanThinking, "23433453", mutableListOf()))
-        }
-
-        if (actualResponse.isNotBlank()) {
-            MarkdownText(
-                text = actualResponse,
-                canCopy = true,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
-                ),
-                modifier = Modifier.padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
-            )
         }
     }
 }
