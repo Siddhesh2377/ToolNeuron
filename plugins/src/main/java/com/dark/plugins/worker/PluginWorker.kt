@@ -130,7 +130,7 @@ fun createInstanceSmart(clazz: Class<*>, appCtx: Context): Any {
     // 2) Kotlin object
     runCatching {
         val f = clazz.getField("INSTANCE")
-        return f.get(null)
+        return f.get(null) ?: Any()
     }
     // 3) Companion.create()/getInstance()
     runCatching {
@@ -140,7 +140,7 @@ fun createInstanceSmart(clazz: Class<*>, appCtx: Context): Any {
             val comp = compField.get(null)
             val m =
                 companion.methods.firstOrNull { it.name == "create" || it.name == "getInstance" }
-            if (comp != null && m != null) return m.invoke(comp)
+            if (comp != null && m != null) return m.invoke(comp) ?: Any()
         }
     }
     // 4) (Context) constructor
