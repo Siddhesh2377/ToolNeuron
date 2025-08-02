@@ -33,7 +33,7 @@ object PluginManager {
     fun runPlugin(ctx: Context, pluginZip: String, data: Any): LoadedPlugin {
         val loadedPlugin = loadPlugin(pluginZip, ctx)
 
-        val api = loadedPlugin.api
+        val api = loadedPlugin?.api
         if (api != null) {
             val pluginName = api.getPluginInfo().name
             val job = pluginScope.launch {
@@ -53,7 +53,7 @@ object PluginManager {
             _currentPlugin.value = loadedPlugin
         }
 
-        return loadedPlugin
+        return loadedPlugin ?: throw IllegalStateException("Failed to load plugin")
     }
 
     fun stopPlugin(pluginName: String) {

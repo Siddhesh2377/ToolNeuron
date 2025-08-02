@@ -71,6 +71,7 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
                 if (loadedPlugins.isEmpty()) {
                     PluginManager.runPlugin(ctx, "app-io-plugin.zip", Unit)
                     PluginManager.runPlugin(ctx, "demo-macro-plugin.zip", Unit)
+                    PluginManager.runPlugin(ctx, "ai-chat-plugin.zip", Unit)
                 }
             }
         }
