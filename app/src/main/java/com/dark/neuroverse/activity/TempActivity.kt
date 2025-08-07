@@ -45,7 +45,7 @@ fun PluginHostScreen(paddingValues: PaddingValues) {
 
     /* ----------  one-shot startup work  ---------- */
     LaunchedEffect(Unit) {
-        ModelManager.getFirstModel()?.let { mdl ->
+        ModelManager.getModel("Qwen3-Zero-Coder-Reasoning-0.8B")?.let { mdl ->
             ModelManager.loadModel(ctx, mdl) {
                 if (PluginManager.plugins.value.isEmpty()) {
                     listOf(
