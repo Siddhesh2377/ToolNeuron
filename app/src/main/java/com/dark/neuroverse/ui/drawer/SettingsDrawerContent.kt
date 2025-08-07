@@ -1,6 +1,5 @@
 package com.dark.neuroverse.ui.drawer
 
-import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +15,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
-import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.Icon
@@ -31,16 +29,18 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.PluginHostViewModel
 
 @Composable
 fun SettingsDrawerContent(
-    viewModel: PluginHostViewModel, onSettingsClick: () -> Unit, onModelsClick: () -> Unit
+    viewModel: PluginHostViewModel,
+    onSettingsClick: () -> Unit,
+    onModelsClick: () -> Unit,
+    onPluginClick: () -> Unit
 ) {
-    val context = LocalContext.current
+    LocalContext.current
+    val chatList = viewModel.loadedPlugins.collectAsState()
 
     Column(
         modifier = Modifier
@@ -64,22 +64,37 @@ fun SettingsDrawerContent(
                     ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
             }
-        }
 
-        Row(Modifier
-            .clickable {
-                context.startActivity(Intent(context, TempActivity::class.java))
+            items(chatList.value) { chat ->
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
+                    .clickable {
+                        viewModel.setCurrentByName(chat.loadedPlugin?.manifest?.name ?: "")
+                        onPluginClick()
+                    }
+                    .background(
+                        MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small
+                    )
+                    .padding(rDP(10.dp))) {
+                    Text(
+                        text = chat.loadedPlugin?.manifest?.name ?: "",
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Icon(
+                        Icons.TwoTone.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .clickable {
+                                viewModel.stopPlugin(chat.loadedPlugin?.manifest?.name ?: "")
+                            })
+                }
+
             }
-            .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.medium)
-            .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(
-                "Plugin-Preview",
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
-            )
-            Icon(Icons.Outlined.Build, contentDescription = "Settings")
         }
 
         Spacer(Modifier.height(16.dp))

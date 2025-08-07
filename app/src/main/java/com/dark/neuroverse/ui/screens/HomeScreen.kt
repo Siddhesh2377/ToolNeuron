@@ -81,6 +81,7 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.PluginHostViewModel
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -108,7 +109,12 @@ fun HomeScreen(
             SettingsDrawerContent(
                 viewModel,
                 onSettingsClick = onRequestSettingsChange,
-                onModelsClick = onRequestModelChange
+                onModelsClick = onRequestModelChange,
+                onPluginClick = {
+                    scope.launch {
+                        drawerState.close()
+                    }
+                }
             )
         }
     ) {
