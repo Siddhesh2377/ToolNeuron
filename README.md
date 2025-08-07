@@ -1,6 +1,6 @@
 # NeuroVerse
 
-**NeuroVerse** is an advanced AI-powered Android assistant that offers secure, offline control of your device using natural language processing.
+**NeuroVerse** is a modular, privacy‑first AI assistant for Android designed to run entirely offline. It combines on‑device language models, dynamic plugins, and a secure memory architecture to give users full control of their phones without relying on the cloud.
 
 <p align="center">
   <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
@@ -8,39 +8,25 @@
 
 ---
 
-[https://github.com/user-attachments/assets/5aab8f3b-40de-4407-a11a-15dd9471776f](https://github.com/user-attachments/assets/5aab8f3b-40de-4407-a11a-15dd9471776f)
+## What is NeuroVerse?
 
-## Key Features
-
-**Natural Language Understanding**
-Converts spoken or written prompts into structured JSON commands using **llama.cpp** & **SmolChat-Android**
-
-**Encrypted Local Memory**
-All NeuronTree memory is stored and processed locally with robust encryption. Hardware-backed keys ensure maximum security.
-
-**Offline-First Privacy**
-Your data never leaves your device. Memory, tasks, and processing are handled offline.
-
-**Dynamic Task System**
-Tasks respond to AI-generated commands, user triggers
-
-**Advanced UI**
-Modern design with Jetpack Compose and Material 3.
-
-**Expandable Roadmap**
-Upcoming additions include:
-
-* Native Text-to-Speech (TTS)
-* Offline Speech-to-Text (STT)
-* Toggle tasks on or off as needed
-* Expanded Task library
-* Automated, sandboxed web browser with enhanced privacy
+NeuroVerse converts natural‑language prompts into structured commands, executes them through a flexible plugin framework, and stores context in an encrypted symbolic memory called **NeuronTree**. The entire pipeline—from speech or text input to device automation—runs locally.
 
 ---
 
-## DEMO
+## Core Features
 
-> Experimental UI Previews
+| Feature                 | Summary                                                                                              |
+| ----------------------- | ---------------------------------------------------------------------------------------------------- |
+| Natural Language → JSON | On‑device inference with `llama.cpp` and a lightweight Kotlin wrapper generates structured commands. |
+| Secure Memory           | NeuronTree data is encrypted using hardware‑backed keys.                                             |
+| Offline‑First           | No telemetry or external APIs; all processing happens on the device.                                 |
+| Dynamic Plugin System   | Runtime‑loaded `.zip` bundles add tasks, Compose UIs, and automation routines.                       |
+| Modern UI               | Clean Material 3 interface built with Jetpack Compose.                                               |
+
+---
+
+## Demo
 
 <p align="center">
   <img src="RES/output.gif" alt="Demo" width="260"/>
@@ -48,68 +34,69 @@ Upcoming additions include:
 
 ---
 
+## Architecture Overview
+
+| Layer          | Responsibility                                   |
+| -------------- | ------------------------------------------------ |
+| UI             | Jetpack Compose, plugin‑provided screens         |
+| Inference      | `llama.cpp` (GGUF) for language understanding    |
+| Command Engine | Translates JSON actions into runnable tasks      |
+| Task Manager   | Manages plugin coroutines and execution context  |
+| Memory         | Encrypted NeuronTree storage                     |
+| Automation     | AccessibilityService bridges tasks to UI actions |
+
+---
+
 ## Technical Stack
 
-* Kotlin + Jetpack Compose UI
-* Hardware-Backed Secure Storage
-* Smollm & Llama.CPP for AI inference
-* Accessibility Services for enhanced automation
-* Compose Navigation + State Management
+* Kotlin, Jetpack Compose, Coroutines
+* `llama.cpp` / GGUF models
+* Room Database with Keystore‑backed encryption
+* Compose Navigation and scoped state management
+* AccessibilityService for automation
 
 ---
 
-## Contribution Guidelines
+## Contributing
 
-Contributions are encouraged for the following areas:
+Contributions are welcome in the following areas:
 
 * Plugin development
-* Core AI improvements
-* Enhanced task capabilities
-* UI and user experience refinements
+* AI model integration and optimisation
+* Task library extensions
+* UI and user experience improvements
 
-**Steps to Contribute:**
+**How to contribute**
 
-* Fork the repository
-* Follow project coding standards
-* Document your changes clearly
-* Submit a Pull Request for review
+1. Fork the repository.
+2. Create a feature branch.
+3. Follow the coding guidelines.
+4. Document changes clearly and open a pull request.
 
 ---
 
-## Licensing and Commercial Use
+## Licence and Commercial Use
 
-```
-NeuroVerse is licensed strictly for personal, educational, and non-commercial use.
+NeuroVerse is released for personal, educational, and non‑commercial use only. Commercial deployment, redistribution, or integration is prohibited without written permission.
 
-Commercial use is prohibited without permission from the author.
+To request a commercial licence, contact **[siddheshsonar2377@gmail.com](mailto:siddheshsonar2377@gmail.com)**.
 
-Examples of restricted commercial use:
-- Integrating NeuroVerse into commercial apps or services
-- Selling, sublicensing, or redistributing the software
-- Using the software in business environments, SaaS platforms, or monetized tools
-
-To request a commercial license, contact:
-siddheshsonar2377@gmail.com
-
-Unauthorized commercial use may result in legal action.
-```
-
-![license: custom](https://img.shields.io/badge/license-custom-blue)
+![Licence: custom](https://img.shields.io/badge/licence-custom-blue)
 
 ---
 
 ## Author
 
-**Siddhesh Sonar (DARK)**
-Android Developer | AI Enthusiast | Open Source Contributor
-[GitHub Profile](https://github.com/Siddhesh2377)
+**Siddhesh Sonar**
+Android Developer · AI Enthusiast · Open‑Source Contributor
+[GitHub @Siddhesh2377](https://github.com/Siddhesh2377)
 
 ---
 
 ## Acknowledgements
 
-* [https://github.com/ggml-org/llama.cpp](https://github.com/ggml-org/llama.cpp)
-* [https://github.com/shubham0204/SmolChat-Android](https://github.com/shubham0204/SmolChat-Android)
-* [https://www.jetbrains.com/](https://www.jetbrains.com/)
-* [https://source.android.com/](https://source.android.com/)
-* [https://github.com/](https://github.com/)
+* [`llama.cpp`](https://github.com/ggml-org/llama.cpp)
+* [`SmolChat‑Android`](https://github.com/shubham0204/SmolChat-Android)
+* JetBrains, 
+* Android Open Source Project, 
+* GitHub

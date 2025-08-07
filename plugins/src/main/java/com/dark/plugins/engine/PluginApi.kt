@@ -52,7 +52,7 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         Text("Hello From Default Plugin :)")
     }
 
-    protected suspend fun aiCall(input: JSONObject, onToken: (String) -> Unit): JSONObject {
+    open suspend fun aiCall(input: JSONObject, onToken: (String) -> Unit): JSONObject {
         val temp: String = Neuron.generateStreamAndWait(input.toString()) {
             onToken(it)
         }

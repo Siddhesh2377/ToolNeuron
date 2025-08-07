@@ -4,34 +4,19 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -46,119 +31,132 @@ class TempActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NeuroVersePluginTheme {
-                Scaffold { padding ->
-                    PluginHostScreen(padding)
-                }
+                Scaffold { padding -> PluginHostScreen(padding) }
             }
         }
     }
 }
 
-// ✅ UPDATED PluginHostScreen Composable
 @Composable
 fun PluginHostScreen(paddingValues: PaddingValues) {
     val ctx = LocalContext.current.applicationContext
-
     val loadedPlugins by PluginManager.plugins.collectAsState()
     val currentPlugin by PluginManager.currentPlugin.collectAsState()
 
-    val (start, end) = (12.dp to 12.dp)
-
-    LaunchedEffect(loadedPlugins.isEmpty()) {
-        val model = ModelManager.getFirstModel()
-        if (model != null) {
-            ModelManager.loadModel(ctx, model) {
-                if (loadedPlugins.isEmpty()) {
-                    PluginManager.runPlugin(ctx, "app-io-plugin.zip", Unit)
-                    PluginManager.runPlugin(ctx, "demo-macro-plugin.zip", Unit)
-                    PluginManager.runPlugin(ctx, "ai-chat-plugin.zip", Unit)
+    /* ----------  one-shot startup work  ---------- */
+    LaunchedEffect(Unit) {
+        ModelManager.getFirstModel()?.let { mdl ->
+            ModelManager.loadModel(ctx, mdl) {
+                if (PluginManager.plugins.value.isEmpty()) {
+                    listOf(
+                        "app-io-plugin.zip",
+                        "demo-macro-plugin.zip",
+                        "ai-chat-plugin.zip"
+                    ).forEach { PluginManager.runPlugin(ctx, it, Unit) }
                 }
             }
         }
-
     }
 
-    // Auto select fallback plugin if none selected
+    /* ----------  fallback select  ---------- */
     LaunchedEffect(loadedPlugins, currentPlugin) {
         if (currentPlugin == null && loadedPlugins.isNotEmpty()) {
-            val fallback = loadedPlugins.first().loadedPlugin
-            fallback?.api?.getPluginInfo()?.name?.let {
-                PluginManager.setCurrentPluginByName(it)
-            }
+            loadedPlugins.first().loadedPlugin
+                ?.api?.getPluginInfo()?.name
+                ?.let(PluginManager::setCurrentPluginByName)
         }
     }
 
+    /* ----------  derived, memoised state  ---------- */
+    val pluginName = currentPlugin?.api?.getPluginInfo()?.name
+    val isPluginActive by remember(pluginName, loadedPlugins) {
+        mutableStateOf(
+            pluginName != null && loadedPlugins.any {
+                it.loadedPlugin?.api?.getPluginInfo()?.name == pluginName
+            }
+        )
+    }
+
+    /* ----------  UI  ---------- */
     Column(
         Modifier
             .fillMaxSize()
             .padding(paddingValues)
             .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        val isPluginActive = currentPlugin?.api?.getPluginInfo()?.name?.let { name ->
-            loadedPlugins.any { it.loadedPlugin?.api?.getPluginInfo()?.name == name }
-        } ?: false
 
-        if (currentPlugin != null && isPluginActive) {
-            val pluginName = currentPlugin?.api?.getPluginInfo()?.name
-            val storeOwner = remember(pluginName) {
-                pluginName?.let { PluginManager.getViewModelStoreOwner(it) }
-            }
-
-            storeOwner?.let {
-                key(pluginName!!) {
-                    Box(Modifier
-                        .fillMaxWidth()
-                        .weight(1f)) {
-                        currentPlugin?.content?.invoke()
-                    }
-                }
-            }
+        /* ---- animated plugin content ---- */
+        Crossfade(
+            targetState = if (isPluginActive) pluginName else null,
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) { name ->
+            if (name == null) return@Crossfade           // no plugin yet
+            val storeOwner = remember(name) { PluginManager.getViewModelStoreOwner(name) }
+            storeOwner.let { currentPlugin?.content?.invoke() }
         }
 
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            items(
-                loadedPlugins,
-                key = { it.loadedPlugin?.api?.getPluginInfo()?.name ?: it.hashCode() }) { plugin ->
-                val name = plugin.loadedPlugin?.api?.getPluginInfo()?.name ?: "Unknown"
-                Row(
-                    Modifier
-                        .height(50.dp)
-                        .width(100.dp)
-                        .background(
-                            MaterialTheme.colorScheme.primary, shape = RoundedCornerShape(16.dp)
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Box(modifier = Modifier
-                        .clickable { PluginManager.setCurrentPluginByName(name) }
-                        .fillMaxHeight()
-                        .weight(1f)
-                        .background(
-                            MaterialTheme.colorScheme.primary,
-                            shape = RoundedCornerShape(topStart = start, bottomStart = start)
-                        ), contentAlignment = Alignment.Center) {
-                        Text(
-                            name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                            color = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.padding(horizontal = 8.dp)
-                        )
-                    }
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = "Close",
-                        modifier = Modifier
-                            .clickable { PluginManager.stopPlugin(name) }
-                            .fillMaxHeight()
-                            .weight(1f)
-                            .background(
-                                MaterialTheme.colorScheme.error,
-                                shape = RoundedCornerShape(bottomEnd = end, topEnd = end)
-                            ),
-                        tint = MaterialTheme.colorScheme.onPrimary)
-                }
-            }
-        }
+//        Spacer(Modifier.height(12.dp))
+//
+//        /* ---- plugin selector row ---- */
+//        LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+//            items(
+//                loadedPlugins,
+//                key = { it.loadedPlugin?.api?.getPluginInfo()?.name ?: it.hashCode() }
+//            ) { plugin ->
+//                val name = plugin.loadedPlugin?.api?.getPluginInfo()?.name ?: "Unknown"
+//                val selected = name == pluginName
+//
+//                // small “alive” animations
+//                val bg by animateColorAsState(
+//                    if (selected) MaterialTheme.colorScheme.primary
+//                    else MaterialTheme.colorScheme.surfaceVariant,
+//                    label = "chipBg"
+//                )
+//                val elev by animateDpAsState(
+//                    if (selected) 6.dp else 0.dp,
+//                    label = "chipElev"
+//                )
+//
+//                Surface(
+//                    tonalElevation = elev,
+//                    shape = RoundedCornerShape(16.dp),
+//                    color = bg,
+//                    modifier = Modifier.size(width = 100.dp, height = 50.dp)
+//                ) {
+//                    Row(
+//                        verticalAlignment = Alignment.CenterVertically,
+//                        horizontalArrangement = Arrangement.Center
+//                    ) {
+//                        /*  select (left half)  */
+//                        Box(
+//                            Modifier
+//                                .weight(1f)
+//                                .fillMaxHeight()
+//                                .clickable { PluginManager.setCurrentPluginByName(name) },
+//                            contentAlignment = Alignment.Center
+//                        ) {
+//                            Text(
+//                                name.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+//                                color = MaterialTheme.colorScheme.onPrimary
+//                            )
+//                        }
+//                        /*  stop (right half)  */
+//                        Icon(
+//                            Icons.Default.Close,
+//                            contentDescription = "Close",
+//                            modifier = Modifier
+//                                .weight(1f)
+//                                .fillMaxHeight()
+//                                .clickable { PluginManager.stopPlugin(name) }
+//                                .background(MaterialTheme.colorScheme.error),
+//                            tint = MaterialTheme.colorScheme.onPrimary
+//                        )
+//                    }
+//                }
+//            }
+//        }
     }
 }
