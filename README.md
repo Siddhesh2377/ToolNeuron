@@ -20,7 +20,12 @@ Production‑ready, first‑party plugins live in a separate repository:
 
 **Neuro‑V‑Sys Plugins** → [https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins](https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins)
 
-This repository contains independently buildable Android library modules (e.g., `ai-chat`, `app-io`, `demo-macro`). Each module can be packaged into a distributable **plugin.zip** containing `plugin.aar` and `Manifest.json`, which the host app (NeuroVerse) can discover and load at runtime.
+This repository contains independently buildable Android library modules 
+* `ai-chat`
+* `app-io`
+* `demo-macro`
+---
+Each module can be packaged into a distributable **plugin.zip** containing `plugin.aar` and `Manifest.json`, which the host app (NeuroVerse) can discover and load at runtime.
 
 ### How Plugins Integrate with NeuroVerse
 
