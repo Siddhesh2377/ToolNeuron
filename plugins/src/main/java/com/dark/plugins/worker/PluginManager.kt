@@ -13,6 +13,7 @@ import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.File
 
 // Data class to track plugin and its job
 data class Plugin(
@@ -31,9 +32,9 @@ object PluginManager {
     val currentPlugin = _currentPlugin.asStateFlow()
 
     fun runPlugin(ctx: Context, pluginZip: String, data: Any): LoadedPlugin {
-        val loadedPlugin = loadPlugin(pluginZip, ctx)
+        val loadedPlugin = loadPluginFromAssets(pluginZip, ctx)
 
-        val api = loadedPlugin?.api
+        val api = loadedPlugin.api
         if (api != null) {
             val pluginName = api.getPluginInfo().name
             val job = pluginScope.launch {
@@ -53,7 +54,33 @@ object PluginManager {
             _currentPlugin.value = loadedPlugin
         }
 
-        return loadedPlugin ?: throw IllegalStateException("Failed to load plugin")
+        return loadedPlugin
+    }
+
+    fun runPlugin(ctx: Context, pluginPath: File, data: Any): LoadedPlugin {
+        val loadedPlugin = loadPluginFromFile(pluginPath, ctx)
+
+        val api = loadedPlugin.api
+        if (api != null) {
+            val pluginName = api.getPluginInfo().name
+            val job = pluginScope.launch {
+                try {
+                    api.onCreate(data)
+                    api.onDestroy()
+                } catch (e: Exception) {
+                    Log.e("PluginManager", "Plugin execution failed", e)
+                }
+            }
+
+            val pluginInstance = Plugin(loadedPlugin, job)
+            _plugins.value = _plugins.value.filterNot {
+                it.loadedPlugin?.api?.getPluginInfo()?.name == pluginName
+            } + pluginInstance
+
+            _currentPlugin.value = loadedPlugin
+        }
+
+        return loadedPlugin
     }
 
     fun stopPlugin(pluginName: String) {
@@ -113,9 +140,21 @@ object PluginManager {
         _currentPlugin.value = plugin
     }
 
-    private fun loadPlugin(assetZipName: String, ctx: Context): LoadedPlugin {
+    private fun loadPluginFromAssets(assetZipName: String, ctx: Context): LoadedPlugin {
         return try {
             val (manifest, dexBuf) = loadPluginZipFromAssets(ctx, assetZipName)
+            val classLoader = InMemoryDexClassLoader(dexBuf, ctx.classLoader)
+            val (pluginInstance, block) = instantiatePlugin(classLoader, manifest.mainClass, ctx)
+            LoadedPlugin(manifest, pluginInstance, block, null)
+        } catch (t: Throwable) {
+            Log.e("PluginManager", "Failed to load plugin", t)
+            LoadedPlugin(null, null, null, t)
+        }
+    }
+
+    private fun loadPluginFromFile(path: File, ctx: Context): LoadedPlugin {
+        return try {
+            val (manifest, dexBuf) = loadPluginZipFromPath(path)
             val classLoader = InMemoryDexClassLoader(dexBuf, ctx.classLoader)
             val (pluginInstance, block) = instantiatePlugin(classLoader, manifest.mainClass, ctx)
             LoadedPlugin(manifest, pluginInstance, block, null)

@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
-/* ===================================================================== *//*  ViewModel: PluginHostViewModel                                       *//* ===================================================================== */
+
 class PluginHostViewModel : ViewModel() {
 
     /** All loaded plugins (directly mirrored from PluginManager). */
@@ -52,6 +53,12 @@ class PluginHostViewModel : ViewModel() {
         }
     }
 
+    fun loadPlugin(appContext: Context, file: File) {
+        viewModelScope.launch {
+            runPluginZip(appContext = appContext, path = file)
+        }
+    }
+
     /** If nothing is active but we have plugins, select the first. */
     fun selectFirstIfNone() {
         val current = activePluginName.value
@@ -79,9 +86,14 @@ class PluginHostViewModel : ViewModel() {
         activePluginName.value?.let { PluginManager.stopPlugin(it) }
     }
 
-    /** Run a packaged plugin (.zip) with optional args. */
+    /** Run a packaged plugin (.zip) from assets with optional args. */
     fun runPluginZip(appContext: Context, zipFileName: String, args: Any = Unit) {
         PluginManager.runPlugin(appContext, zipFileName, args)
+    }
+
+    /** Run a packaged plugin (.zip) from a file with optional args. */
+    fun runPluginZip(appContext: Context, path: File, args: Any = Unit) {
+        PluginManager.runPlugin(appContext, path, args)
     }
 
     /** Provide a ViewModelStoreOwner for the current plugin's scoped ViewModels. */
@@ -89,6 +101,4 @@ class PluginHostViewModel : ViewModel() {
         PluginManager.getViewModelStoreOwner(it)
     }
 
-    /** Human-friendly title for the active plugin (fallback shown if null). */
-    fun activeTitleOr(default: String = "NeuroV Plugin"): String = activePluginName.value ?: default
 }

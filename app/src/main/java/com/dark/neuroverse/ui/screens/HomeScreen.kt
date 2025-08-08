@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
+import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import android.widget.Toast
@@ -48,7 +49,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -63,31 +63,27 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.model.ModelsData
-import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginHostScreen
-import com.dark.neuroverse.model.DOC
 import com.dark.neuroverse.model.FileAttachment
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.ROLE
 import com.dark.neuroverse.ui.components.MarkdownText
-import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButton
 import com.dark.neuroverse.ui.screens.UIComponents.ActionButtonWithCircleProgressIndicator
 import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.util.isZipByHeader
+import com.dark.neuroverse.util.isZipByMime
+import com.dark.neuroverse.util.isZipByName
+import com.dark.neuroverse.util.queryDisplayName
+import com.dark.neuroverse.util.uriToFile
 import com.dark.neuroverse.viewModel.ChattingViewModel
-import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.PluginHostViewModel
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
-/* ===================================================================== */
-/*  HomeScreen — uses PluginHostScreen as the plugin host                 */
-/* ===================================================================== */
+/* ===================================================================== *//*  HomeScreen — uses PluginHostScreen as the plugin host                 *//* ===================================================================== */
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
@@ -95,7 +91,7 @@ fun HomeScreen(
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    LocalContext.current
     val viewModel: PluginHostViewModel = viewModel()
 
     LaunchedEffect(Unit) {
@@ -104,8 +100,7 @@ fun HomeScreen(
     }
 
     ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
+        drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 viewModel,
                 onSettingsClick = onRequestSettingsChange,
@@ -114,10 +109,8 @@ fun HomeScreen(
                     scope.launch {
                         drawerState.close()
                     }
-                }
-            )
-        }
-    ) {
+                })
+        }) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -140,11 +133,39 @@ fun HomeScreen(
     }
 }
 
-/* ===================================================================== */
-/*  TopBar (unchanged behavior, minor tidy)                               */
-/* ===================================================================== */
+/* ===================================================================== *//*  TopBar (unchanged behavior, minor tidy)                               *//* ===================================================================== */
 @Composable
 internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
+    val context = LocalContext.current
+    val resolver = context.contentResolver
+
+
+    val zipMimeTypes = arrayOf("application/zip", "application/x-zip-compressed")
+
+    val launcher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            // Persist if you'll need it later (across restarts)
+            try {
+                resolver.takePersistableUriPermission(
+                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) { /* not persisted, fine */
+            }
+
+            val name = queryDisplayName(resolver, uri)
+            val mime = resolver.getType(uri)
+
+            if (isZipByName(name) || isZipByMime(mime) || isZipByHeader(resolver, uri)) {
+                val file = uriToFile(context, uri)
+                viewModel.loadPlugin(context, file)
+            } else {
+                Toast.makeText(context, "Not a valid plugin", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
@@ -160,8 +181,7 @@ internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
                 maxLines = 1,
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.headlineSmall.copy(
-                    fontFamily = FontFamily.Serif,
-                    fontWeight = FontWeight.W100
+                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.W100
                 )
             )
         }
@@ -169,7 +189,7 @@ internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
         Spacer(Modifier.weight(1f))
 
         IconButton(onClick = {
-
+            launcher.launch(zipMimeTypes)
         }) {
             Icon(painter = painterResource(R.drawable.new_chat), contentDescription = "New Chat")
         }
@@ -215,10 +235,13 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
             horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
         ) {
             if (message.role == ROLE.USER) {
-                if (message.document.isNotEmpty()){
+                if (message.document.isNotEmpty()) {
                     Row {
                         repeat(message.document.size) {
-                            Box(Modifier.padding(start = rDP(12.dp)), contentAlignment = Alignment.Center) {
+                            Box(
+                                Modifier.padding(start = rDP(12.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
                                     text = message.document[it].doc.name,
                                     style = MaterialTheme.typography.bodyMedium,
@@ -275,6 +298,7 @@ internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingVie
             }
         }
     }
+
     val messages = viewModel.messages.collectAsState().value.toMutableList()
 
     LazyColumn(
@@ -349,8 +373,7 @@ internal fun BottomBar(viewModel: ChattingViewModel) {
                             )
                         }
                         innerTextField()
-                    }
-                )
+                    })
             }
 
             ActionButton(R.drawable.attachment, "Attachment") {
@@ -416,7 +439,6 @@ fun FileItem(fileAttachment: FileAttachment, onRemove: () -> Unit) {
         }
     }
 }
-
 
 
 internal object UIComponents {
