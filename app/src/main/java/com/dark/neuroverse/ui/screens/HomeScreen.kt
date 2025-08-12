@@ -83,7 +83,6 @@ import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.PluginHostViewModel
 import kotlinx.coroutines.launch
 
-/* ===================================================================== *//*  HomeScreen — uses PluginHostScreen as the plugin host                 *//* ===================================================================== */
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
@@ -133,7 +132,6 @@ fun HomeScreen(
     }
 }
 
-/* ===================================================================== *//*  TopBar (unchanged behavior, minor tidy)                               *//* ===================================================================== */
 @Composable
 internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
     val context = LocalContext.current
@@ -151,8 +149,7 @@ internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
                 resolver.takePersistableUriPermission(
                     uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: SecurityException) { /* not persisted, fine */
-            }
+            } catch (_: SecurityException) { }
 
             val name = queryDisplayName(resolver, uri)
             val mime = resolver.getType(uri)

@@ -8,56 +8,26 @@ import com.dark.plugins.sys.plugins.UiActionPlugin
 import org.json.JSONObject
 
 object PluginRegistry {
-    val plugins: MutableList<PluginApi> = mutableListOf()
+    val plugins: MutableList<PluginRepo> = mutableListOf()
 
     fun init(context: Context) {
         plugins.clear()
-        registerPlugin(AppIOPlugin(context), UiActionPlugin(context))
+
     }
 
-    fun getPlugin(name: String): PluginApi? {
+    fun getPlugin(name: String): PluginRepo? {
         return plugins.find {
-            it.getPluginInfo().name == name
+            it.name == name
         }
     }
 
-    fun registerPlugin(vararg plugin: PluginApi) {
-        for (p in plugin) {
-            plugins.add(p)
+    fun registerPlugin(vararg paths: String) {
+        for (p in paths) {
+            plugins.add(PluginRepo(p, "", false))
         }
     }
 
-    fun runComplexPlugins(json: JSONObject) {
-        Log.d("PluginRegistry", "Running complex plugins")
+    fun registerFromAsset(vararg name: String){
 
-//        Log.d(
-//            "PluginRegistry",
-//            "WorkFlow: ${json.getString("title")}" + "\n Description: ${json.getString("description")}" + "\n Tools: ${
-//                json.getJSONArray("tools_called").length()
-//            }"
-//        )
-        val i = 0
-
-        val steps = json.getJSONArray("steps")
-
-        for (i in 0 until steps.length()) {
-            val step = steps.getJSONObject(i)
-            val pluginName = step.getString("tool")
-            val args = step.getJSONObject("args")
-            runPlugin(pluginName, args)
-        }
-    }
-
-    fun runPlugin(string: String, args: Any) {
-        plugins.find {
-            it.getPluginInfo().name == string
-        }.let {
-            if (it == null) {
-                Log.d("PluginRegistry", "Sry Bro, it is Null")
-                return
-            }
-            Log.d("PluginRegistry", "Running plugin: ${it.getPluginInfo().name}")
-            it.onCreate(args)
-        }
     }
 }

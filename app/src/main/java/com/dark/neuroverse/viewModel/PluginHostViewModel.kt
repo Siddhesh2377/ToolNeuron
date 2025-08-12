@@ -1,6 +1,7 @@
 package com.dark.neuroverse.viewModel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
@@ -41,8 +42,10 @@ class PluginHostViewModel : ViewModel() {
     /** Load default model & bootstrap plugins once. Safe to call repeatedly. */
     fun ensureInitialLoad(appContext: Context) {
         viewModelScope.launch {
-            ModelManager.getModel("Qwen3-Zero-Coder-Reasoning-0.8B")?.let { mdl ->
+            ModelManager.getModel("Lucy-128k-gguf")?.let { mdl ->
+                Log.d("PluginHostViewModel", "Loading default model...")
                 ModelManager.loadModel(appContext, mdl) {
+                    Log.d("PluginHostViewModel", "Default model loaded.")
                     if (loadedPlugins.value.isEmpty()) {
                         listOf(
                             "app-io-plugin.zip", "demo-macro-plugin.zip", "ai-chat-plugin.zip"

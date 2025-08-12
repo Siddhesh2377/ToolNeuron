@@ -59,7 +59,7 @@ fun SettingsDrawerContent(
 
             item {
                 Text(
-                    text = "Chats", style = MaterialTheme.typography.headlineSmall.copy(
+                    text = "Plugins", style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
                     ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
