@@ -61,6 +61,10 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         }
     }
 
+    open suspend fun stopGeneration(){
+        Neuron.stopGeneration(true)
+    }
+
     override fun content(): ComposableBlock = { AppContent() }
 
 }

@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material3.Button
@@ -22,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.dark.neuroverse.ui.theme.ActionColors
+import com.dark.neuroverse.ui.theme.NVSpacing
 
 @Composable
 fun CollapsableButton(
@@ -69,5 +73,35 @@ fun CollapsableButton(
                 }
             }
         }
+    }
+}
+
+
+@Composable
+fun NVActionButton(
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+    text: String,
+    icon: @Composable (() -> Unit)? = null,
+    colors: ActionColors,
+    enabled: Boolean = true
+) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = colors.bg,
+            contentColor   = colors.fg,
+            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+            disabledContentColor   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        ),
+        shape = MaterialTheme.shapes.medium
+    ) {
+        if (icon != null) {
+            icon()
+            Spacer(Modifier.width(NVSpacing.xs))
+        }
+        Text(text)
     }
 }

@@ -12,3 +12,5 @@ val onWarning = Color(0xFFFFF2E7)
 val Warning = Color(0xFFC26A00)
 val onSuccess = Color(0xFFD9FFDB)
 val Success = Color(0xFF4CAF50)
+
+val PrimaryContainer = Color(0x202979FF)
