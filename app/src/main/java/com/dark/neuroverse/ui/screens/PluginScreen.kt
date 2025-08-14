@@ -5,25 +5,63 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.twotone.Dashboard
+import androidx.compose.material.icons.twotone.GridView
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberTopAppBarState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.neuroverse.activity.MainActivity
+import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.viewModel.PluginStoreScreenViewModel
 import com.dark.plugins.model.PluginLocalDB
-import com.dark.neuroverse.activity.MainActivity
+import com.dark.plugins.ui.theme.rDP
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,62 +82,66 @@ fun PluginStoreScreen(
         derivedStateOf { current?.api?.getPluginInfo()?.name }
     }
 
-    // SAF picker for plugin files
     val addLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = { uri ->
+        contract = ActivityResultContracts.OpenDocument(), onResult = { uri ->
             if (uri != null) {
                 viewModel.addPluginFromUri(context, uri)
                 Toast.makeText(context, "Installing plugin…", Toast.LENGTH_SHORT).show()
             }
-        }
-    )
+        })
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Plugin Store") },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        // navigate to MainActivity (home)
-                        val intent = Intent(context, MainActivity::class.java)
-                        context.startActivity(intent)
-                    }) {
-                        Icon(Icons.Default.Home, contentDescription = "Home")
-                    }
-                },
-                actions = {
-                    // Optional: open home too (text+icon)
-                    TextButton(onClick = {
-                        val intent = Intent(context, MainActivity::class.java)
-                        context.startActivity(intent)
-                    }) {
-                        Icon(Icons.Default.Dashboard, contentDescription = null)
-                        Spacer(Modifier.width(6.dp))
-                        Text("Home")
-                    }
-                },
-                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+    Scaffold(topBar = {
+        TopAppBar(
+            title = {
+            Text(
+                "Plugin Store",
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+            )
+        }, navigationIcon = {
+            Icon(
+                Icons.TwoTone.GridView,
+                contentDescription = "Home",
+                modifier = Modifier.padding(8.dp)
+            )
+        }, actions = {
+            TextButton(onClick = {
+                val intent = Intent(context, MainActivity::class.java)
+                context.startActivity(intent)
+            }) {
+                Icon(Icons.TwoTone.Dashboard, contentDescription = null)
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "Home",
+                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif)
+                )
+            }
+        }, scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+        )
+    }, floatingActionButton = {
+        FloatingActionButton(
+            onClick = {
+            addLauncher.launch(
+                arrayOf(
+                    "application/zip",
+                    "application/java-archive",
+                    "application/vnd.android.package-archive",
+                    "*/*"
+                )
             )
         },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = {
-                    // allow zip/jar/apk
-                    addLauncher.launch(arrayOf("application/zip", "application/java-archive", "application/vnd.android.package-archive", "*/*"))
-                }
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Add plugin from file")
-            }
+            containerColor = MaterialTheme.colorScheme.primary,
+            contentColor = MaterialTheme.colorScheme.onPrimary
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Add plugin from file")
         }
-    ) { inner ->
+    }) { inner ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        0f to MaterialTheme.colorScheme.surface,
-                        1f to MaterialTheme.colorScheme.surfaceVariant
+                        0f to MaterialTheme.colorScheme.background,
+                        1f to MaterialTheme.colorScheme.primaryContainer
                     )
                 )
                 .padding(inner)
@@ -107,10 +149,15 @@ fun PluginStoreScreen(
             if (installed.isEmpty()) {
                 EmptyState(
                     onSeed = {
-                        viewModel.init(context)
-                        Toast.makeText(context, "Seeding demo plugins…", Toast.LENGTH_SHORT).show()
-                    }
-                )
+                        addLauncher.launch(
+                            arrayOf(
+                                "application/zip",
+                                "application/java-archive",
+                                "application/vnd.android.package-archive",
+                                "*/*"
+                            )
+                        )
+                    })
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
@@ -126,15 +173,14 @@ fun PluginStoreScreen(
                             isRunning = isRunning,
                             isCurrent = isCurrent,
                             onRun = {
-                                // Run via manager
                                 viewModel.runPlugin(
                                     context,
                                     plugin.pluginName,
                                     data = mapOf("source" to "PluginStoreScreen")
                                 )
-                                // Launch MainActivity with plugin extra
-                                val intent = Intent(context, MainActivity::class.java)
-                                    .putExtra("plugin_name", plugin.pluginName)
+                                val intent = Intent(
+                                    context, MainActivity::class.java
+                                ).putExtra("plugin_name", plugin.pluginName)
                                 context.startActivity(intent)
                             },
                             onStop = {
@@ -145,10 +191,10 @@ fun PluginStoreScreen(
                             },
                             onDelete = {
                                 val ok = viewModel.deletePlugin(plugin.pluginName)
-                                val msg = if (ok) "Deleted ${plugin.pluginName}" else "Failed to delete ${plugin.pluginName}"
+                                val msg =
+                                    if (ok) "Deleted ${plugin.pluginName}" else "Failed to delete ${plugin.pluginName}"
                                 Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                            }
-                        )
+                            })
                     }
                     item { Spacer(Modifier.height(56.dp)) }
                 }
@@ -167,101 +213,147 @@ private fun PluginCard(
     onSetCurrent: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val colors = MaterialTheme.colorScheme
+    val containerColor = colors.surface
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isCurrent)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
     ) {
-        Columnish(modifier = Modifier.padding(16.dp)) {
+        ColumnISH(modifier = Modifier.padding(rDP(14.dp))) {
+
+            // Top Row: Name + Status + Delete
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = plugin.pluginName,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                // Plugin name with running indicator
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Text(
+                        text = plugin.pluginName,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontFamily = FontFamily.Serif,
+                            color = colors.onSurface
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    if (isRunning) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(
+                            modifier = Modifier
+                                .width(10.dp)
+                                .height(10.dp)
+                                .background(Success, shape = MaterialTheme.shapes.small)
+                        )
+                    }
+                }
 
                 if (isCurrent) {
                     AssistChip(
                         onClick = {},
-                        label = { Text("Current") },
+                        label = {
+                            Text(
+                                "Current",
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Serif)
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null) }
                     )
                 }
 
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete")
+                    Icon(Icons.Default.Delete, contentDescription = "Delete", tint = colors.error)
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(rDP(6.dp)))
 
-            Text("Version: ${plugin.pluginVersion}", style = MaterialTheme.typography.bodySmall)
+            // Version & Path
+            Text(
+                "Version: ${plugin.pluginVersion}",
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Serif),
+                color = colors.secondary
+            )
             Text(
                 text = "Path: ${plugin.pluginPath}",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Serif),
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                color = colors.secondary
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(rDP(10.dp)))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Actions Row
+            Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                 if (isRunning) {
-                    Button(onClick = onStop) {
+                    Button(
+                        onClick = onStop,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.error)
+                    ) {
                         Icon(Icons.Filled.Stop, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Stop")
-                    }
-                    OutlinedButton(onClick = onSetCurrent, enabled = !isCurrent) {
-                        Text(if (isCurrent) "Already Current" else "Set Current")
+                        Spacer(Modifier.width(rDP(4.dp)))
+                        Text("Stop", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif))
                     }
                 } else {
-                    Button(onClick = onRun) {
+                    Button(
+                        onClick = onRun,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.primary)
+                    ) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Run")
+                        Spacer(Modifier.width(rDP(4.dp)))
+                        Text("Run", style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif))
                     }
-                    OutlinedButton(onClick = onSetCurrent, enabled = !isCurrent) {
-                        Text(if (isCurrent) "Already Current" else "Set Current")
-                    }
+                }
+
+                OutlinedButton(onClick = onSetCurrent, enabled = !isCurrent) {
+                    Text(
+                        if (isCurrent) "Already Current" else "Set Current",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif)
+                    )
                 }
             }
         }
     }
 }
+
+
 
 @Composable
 private fun EmptyState(onSeed: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .padding(24.dp), contentAlignment = Alignment.Center
     ) {
-        Columnish(horizontal = Alignment.CenterHorizontally) {
-            Text("No plugins yet", style = MaterialTheme.typography.titleLarge)
+        ColumnISH(horizontal = Alignment.CenterHorizontally) {
+            Text(
+                "No plugins yet",
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+            )
             Spacer(Modifier.height(8.dp))
-            Text("Tap below to (re)seed the built-in demo plugins.", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Tap below to Load Plugins From Device",
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif)
+            )
             Spacer(Modifier.height(16.dp))
-            Button(onClick = onSeed) { Text("Add Demo Plugins") }
+            Button(onClick = onSeed) {
+                Text(
+                    "+  Add Plugins",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Serif)
+                )
+            }
         }
     }
 }
 
 @Composable
-private fun Columnish(
+private fun ColumnISH(
     modifier: Modifier = Modifier,
     horizontal: Alignment.Horizontal = Alignment.Start,
     content: @Composable () -> Unit
-) = androidx.compose.foundation.layout.Column(
-    modifier = modifier,
-    horizontalAlignment = horizontal,
-    content = { content() }
-)
+) = Column(
+    modifier = modifier, horizontalAlignment = horizontal, content = { content() })

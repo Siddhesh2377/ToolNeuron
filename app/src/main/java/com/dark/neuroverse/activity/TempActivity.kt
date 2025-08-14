@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.dark.neuroverse.ui.screens.PluginStoreScreen
+import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.plugins.ui.theme.NeuroVersePluginTheme
 
 class TempActivity : ComponentActivity() {
@@ -12,7 +13,7 @@ class TempActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            NeuroVersePluginTheme {
+            NeuroVerseTheme {
                 PluginStoreScreen()
             }
         }

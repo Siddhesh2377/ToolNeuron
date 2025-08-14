@@ -78,6 +78,10 @@ class PluginHostViewModel : ViewModel() {
         activePluginName.value?.let { PluginManager.stopPlugin(it) }
     }
 
+    fun deletePlugin(pluginName: String): Boolean {
+        return PluginManager.uninstallPlugin(pluginName)
+    }
+
     /** Provide a ViewModelStoreOwner for the current plugin's scoped ViewModels. */
     fun currentStoreOwner(): ViewModelStoreOwner? = activePluginName.value?.let {
         PluginManager.getViewModelStoreOwner(it)

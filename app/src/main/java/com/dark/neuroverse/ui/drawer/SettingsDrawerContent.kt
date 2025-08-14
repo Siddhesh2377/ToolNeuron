@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
+import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.Icon
@@ -131,7 +132,7 @@ fun SettingsDrawerContent(
                         modifier = Modifier
                             .padding(start = 8.dp)
                             .clickable {
-                                viewModel.stopPlugin(installedPlugins.pluginName)
+                                viewModel.deletePlugin(installedPlugins.pluginName)
                             })
                 }
 
@@ -153,7 +154,7 @@ fun SettingsDrawerContent(
                 "Plugin-Store",
                 style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
             )
-            Icon(Icons.Outlined.ArrowCircleDown, contentDescription = "Settings")
+            Icon(Icons.Outlined.GridView, contentDescription = "Settings")
         }
 
         Spacer(Modifier.height(16.dp))

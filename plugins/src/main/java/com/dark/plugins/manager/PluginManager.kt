@@ -77,16 +77,6 @@ object PluginManager {
                 }
             }
         }
-
-        // Always try seeding demo plugins
-        Log.d(
-            TAG,
-            "Seeding demo asset plugins: app-io-plugin.zip, demo-macro-plugin.zip, ai-chat-plugin.zip"
-        )
-        registerPluginFromAssets(
-            context = context,
-            names = arrayOf("app-io-plugin.zip", "demo-macro-plugin.zip", "ai-chat-plugin.zip")
-        )
     }
 
 
