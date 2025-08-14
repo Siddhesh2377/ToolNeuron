@@ -1,5 +1,5 @@
 {
-  "hasUpdate": true,
+  "hasUpdate": false,
   "updateLink" : "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/app-neuroV-release.apk?ts=${System.currentTimeMillis()}",
   "version" : "0.0.2-Beta",
   "whatsNew": [
