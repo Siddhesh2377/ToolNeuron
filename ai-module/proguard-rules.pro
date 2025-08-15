@@ -10,6 +10,7 @@
 -keep class com.dark.neuroverse.activity.** { *; }
 -keep class com.dark.neuroverse.viewModel.** { *; }
 -keep class com.dark.neuroverse.ui.** { *; }
+-keep class android.content.Context
 
 # -- General, keep all native and JNI-related classes --
 -keep class * extends java.lang.Exception

@@ -18,5 +18,35 @@
 -keep class * extends java.lang.Exception
 -keep class * extends java.lang.Throwable
 
-# -- (Optional) Keep annotations, required by some reflection/Python/JNI libs --
+
+# --- Keep plugin API fully intact for reflection ---
+-keep class com.dark.plugins.api.** { *; }
+
+# Keep the ComposePlugin interface and its method names
+-keep interface com.dark.plugins.api.ComposePlugin { *; }
+
+# Keep method signatures for all classes implementing ComposePlugin
+-keepclassmembers class * implements com.dark.plugins.api.ComposePlugin {
+    @androidx.compose.runtime.Composable <methods>;
+    public *** content(...);
+}
+
+# Keep PluginApi and its subclasses completely
+-keep class com.dark.plugins.api.PluginApi { *; }
+-keep class * extends com.dark.plugins.api.PluginApi { *; }
+
+# Keep Kotlin metadata (needed to preserve annotations & method info)
+-keep class kotlin.Metadata { *; }
 -keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature
+
+# Don't strip Compose @Composable methods in any class
+-keepclassmembers class ** {
+    @androidx.compose.runtime.Composable *;
+}
+
+# Keep @Keep annotated classes/members
+-keep @androidx.annotation.Keep class * { *; }
+# Keep all PluginApi subclasses and their Context constructors
+-keep class * extends com.dark.plugins.api.PluginApi {
+    public <init>(android.content.Context);
+}

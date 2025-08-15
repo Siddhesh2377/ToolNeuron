@@ -13,13 +13,14 @@ import com.dark.plugins.manager.PluginManager
 import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit
-
+@Keep
 @Stable
 interface ComposePlugin {
+    @Keep
     /** Return top-level UI to render. Host will call this frequently; avoid heavy work. */
     fun content(): ComposableBlock
 }
-
+@Keep
 @Immutable
 data class PluginInfo(
     val name: String = "", val description: String = ""
@@ -65,6 +66,7 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         Neuron.stopGeneration(true)
     }
 
+    @Keep
     override fun content(): ComposableBlock = { AppContent() }
 
 }

@@ -5,6 +5,14 @@ plugins {
 }
 
 android {
+    signingConfigs {
+        create("release") {
+            storeFile = file("/home/home/Documents/neuro.jks")
+            storePassword = "neurov"
+            keyPassword = "neurov"
+            keyAlias = "key0"
+        }
+    }
     namespace = "com.dark.ai_module"
     compileSdk = 36
 

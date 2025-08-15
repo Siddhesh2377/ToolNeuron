@@ -32,12 +32,12 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = true           // Enable code shrinking
-            isShrinkResources = true         // Remove unused resources
+            isMinifyEnabled = false           // Enable code shrinking
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+
         }
     }
     compileOptions {
@@ -84,6 +84,8 @@ chaquopy {
 dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     //CORE
+    implementation("org.jetbrains.kotlin:kotlin-stdlib")
+
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
     //PROJECTS

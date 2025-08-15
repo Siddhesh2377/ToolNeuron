@@ -77,6 +77,8 @@ object PluginManager {
                 }
             }
         }
+
+        registerPluginFromAssets(context, arrayOf("ai-chat-plugin.zip"))
     }
 
 
