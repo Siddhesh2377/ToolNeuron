@@ -43,7 +43,7 @@ object UpdateCenter {
 
     // ======= CONFIG =======
     private val UPDATE_JSON_URL =
-        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
+        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/refs/heads/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
 
     private const val NOTI_CHANNEL_ID = "updates.channel"
     private const val NOTI_CHANNEL_NAME = "App Updates"
