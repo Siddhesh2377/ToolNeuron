@@ -2,16 +2,26 @@ package com.mp.updatemanager
 
 
 import android.annotation.SuppressLint
-import android.app.*
-import android.content.*
+import android.app.DownloadManager
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
 import android.database.Cursor
 import android.net.Uri
 import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import androidx.annotation.MainThread
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
-import kotlinx.coroutines.*
+import androidx.core.net.toUri
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -32,7 +42,7 @@ object UpdateCenter {
 
     // ======= CONFIG =======
     private val UPDATE_JSON_URL =
-        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/refs/heads/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
+        "https://raw.githubusercontent.com/Siddhesh2377/NeuroVerse/fresh-new/repo/AppUpdate.json?ts=${System.currentTimeMillis()}"
 
     private const val NOTI_CHANNEL_ID = "updates.channel"
     private const val NOTI_CHANNEL_NAME = "App Updates"
@@ -45,10 +55,8 @@ object UpdateCenter {
     private lateinit var app: Context
     private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val client by lazy {
-        OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .build()
+        OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(30, TimeUnit.SECONDS).build()
     }
 
     fun init(context: Context) {
@@ -85,10 +93,7 @@ object UpdateCenter {
 
     // ======= JSON parse =======
     private data class UpdateInfo(
-        val hasUpdate: Boolean,
-        val version: String,
-        val updateLink: String,
-        val whatsNew: String
+        val hasUpdate: Boolean, val version: String, val updateLink: String, val whatsNew: String
     )
 
     private fun fetchUpdateJson(): UpdateInfo? {
@@ -105,20 +110,24 @@ object UpdateCenter {
                     whatsNew = json.optString("whatsNew", "")
                 ).takeIf { it.updateLink.isNotBlank() && it.version.isNotBlank() }
             }
-        } catch (_: Exception) { null }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     // ======= Download =======
     private fun enqueueDownload(url: String, version: String, whatsNew: String): Long {
         val dm = app.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
-        val uri = Uri.parse(url)
+        val uri = url.toUri()
         val req = DownloadManager.Request(uri)
+        req.setDestinationInExternalPublicDir(
+            Environment.DIRECTORY_DOWNLOADS, "app-$version.apk"
+        ).setMimeType("application/vnd.android.package-archive")
+
             .setTitle("Downloading update $version")
             .setDescription(if (whatsNew.isBlank()) "App update" else whatsNew.take(120))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setAllowedOverMetered(true)
-            .setAllowedOverRoaming(true)
-            .setVisibleInDownloadsUi(true)
+            .setAllowedOverMetered(true).setAllowedOverRoaming(true).setVisibleInDownloadsUi(true)
 
         // If you host on HTTPS with valid headers, DM will infer file name; otherwise:
         // req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "app-$version.apk")
@@ -141,8 +150,10 @@ object UpdateCenter {
                     if (!it.moveToFirst()) return@use
 
                     val status = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))
-                    val total = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
-                    val soFar = it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
+                    val total =
+                        it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES))
+                    val soFar =
+                        it.getLong(it.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR))
 
                     when (status) {
                         DownloadManager.STATUS_RUNNING, DownloadManager.STATUS_PAUSED -> {
@@ -152,23 +163,28 @@ object UpdateCenter {
                                 showProgress(progress, "Downloading update… $progress%")
                             }
                         }
+
                         DownloadManager.STATUS_SUCCESSFUL -> {
                             showComplete()
                             done = true
                             // Clear persisted id
                             sp().edit().remove(SP_KEY_DOWNLOAD_ID).apply()
-                            val uriStr = it.getString(it.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
-                            val apkUri = dm.getUriForDownloadedFile(downloadId) ?: uriStr?.let(Uri::parse)
+                            val uriStr =
+                                it.getString(it.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                            val apkUri =
+                                dm.getUriForDownloadedFile(downloadId) ?: uriStr?.let(Uri::parse)
                             if (apkUri != null) {
                                 promptInstall(apkUri)
                             } else {
                                 showError("Downloaded, but file not found.")
                             }
                         }
+
                         DownloadManager.STATUS_FAILED -> {
                             done = true
                             sp().edit().remove(SP_KEY_DOWNLOAD_ID).apply()
-                            val reason = it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                            val reason =
+                                it.getInt(it.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
                             showError("Download failed (code $reason). Tap to retry.")
                         }
                     }
@@ -184,9 +200,9 @@ object UpdateCenter {
             val canInstall = app.packageManager.canRequestPackageInstalls()
             if (!canInstall) {
                 // direct user to allow from settings
-                val intent = Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES)
-                    .setData(Uri.parse("package:${app.packageName}"))
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val intent =
+                    Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES).setData(Uri.parse("package:${app.packageName}"))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 app.startActivity(intent)
                 showError("Allow install from unknown sources and retry.")
                 return
@@ -210,7 +226,9 @@ object UpdateCenter {
         return try {
             val p = app.packageManager.getPackageInfo(app.packageName, 0)
             if (Build.VERSION.SDK_INT >= 28) p.longVersionCode.toString() else p.versionName ?: "0"
-        } catch (_: Exception) { "0" }
+        } catch (_: Exception) {
+            "0"
+        }
     }
 
     /** Very tolerant semver-ish comparison: 1.4.2 > 1.3.9; falls back to string compare if needed. */
@@ -242,20 +260,15 @@ object UpdateCenter {
 
     private fun notifyBuilder(): NotificationCompat.Builder {
         return NotificationCompat.Builder(app, NOTI_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setOnlyAlertOnce(true)
-            .setColor(ContextCompat.getColor(app, android.R.color.holo_blue_light))
-            .setOngoing(true)
+            .setSmallIcon(android.R.drawable.stat_sys_download).setOnlyAlertOnce(true)
+            .setColor(ContextCompat.getColor(app, android.R.color.holo_blue_light)).setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
     }
 
     private fun showProgress(percent: Int, text: String) {
         val mgr = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val n = notifyBuilder()
-            .setContentTitle("App update")
-            .setContentText(text)
-            .setProgress(100, percent.coerceIn(0, 100), percent <= 0)
-            .build()
+        val n = notifyBuilder().setContentTitle("App update").setContentText(text)
+            .setProgress(100, percent.coerceIn(0, 100), percent <= 0).build()
         mgr.notify(NOTI_ID_PROGRESS, n)
     }
 
@@ -264,8 +277,7 @@ object UpdateCenter {
         val n = NotificationCompat.Builder(app, NOTI_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download_done)
             .setContentTitle("Update downloaded")
-            .setContentText("Tap notification from installer to proceed.")
-            .setAutoCancel(true)
+            .setContentText("Tap notification from installer to proceed.").setAutoCancel(true)
             .build()
         mgr.notify(NOTI_ID_PROGRESS, n)
     }
@@ -273,16 +285,12 @@ object UpdateCenter {
     private fun showError(message: String) {
         val mgr = app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val n = NotificationCompat.Builder(app, NOTI_CHANNEL_ID)
-            .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setContentTitle("Update error")
-            .setContentText(message)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(message))
-            .setAutoCancel(true)
-            .build()
+            .setSmallIcon(android.R.drawable.stat_notify_error).setContentTitle("Update error")
+            .setContentText(message).setStyle(NotificationCompat.BigTextStyle().bigText(message))
+            .setAutoCancel(true).build()
         mgr.notify(NOTI_ID_PROGRESS + 1, n)
     }
 
     // ======= Utils =======
-    private fun sp(): SharedPreferences =
-        app.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
+    private fun sp(): SharedPreferences = app.getSharedPreferences(SP_NAME, Context.MODE_PRIVATE)
 }
