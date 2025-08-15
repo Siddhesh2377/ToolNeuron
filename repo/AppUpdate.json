@@ -1,6 +1,6 @@
 {
   "hasUpdate": true,
-  "updateLink" : "https://huggingface.co/spaces/Void2377/neurov/resolve/main/app-neuroV-release.apk?download=true?ts=${System.currentTimeMillis()}",
+  "updateLink" : "https://huggingface.co/spaces/Void2377/neurov/resolve/main/app-neuroV-release.apk?download=true",
   "version" : "0.0.3-Beta-Patch",
   "whatsNew": [
     "Added Query App Permission"
