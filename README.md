@@ -117,11 +117,12 @@ Contributions are welcome in the following areas:
 
 ## Licence and Commercial Use
 
-NeuroVerse is released for personal, educational, and non‑commercial use only. Commercial deployment, redistribution, or integration is prohibited without written permission.
+NeuroVerse - Offline Android Copilot with Plugin System
+Copyright 2025 Siddhesh Sonar and NeuroVerse Contributors
 
-To request a commercial licence, contact **[siddheshsonar2377@gmail.com](mailto:siddheshsonar2377@gmail.com)**.
+This product includes software developed by the NeuroVerse contributors.
+Trademarks: “NeuroVerse” and the NeuroVerse logo are trademarks of their respective owner(s).
 
-![Licence: custom](https://img.shields.io/badge/licence-custom-blue)
 
 ---
 
