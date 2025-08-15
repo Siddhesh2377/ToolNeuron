@@ -7,6 +7,19 @@
 </p>
 
 ---
+## Join the Community
+
+Have questions, ideas, or want to contribute to the discussion?
+
+Join the official NeuroVerse Discord Server to chat with other developers, share plugins, and get support:
+
+[![Join the Discord](https://img.shields.io/discord/1147913460385062972?label=Join%20Discord&logo=discord&style=for-the-badge)](https://discord.gg/tG5r9aDF)
+
+
+Everyone is welcome — whether you're building plugins, experimenting with on-device LLMs, or just curious.
+
+
+---
 
 ## What is NeuroVerse?
 
