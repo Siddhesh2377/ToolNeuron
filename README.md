@@ -26,6 +26,12 @@ Everyone is welcome — whether you're building plugins, experimenting with on-d
 NeuroVerse converts natural‑language prompts into structured commands, executes them through a flexible plugin framework, and stores context in an encrypted symbolic memory called **NeuronTree**. The entire pipeline—from text or speech input to device automation—runs locally.
 
 ---
+## Preview :: GIF
+
+<img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" alt="screenshot" height="600">
+
+---
+
 
 ## Official Plugins Repository
 
