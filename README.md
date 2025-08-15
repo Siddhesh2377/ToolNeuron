@@ -115,13 +115,13 @@ Contributions are welcome in the following areas:
 
 ---
 
-## Licence and Commercial Use
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](#license)
 
-NeuroVerse - Offline Android Copilot with Plugin System
-Copyright 2025 Siddhesh Sonar and NeuroVerse Contributors
+…
 
-This product includes software developed by the NeuroVerse contributors.
-Trademarks: “NeuroVerse” and the NeuroVerse logo are trademarks of their respective owner(s).
+## License
+NeuroVerse is licensed under the **Apache License 2.0**.  
+See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Third-party components remain under their original licenses.
 
 
 ---
