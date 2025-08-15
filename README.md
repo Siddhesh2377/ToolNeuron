@@ -1,134 +1,161 @@
 # NeuroVerse
 
-**NeuroVerse** is a modular, privacy‑first AI assistant for Android designed to run entirely offline. It combines on‑device language models, a dynamic plugin system, and a secure memory architecture to deliver device automation without relying on the cloud.
+**Offline Android AI chat with a modular plugin framework (automation coming soon).**
+
+NeuroVerse is a privacy‑first Android app that runs fully on‑device and showcases a plugin‑based architecture. The current public milestone is **chat‑only** via the first‑party **AI Chat** plugin. The command/automation engine exists in the codebase but is **disabled and not user‑facing yet**.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
+  <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational">
+  <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple">
+  <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green"></a>
 </p>
 
 ---
-## Join the Community
 
-Have questions, ideas, or want to contribute to the discussion?
+## Try it now
 
-Join the official NeuroVerse Discord Server to chat with other developers, share plugins, and get support:
+* **Download APK:** [latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
+* **Join Discord:** community support and plugin discussions — [https://discord.gg/tG5r9aDF](https://discord.gg/tG5r9aDF)
 
-[![Join the Discord](https://img.shields.io/discord/1147913460385062972?label=Join%20Discord&logo=discord&style=for-the-badge)](https://discord.gg/tG5r9aDF)
-
-
-Everyone is welcome — whether you're building plugins, experimenting with on-device LLMs, or just curious.
-
+> First‑run: install the APK, grant permissions, open **AI Chat** and start chatting. No cloud account required.
 
 ---
 
-## What is NeuroVerse?
+## Preview
 
-NeuroVerse converts natural‑language prompts into structured commands, executes them through a flexible plugin framework, and stores context in an encrypted symbolic memory called **NeuronTree**. The entire pipeline—from text or speech input to device automation—runs locally.
-
----
-## Preview :: GIF
-
-<img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" alt="screenshot" height="600">
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" alt="NeuroVerse chat screenshot" width="220">
+</p>
 
 ---
 
+## Status
 
-## Official Plugins Repository
-
-Production‑ready, first‑party plugins live in a separate repository:
-
-**Neuro‑V‑Sys Plugins** → [https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins](https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins)
-
-This repository contains independently buildable Android library modules 
-* `ai-chat`
-* `app-io`
-* `demo-macro`
----
-Each module can be packaged into a distributable **plugin.zip** containing `plugin.aar` and `Manifest.json`, which the host app (NeuroVerse) can discover and load at runtime.
-
-### How Plugins Integrate with NeuroVerse
-
-* **Manifest**: Each plugin defines an `entryClass` in `src/main/Manifest.json` (e.g., `com.mp.ai_chat.ChatScreenPlugin`).
-* **Packaging**: Plugins are distributed as `plugin.zip` with at least `plugin.aar` and `Manifest.json`.
-* **Loading**: NeuroVerse scans user‑provided plugin zips, validates their manifest, and loads the entry class to register UI surfaces and actions.
-* **UI**: Plugins may expose Jetpack Compose screens that the host renders within the app’s navigation.
-
-> For build/packaging details, see the README in the plugins repository. A shared Gradle task (e.g., `exportPluginZip`) can be configured per module to produce the correct zip artifact.
+* **Current:** Chat‑only experience using the built‑in **AI Chat** plugin.
+* **Planned:** Command JSON generation, action validation, and on‑device UI automation are in development and will ship in future releases.
 
 ---
 
-## Core Features
+## What you can do today
 
-| Feature                 | Summary                                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Natural Language → JSON | On‑device inference with `llama.cpp` (GGUF) and a lightweight Kotlin wrapper to generate structured commands. |
-| Secure Memory           | **NeuronTree** data is encrypted using hardware‑backed keys.                                                  |
-| Offline‑First           | No telemetry or external APIs; all processing is local.                                                       |
-| Dynamic Plugin System   | Runtime‑loaded plugin bundles add tasks, Compose UIs, and automation routines.                                |
-| Modern UI               | Clean Material 3 interface built with Jetpack Compose.                                                        |
+* Local AI chat with a clean Material 3 UI.
+* Load first‑party sample plugins to explore the plugin lifecycle and UI embedding.
+* Build the app from source and experiment with the plugin API while automation is WIP.
 
 ---
 
-## Architecture Overview
+## Official plugins
 
-| Layer          | Responsibility                                   |
-| -------------- | ------------------------------------------------ |
-| UI             | Jetpack Compose, plugin‑provided screens         |
-| Inference      | `llama.cpp` (GGUF) for language understanding    |
-| Command Engine | Translates JSON actions into runnable tasks      |
-| Task Manager   | Manages plugin coroutines and execution context  |
-| Memory         | Encrypted NeuronTree storage                     |
-| Automation     | AccessibilityService bridges tasks to UI actions |
+First‑party plugins live here: [https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins](https://github.com/Siddhesh2377/Neuro-V-Sys-Plugins)
+
+Available modules:
+
+* `ai-chat` (current focus)
+* `app-io` (under active development)
+* `demo-macro` (prototype; not user‑facing yet)
+
+Each module can be exported to a **plugin.zip** containing `plugin.aar` and `Manifest.json`, which NeuroVerse can import at runtime.
+
+### Plugin integration overview
+
+* **Manifest:** declare `entryClass` in `src/main/Manifest.json` (for example, `com.mp.ai_chat.ChatScreenPlugin`).
+* **Packaging:** produce `plugin.zip` with `plugin.aar` and `Manifest.json`.
+* **Loading:** import the zip from within NeuroVerse; the host validates and registers it.
+* **UI:** plugins may provide Jetpack Compose screens rendered within the app.
+
+See the plugin repo README for the `exportPluginZip` task and packaging details.
 
 ---
 
-## Technical Stack
+## Features (current vs planned)
 
-* Kotlin, Jetpack Compose, Coroutines
-* `llama.cpp` / GGUF models
-* Room Database with Keystore‑backed encryption
-* Compose Navigation and scoped state management
-* AccessibilityService for automation
+| Area       | Current (public)                                                               | Planned (roadmap)                                                 |
+| ---------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
+| Chat       | AI Chat plugin with local UI and message history                               | Tool‑aware chat, plugin suggestions                               |
+| Models     | Local model support under evaluation; dev builds experiment with GGUF runtimes | Curated on‑device models with auto‑download and versioning        |
+| Plugins    | Runtime loading of first‑party zips                                            | Community plugin gallery, ratings, templates                      |
+| Automation | Not available in public builds                                                 | JSON command generation, validator, Accessibility‑based execution |
+| Memory     | Basic chat history                                                             | Encrypted NeuronTree with scoped recall and user controls         |
 
 ---
 
-## Getting Started
+## Architecture (high level)
 
-1. **Clone NeuroVerse** and open in Android Studio.
-2. **Install a model** compatible with `llama.cpp` (GGUF).
-3. **(Optional) Add Plugins**
+| Layer            | Responsibility                                       |
+| ---------------- | ---------------------------------------------------- |
+| UI               | Jetpack Compose app shell and plugin screens         |
+| Plugin Host      | Discovers, validates, and mounts plugin entry points |
+| Inference (chat) | Local model adapter and chat loop                    |
+| Command Engine   | Present but disabled in public builds                |
+| Storage          | Room‑backed data; encryption work in progress        |
 
-    * Build plugins from the **Neuro‑V‑Sys Plugins** repository.
-    * Import the resulting `plugin.zip` bundles into NeuroVerse using the in‑app importer or by placing them in the app‑specific plugin directory (see host configuration).
+---
+
+## Installation
+
+### Install APK
+
+1. Download from the [latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest).
+2. Install on Android 14 or newer.
+3. Open **AI Chat** and start a conversation.
+
+### Build from source
+
+1. Clone the repository and open in Android Studio.
+2. Sync Gradle and build `:app`.
+3. Run on a physical device for best performance.
+
+---
+
+## Developing plugins
+
+1. Start from the template in **Neuro‑V‑Sys Plugins**.
+2. Implement your `entryClass` and any Compose UI.
+3. Run the export task to produce `plugin.zip`.
+4. Import the zip into NeuroVerse from the Plugins screen.
+
+Open a PR to add your plugin to the community list once automation support ships broadly.
+
+---
+
+## Roadmap
+
+* Ship command generation and validator in a public build
+* Accessibility‑based action runner with safety guardrails
+* In‑app plugin gallery and submission flow
+* Basic task inspector and execution logs
+* Small, pre‑bundled model for first‑run offline chat
+
+Feedback is welcome in Issues and Discussions.
+
+---
+
+## Security and privacy
+
+* Chat runs locally; no cloud requirement for the core experience.
+* No analytics or telemetry in the core project.
+* Always review third‑party plugin code before installing.
 
 ---
 
 ## Contributing
 
-Contributions are welcome in the following areas:
+Contributions are welcome. Focus areas: plugin API, chat UX, model adapters, storage, and future automation.
 
-* Plugin system improvements
-* AI model integration and optimisation
-* Task library extensions
-* UI and user experience improvements
-
-**How to contribute**
-
-1. Fork this repository.
+1. Fork the repository.
 2. Create a feature branch.
-3. Follow the coding guidelines.
-4. Document changes clearly and open a pull request.
+3. Document changes.
+4. Open a pull request with a clear description and screenshots.
+
+Good first issues are labeled accordingly.
 
 ---
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache_2.0-green.svg)](#license)
-
-…
-
 ## License
-NeuroVerse is licensed under the **Apache License 2.0**.  
-See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Third-party components remain under their original licenses.
 
+NeuroVerse is licensed under the **Apache License 2.0**.
+
+See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Third‑party components remain under their original licenses.
 
 ---
 
@@ -136,14 +163,14 @@ See [`LICENSE`](./LICENSE) and [`NOTICE`](./NOTICE). Third-party components rema
 
 **Siddhesh Sonar**
 Android Developer · AI Enthusiast · Open‑Source Contributor
-[GitHub @Siddhesh2377](https://github.com/Siddhesh2377)
+GitHub: [https://github.com/Siddhesh2377](https://github.com/Siddhesh2377)
 
 ---
 
 ## Acknowledgements
 
-* [`llama.cpp`](https://github.com/ggml-org/llama.cpp)
-* [`SmolChat-Android`](https://github.com/shubham0204/SmolChat-Android)
-* JetBrains, 
-* Android Open Source Project, 
+* `llama.cpp` and the GGUF ecosystem
+* `SmolChat-Android`
+* JetBrains
+* Android Open Source Project
 * GitHub
