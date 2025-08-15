@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
+import android.widget.Toast
 import androidx.annotation.MainThread
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -78,15 +79,16 @@ object UpdateCenter {
         ioScope.launch {
             val info = fetchUpdateJson() ?: return@launch
             val installed = getInstalledVersionName()
+            if (info.hasUpdate){
+                // Force should only bypass version comparison, not hasUpdate flag
+                val shouldUpdate = (force || isNewer(info.version, installed))
+                if (!shouldUpdate) return@launch
 
-            // Force should only bypass version comparison, not hasUpdate flag
-            val shouldUpdate = info.hasUpdate && (force || isNewer(info.version, installed))
-            if (!shouldUpdate) return@launch
-
-            sp().edit().putString(SP_KEY_LATEST_VERSION, info.version).apply()
-            val dmId = enqueueDownload(info.updateLink, info.version, info.whatsNew)
-            sp().edit().putLong(SP_KEY_DOWNLOAD_ID, dmId).apply()
-            watchDownload(dmId)
+                sp().edit().putString(SP_KEY_LATEST_VERSION, info.version).apply()
+                val dmId = enqueueDownload(info.updateLink, info.version, info.whatsNew)
+                sp().edit().putLong(SP_KEY_DOWNLOAD_ID, dmId).apply()
+                watchDownload(dmId)
+            }
         }
     }
 
@@ -101,7 +103,7 @@ object UpdateCenter {
         return try {
             client.newCall(req).execute().use { resp ->
                 if (!resp.isSuccessful) return null
-                val body = resp.body?.string() ?: return null
+                val body = resp.body.string()
                 val json = JSONObject(body)
                 UpdateInfo(
                     hasUpdate = json.optBoolean("hasUpdate", false),
