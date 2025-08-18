@@ -25,3 +25,4 @@ local.properties
 /smollm/src/main/jniLibs/
 /repo/*.apk
 
+*.apk
