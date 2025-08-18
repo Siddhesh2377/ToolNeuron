@@ -1,6 +1,5 @@
 package com.dark.neuroverse.ui.components
 
-import android.content.Context
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -29,7 +28,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dark.ai_module.model.ModelsData
-import com.dark.ai_module.workers.ModelManager
 
 @Composable
 fun ModelDialog(

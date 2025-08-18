@@ -1,3 +1,7 @@
+import org.gradle.kotlin.dsl.withType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
@@ -5,14 +9,6 @@ plugins {
 }
 
 android {
-    signingConfigs {
-        create("release") {
-            storeFile = file("/home/home/Documents/neuro.jks")
-            storePassword = "neurov"
-            keyPassword = "neurov"
-            keyAlias = "key0"
-        }
-    }
     namespace = "com.dark.ai_module"
     compileSdk = 36
 
@@ -33,13 +29,12 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_11
     }
-
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(JvmTarget.JVM_11)
         }
     }
 }
@@ -47,7 +42,7 @@ android {
 dependencies {
 
     //PROJECTS
-    implementation(project(":smollm"))
+    implementation(project(":ai-core"))
 
     //DATABASE
     implementation(libs.androidx.room.runtime)

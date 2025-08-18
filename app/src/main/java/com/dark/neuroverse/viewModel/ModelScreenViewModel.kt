@@ -8,11 +8,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import android.content.Context
+import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModelProvider
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.downloadFile
+import com.dark.neuroverse.util.uriToFile
+import com.mp.ai_core.NativeLib
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.File
 
@@ -25,7 +31,7 @@ data class DownloadState(
 )
 
 
-class ModelScreenViewModel(context: Context) : ViewModel() {
+class ModelScreenViewModel(context: Context, private val nativeLib: NativeLib = NativeLib()) : ViewModel() {
 
     private val _models = MutableStateFlow<List<ModelsData>>(emptyList())
     val models: StateFlow<List<ModelsData>> = _models
@@ -34,10 +40,16 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates
     private val downloadJobs = mutableMapOf<String, Job>()
 
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
         ModelManager.init(context)
         observeModels()
+    }
+
+    fun updateLoadingState(isLoading: Boolean) {
+        _isLoading.value = isLoading
     }
 
     private fun observeModels() {
@@ -110,6 +122,22 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
         }
     }
 
+    // In your ViewModel
+    fun loadModelDetailsFromFile(uri: Uri, context: Context, onResult: (File) -> Unit){
+        viewModelScope.launch(Dispatchers.IO) {
+            val path = uriToFile(context, uri)
+            Log.d("FilePicker", "Selected file path: $path")
+            if (path.extension == "gguf") {
+                Log.d("FilePicker", "Selected file path: $path")
+                onResult(path)
+                _isLoading.value = false
+            }
+        }
+    }
+
+    fun loadModel(modelsData: ModelsData){
+        addModel(modelsData)
+    }
 
 
     fun addModel(model: ModelsData) {
@@ -146,7 +174,7 @@ class ModelScreenViewModel(context: Context) : ViewModel() {
 class ModelScreenViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         if (modelClass.isAssignableFrom(ModelScreenViewModel::class.java)) {
-            return ModelScreenViewModel(context) as T
+            return ModelScreenViewModel(context = context) as T
         }
         throw IllegalArgumentException("Unknown ViewModel class")
     }

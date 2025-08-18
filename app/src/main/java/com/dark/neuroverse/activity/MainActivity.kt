@@ -1,11 +1,8 @@
 package com.dark.neuroverse.activity
 
 import android.Manifest
-import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import android.util.Log
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -22,7 +19,6 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import com.dark.ai_module.helpers.JNILibHelper
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.Screen
@@ -36,16 +32,10 @@ import com.dark.userdata.getDefaultBrainStructure
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.saveEncryptedTree
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
-    private val activityJob = SupervisorJob()
-    private val activityScope = CoroutineScope(activityJob + Dispatchers.IO)
 
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,53 +48,33 @@ class MainActivity : ComponentActivity() {
                 if (!isGranted) "Permission denied".makeToast(this)
             }
 
-        // Save brain structure in IO scope
-        activityScope.launch {
-            val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
-            val brainFile = getBrainFilePath(this@MainActivity)
-
-            if (!brainFile.exists()) {
-                val brain = getDefaultBrainStructure()
-                saveEncryptedTree(brain, brainFile, key)
-                cancel()
-            }
-        }
-
-        // Get plugin name from intent
+        // For deep-linking into a specific plugin/tab
         val pluginName = intent.getStringExtra("plugin_name")
         Log.d("MainActivity", "plugin_name extra: $pluginName")
 
         setContent {
             val navController = rememberNavController()
-            var isJNIReady by remember { mutableStateOf(false) }
-            var isJNIDownloading by remember { mutableStateOf(false) }
+            var isInitializing by remember { mutableStateOf(true) }
 
-            requestNotificationPermission.launch(permission)
+            // Kick off runtime permission (no-op on old Android versions)
+            LaunchedEffect(Unit) { requestNotificationPermission.launch(permission) }
 
+            // App bootstrap: ensure brain file, then choose start destination.
             LaunchedEffect(Unit) {
-                isJNIDownloading = !JNILibHelper.checkIfJNILibExists(this@MainActivity)
+                // Non-blocking: prepare encrypted brain tree if missing
+                withContext(Dispatchers.IO) { ensureBrainFileExists() }
 
-                // Run JNI + model load
-                withContext(Dispatchers.IO) {
-                    loadJNI {
-                        isJNIDownloading = false
-                        isJNIReady = true
-                        cancel()
-                    }
+                // Decide where to start: Home if a model exists or pluginName is provided, else Models
+                val hasModel = ModelManager.isAnyModelInstalled()
+                val startScreen = when {
+                    pluginName != null -> Screen.Home.route
+                    hasModel -> Screen.Home.route
+                    else -> Screen.Model.route
                 }
-            }
-
-            LaunchedEffect(isJNIReady) {
-                if (isJNIReady) {
-                    val startScreen = when {
-                        pluginName != null -> Screen.Home.route // direct to Home
-                        ModelManager.isAnyModelInstalled() -> Screen.Home.route
-                        else -> Screen.Model.route
-                    }
-                    navController.navigate(startScreen) {
-                        popUpTo(Screen.Intro.route) { inclusive = true }
-                    }
+                navController.navigate(startScreen) {
+                    popUpTo(Screen.Intro.route) { inclusive = true }
                 }
+                isInitializing = false
             }
 
             NeuroVerseTheme {
@@ -115,7 +85,7 @@ class MainActivity : ComponentActivity() {
                         modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Intro.route) {
-                            IntroScreen(isJNIDownloading)
+                            IntroScreen(isInitializing)
                         }
                         composable(Screen.Model.route) {
                             ModelsScreen {
@@ -132,7 +102,7 @@ class MainActivity : ComponentActivity() {
                                 onRequestSettingsChange = {
                                     navController.navigate(Screen.Settings.route)
                                 },
-                                pluginName = pluginName // pass it to HomeScreen if needed
+                                pluginName = pluginName
                             )
                         }
                         composable(Screen.Settings.route) {
@@ -144,24 +114,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
-    private suspend fun loadJNI(onLoaded: () -> Unit) {
-        val model = ModelManager.getFirstModel()
-        JNILibHelper.loadJNILib(this) {
-            if (model != null) {
-                ModelManager.loadModel(this, model) {
-                    onLoaded()
-                }
-            } else {
-                onLoaded()
+    /** Ensure the encrypted brain structure exists; create it if missing. */
+    private fun ensureBrainFileExists() {
+        runCatching {
+            val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+            val brainFile = getBrainFilePath(this@MainActivity)
+            if (!brainFile.exists()) {
+                val brain = getDefaultBrainStructure()
+                saveEncryptedTree(brain, brainFile, key)
             }
+        }.onFailure { err ->
+            Log.e("MainActivity", "Failed to initialize brain file", err)
         }
     }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        activityScope.cancel()
-    }
 }
-
-

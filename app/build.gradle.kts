@@ -1,3 +1,6 @@
+import org.gradle.kotlin.dsl.withType
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
 import java.util.Properties
 
@@ -6,7 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
-    alias(libs.plugins.chaquo.py)
+  //  alias(libs.plugins.chaquo.py)
     kotlin("plugin.serialization") version "2.1.21"
 }
 val localPropertiesFile = rootProject.file("local.properties")
@@ -43,43 +46,42 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
-        isCoreLibraryDesugaringEnabled = true
     }
-    tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile>().configureEach {
+    tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+            jvmTarget.set(JvmTarget.JVM_11)
         }
     }
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    flavorDimensions += "pyVersion"
-    productFlavors {
-        create("neuroV") { dimension = "pyVersion" }
-    }
+//    flavorDimensions += "pyVersion"
+//    productFlavors {
+//        create("neuroV") { dimension = "pyVersion" }
+//    }
 }
 
-chaquopy {
-    productFlavors {
-        getByName("neuroV") { version = "3.10" }
-    }
-
-    sourceSets.getByName("main") {
-        setSrcDirs(listOf("src/main/python"))
-    }
-
-    defaultConfig {
-        pip {
-            install("python-docx")
-            install("python-pptx")
-            install("openpyxl")
-            install("pdfminer.six==20221105")
-            install("pandas")
-            install("chardet")
-        }
-    }
-}
+//chaquopy {
+//    productFlavors {
+//        getByName("neuroV") { version = "3.10" }
+//    }
+//
+//    sourceSets.getByName("main") {
+//        setSrcDirs(listOf("src/main/python"))
+//    }
+//
+//    defaultConfig {
+//        pip {
+//            install("python-docx")
+//            install("python-pptx")
+//            install("openpyxl")
+//            install("pdfminer.six==20221105")
+//            install("pandas")
+//            install("chardet")
+//        }
+//    }
+//}
 
 dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
@@ -90,6 +92,7 @@ dependencies {
 
     //PROJECTS
     implementation(project(":ai-module"))
+    implementation(project(":ai-core"))
     implementation(project(":userData"))
     implementation(project(":updateManager"))
     implementation(project(":plugins"))

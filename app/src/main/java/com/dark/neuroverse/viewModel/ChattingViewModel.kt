@@ -2,25 +2,34 @@ package com.dark.neuroverse.viewModel
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.database.Cursor
-import android.net.Uri
-import android.provider.OpenableColumns
 import android.util.Log
-import androidx.lifecycle.*
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.ai.Neuron
-import com.dark.neuroverse.data.DocReader
 import com.dark.neuroverse.data.UserPrefs
-import com.dark.neuroverse.model.*
+import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.model.FileAttachment
+import com.dark.neuroverse.model.Message
+import com.dark.neuroverse.model.ROLE
 import com.dark.neuroverse.util.extractPureJson
-import com.dark.userdata.*
+import com.dark.userdata.addNewChat
+import com.dark.userdata.getDefaultChatHistory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
+import com.dark.userdata.readBrainFile
+import com.dark.userdata.saveTree
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 import javax.crypto.SecretKey
 
 class ChattingViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
@@ -29,8 +38,9 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
         return ChattingViewModel(context) as T
     }
 }
+
 @SuppressLint("StaticFieldLeak")
-class ChattingViewModel( private val context: Context) : ViewModel() {
+class ChattingViewModel(private val context: Context) : ViewModel() {
 
     //region -- State Variables
 
@@ -72,8 +82,7 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             val root = rootNode.value.getNodeDirect("root")
             val chatHistory = getDefaultChatHistory(root)
 
-            val validChats = NeuronTree(chatHistory)
-                .getAllChildrenRecursive()
+            val validChats = NeuronTree(chatHistory).getAllChildrenRecursive()
                 .filter { it.data.content.isNotBlank() }
 
             if (validChats.isNotEmpty()) {
@@ -97,37 +106,37 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     //endregion
 
     //region -- Public Functions
-    fun handleFileUri(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
-                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (cursor.moveToFirst()) cursor.getString(index) else "unknown_file"
-                } ?: "unknown_file"
-
-                val placeholder = FileAttachment(doc = DOC(fileName, "", "", ""), isLoading = true)
-
-                // Add and capture its index
-                val index = _attachedFiles.updateAndGet { it + placeholder }.lastIndex
-
-                val tempFile = File(context.cacheDir, fileName)
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    tempFile.outputStream().use { output -> input.copyTo(output) }
-                }
-
-                val summary = DocReader.read(tempFile)
-
-                _attachedFiles.update { currentList ->
-                    currentList.toMutableList().apply {
-                        this[index] = FileAttachment(doc = summary, isLoading = false)
-                    }
-                }
-
-            } catch (e: Exception) {
-                Log.e("FilePicker", "Failed to load file", e)
-            }
-        }
-    }
+//    fun handleFileUri(context: Context, uri: Uri) {
+//        viewModelScope.launch(Dispatchers.IO) {
+//            try {
+//                val fileName = context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+//                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+//                    if (cursor.moveToFirst()) cursor.getString(index) else "unknown_file"
+//                } ?: "unknown_file"
+//
+//                val placeholder = FileAttachment(doc = DOC(fileName, "", "", ""), isLoading = true)
+//
+//                // Add and capture its index
+//                val index = _attachedFiles.updateAndGet { it + placeholder }.lastIndex
+//
+//                val tempFile = File(context.cacheDir, fileName)
+//                context.contentResolver.openInputStream(uri)?.use { input ->
+//                    tempFile.outputStream().use { output -> input.copyTo(output) }
+//                }
+//
+//                val summary = DocReader.read(tempFile)
+//
+//                _attachedFiles.update { currentList ->
+//                    currentList.toMutableList().apply {
+//                        this[index] = FileAttachment(doc = summary, isLoading = false)
+//                    }
+//                }
+//
+//            } catch (e: Exception) {
+//                Log.e("FilePicker", "Failed to load file", e)
+//            }
+//        }
+//    }
 
     private inline fun <T> MutableStateFlow<T>.updateAndGet(update: (T) -> T): T {
         val newValue = update(this.value)
@@ -154,7 +163,8 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
                 _isGenerating.value = true
                 _streamingBuffer.value = ""
 
-                val finalizedDocs = _attachedFiles.value.filter { !it.isLoading && it.doc.path.isNotBlank() }
+                val finalizedDocs =
+                    _attachedFiles.value.filter { !it.isLoading && it.doc.path.isNotBlank() }
                 clearAttachment()
 
                 val time = System.currentTimeMillis().toString()
@@ -177,24 +187,16 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                val fullResponse = Neuron.generateStreamAndWait(inputStr) { chunk ->
-                    viewModelScope.launch(Dispatchers.Main) {
-                        _streamingBuffer.update { it + chunk }
-                        _messages.update {
-                            it.map { msg ->
-                                if (msg.role == ROLE.SYSTEM && msg.timeStamp == "streaming")
-                                    msg.copy(content = _streamingBuffer.value)
-                                else msg
-                            }
-                        }
-                    }
-                }
+                val fullResponse = ""
 
                 _isGenerating.value = false
 
                 _messages.update {
-                    it.filterNot { m -> m.role == ROLE.SYSTEM && m.timeStamp == "streaming" } +
-                            Message(ROLE.SYSTEM, fullResponse, System.currentTimeMillis().toString())
+                    it.filterNot { m -> m.role == ROLE.SYSTEM && m.timeStamp == "streaming" } + Message(
+                        ROLE.SYSTEM,
+                        fullResponse,
+                        System.currentTimeMillis().toString()
+                    )
                 }
 
                 generateTitle()
@@ -239,11 +241,11 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         _chatTitle.value = ""
         chatId.value = ""
         _isGenerating.value = false
-        Neuron.stopGeneration(true)
+        Neuron.stopGeneration()
     }
 
     fun stopGenerating() {
-        Neuron.stopGeneration(true)
+        Neuron.stopGeneration()
         _isGenerating.value = false
         updateConversation()
     }
@@ -351,7 +353,9 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
         })
 
         _messages.value.forEach { msg ->
-            val clean = msg.content.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
+            val clean =
+                msg.content.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+                    .trim()
             if (clean.isNotBlank()) {
                 arr.put(JSONObject().apply {
                     put("role", msg.role.name.lowercase())
@@ -382,11 +386,8 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
     }
 
     private fun sanitizeForModel(input: String): String {
-        return input.replace(Regex("[ ]{2,}"), " ")
-            .replace(Regex("\\n{2,}"), "\n")
-            .replace(Regex("(?<=\\w)[ ](?=\\w)"), "")
-            .trim()
-            .take(3000) + "\n\n[TRUNCATED]"
+        return input.replace(Regex("[ ]{2,}"), " ").replace(Regex("\\n{2,}"), "\n")
+            .replace(Regex("(?<=\\w)[ ](?=\\w)"), "").trim().take(3000) + "\n\n[TRUNCATED]"
     }
 
     private fun roughTokenEstimate(text: String): Int {
@@ -418,7 +419,6 @@ class ChattingViewModel( private val context: Context) : ViewModel() {
             }
         }
     }
-
 
 
     //endregion

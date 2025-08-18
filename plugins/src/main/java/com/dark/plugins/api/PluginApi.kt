@@ -13,13 +13,15 @@ import com.dark.plugins.manager.PluginManager
 import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit
+
 @Keep
 @Stable
 interface ComposePlugin {
     @Keep
-    /** Return top-level UI to render. Host will call this frequently; avoid heavy work. */
+            /** Return top-level UI to render. Host will call this frequently; avoid heavy work. */
     fun content(): ComposableBlock
 }
+
 @Keep
 @Immutable
 data class PluginInfo(
@@ -52,18 +54,20 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         Text("Hello From Default Plugin :)")
     }
 
-    open suspend fun aiCall(input: JSONObject, onToken: (String) -> Unit): JSONObject {
-        val temp: String = Neuron.generateStreamAndWait(input.toString()) {
-            onToken(it)
-        }
-
-        return JSONObject().apply {
-            put("response", temp)
-        }
+    open suspend fun aiCall(
+        input: JSONObject,
+        onToken: (String) -> Unit
+    ): JSONObject {
+        val temp: String = Neuron.generateStreaming(
+            prompt = input.toString(),
+            gen = Neuron.GenerationParams(),
+            onToken = onToken
+        )
+        return JSONObject().apply { put("response", temp) }
     }
 
-    open suspend fun stopGeneration(){
-        Neuron.stopGeneration(true)
+    open suspend fun stopGeneration() {
+        Neuron.stopGeneration()
     }
 
     @Keep

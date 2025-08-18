@@ -38,6 +38,15 @@
         </activity>
 
         <activity
+            android:name=".activity.PluginStoreActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize">
+
+        </activity>
+
+        <activity
             android:name=".activity.TempActivity"
             android:exported="true"
             android:launchMode="singleTask"

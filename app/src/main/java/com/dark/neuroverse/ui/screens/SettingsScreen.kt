@@ -213,7 +213,7 @@ fun SettingsScreen(
                             Toast.makeText(
                                 context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
                             ).show()
-                            ModelManager.loadModel(context, it) {
+                            ModelManager.loadModel( it) {
                                 Toast.makeText(
                                     context, "Model loaded successfully", Toast.LENGTH_SHORT
                                 ).show()
