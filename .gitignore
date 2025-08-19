@@ -24,5 +24,4 @@ local.properties
 /web/*.html
 /smollm/src/main/jniLibs/
 /repo/*.apk
-
 *.apk
