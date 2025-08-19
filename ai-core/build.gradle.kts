@@ -5,18 +5,42 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
-    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
-    namespace = "com.dark.userdata"
+    namespace = "com.mp.ai_core"
     compileSdk = 36
 
-    defaultConfig {
+    ndkVersion = "29.0.13599879"
 
-        minSdk = 28
+    defaultConfig {
+        minSdk = 33
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        consumerProguardFiles("consumer-rules.pro")
+        consumerProguardFiles("proguard-rules.pro")
+        ndk {
+            //noinspection ChromeOsAbiSupport
+            abiFilters += listOf("arm64-v8a")
+        }
+
+        externalNativeBuild {
+            cmake {
+                arguments += "-DLLAMA_CURL=OFF"
+                arguments += "-DLLAMA_BUILD_COMMON=ON"
+                arguments += "-DGGML_LLAMAFILE=OFF"
+                arguments += "-DGGML_PAGE_SIZE=16384"
+                arguments += "-DVULKAN_HEADERS_INCLUDE_DIR=/usr/include"
+                arguments += "-DGGML_VULKAN_DEBUG=ON"
+                arguments += "-DGGML_VULKAN=ON"
+                arguments += "-DCMAKE_BUILD_TYPE=Release"
+
+
+                cppFlags += listOf()
+                arguments += listOf()
+
+                cppFlags("")
+            }
+        }
     }
 
     buildTypes {
@@ -26,6 +50,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+    }
+    externalNativeBuild {
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
         }
     }
     compileOptions {
@@ -40,7 +70,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.material)

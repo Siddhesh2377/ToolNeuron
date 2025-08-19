@@ -12,13 +12,13 @@ fun getDefaultModelData() = ModelsData(
 @Entity(tableName = "local_models")
 data class ModelsData(
     @PrimaryKey(autoGenerate = true) val id: Int = 0,
-    val modeName: String,
-    val modelDescription: String,
-    val modelCtxSize: Int,
-    val toolUse: String,
-    val modelLink: String,
-    val modelPageLink: String,
-    val modelPath: String,
-    val chatTemplate: String,
-    val modelSize: Int
+    val modeName: String = "",
+    val modelDescription: String = "",
+    val modelCtxSize: Int = 0,
+    val toolUse: String = "",
+    val modelLink: String = "",
+    val modelPageLink: String = "",
+    val modelPath: String = "",
+    val chatTemplate: String = "",
+    val modelSize: Int = 0
 )

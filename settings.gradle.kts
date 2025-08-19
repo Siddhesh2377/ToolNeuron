@@ -24,7 +24,7 @@ dependencyResolutionManagement {
 rootProject.name = "NeuroVerse"
 include(":app")
 include(":ai-module")
-include(":smollm")
 include(":userData")
 include(":updateManager")
 include(":plugins")
+include(":ai-core")

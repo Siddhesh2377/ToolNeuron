@@ -6,41 +6,17 @@ import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.annotation.DrawableRes
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Text
@@ -48,15 +24,9 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -64,22 +34,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.R
-import com.dark.neuroverse.activity.TempActivity
-import com.dark.neuroverse.model.FileAttachment
-import com.dark.neuroverse.model.Message
-import com.dark.neuroverse.model.ROLE
-import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
-import com.dark.neuroverse.ui.screens.UIComponents.ActionButton
-import com.dark.neuroverse.ui.screens.UIComponents.ActionButtonWithCircleProgressIndicator
-import com.dark.neuroverse.ui.screens.UIComponents.ThinkingBubble
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.util.isZipByHeader
 import com.dark.neuroverse.util.isZipByMime
 import com.dark.neuroverse.util.isZipByName
 import com.dark.neuroverse.util.queryDisplayName
 import com.dark.neuroverse.util.uriToFile
-import com.dark.neuroverse.viewModel.ChattingViewModel
 import com.dark.neuroverse.viewModel.PluginHostViewModel
 import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.launch
@@ -118,7 +80,7 @@ fun HomeScreen(
                     }
                 },
                 onPluginStoreClick = {
-                    context.startActivity(Intent(context, TempActivity::class.java))
+                    context.startActivity(Intent(context, PluginStoreActivity::class.java))
                 })
         }) {
         Column(
@@ -204,354 +166,354 @@ internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
         }
     }
 }
-
-@Composable
-internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingViewModel) {
-    @Composable
-    fun ChatBubble(message: Message) {
-        val isThinkingMessage = remember(message.content) {
-            message.content.trimStart().startsWith("<think>")
-        }
-
-        // Detect and clean reasoning part
-        val raw = message.content.trim()
-        val cleanThinking = remember(raw) {
-            if (isThinkingMessage) {
-                val withoutOpen = raw.removePrefix("<think>").trimStart()
-                if (withoutOpen.endsWith("</think>")) {
-                    withoutOpen.removeSuffix("</think>").trimEnd()
-                } else {
-                    withoutOpen
-                }
-            } else ""
-        }
-
-        val actualResponse = remember(raw) {
-            if (isThinkingMessage && raw.contains("</think>")) {
-                // Extract actual response that comes after </think>
-                raw.substringAfter("</think>").trimStart()
-            } else if (!isThinkingMessage) {
-                // Normal system message
-                raw
-            } else {
-                "" // if still thinking and no closing tag yet
-            }
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
-        ) {
-            if (message.role == ROLE.USER) {
-                if (message.document.isNotEmpty()) {
-                    Row {
-                        repeat(message.document.size) {
-                            Box(
-                                Modifier.padding(start = rDP(12.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = message.document[it].doc.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (isThinkingMessage) {
-                ThinkingBubble(message.copy(content = cleanThinking))
-            }
-
-            if (actualResponse.isNotBlank()) {
-                MarkdownText(
-                    text = actualResponse,
-                    canCopy = message.role != ROLE.USER,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
-                    ),
-                    modifier = Modifier
-                        .then(
-                            if (message.role == ROLE.USER) {
-                                Modifier.background(
-                                        color = MaterialTheme.colorScheme.surface,
-                                        shape = MaterialTheme.shapes.extraLarge
-                                    ).widthIn(max = rDP(300.dp))
-                            } else Modifier
-                        )
-                        .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
-                )
-            }
-
-            if (message.role != ROLE.USER && actualResponse.isNotBlank()) {
-                Row(
-                    modifier = Modifier.padding(
-                        top = rDP(4.dp), start = rDP(18.dp)
-                    ), horizontalArrangement = Arrangement.spacedBy(rDP(14.dp))
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.copy),
-                        contentDescription = "Copy",
-                        modifier = Modifier.size(rDP(14.dp))
-                    )
-
-                    Icon(
-                        painter = painterResource(R.drawable.new_action),
-                        contentDescription = "Layers",
-                        modifier = Modifier.size(rDP(14.dp))
-                    )
-                }
-            }
-        }
-    }
-
-    val messages = viewModel.messages.collectAsState().value.toMutableList()
-
-    LazyColumn(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(top = rDP(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(12.dp)),
-        contentPadding = PaddingValues(bottom = rDP(26.dp))
-    ) {
-        items(messages.size) { index ->
-            ChatBubble(message = messages[index])
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-@Composable
-internal fun BottomBar(viewModel: ChattingViewModel) {
-    var userInput by remember { mutableStateOf("") }
-    val isGenerating by viewModel.isGenerating.collectAsState()
-    val attachedFiles by viewModel.attachedFiles.collectAsState()
-
-    val context = LocalContext.current
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        viewModel.handleFileUri(context, uri ?: return@rememberLauncherForActivityResult)
-    }
-
-    Column(Modifier.padding(8.dp)) {
-
-        AnimatedVisibility(attachedFiles.isNotEmpty()) {
-            LazyRow {
-                itemsIndexed(attachedFiles) { index, item ->
-                    FileItem(item, onRemove = { viewModel.clearAttachment(index) })
-                }
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = rDP(16.dp))
-                .clip(MaterialTheme.shapes.medium)
-                .background(color = MaterialTheme.colorScheme.primary)
-                .heightIn(max = 400.dp)
-                .padding(vertical = rDP(8.dp))
-                .padding(start = rDP(12.dp), end = rDP(10.dp)),
-            verticalAlignment = Alignment.Bottom,
-            horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
-        ) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(8.dp)
-            ) {
-                BasicTextField(
-                    value = userInput,
-                    textStyle = MaterialTheme.typography.titleMedium.copy(
-                        color = MaterialTheme.colorScheme.onPrimary
-                    ),
-                    onValueChange = { userInput = it },
-                    singleLine = false,
-                    decorationBox = { innerTextField ->
-                        if (userInput.isEmpty()) {
-                            Text(
-                                "Say Anything...",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontFamily = FontFamily.Serif,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.Gray
-                            )
-                        }
-                        innerTextField()
-                    })
-            }
-
-            ActionButton(R.drawable.attachment, "Attachment") {
-                filePickerLauncher.launch("*/*")
-            }
-
-            ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
-                if (isGenerating) {
-                    viewModel.stopGenerating()
-                    return@ActionButtonWithCircleProgressIndicator
-                }
-
-                if (userInput.isNotEmpty()) {
-                    viewModel.sendMessage(userInput)
-                    userInput = ""
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun FileItem(fileAttachment: FileAttachment, onRemove: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
-            .clip(MaterialTheme.shapes.medium)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            painter = painterResource(id = R.drawable.attachment),
-            contentDescription = "Attached",
-            modifier = Modifier.size(rDP(16.dp)),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(modifier = Modifier.width(rDP(6.dp)))
-
-        Text(
-            text = fileAttachment.doc.name,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-
-        if (fileAttachment.isLoading) {
-            Spacer(Modifier.width(rDP(6.dp)))
-            CircularProgressIndicator(
-                modifier = Modifier.size(rDP(14.dp)),
-                strokeWidth = rDP(2.dp),
-                color = MaterialTheme.colorScheme.primary
-            )
-        } else {
-            Spacer(modifier = Modifier.width(rDP(6.dp)))
-            Icon(
-                Icons.Default.Close,
-                contentDescription = "Remove",
-                modifier = Modifier
-                    .size(rDP(12.dp))
-                    .clickable { onRemove() },
-                tint = MaterialTheme.colorScheme.error
-            )
-        }
-    }
-}
-
-
-internal object UIComponents {
-
-    @Composable
-    fun ActionButton(
-        @DrawableRes icon: Int, contentDescription: String, onClick: () -> Unit
-    ) {
-        IconButton(
-            modifier = Modifier.size(rDP(26.dp)), onClick = {
-                onClick()
-            }, colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.onPrimary,
-                contentColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Icon(
-                painter = painterResource(icon),
-                contentDescription = contentDescription,
-                modifier = Modifier.size(rDP(14.dp))
-            )
-        }
-    }
-
-    @Composable
-    fun ActionButtonWithCircleProgressIndicator(
-        @DrawableRes icon: Int, contentDescription: String, show: Boolean, onClick: () -> Unit
-    ) {
-        Box(contentAlignment = Alignment.Center) {
-            AnimatedVisibility(show) {
-                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
-            }
-
-            IconButton(
-                modifier = Modifier.size(rDP(26.dp)), onClick = {
-                    onClick()
-                }, colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.onPrimary,
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                AnimatedContent(show) { isGeneratingText ->
-                    when {
-                        isGeneratingText -> {
-                            Icon(
-                                imageVector = Icons.Default.Stop, contentDescription = "Mic"
-                            )
-                        }
-
-                        else -> {
-                            Icon(
-                                painter = painterResource(icon),
-                                contentDescription = contentDescription,
-                                modifier = Modifier.size(rDP(14.dp))
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @Composable
-    fun ThinkingBubble(message: Message) {
-        var expanded by remember { mutableStateOf(false) }
-
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = rDP(16.dp))
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .clickable { expanded = !expanded }
-                    .background(
-                        color = MaterialTheme.colorScheme.surfaceVariant,
-                        shape = MaterialTheme.shapes.medium
-                    )
-                    .padding(rDP(10.dp))) {
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = "Expand",
-                    modifier = Modifier.size(rDP(16.dp))
-                )
-                Spacer(modifier = Modifier.width(rDP(8.dp)))
-                Text(
-                    text = if (expanded) "AI Reasoning (tap to hide)" else "AI is thinking...",
-                    style = MaterialTheme.typography.labelMedium
-                )
-            }
-
-            AnimatedVisibility(visible = expanded) {
-                MarkdownText(
-                    text = message.content,
-                    canCopy = message.role != ROLE.USER,
-                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(rDP(12.dp))
-                )
-            }
-        }
-    }
-
-}
+//
+//@Composable
+//internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingViewModel) {
+//    @Composable
+//    fun ChatBubble(message: Message) {
+//        val isThinkingMessage = remember(message.content) {
+//            message.content.trimStart().startsWith("<think>")
+//        }
+//
+//        // Detect and clean reasoning part
+//        val raw = message.content.trim()
+//        val cleanThinking = remember(raw) {
+//            if (isThinkingMessage) {
+//                val withoutOpen = raw.removePrefix("<think>").trimStart()
+//                if (withoutOpen.endsWith("</think>")) {
+//                    withoutOpen.removeSuffix("</think>").trimEnd()
+//                } else {
+//                    withoutOpen
+//                }
+//            } else ""
+//        }
+//
+//        val actualResponse = remember(raw) {
+//            if (isThinkingMessage && raw.contains("</think>")) {
+//                // Extract actual response that comes after </think>
+//                raw.substringAfter("</think>").trimStart()
+//            } else if (!isThinkingMessage) {
+//                // Normal system message
+//                raw
+//            } else {
+//                "" // if still thinking and no closing tag yet
+//            }
+//        }
+//
+//        Column(
+//            modifier = Modifier.fillMaxWidth(),
+//            verticalArrangement = Arrangement.Center,
+//            horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
+//        ) {
+//            if (message.role == ROLE.USER) {
+//                if (message.document.isNotEmpty()) {
+//                    Row {
+//                        repeat(message.document.size) {
+//                            Box(
+//                                Modifier.padding(start = rDP(12.dp)),
+//                                contentAlignment = Alignment.Center
+//                            ) {
+//                                Text(
+//                                    text = message.document[it].doc.name,
+//                                    style = MaterialTheme.typography.bodyMedium,
+//                                    color = MaterialTheme.colorScheme.primary
+//                                )
+//                            }
+//                        }
+//                    }
+//                }
+//            }
+//
+//            if (isThinkingMessage) {
+//                ThinkingBubble(message.copy(content = cleanThinking))
+//            }
+//
+//            if (actualResponse.isNotBlank()) {
+//                MarkdownText(
+//                    text = actualResponse,
+//                    canCopy = message.role != ROLE.USER,
+//                    style = MaterialTheme.typography.bodyLarge.copy(
+//                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
+//                    ),
+//                    modifier = Modifier
+//                        .then(
+//                            if (message.role == ROLE.USER) {
+//                                Modifier.background(
+//                                        color = MaterialTheme.colorScheme.surface,
+//                                        shape = MaterialTheme.shapes.extraLarge
+//                                    ).widthIn(max = rDP(300.dp))
+//                            } else Modifier
+//                        )
+//                        .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
+//                )
+//            }
+//
+//            if (message.role != ROLE.USER && actualResponse.isNotBlank()) {
+//                Row(
+//                    modifier = Modifier.padding(
+//                        top = rDP(4.dp), start = rDP(18.dp)
+//                    ), horizontalArrangement = Arrangement.spacedBy(rDP(14.dp))
+//                ) {
+//                    Icon(
+//                        painter = painterResource(R.drawable.copy),
+//                        contentDescription = "Copy",
+//                        modifier = Modifier.size(rDP(14.dp))
+//                    )
+//
+//                    Icon(
+//                        painter = painterResource(R.drawable.new_action),
+//                        contentDescription = "Layers",
+//                        modifier = Modifier.size(rDP(14.dp))
+//                    )
+//                }
+//            }
+//        }
+//    }
+//
+//    val messages = viewModel.messages.collectAsState().value.toMutableList()
+//
+//    LazyColumn(
+//        modifier = modifier
+//            .fillMaxWidth()
+//            .padding(top = rDP(16.dp)),
+//        verticalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+//        contentPadding = PaddingValues(bottom = rDP(26.dp))
+//    ) {
+//        items(messages.size) { index ->
+//            ChatBubble(message = messages[index])
+//        }
+//    }
+//}
+//
+//@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+//@Composable
+//internal fun BottomBar(viewModel: ChattingViewModel) {
+//    var userInput by remember { mutableStateOf("") }
+//    val isGenerating by viewModel.isGenerating.collectAsState()
+//    val attachedFiles by viewModel.attachedFiles.collectAsState()
+//
+//    val context = LocalContext.current
+//    val filePickerLauncher = rememberLauncherForActivityResult(
+//        contract = ActivityResultContracts.GetContent()
+//    ) { uri: Uri? ->
+//      //  viewModel.handleFileUri(context, uri ?: return@rememberLauncherForActivityResult)
+//    }
+//
+//    Column(Modifier.padding(8.dp)) {
+//
+//        AnimatedVisibility(attachedFiles.isNotEmpty()) {
+//            LazyRow {
+//                itemsIndexed(attachedFiles) { index, item ->
+//                    FileItem(item, onRemove = { viewModel.clearAttachment(index) })
+//                }
+//            }
+//        }
+//
+//        Row(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(horizontal = rDP(16.dp))
+//                .clip(MaterialTheme.shapes.medium)
+//                .background(color = MaterialTheme.colorScheme.primary)
+//                .heightIn(max = 400.dp)
+//                .padding(vertical = rDP(8.dp))
+//                .padding(start = rDP(12.dp), end = rDP(10.dp)),
+//            verticalAlignment = Alignment.Bottom,
+//            horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
+//        ) {
+//            Box(
+//                modifier = Modifier
+//                    .weight(1f)
+//                    .padding(8.dp)
+//            ) {
+//                BasicTextField(
+//                    value = userInput,
+//                    textStyle = MaterialTheme.typography.titleMedium.copy(
+//                        color = MaterialTheme.colorScheme.onPrimary
+//                    ),
+//                    onValueChange = { userInput = it },
+//                    singleLine = false,
+//                    decorationBox = { innerTextField ->
+//                        if (userInput.isEmpty()) {
+//                            Text(
+//                                "Say Anything...",
+//                                style = MaterialTheme.typography.titleMedium,
+//                                fontFamily = FontFamily.Serif,
+//                                fontWeight = FontWeight.Bold,
+//                                color = Color.Gray
+//                            )
+//                        }
+//                        innerTextField()
+//                    })
+//            }
+//
+//            ActionButton(R.drawable.attachment, "Attachment") {
+//                filePickerLauncher.launch("*/*")
+//            }
+//
+//            ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
+//                if (isGenerating) {
+//                    viewModel.stopGenerating()
+//                    return@ActionButtonWithCircleProgressIndicator
+//                }
+//
+//                if (userInput.isNotEmpty()) {
+//                    viewModel.sendMessage(userInput)
+//                    userInput = ""
+//                }
+//            }
+//        }
+//    }
+//}
+//
+//@Composable
+//fun FileItem(fileAttachment: FileAttachment, onRemove: () -> Unit) {
+//    Row(
+//        modifier = Modifier
+//            .padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
+//            .clip(MaterialTheme.shapes.medium)
+//            .background(MaterialTheme.colorScheme.surfaceVariant)
+//            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp)),
+//        verticalAlignment = Alignment.CenterVertically
+//    ) {
+//        Icon(
+//            painter = painterResource(id = R.drawable.attachment),
+//            contentDescription = "Attached",
+//            modifier = Modifier.size(rDP(16.dp)),
+//            tint = MaterialTheme.colorScheme.onSurfaceVariant
+//        )
+//        Spacer(modifier = Modifier.width(rDP(6.dp)))
+//
+//        Text(
+//            text = fileAttachment.doc.name,
+//            style = MaterialTheme.typography.bodyMedium,
+//            color = MaterialTheme.colorScheme.onSurfaceVariant
+//        )
+//
+//        if (fileAttachment.isLoading) {
+//            Spacer(Modifier.width(rDP(6.dp)))
+//            CircularProgressIndicator(
+//                modifier = Modifier.size(rDP(14.dp)),
+//                strokeWidth = rDP(2.dp),
+//                color = MaterialTheme.colorScheme.primary
+//            )
+//        } else {
+//            Spacer(modifier = Modifier.width(rDP(6.dp)))
+//            Icon(
+//                Icons.Default.Close,
+//                contentDescription = "Remove",
+//                modifier = Modifier
+//                    .size(rDP(12.dp))
+//                    .clickable { onRemove() },
+//                tint = MaterialTheme.colorScheme.error
+//            )
+//        }
+//    }
+//}
+//
+//
+//internal object UIComponents {
+//
+//    @Composable
+//    fun ActionButton(
+//        @DrawableRes icon: Int, contentDescription: String, onClick: () -> Unit
+//    ) {
+//        IconButton(
+//            modifier = Modifier.size(rDP(26.dp)), onClick = {
+//                onClick()
+//            }, colors = IconButtonDefaults.iconButtonColors(
+//                containerColor = MaterialTheme.colorScheme.onPrimary,
+//                contentColor = MaterialTheme.colorScheme.primary
+//            )
+//        ) {
+//            Icon(
+//                painter = painterResource(icon),
+//                contentDescription = contentDescription,
+//                modifier = Modifier.size(rDP(14.dp))
+//            )
+//        }
+//    }
+//
+//    @Composable
+//    fun ActionButtonWithCircleProgressIndicator(
+//        @DrawableRes icon: Int, contentDescription: String, show: Boolean, onClick: () -> Unit
+//    ) {
+//        Box(contentAlignment = Alignment.Center) {
+//            AnimatedVisibility(show) {
+//                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
+//            }
+//
+//            IconButton(
+//                modifier = Modifier.size(rDP(26.dp)), onClick = {
+//                    onClick()
+//                }, colors = IconButtonDefaults.iconButtonColors(
+//                    containerColor = MaterialTheme.colorScheme.onPrimary,
+//                    contentColor = MaterialTheme.colorScheme.primary
+//                )
+//            ) {
+//                AnimatedContent(show) { isGeneratingText ->
+//                    when {
+//                        isGeneratingText -> {
+//                            Icon(
+//                                imageVector = Icons.Default.Stop, contentDescription = "Mic"
+//                            )
+//                        }
+//
+//                        else -> {
+//                            Icon(
+//                                painter = painterResource(icon),
+//                                contentDescription = contentDescription,
+//                                modifier = Modifier.size(rDP(14.dp))
+//                            )
+//                        }
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//    @Composable
+//    fun ThinkingBubble(message: Message) {
+//        var expanded by remember { mutableStateOf(false) }
+//
+//        Column(
+//            modifier = Modifier
+//                .fillMaxWidth()
+//                .padding(horizontal = rDP(16.dp))
+//        ) {
+//            Row(
+//                verticalAlignment = Alignment.CenterVertically,
+//                modifier = Modifier
+//                    .clickable { expanded = !expanded }
+//                    .background(
+//                        color = MaterialTheme.colorScheme.surfaceVariant,
+//                        shape = MaterialTheme.shapes.medium
+//                    )
+//                    .padding(rDP(10.dp))) {
+//                Icon(
+//                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+//                    contentDescription = "Expand",
+//                    modifier = Modifier.size(rDP(16.dp))
+//                )
+//                Spacer(modifier = Modifier.width(rDP(8.dp)))
+//                Text(
+//                    text = if (expanded) "AI Reasoning (tap to hide)" else "AI is thinking...",
+//                    style = MaterialTheme.typography.labelMedium
+//                )
+//            }
+//
+//            AnimatedVisibility(visible = expanded) {
+//                MarkdownText(
+//                    text = message.content,
+//                    canCopy = message.role != ROLE.USER,
+//                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .padding(rDP(12.dp))
+//                )
+//            }
+//        }
+//    }
+//
+//}
 

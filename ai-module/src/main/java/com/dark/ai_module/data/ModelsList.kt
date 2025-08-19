@@ -5,14 +5,8 @@ import com.dark.ai_module.model.ModelsData
 import java.io.File
 
 object ModelsList {
-    fun getModelList(context: Context): List<ModelsData> {
 
-        val modelsDir = File(context.filesDir, "Models")
-        if (!modelsDir.exists()) {
-            modelsDir.mkdirs() // Create "Models" folder if not exists
-        }
-
-        val chatTemplate = """
+    val chatTemplate = """
             <|im_start|>system
             Your name is Neuron, developed by NeuroV. You only send short, polite, relevant auto-replies when the user is unavailable. Never overthink, reason, or generate long responses. Keep replies under 10 words.
             Use the following parameters to adjust your tone:
@@ -30,6 +24,12 @@ object ModelsList {
             {% endif %}
         """.trimIndent()
 
+    fun getModelList(context: Context): List<ModelsData> {
+
+        val modelsDir = File(context.filesDir, "Models")
+        if (!modelsDir.exists()) {
+            modelsDir.mkdirs() // Create "Models" folder if not exists
+        }
 
         val kodifyNano = ModelsData(
             id = 1,
@@ -75,4 +75,17 @@ object ModelsList {
 
         return listOf(qwenZeroCoder, lucy128K, kodifyNano)
     }
+
+    val CUSTOM_MODEL = ModelsData(
+        id = -1,
+        "Custom Model",
+        "Custom Model",
+        4096,
+        "NO",
+        "---",
+        "---",
+        "",
+        chatTemplate,
+        0
+    )
 }
