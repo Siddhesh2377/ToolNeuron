@@ -15,5 +15,6 @@ data class PluginLocalDB(
     val manifestCode: String = "",    // raw Manifest.json
     val pluginPath: String = "",      // absolute file path to the zip
     val mainClass: String = "",
-    val pluginVersion: String = ""    // optional, if present in manifest (not enforced)
+    val pluginVersion: String = "",    // optional, if present in manifest (not enforced)
+    val tools: List<Tools> = emptyList(),
 )

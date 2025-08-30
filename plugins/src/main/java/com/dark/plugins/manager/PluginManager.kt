@@ -8,6 +8,7 @@ import com.dark.plugins.db.LocalPluginDBManager
 import com.dark.plugins.db.PluginLocalDBDao
 import com.dark.plugins.model.LoadedPlugin
 import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.instantiatePlugin
 import com.dark.plugins.worker.loadPluginZipFromPath
 import dalvik.system.InMemoryDexClassLoader
@@ -270,7 +271,8 @@ object PluginManager {
             manifestCode = manifest.rawCode,
             pluginPath = destFile.absolutePath,
             mainClass = manifest.mainClass,
-            pluginVersion = manifest.version
+            pluginVersion = manifest.version,
+            tools = manifest.tools
         )
     }
 
@@ -306,13 +308,22 @@ object PluginManager {
         return ok
     }
 
+    fun getInstalledTools(): List<Pair<String, List<Tools>>>{
+        val tools = mutableListOf<Pair<String, List<Tools>>>()
+        installedPlugins.value.forEach { plugin ->
+            tools.add(Pair(plugin.pluginName, plugin.tools))
+        }
+        return tools
+    }
+
 
     private fun upsertDb(
         pluginName: String,
         manifestCode: String,
         pluginPath: String,
         mainClass: String,
-        pluginVersion: String
+        pluginVersion: String,
+        tools: List<Tools>
     ) {
         val dao = daoRef.get()
         if (dao == null) {
@@ -327,7 +338,8 @@ object PluginManager {
                         manifestCode = manifestCode,
                         pluginPath = pluginPath,
                         mainClass = mainClass,
-                        pluginVersion = pluginVersion
+                        pluginVersion = pluginVersion,
+                        tools = tools
                     )
                 )
             } catch (t: Throwable) {
@@ -368,5 +380,10 @@ object PluginManager {
             Log.e(TAG, "Failed to load plugin from ${path.absolutePath}", t)
             LoadedPlugin(job = null, manifest = null, api = null, content = null, throwable = t)
         }
+    }
+
+
+    fun addTools(){
+
     }
 }

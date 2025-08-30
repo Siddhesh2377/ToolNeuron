@@ -10,6 +10,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.plugins.manager.PluginManager
+import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,8 +24,10 @@ class TempViewModel : ViewModel() {
     //Define State Variables
     private var _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
+    val toolList: StateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(PluginManager.getInstalledTools())
 
     init {
+        Log.v("ViewModel", PluginManager.getInstalledTools().toString())
         viewModelScope.launch(Dispatchers.IO) {
             //Initialize NativeLib
             val model = ModelManager.getFirstModel()
@@ -41,6 +44,10 @@ class TempViewModel : ViewModel() {
                 Log.d("Model", "Model loaded successfully $model")
             }
         }
+    }
+
+    fun setTools(tools: List<Tools>){
+
     }
 
     //Public Methods

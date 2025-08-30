@@ -4,10 +4,13 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.TypeConverters
 import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.PluginTypeConverters
 
 
 @Database(entities = [PluginLocalDB::class], version = 1, exportSchema = true)
+@TypeConverters(PluginTypeConverters::class)
 abstract class LocalPluginDBManager : RoomDatabase() {
     abstract fun getPluginLocalDBDao(): PluginLocalDBDao
 

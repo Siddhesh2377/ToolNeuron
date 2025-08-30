@@ -1,6 +1,8 @@
 package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
+import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -12,9 +14,11 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -69,6 +73,7 @@ import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.TempViewModel
 import com.dark.plugins.manager.PluginManager
+import com.dark.plugins.model.Tools
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -187,10 +192,11 @@ private fun BottomBar(
 ) {
     val context = LocalContext.current
     var input by remember { mutableStateOf("Search On Web About General Science") }
+    val tools by viewModel.toolList.collectAsState()
 
     ChatInputBar(value = input, onValueChange = {
         input = it
-    }, onAttach = {}, onSend = {
+    }, tools = tools, onAttach = {}, onSend = {
         if (input.isNotBlank()) {
             viewModel.sendMessage(input, context)
             input = ""
@@ -285,16 +291,67 @@ private fun AssistTag(name: String) {
     }
 }
 
+@Composable
+fun ToolsList(
+    modifier: Modifier = Modifier,
+    tools: List<Pair<String, List<Tools>>>, // Pair(pluginName, tools)
+    onToolSelected: (Tools) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        tools.forEach { (pluginName, toolList) ->
+            item {
+                // Plugin header
+                Text(
+                    text = pluginName,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            items(toolList) { tool ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 4.dp)
+                        .clickable { onToolSelected(tool) },
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = tool.toolName, style = MaterialTheme.typography.bodyLarge
+                        )
+                        if (tool.path.isNotBlank()) {
+                            Text(
+                                text = tool.path,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
 private fun ChatInputBar(
-    value: String, onValueChange: (String) -> Unit, onAttach: () -> Unit, onSend: () -> Unit
+    value: String,
+    tools: List<Pair<String, List<Tools>>>,
+    onValueChange: (String) -> Unit,
+    onAttach: () -> Unit,
+    onSend: () -> Unit
 ) {
-    LocalContext.current
-
     val loadedPlugin = PluginManager.currentPlugin.collectAsState().value
-
-
+    var showToolsList by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -302,7 +359,12 @@ private fun ChatInputBar(
             .background(MaterialTheme.colorScheme.surface),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-
+        AnimatedVisibility(showToolsList) {
+            ToolsList(
+                modifier = Modifier, tools = tools, onToolSelected = { tool ->
+                    Log.i("Tool selected", tool.toolName)
+                })
+        }
 
         Row(
             modifier = Modifier.padding(top = 16.dp, start = 16.dp),
@@ -311,6 +373,7 @@ private fun ChatInputBar(
         ) {
             Button(
                 onClick = {
+                    showToolsList = !showToolsList
                     Neuron.setSystemPrompt(
                         ModelsList.getToolCallSystemPrompt(
                             loadedPlugin?.manifest?.rawToolsCode ?: ""

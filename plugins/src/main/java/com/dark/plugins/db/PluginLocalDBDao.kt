@@ -22,4 +22,12 @@ interface PluginLocalDBDao {
     @Query("DELETE FROM plugins WHERE pluginName = :name")
     suspend fun deleteByName(name: String)
 
+    @Query("DELETE FROM plugins")
+    suspend fun deleteAll()
+
+    @Query("SELECT * FROM plugins WHERE tools LIKE '%' || :toolName || '%'")
+    fun getByToolName(toolName: String): Flow<List<PluginLocalDB>>
+
+    @Query("SELECT * FROM plugins")
+    suspend fun getAllRaw(): List<PluginLocalDB>
 }
