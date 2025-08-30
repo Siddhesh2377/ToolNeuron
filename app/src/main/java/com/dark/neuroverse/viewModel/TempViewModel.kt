@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.util.UUID
 
 class TempViewModel : ViewModel() {
@@ -67,9 +68,9 @@ class TempViewModel : ViewModel() {
 
             response.let { it ->
                 Log.d("Response", "Response: $it")
-                val loadedPlugin = PluginManager.currentPlugin.value ?: return@let
+                val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", it)
 
-                ToolRunner.run(loadedPlugin, context)
+                ToolRunner.run(loadedPlugin, context, JSONObject(it))
                 _messages.update {
                     it.map { message ->
                         if (message.id == "-1") {

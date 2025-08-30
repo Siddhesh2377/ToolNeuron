@@ -1,7 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
-import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -68,7 +67,6 @@ import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.TempViewModel
 import com.dark.plugins.manager.PluginManager
-import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -217,7 +215,7 @@ private fun EmptyHint() {
 @Composable
 private fun ChatBubble(msg: Message) {
 
-    val context = LocalContext.current
+    LocalContext.current
 
     val isUser = msg.role == Role.User
 
@@ -255,32 +253,9 @@ private fun ChatBubble(msg: Message) {
                     msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
                 )
 
-                if (isUser){
-                    val lp = PluginManager.runPlugin(context, "Web-Searching", "data")
-                    lp.api?.content()?.invoke()
-
-                    Log.d("ToolRunner", "Running tool for plugin ${lp.manifest?.name}")
-                    val toolCall = JSONObject().apply {
-                        put("type", "tool_call")
-                        put("tool", "searchWeb")
-                        put("arguments", JSONObject().apply {
-                            put("query", "What is the capital of France?")
-                        })
-                    }
-
-                    if (lp.api == null) Log.e("ToolRunner", "API is null")
-                    if (lp.api != null) Log.e(
-                        "ToolRunner",
-                        "API is Not Null ${lp.api?.getPluginInfo()}"
-                    )
-
-                    lp.api?.runTool(
-                        context,
-                        toolCall.getString("tool"),
-                        toolCall.getJSONObject("arguments")
-                    ) { result ->
-                        Log.d("ToolRunner", "Tool result: $result")
-                    }
+                if (!isUser) {
+                    val lp = PluginManager.currentPlugin.collectAsState().value
+                    lp?.api?.content()?.invoke()
                 }
             }
         }
@@ -311,9 +286,9 @@ private fun AssistTag(name: String) {
 private fun ChatInputBar(
     value: String, onValueChange: (String) -> Unit, onAttach: () -> Unit, onSend: () -> Unit
 ) {
-    val context = LocalContext.current
+    LocalContext.current
 
-    val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", "data")
+    val loadedPlugin = PluginManager.currentPlugin.collectAsState().value
 
 
 
@@ -332,7 +307,11 @@ private fun ChatInputBar(
         ) {
             Button(
                 onClick = {
-                    Neuron.setSystemPrompt(ModelsList.toolCallingSystemPrompt + "\nTOOLS:\n" + loadedPlugin.manifest?.rawToolsCode)
+                    Neuron.setSystemPrompt(
+                        ModelsList.getToolCallSystemPrompt(
+                            loadedPlugin?.manifest?.rawToolsCode ?: ""
+                        )
+                    )
                 }, colors = ButtonDefaults.textButtonColors(
                     containerColor = MaterialTheme.colorScheme.background
                 ), shape = RoundedCornerShape(rDP(8.dp))

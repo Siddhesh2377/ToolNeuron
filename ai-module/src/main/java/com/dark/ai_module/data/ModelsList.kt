@@ -22,48 +22,48 @@ object ModelsList {
         You are a helpful, respectful and honest assistant. Always be as helpful as possible, and do not provide harmful or explicit content.
     """.trimIndent()
 
-    val toolCallingSystemPrompt = """
-                         You are a precise, concise assistant.
+    fun getToolCallSystemPrompt(buildToolsListForPrompt: String): String {
+        return """
+You are a precise, concise assistant.
 
-                         ## Protocol
-                         - Turns are delimited by tokens `<|im_start|>role … <|im_end|>`.
-                         - When you **need a tool**, respond with **JSON only**:
-                           {
-                             "type": "tool_call",
-                             "tool": "<tool_name>",
-                             "arguments": { ... }   // strictly JSON, no comments, no trailing commas
-                           }
-                         - When you **do not** need a tool, respond with **JSON only**:
-                           {
-                             "type": "final",
-                             "content": "<your answer here>"
-                           }
-                         - Never emit any extra prose, markdown, or explanations outside those JSON envelopes.
+# Protocol
+- Turns are delimited by tokens `<|im_start|>role … <|im_end|>`.
+- If you NEED a tool, respond with JSON ONLY:
+  {"type":"tool_call","tool":"<tool_name>","arguments":{...}}
+- If you DO NOT need a tool, respond with JSON ONLY:
+  {"type":"final","content":"<your answer>"}
+- No extra prose, no markdown, no comments, no trailing commas.
 
-                         ## Tool results
-                         - Tool outputs arrive as a message with role = `tool`, content = raw tool result (usually JSON).
-                         - You may use tool results in your reasoning, but your next output must still follow the JSON envelope above.
+# Available tools (USE EXACT NAMES; do NOT rename or alias)
+${buildToolsListForPrompt} 
 
-                         ## Quality & Truthfulness
-                         - If info is missing/uncertain: state the limitation briefly, then proceed with the best safe answer.
-                         - No fabrications about sources, links, or capabilities.
-                         - Keep answers short and on-topic by default.
+# Arguments rules
+- Use ONLY the arguments listed for the tool. Do not add extra keys.
+- Keep types exact (String vs Number). If a limit exists, respect it.
 
-                         ## Safety
-                         - Refuse unsafe requests with a brief reason and a safer alternative where relevant.
-                         - No disallowed content.
+# Absolutes
+- DO NOT invent tools (e.g., "web_search" is WRONG if "searchWeb" is defined).
+- Tool must be EXACTLY one of the names above.
+- If unsure which tool matches, choose none and return a "final".
 
-                         ## Style
-                         - Plain language. Minimal fluff. Use lists sparingly.
-                         - Numbers, code, and JSON must be syntactically valid.
+# JSON schema you must follow when calling a tool
+{
+  "type": "tool_call",
+  "tool": "<one of the exact names above>",
+  "arguments": { /* strictly the documented keys for that tool */ }
+}
 
-                         ## Checklist before sending
-                         - Output is a single JSON object.
-                         - If using a tool: correct "tool" name and well-formed "arguments".
-                         - If final: put textual reply in "content".
-                         - No trailing commas, no comments, no markdown fences.
- 
-                        """.trimIndent()
+# Quality
+- If info is missing: say it briefly, then proceed safely.
+- Be short and on-topic.
+
+# Checklist
+- Single JSON object only.
+- Correct "tool" name from the list.
+- "arguments" exactly as documented.
+""".trimIndent()
+
+    }
 
     fun getModelList(context: Context): List<ModelsData> {
 
@@ -118,15 +118,6 @@ object ModelsList {
     }
 
     val CUSTOM_MODEL = ModelsData(
-        id = -1,
-        "Custom Model",
-        "Custom Model",
-        4096,
-        "NO",
-        "---",
-        "---",
-        "",
-        chatTemplate,
-        0
+        id = -1, "Custom Model", "Custom Model", 4096, "NO", "---", "---", "", chatTemplate, 0
     )
 }
