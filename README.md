@@ -26,7 +26,7 @@ NeuroVerse is a privacy‑first Android app that runs fully on‑device and show
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" alt="NeuroVerse chat screenshot" width="220">
-  <img src="https://github.com/user-attachments/assets/75c868b6-8502-4f6b-bea0-e7384b2efe66" alt="NeuroVerse Tool-Calling" width="220">
+  <img src="https://github.com/user-attachments/assets/c7187a51-b245-4305-b2d0-9cb2a1e467a9" alt="NeuroVerse Tool-Calling" width="220">
 </p>
 
 ---
