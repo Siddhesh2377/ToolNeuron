@@ -9,6 +9,7 @@ import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.neuroverse.util.extractPureJson
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
@@ -24,7 +25,8 @@ class TempViewModel : ViewModel() {
     //Define State Variables
     private var _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
-    val toolList: StateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(PluginManager.toolsList.value)
+    val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
+    val selectedTools: MutableStateFlow<List<Tools>> = MutableStateFlow(emptyList())
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -42,11 +44,20 @@ class TempViewModel : ViewModel() {
             ) {
                 Log.d("Model", "Model loaded successfully $model")
             }
+
+            //Load Tools
+            toolList.value = PluginManager.toolsList.value
+
+            Log.d("Tools", "Tools loaded successfully ${toolList.value.size}")
         }
     }
 
-    fun setTools(tools: List<Tools>){
 
+    fun selectTool(tools: Tools) {
+        selectedTools.value += tools
+        Neuron.setSystemPrompt(ModelsList.getToolCallSystemPrompt(buildToolsListForPrompt = selectedTools.value.joinToString {
+            it.toolName + ":" + it.args.entries.joinToString { (key, value) -> "$key:$value" }
+        }))
     }
 
     //Public Methods
@@ -74,9 +85,10 @@ class TempViewModel : ViewModel() {
 
             response.let { it ->
                 Log.d("Response", "Response: $it")
-                val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", it)
+                val json = extractPureJson(it)
+                val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", json)
 
-                ToolRunner.run(loadedPlugin, context, JSONObject(it))
+                ToolRunner.run(loadedPlugin, context, JSONObject(json))
                 _messages.update {
                     it.map { message ->
                         if (message.id == "-1") {
@@ -94,4 +106,3 @@ class TempViewModel : ViewModel() {
         Neuron.stopGeneration()
     }
 }
-

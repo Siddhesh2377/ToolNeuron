@@ -18,8 +18,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -37,14 +40,17 @@ object PluginManager {
     private val pluginViewModelStores = mutableMapOf<String, ViewModelStore>()
     private val _currentPlugin = MutableStateFlow<LoadedPlugin?>(null)
     private val daoRef = AtomicReference<PluginLocalDBDao?>()
-    private val _toolsList = MutableStateFlow<List<Pair<String, List<Tools>>>>(emptyList())
 
     //Public Variables
     val pluginScope: CoroutineScope = CoroutineScope(Dispatchers.IO + supervisorJob)
     val installedPlugins: StateFlow<List<PluginLocalDB>> = _installedPlugins.asStateFlow()
     val runningPlugins: StateFlow<List<LoadedPlugin>> = _runningPlugins.asStateFlow()
     val currentPlugin: StateFlow<LoadedPlugin?> = _currentPlugin.asStateFlow()
-    val toolsList: StateFlow<List<Pair<String, List<Tools>>>> = _toolsList.asStateFlow()
+
+    val toolsList: StateFlow<List<Pair<String, List<Tools>>>> =
+        _installedPlugins
+            .map { rows -> rows.map { it.pluginName to it.tools } }
+            .stateIn(pluginScope, SharingStarted.Eagerly, emptyList())
 
     //Public Fun's
 
@@ -78,9 +84,6 @@ object PluginManager {
 
         //Register Plugin From Assets :: FOR DEBUG PURPOSE ONLY
         registerPluginFromAssets(context, arrayOf("web-searching-plugin.zip"))
-
-        //Collect Tools List
-        updateToolsList()
     }
 
 
@@ -305,12 +308,6 @@ object PluginManager {
         // clear any ViewModelStore leftover
         pluginViewModelStores.remove(pluginName)?.clear()
         return ok
-    }
-
-    private fun updateToolsList() {
-        installedPlugins.value.forEach { plugin ->
-            _toolsList.value += Pair(plugin.pluginName, plugin.tools)
-        }
     }
 
 
