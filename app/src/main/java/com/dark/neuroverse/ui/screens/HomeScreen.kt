@@ -72,6 +72,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.R
@@ -83,7 +85,7 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.ChatScreenViewModel
-import com.dark.neuroverse.viewModel.DrawerViewModel
+import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.launch
@@ -91,34 +93,22 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
-    onRequestSettingsChange: () -> Unit, // Optional, if needed outside,
-    pluginName: String? = null,
-    chatScreenViewModel: ChatScreenViewModel = viewModel(),
+    onRequestSettingsChange: () -> Unit,
+    viewModel: ChatScreenViewModel = viewModel(
+        factory = ChattingViewModelFactory(LocalContext.current)
+    ),
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val drawerViewModel: DrawerViewModel = viewModel()
+    val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
     PluginManager.init(context)
-
-    LaunchedEffect(pluginName) {
-        if (pluginName != null) {
-            drawerViewModel.setCurrentByName(pluginName)
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        Log.d("HomeScreen", "LaunchedEffect triggered")
-        Log.d("HomeScreen", "Chat list updated")
-    }
-
-
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
-                drawerViewModel,
+                viewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
                 onPluginClick = {
@@ -133,17 +123,17 @@ fun HomeScreen(
         Scaffold(modifier = Modifier
             .fillMaxSize()
             .imePadding(), topBar = {
-            TopBar(onMenu = {
+            TopBar(title = chatTitle, onMenu = {
                 scope.launch {
                     drawerState.open()
                 }
             }, onLeftMenu = {
-
+                viewModel.newChat()
             })
         }, bottomBar = {
-            BottomBar(chatScreenViewModel)
+            BottomBar(viewModel)
         }) { inner ->
-            BodyContent(inner, chatScreenViewModel)
+            BodyContent(inner, viewModel)
         }
     }
 }
@@ -152,9 +142,8 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TopBar(
-    onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
-    val title = "NeuroV Chat"
     TopAppBar(
         title = {
         Text(
@@ -164,7 +153,7 @@ private fun TopBar(
             fontWeight = FontWeight.SemiBold
         )
     }, navigationIcon = {
-        IconButton(onClick = onLeftMenu) {
+        IconButton(onClick = onMenu) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
         }
     }, actions = {
@@ -177,7 +166,7 @@ private fun TopBar(
                 .background(
                     Brush.linearGradient(listOf(MaterialTheme.colorScheme.onPrimary, SkyBlue))
                 )
-                .clickable { /* TODO: quick action */ }, contentAlignment = Alignment.Center
+                .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
         ) {
             // tiny white dot “spark”
             Box(
@@ -187,7 +176,7 @@ private fun TopBar(
                     .background(Color.White)
             )
         }
-        IconButton(onClick = onMenu) {
+        IconButton(onClick = onLeftMenu) {
             Icon(
                 imageVector = Icons.Outlined.MoreVert,
                 contentDescription = "More",
@@ -200,9 +189,10 @@ private fun TopBar(
     )
 }
 
+
 @Composable
 private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
-    val messages by viewModel.messages.collectAsState()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -217,9 +207,7 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                     .fillMaxSize()
                     .padding(horizontal = 16.dp),
                 reverseLayout = false,
-                contentPadding = PaddingValues(
-                    bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp
-                )
+                contentPadding = PaddingValues(bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp)
             ) {
                 items(messages) { msg ->
                     ChatBubble(msg)
@@ -230,15 +218,16 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
     }
 }
 
+
 @Composable
 private fun BottomBar(
     viewModel: ChatScreenViewModel
 ) {
     val context = LocalContext.current
-    var input by remember { mutableStateOf("Search On Web About General Science") }
-    val tools = viewModel.toolList.collectAsState().value
-    val selectedTools = viewModel.selectedTools.collectAsState().value
-    val modelList = viewModel.modelList.collectAsState().value
+    var input by remember { mutableStateOf("Hi Bro") }
+    val tools by viewModel.toolList.collectAsStateWithLifecycle()
+    val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
+    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
 
 
     selectedTools.forEach {
@@ -278,8 +267,6 @@ private fun EmptyHint() {
 @Composable
 private fun ChatBubble(msg: Message) {
 
-    LocalContext.current
-
     val isUser = msg.role == Role.User
 
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
@@ -317,7 +304,7 @@ private fun ChatBubble(msg: Message) {
                 )
 
                 if (!isUser) {
-                    if (msg.viaPlugin != null) {
+                    if (msg.viaPlugin?.isNotEmpty() == true) {
                         val lp = PluginManager.currentPlugin.collectAsState().value
 
                         AnimatedContent(lp == null) {

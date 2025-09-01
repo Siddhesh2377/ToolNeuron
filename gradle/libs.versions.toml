@@ -35,6 +35,7 @@ moshiKotlin = "1.15.2"
 okhttp = "5.1.0"
 jsoup = "1.21.2"
 gson = "2.13.1"
+lifecycleViewmodelKtx = "2.9.3"
 
 [libraries]
 
@@ -91,6 +92,7 @@ androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version
 androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "workRuntimeKtx" }
 androidx-runtime-android = { group = "androidx.compose.runtime", name = "runtime-android", version.ref = "runtimeAndroid" }
 androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewmodelKtx" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

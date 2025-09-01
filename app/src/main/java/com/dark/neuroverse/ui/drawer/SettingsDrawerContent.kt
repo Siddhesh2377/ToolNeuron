@@ -30,21 +30,21 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.viewModel.DrawerViewModel
+import com.dark.neuroverse.viewModel.ChatScreenViewModel
 
 @Composable
 fun SettingsDrawerContent(
     modifier: Modifier = Modifier,
-    viewModel: DrawerViewModel,
+    viewModel: ChatScreenViewModel,
     onSettingsClick: () -> Unit,
     onModelsClick: () -> Unit,
     onPluginClick: () -> Unit,
     onPluginStoreClick: () -> Unit,
 ) {
     val context = LocalContext.current
-    val loadedPluginsState = viewModel.loadedPlugins.collectAsState()
-    val installedPlugins = viewModel.installedPlugins.collectAsState()
+    val chatList = viewModel.chatList.collectAsStateWithLifecycle()
 
     Column(
         modifier = modifier
@@ -61,19 +61,17 @@ fun SettingsDrawerContent(
         )
 
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-
             item {
                 Text(
-                    text = "Running Plugins", style = MaterialTheme.typography.headlineSmall.copy(
+                    text = "Chat History", style = MaterialTheme.typography.headlineSmall.copy(
                         fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
                     ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
             }
-
-            items(loadedPluginsState.value) { loadedPluginWrapper ->
+            items(chatList.value) { chats ->
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
                     .clickable {
-                        viewModel.setCurrentByName(loadedPluginWrapper.manifest?.name ?: "")
+                        viewModel.loadChatById(chats.id)
                         onPluginClick()
                     }
                     .background(
@@ -81,7 +79,7 @@ fun SettingsDrawerContent(
                     )
                     .padding(rDP(10.dp))) {
                     Text(
-                        text = loadedPluginWrapper.manifest?.name ?: "",
+                        text = chats.name,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyLarge,
@@ -95,45 +93,7 @@ fun SettingsDrawerContent(
                         modifier = Modifier
                             .padding(start = 8.dp)
                             .clickable {
-                                viewModel.stopPlugin(loadedPluginWrapper.manifest?.name ?: "")
-                            })
-                }
-
-            }
-
-            item {
-                Text(
-                    text = "Installed Plugins", style = MaterialTheme.typography.headlineSmall.copy(
-                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
-                    ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-                )
-            }
-            items(installedPlugins.value) { installedPlugins ->
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
-                    .clickable {
-                        viewModel.runPlugin(installedPlugins.pluginName, context)
-                        onPluginClick()
-                    }
-                    .background(
-                        MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small
-                    )
-                    .padding(rDP(10.dp))) {
-                    Text(
-                        text = installedPlugins.pluginName,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.weight(1f)
-                    )
-
-                    Icon(
-                        Icons.TwoTone.Delete,
-                        contentDescription = "Delete",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .clickable {
-                                viewModel.deletePlugin(installedPlugins.pluginName)
+                                viewModel.deleteChatById(chats.id, context)
                             })
                 }
 

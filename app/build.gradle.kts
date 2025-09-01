@@ -94,6 +94,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     //CORE
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
     coreLibraryDesugaring(libs.desugar.jdk.libs)
 
