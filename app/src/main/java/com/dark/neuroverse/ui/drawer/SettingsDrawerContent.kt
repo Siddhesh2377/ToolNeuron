@@ -31,12 +31,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.viewModel.PluginHostViewModel
-import com.dark.plugins.manager.PluginManager
+import com.dark.neuroverse.viewModel.DrawerViewModel
 
 @Composable
 fun SettingsDrawerContent(
-    viewModel: PluginHostViewModel,
+    modifier: Modifier = Modifier,
+    viewModel: DrawerViewModel,
     onSettingsClick: () -> Unit,
     onModelsClick: () -> Unit,
     onPluginClick: () -> Unit,
@@ -47,11 +47,12 @@ fun SettingsDrawerContent(
     val installedPlugins = viewModel.installedPlugins.collectAsState()
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxHeight()
             .width(250.dp)
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
+            .padding(vertical = 24.dp)
     ) {
         Text(
             text = "More Options", style = MaterialTheme.typography.headlineMedium.copy(

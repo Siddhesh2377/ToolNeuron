@@ -142,6 +142,10 @@ object ModelManager {
         }
     }
 
+    fun unLoadModel(){
+        Neuron.unloadActiveModel()
+    }
+
     // -------------------------------------------------------------
     //  Params
     // -------------------------------------------------------------
@@ -195,6 +199,11 @@ object ModelManager {
     suspend fun isAnyModelInstalled(): Boolean = withContext(io) {
         ensureDaoInitialized()
         dao.getAllModels().firstOrNull()?.isNotEmpty() == true
+    }
+
+    suspend fun getAllModels(): List<ModelsData> = withContext(io) {
+        ensureDaoInitialized()
+        dao.getAllModels().firstOrNull() ?: emptyList()
     }
 }
 

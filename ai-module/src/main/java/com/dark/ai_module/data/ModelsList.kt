@@ -35,7 +35,7 @@ You are a precise, concise assistant.
 - No extra prose, no markdown, no comments, no trailing commas.
 
 # Available tools (USE EXACT NAMES; do NOT rename or alias)
-${buildToolsListForPrompt} 
+$buildToolsListForPrompt 
 
 # Arguments rules
 - Use ONLY the arguments listed for the tool. Do not add extra keys.

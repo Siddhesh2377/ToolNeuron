@@ -38,6 +38,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -98,88 +99,91 @@ fun ModelsScreen(onNext: () -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 26.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+    Scaffold { innerPadding ->
+        Column(Modifier.padding(innerPadding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 26.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
 
 
-            Text(
-                "Choose Your\nModels",
-                modifier = Modifier.padding(top = 24.dp, bottom = 12.dp),
-                style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                Text(
+                    "Choose Your\nModels",
+                    modifier = Modifier.padding(top = 24.dp, bottom = 12.dp),
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                    )
                 )
-            )
 
-            // In your Composable
-            if (show) {
-                val isLoading by viewModel.isLoading.collectAsState()
+                // In your Composable
+                if (show) {
+                    val isLoading by viewModel.isLoading.collectAsState()
 
-                if (isLoading) {
-                    AlertDialog(onDismissRequest = {}, confirmButton = {}, text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            CircularWavyProgressIndicator(waveSpeed = 50.dp)
-                            Spacer(Modifier.height(16.dp))
-                            Text("Loading model…", style = MaterialTheme.typography.bodyLarge)
-                        }
-                    })
-                } else {
-                    ModelDialog(
-                        modelInfo = selectedModelPath ?: File("default_model.gguf"),
-                        onDismiss = { show = false },
-                        onSave = {
-                            val modelsData = it
-
-
-                            Log.d("ModelDialog", "ModelDialog: $modelsData")
-                            viewModel.loadModel(modelsData)
+                    if (isLoading) {
+                        AlertDialog(onDismissRequest = {}, confirmButton = {}, text = {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                CircularWavyProgressIndicator(waveSpeed = 50.dp)
+                                Spacer(Modifier.height(16.dp))
+                                Text("Loading model…", style = MaterialTheme.typography.bodyLarge)
+                            }
                         })
+                    } else {
+                        ModelDialog(
+                            modelInfo = selectedModelPath ?: File("default_model.gguf"),
+                            onDismiss = { show = false },
+                            onSave = {
+                                val modelsData = it
+
+
+                                Log.d("ModelDialog", "ModelDialog: $modelsData")
+                                viewModel.loadModel(modelsData)
+                            })
+                    }
+                }
+
+
+                Button(onClick = {
+                    // Launch file picker only for .gguf
+                    filePickerLauncher.launch("application/octet-stream")
+                    viewModel.updateLoadingState(true)
+                    show = true
+                }) {
+                    Icon(Icons.TwoTone.FileOpen, "Models")
+                    Spacer(Modifier.width(12.dp))
+                    Text("Import")
                 }
             }
 
+            val downloadStates by viewModel.downloadStates.collectAsState()
 
-            Button(onClick = {
-                // Launch file picker only for .gguf
-                filePickerLauncher.launch("application/octet-stream")
-                viewModel.updateLoadingState(true)
-                show = true
-            }) {
-                Icon(Icons.TwoTone.FileOpen, "Models")
-                Spacer(Modifier.width(12.dp))
-                Text("Import")
+            LazyColumn(Modifier.weight(1f)) {
+                items(models) { modelData ->
+                    val state = downloadStates[modelData.modeName] ?: DownloadState()
+
+                    ModelCard(
+                        modelsData = modelData,
+                        isDownloading = state.isDownloading,
+                        progress = state.progress,
+                        onDownloadComplete = state.isComplete,
+                        viewModel = viewModel,
+                        onDownload = { viewModel.startDownload(modelData) })
+                }
             }
-        }
 
-        val downloadStates by viewModel.downloadStates.collectAsState()
-
-        LazyColumn(Modifier.weight(1f)) {
-            items(models) { modelData ->
-                val state = downloadStates[modelData.modeName] ?: DownloadState()
-
-                ModelCard(
-                    modelsData = modelData,
-                    isDownloading = state.isDownloading,
-                    progress = state.progress,
-                    onDownloadComplete = state.isComplete,
-                    viewModel = viewModel,
-                    onDownload = { viewModel.startDownload(modelData) })
+            StandardBottomBar(Modifier.padding(bottom = 14.dp)) {
+                CollapsableButton(
+                    text = "Finish", icon = Icons.AutoMirrored.Default.ArrowForward, enabled = isEnabled
+                ) { onNext() }
             }
-        }
-
-        StandardBottomBar(Modifier.padding(bottom = 14.dp)) {
-            CollapsableButton(
-                text = "Finish", icon = Icons.AutoMirrored.Default.ArrowForward, enabled = isEnabled
-            ) { onNext() }
         }
     }
+
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

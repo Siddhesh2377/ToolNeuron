@@ -28,6 +28,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
@@ -129,242 +130,269 @@ fun SettingsScreen(
         }
     }
 
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
-    ) {
-        item {
-            Text(
-                "NeuroV Settings", style = MaterialTheme.typography.headlineLarge.copy(
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+    Scaffold { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+                .padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            item {
+                Text(
+                    "NeuroV Settings", style = MaterialTheme.typography.headlineLarge.copy(
+                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+                    )
                 )
-            )
-        }
-
-        // ---- MODEL SETTINGS ----
-        item {
-
-            var professionalism by remember { mutableFloatStateOf(2f) }
-            var emotionalTone by remember { mutableFloatStateOf(7f) }
-            val currentModel = ModelManager.getModel().collectAsState()
-            val context = LocalContext.current
-            var expanded by remember { mutableStateOf(false) }
-
-            LocalDensity.current
-            LocalWindowInfo.current.containerSize.width.dp
-            val modelList = remember { mutableStateListOf<ModelsData>() }
-
-            LaunchedEffect(Unit) {
-                val updatedProfessionalism =
-                    UserPrefs.getModelPParams(context).firstOrNull() ?: 2.5f
-                val updatedEmotionalTone = UserPrefs.getModelEParams(context).firstOrNull() ?: 7.3f
-
-                professionalism = updatedProfessionalism
-                emotionalTone = updatedEmotionalTone
-
-                ModelManager.observeModels().collectLatest { data ->
-                    modelList.clear()
-                    modelList += data
-                    Log.d("ModelManager", "Model list updated: $data")
-                }
             }
 
-            LaunchedEffect(currentModel) {
-                Log.d("ModelManager", "Current model updated: ${currentModel.value}")
-            }
+            // ---- MODEL SETTINGS ----
+            item {
 
-            LaunchedEffect(professionalism, emotionalTone) {
-                UserPrefs.setModelPParams(context, professionalism)
-                UserPrefs.setModelEParams(context, emotionalTone)
+                var professionalism by remember { mutableFloatStateOf(2f) }
+                var emotionalTone by remember { mutableFloatStateOf(7f) }
+                val currentModel = ModelManager.getModel().collectAsState()
+                val context = LocalContext.current
+                var expanded by remember { mutableStateOf(false) }
 
-                // Save the updated values to shared preferences or perform any other necessary actions 
-                // Update the slider values when the preferences change
-                val updatedProfessionalism =
-                    UserPrefs.getModelPParams(context).firstOrNull() ?: 2.5f
-                val updatedEmotionalTone = UserPrefs.getModelEParams(context).firstOrNull() ?: 7.3f
+                LocalDensity.current
+                LocalWindowInfo.current.containerSize.width.dp
+                val modelList = remember { mutableStateListOf<ModelsData>() }
 
-                professionalism = updatedProfessionalism
-                emotionalTone = updatedEmotionalTone
-            }
+                LaunchedEffect(Unit) {
+                    val updatedProfessionalism =
+                        UserPrefs.getModelPParams(context).firstOrNull() ?: 2.5f
+                    val updatedEmotionalTone = UserPrefs.getModelEParams(context).firstOrNull() ?: 7.3f
 
+                    professionalism = updatedProfessionalism
+                    emotionalTone = updatedEmotionalTone
 
-            Text(
-                "Model Settings",
-                modifier = Modifier.padding(vertical = 12.dp),
-                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
-            )
-
-            SettingCard(
-                title = "Current Model", roundedCornerShape = RoundedCornerShape(
-                    topStart = outerCorner,
-                    topEnd = outerCorner,
-                    bottomEnd = innerCorner,
-                    bottomStart = innerCorner
-                ), actionLabel = "Switch", onAction = {
-                    expanded = true
-                }) {
-                if (expanded) {
-                    ModelDialog(modelList) {
-                        expanded = false
-                        if (it != null) {
-                            Toast.makeText(
-                                context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
-                            ).show()
-                            ModelManager.loadModel( it) {
-                                Toast.makeText(
-                                    context, "Model loaded successfully", Toast.LENGTH_SHORT
-                                ).show()
-                            }
-                        }
+                    ModelManager.observeModels().collectLatest { data ->
+                        modelList.clear()
+                        modelList += data
+                        Log.d("ModelManager", "Model list updated: $data")
                     }
+                }
+
+                LaunchedEffect(currentModel) {
+                    Log.d("ModelManager", "Current model updated: ${currentModel.value}")
+                }
+
+                LaunchedEffect(professionalism, emotionalTone) {
+                    UserPrefs.setModelPParams(context, professionalism)
+                    UserPrefs.setModelEParams(context, emotionalTone)
+
+                    // Save the updated values to shared preferences or perform any other necessary actions
+                    // Update the slider values when the preferences change
+                    val updatedProfessionalism =
+                        UserPrefs.getModelPParams(context).firstOrNull() ?: 2.5f
+                    val updatedEmotionalTone = UserPrefs.getModelEParams(context).firstOrNull() ?: 7.3f
+
+                    professionalism = updatedProfessionalism
+                    emotionalTone = updatedEmotionalTone
                 }
 
 
                 Text(
-                    buildAnnotatedString {
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                            append("Name: ")
-                        }
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
-                            append("${currentModel.value.modeName}\n\n")
-                        }
-
-                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                            append("Parameters\n")
-                        }
-
-                        append("\u2023 Context Size: ${currentModel.value.modelCtxSize}\n")
-                        append("\u2023 Model Size: ${currentModel.value.modelSize} MB\n")
-                        append("\u2023 Tool Call: ${currentModel.value.toolUse}")
-                    }, modifier = Modifier.padding(12.dp)
+                    "Model Settings",
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
                 )
-            }
 
-            Spacer(Modifier.height(8.dp))
-
-            SettingCard(
-                title = "Model Tweaks", roundedCornerShape = RoundedCornerShape(
-                    topStart = innerCorner,
-                    topEnd = innerCorner,
-                    bottomEnd = outerCorner,
-                    bottomStart = outerCorner
-                ), actionLabel = "Reset", onAction = onResetTweaks
-            ) {
-                Spacer(Modifier.height(8.dp))
-                Text("Professionalism : 0.1 - 9.0")
-                Slider(
-                    value = professionalism, onValueChange = {
-                        professionalism = it
-                    }, valueRange = 0.1f..9.0f, colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surface
-                    ), modifier = Modifier.fillMaxWidth(), steps = 9
-                )
-                Spacer(Modifier.height(8.dp))
-                Text("Emotional : 0.1 - 9.0")
-                Slider(
-                    value = emotionalTone, onValueChange = {
-                        emotionalTone = it
-                    }, valueRange = 0.1f..9.0f, colors = SliderDefaults.colors(
-                        thumbColor = MaterialTheme.colorScheme.primary,
-                        activeTrackColor = MaterialTheme.colorScheme.primary,
-                        inactiveTrackColor = MaterialTheme.colorScheme.surface
-                    ), modifier = Modifier.fillMaxWidth(), steps = 9
-                )
-            }
-        }
-
-        // ---- USER SETTINGS ----
-        item {
-            Text(
-                "User Settings",
-                modifier = Modifier.padding(vertical = 12.dp),
-                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
-            )
-            SettingCard(
-                title = "Clear User Data", actionLabel = "Clear", onAction = {
-                    clearChatHistory()
-                })
-        }
-
-// ---- APP SETTINGS ----
-        item {
-            val context = LocalContext.current
-            val updateInfo by updateViewModel.updateInfo.collectAsState()
-            var showCard by remember { mutableStateOf(false) }
-
-            Text(
-                "App Settings",
-                modifier = Modifier.padding(vertical = 12.dp),
-                style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
-            )
-
-            SettingCard(
-                title = "Check for Updates", actionLabel = when (updateInfo.status) {
-                    UpdateStatus.DOWNLOADING -> "${updateInfo.downloadProgress}%"
-                    UpdateStatus.READY_TO_INSTALL -> "Install"
-                    UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else "Check"
-                    UpdateStatus.FAILED -> "Retry"
-                }, showCard = showCard, onAction = {
-                    when (updateInfo.status) {
-                        UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
-
-                        UpdateStatus.IDLE -> {
-                            updateViewModel.checkForUpdateAndStartDownload()
-                        }
-
-                        UpdateStatus.FAILED -> {
-                            updateViewModel.downloadApk(context)
-                            showCard = true
-                        }
-
-                        UpdateStatus.DOWNLOADING -> {
-                            // Already downloading
+                SettingCard(
+                    title = "Current Model", roundedCornerShape = RoundedCornerShape(
+                        topStart = outerCorner,
+                        topEnd = outerCorner,
+                        bottomEnd = innerCorner,
+                        bottomStart = innerCorner
+                    ), actionLabel = "Switch", onAction = {
+                        expanded = true
+                    }) {
+                    if (expanded) {
+                        ModelDialog(modelList) {
+                            expanded = false
+                            if (it != null) {
+                                Toast.makeText(
+                                    context, "Model switched to ${it.modeName}", Toast.LENGTH_SHORT
+                                ).show()
+                                ModelManager.loadModel( it) {
+                                    Toast.makeText(
+                                        context, "Model loaded successfully", Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
                         }
                     }
+
+
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append("Name: ")
+                            }
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Normal)) {
+                                append("${currentModel.value.modeName}\n\n")
+                            }
+
+                            withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                append("Parameters\n")
+                            }
+
+                            append("\u2023 Context Size: ${currentModel.value.modelCtxSize}\n")
+                            append("\u2023 Model Size: ${currentModel.value.modelSize} MB\n")
+                            append("\u2023 Tool Call: ${currentModel.value.toolUse}")
+                        }, modifier = Modifier.padding(12.dp)
+                    )
                 }
 
+                Spacer(Modifier.height(8.dp))
 
-            ) {
-                Crossfade(
-                    targetState = updateInfo.status, label = "UpdateStatusCrossfade"
-                ) { status ->
-                    when (status) {
-                        UpdateStatus.IDLE -> {}
+                SettingCard(
+                    title = "Model Tweaks", roundedCornerShape = RoundedCornerShape(
+                        topStart = innerCorner,
+                        topEnd = innerCorner,
+                        bottomEnd = outerCorner,
+                        bottomStart = outerCorner
+                    ), actionLabel = "Reset", onAction = onResetTweaks
+                ) {
+                    Spacer(Modifier.height(8.dp))
+                    Text("Professionalism : 0.1 - 9.0")
+                    Slider(
+                        value = professionalism, onValueChange = {
+                            professionalism = it
+                        }, valueRange = 0.1f..9.0f, colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surface
+                        ), modifier = Modifier.fillMaxWidth(), steps = 9
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    Text("Emotional : 0.1 - 9.0")
+                    Slider(
+                        value = emotionalTone, onValueChange = {
+                            emotionalTone = it
+                        }, valueRange = 0.1f..9.0f, colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.surface
+                        ), modifier = Modifier.fillMaxWidth(), steps = 9
+                    )
+                }
+            }
 
-                        UpdateStatus.DOWNLOADING -> {
-                            AnimatedVisibility(
-                                visible = true, enter = fadeIn(), exit = fadeOut()
-                            ) {
-                                Column(
-                                    Modifier
-                                        .fillMaxWidth()
-                                        .wrapContentHeight()
+            // ---- USER SETTINGS ----
+            item {
+                Text(
+                    "User Settings",
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
+                )
+                SettingCard(
+                    title = "Clear User Data", actionLabel = "Clear", onAction = {
+                        clearChatHistory()
+                    })
+            }
+
+// ---- APP SETTINGS ----
+            item {
+                val context = LocalContext.current
+                val updateInfo by updateViewModel.updateInfo.collectAsState()
+                var showCard by remember { mutableStateOf(false) }
+
+                Text(
+                    "App Settings",
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
+                )
+
+                SettingCard(
+                    title = "Check for Updates", actionLabel = when (updateInfo.status) {
+                        UpdateStatus.DOWNLOADING -> "${updateInfo.downloadProgress}%"
+                        UpdateStatus.READY_TO_INSTALL -> "Install"
+                        UpdateStatus.IDLE -> if (updateInfo.hasUpdate) "Update" else "Check"
+                        UpdateStatus.FAILED -> "Retry"
+                    }, showCard = showCard, onAction = {
+                        when (updateInfo.status) {
+                            UpdateStatus.READY_TO_INSTALL -> updateViewModel.triggerInstall(context)
+
+                            UpdateStatus.IDLE -> {
+                                updateViewModel.checkForUpdateAndStartDownload()
+                            }
+
+                            UpdateStatus.FAILED -> {
+                                updateViewModel.downloadApk(context)
+                                showCard = true
+                            }
+
+                            UpdateStatus.DOWNLOADING -> {
+                                // Already downloading
+                            }
+                        }
+                    }
+
+
+                ) {
+                    Crossfade(
+                        targetState = updateInfo.status, label = "UpdateStatusCrossfade"
+                    ) { status ->
+                        when (status) {
+                            UpdateStatus.IDLE -> {}
+
+                            UpdateStatus.DOWNLOADING -> {
+                                AnimatedVisibility(
+                                    visible = true, enter = fadeIn(), exit = fadeOut()
                                 ) {
-                                    Text(
-                                        "Downloading...",
-                                        style = MaterialTheme.typography.titleLarge,
-                                        modifier = Modifier.padding(bottom = 8.dp)
-                                    )
+                                    Column(
+                                        Modifier
+                                            .fillMaxWidth()
+                                            .wrapContentHeight()
+                                    ) {
+                                        Text(
+                                            "Downloading...",
+                                            style = MaterialTheme.typography.titleLarge,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
 
-                                    val animatedProgress = animateFloatAsState(
-                                        targetValue = updateInfo.downloadProgress,
-                                        label = "ProgressAnim"
-                                    )
+                                        val animatedProgress = animateFloatAsState(
+                                            targetValue = updateInfo.downloadProgress,
+                                            label = "ProgressAnim"
+                                        )
 
-                                    if (animatedProgress.value > 0f) {
-                                        LinearProgressIndicator(
-                                            progress = { animatedProgress.value },
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.fillMaxWidth(),
-                                            strokeCap = StrokeCap.Round
+                                        if (animatedProgress.value > 0f) {
+                                            LinearProgressIndicator(
+                                                progress = { animatedProgress.value },
+                                                color = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.fillMaxWidth(),
+                                                strokeCap = StrokeCap.Round
+                                            )
+                                        }
+
+                                        Text(
+                                            buildAnnotatedString {
+                                                withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                    append("What's New:\n")
+                                                }
+                                                updateInfo.whatsNew.forEach {
+                                                    append("\u2023 $it\n")
+                                                }
+                                            }, modifier = Modifier.padding(top = 12.dp)
                                         )
                                     }
+                                }
+                            }
 
+                            UpdateStatus.FAILED -> {
+                                AnimatedVisibility(visible = true) {
+                                    Text(
+                                        "Download failed. Please try again.",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                }
+                            }
+
+                            UpdateStatus.READY_TO_INSTALL -> {
+                                AnimatedVisibility(visible = true) {
                                     Text(
                                         buildAnnotatedString {
                                             withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
@@ -373,42 +401,17 @@ fun SettingsScreen(
                                             updateInfo.whatsNew.forEach {
                                                 append("\u2023 $it\n")
                                             }
-                                        }, modifier = Modifier.padding(top = 12.dp)
+                                        }, modifier = Modifier.padding(12.dp)
                                     )
                                 }
                             }
                         }
-
-                        UpdateStatus.FAILED -> {
-                            AnimatedVisibility(visible = true) {
-                                Text(
-                                    "Download failed. Please try again.",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.padding(bottom = 8.dp)
-                                )
-                            }
-                        }
-
-                        UpdateStatus.READY_TO_INSTALL -> {
-                            AnimatedVisibility(visible = true) {
-                                Text(
-                                    buildAnnotatedString {
-                                        withStyle(style = SpanStyle(fontWeight = FontWeight.Bold)) {
-                                            append("What's New:\n")
-                                        }
-                                        updateInfo.whatsNew.forEach {
-                                            append("\u2023 $it\n")
-                                        }
-                                    }, modifier = Modifier.padding(12.dp)
-                                )
-                            }
-                        }
                     }
+
                 }
-
             }
-        }
 
+        }
     }
 }
 

@@ -17,7 +17,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import com.dark.neuroverse.viewModel.PluginHostViewModel
+import com.dark.neuroverse.viewModel.DrawerViewModel
 import com.dark.plugins.api.CommandQueue
 import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.Dispatchers
@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 @SuppressLint("StateFlowValueCalledInComposition")
 @Composable
 fun PluginHostScreen(
-    paddingValues: PaddingValues = PaddingValues(), viewModel: PluginHostViewModel
+    paddingValues: PaddingValues = PaddingValues(), viewModel: DrawerViewModel
 ) {
     val ctx = LocalContext.current.applicationContext
 

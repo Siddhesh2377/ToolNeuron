@@ -79,11 +79,9 @@ class MainActivity : ComponentActivity() {
             }
 
             NeuroVerseTheme {
-                Scaffold { innerPadding ->
                     NavHost(
                         navController = navController,
                         startDestination = Screen.Intro.route,
-                        modifier = Modifier.padding(innerPadding)
                     ) {
                         composable(Screen.Intro.route) {
                             IntroScreen(isInitializing)
@@ -110,7 +108,6 @@ class MainActivity : ComponentActivity() {
                             SettingsScreen()
                         }
                     }
-                }
             }
         }
     }

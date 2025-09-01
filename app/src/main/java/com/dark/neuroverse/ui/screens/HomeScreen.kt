@@ -1,65 +1,109 @@
 package com.dark.neuroverse.ui.screens
 
+import android.annotation.SuppressLint
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
-import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Web
+import androidx.compose.material.icons.outlined.AttachFile
+import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
+import com.dark.neuroverse.model.Message
+import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
+import com.dark.neuroverse.ui.theme.SkyBlue
+import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.util.isZipByHeader
-import com.dark.neuroverse.util.isZipByMime
-import com.dark.neuroverse.util.isZipByName
-import com.dark.neuroverse.util.queryDisplayName
-import com.dark.neuroverse.util.uriToFile
-import com.dark.neuroverse.viewModel.PluginHostViewModel
+import com.dark.neuroverse.viewModel.ChatScreenViewModel
+import com.dark.neuroverse.viewModel.DrawerViewModel
 import com.dark.plugins.manager.PluginManager
+import com.dark.plugins.model.Tools
 import kotlinx.coroutines.launch
 
 @Composable
 fun HomeScreen(
     onRequestModelChange: () -> Unit, // For navigating to model screen
     onRequestSettingsChange: () -> Unit, // Optional, if needed outside,
-    pluginName: String? = null
+    pluginName: String? = null,
+    chatScreenViewModel: ChatScreenViewModel = viewModel(),
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val viewModel: PluginHostViewModel = viewModel()
+    val drawerViewModel: DrawerViewModel = viewModel()
+    PluginManager.init(context)
 
     LaunchedEffect(pluginName) {
         if (pluginName != null) {
-            viewModel.setCurrentByName(pluginName)
+            drawerViewModel.setCurrentByName(pluginName)
         }
     }
 
@@ -68,10 +112,13 @@ fun HomeScreen(
         Log.d("HomeScreen", "Chat list updated")
     }
 
+
+
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
-                viewModel,
+                modifier = Modifier,
+                drawerViewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
                 onPluginClick = {
@@ -83,437 +130,508 @@ fun HomeScreen(
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
                 })
         }) {
-        Column(
+        Scaffold(modifier = Modifier
+            .fillMaxSize()
+            .imePadding(), topBar = {
+            TopBar(onMenu = {
+                scope.launch {
+                    drawerState.open()
+                }
+            }, onLeftMenu = {
+
+            })
+        }, bottomBar = {
+            BottomBar(chatScreenViewModel)
+        }) { inner ->
+            BodyContent(inner, chatScreenViewModel)
+        }
+    }
+}
+
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TopBar(
+    onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+) {
+    val title = "NeuroV Chat"
+    TopAppBar(
+        title = {
+        Text(
+            text = title,
+            fontSize = 22.sp,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold
+        )
+    }, navigationIcon = {
+        IconButton(onClick = onLeftMenu) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        // Circular “spark” button (for future quick actions / mic)
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = rDP(12.dp))
-                .padding(top = rDP(8.dp))
-                .imePadding()
+                .padding(end = 8.dp)
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(
+                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.onPrimary, SkyBlue))
+                )
+                .clickable { /* TODO: quick action */ }, contentAlignment = Alignment.Center
         ) {
-            TopBar(
-                viewModel = viewModel,
-                onDrawerOpen = { scope.launch { drawerState.open() } },
+            // tiny white dot “spark”
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .clip(CircleShape)
+                    .background(Color.White)
             )
+        }
+        IconButton(onClick = onMenu) {
+            Icon(
+                imageVector = Icons.Outlined.MoreVert,
+                contentDescription = "More",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
+    )
+}
 
-            // This is the unified plugin host UI
-            PluginHostScreen(viewModel = viewModel)
+@Composable
+private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
+    val messages by viewModel.messages.collectAsState()
 
-            // Conversations + BottomBar are managed by plugins now; keep them commented
-            // Conversations(Modifier.weight(1f), viewModel)
-            // BottomBar(viewModel)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(inner)
+    ) {
+        if (messages.isEmpty()) {
+            EmptyHint()
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                reverseLayout = false,
+                contentPadding = PaddingValues(
+                    bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp
+                )
+            ) {
+                items(messages) { msg ->
+                    ChatBubble(msg)
+                    Spacer(Modifier.height(18.dp))
+                }
+            }
         }
     }
 }
 
 @Composable
-internal fun TopBar(viewModel: PluginHostViewModel, onDrawerOpen: () -> Unit) {
+private fun BottomBar(
+    viewModel: ChatScreenViewModel
+) {
     val context = LocalContext.current
-    val resolver = context.contentResolver
+    var input by remember { mutableStateOf("Search On Web About General Science") }
+    val tools = viewModel.toolList.collectAsState().value
+    val selectedTools = viewModel.selectedTools.collectAsState().value
+    val modelList = viewModel.modelList.collectAsState().value
 
 
-    val zipMimeTypes = arrayOf("application/zip", "application/x-zip-compressed")
-
-    val launcher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri: Uri? ->
-        if (uri != null) {
-            // Persist if you'll need it later (across restarts)
-            try {
-                resolver.takePersistableUriPermission(
-                    uri, Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (_: SecurityException) {
-            }
-
-            val name = queryDisplayName(resolver, uri)
-            val mime = resolver.getType(uri)
-
-            if (isZipByName(name) || isZipByMime(mime) || isZipByHeader(resolver, uri)) {
-                val file = uriToFile(context, uri)
-                PluginManager.registerPlugin(path = arrayOf(file.absolutePath), context)
-            } else {
-                Toast.makeText(context, "Not a valid plugin", Toast.LENGTH_SHORT).show()
-            }
-        }
+    selectedTools.forEach {
+        Log.v("Selected Tool", it.toolName)
     }
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+    ChatInputBar(value = input, onValueChange = {
+        input = it
+    }, tools = tools, modelList = modelList, onAttach = {}, onToolSelected = {
+        viewModel.selectTool(it)
+    }, selectedTools = selectedTools, onModelSelected = {
+        viewModel.selectModel(it)
+    }, onSend = {
+        if (input.isNotBlank()) {
+            viewModel.sendMessage(input, context)
+            input = ""
+        }
+    })
+}
+
+@Composable
+private fun EmptyHint() {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.Top,
+        horizontalAlignment = Alignment.Start
     ) {
-        IconButton(onClick = onDrawerOpen) {
-            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-        }
+        Spacer(Modifier.height(24.dp))
+        Text(
+            "Here is Your PDF Document About General Science", color = SlateGrey, fontSize = 16.sp
+        )
+    }
+}
 
-        val chatTitle = viewModel.activePluginName.collectAsState().value
-        Crossfade(chatTitle) { title ->
-            Text(
-                title ?: "Neuro-V",
-                maxLines = 1,
-                modifier = Modifier.weight(1f),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontFamily = FontFamily.Serif, fontWeight = FontWeight.W100
+@Composable
+private fun ChatBubble(msg: Message) {
+
+    LocalContext.current
+
+    val isUser = msg.role == Role.User
+
+    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
+    else Color.Transparent
+
+    val textColor =
+        if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
+    val align = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
+    val radius = with(LocalDensity.current) { 18.dp }
+
+    val corner = RoundedCornerShape(
+        radius
+    )
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    ) {
+        Box(
+            modifier = Modifier
+                .then(if (isUser) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth())
+                .clip(
+                    corner
                 )
-            )
-        }
+                .background(bubbleColor)
+                .padding(14.dp), contentAlignment = align
+        ) {
+            Column {
+                if (msg.viaPlugin != null) {
+                    AssistTag(msg.viaPlugin)
+                    Spacer(Modifier.height(6.dp))
+                }
+                Text(
+                    msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
+                )
 
-        Spacer(Modifier.weight(1f))
+                if (!isUser) {
+                    if (msg.viaPlugin != null) {
+                        val lp = PluginManager.currentPlugin.collectAsState().value
 
-        IconButton(onClick = {
-            launcher.launch(zipMimeTypes)
-        }) {
-            Icon(painter = painterResource(R.drawable.new_chat), contentDescription = "New Chat")
+                        AnimatedContent(lp == null) {
+                            when (it) {
+                                true -> {
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        ),
+                                        elevation = CardDefaults.cardElevation(0.dp),
+                                        modifier = Modifier.size(200.dp),
+                                    ) {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(24.dp),
+                                            verticalArrangement = Arrangement.spacedBy(
+                                                16.dp, Alignment.CenterVertically
+                                            ),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(32.dp), // a bit larger than before
+                                                strokeWidth = 3.dp
+                                            )
+                                            Text(
+                                                text = "Loading...Plugin \n ${msg.viaPlugin}",
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                textAlign = TextAlign.Center,
+                                                fontFamily = FontFamily.Serif
+                                            )
+                                        }
+                                    }
+
+                                }
+
+                                false -> {
+                                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
+                                        lp?.api?.content()?.invoke()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
-//
-//@Composable
-//internal fun Conversations(modifier: Modifier = Modifier, viewModel: ChattingViewModel) {
-//    @Composable
-//    fun ChatBubble(message: Message) {
-//        val isThinkingMessage = remember(message.content) {
-//            message.content.trimStart().startsWith("<think>")
-//        }
-//
-//        // Detect and clean reasoning part
-//        val raw = message.content.trim()
-//        val cleanThinking = remember(raw) {
-//            if (isThinkingMessage) {
-//                val withoutOpen = raw.removePrefix("<think>").trimStart()
-//                if (withoutOpen.endsWith("</think>")) {
-//                    withoutOpen.removeSuffix("</think>").trimEnd()
-//                } else {
-//                    withoutOpen
-//                }
-//            } else ""
-//        }
-//
-//        val actualResponse = remember(raw) {
-//            if (isThinkingMessage && raw.contains("</think>")) {
-//                // Extract actual response that comes after </think>
-//                raw.substringAfter("</think>").trimStart()
-//            } else if (!isThinkingMessage) {
-//                // Normal system message
-//                raw
-//            } else {
-//                "" // if still thinking and no closing tag yet
-//            }
-//        }
-//
-//        Column(
-//            modifier = Modifier.fillMaxWidth(),
-//            verticalArrangement = Arrangement.Center,
-//            horizontalAlignment = if (message.role == ROLE.USER) Alignment.End else Alignment.Start
-//        ) {
-//            if (message.role == ROLE.USER) {
-//                if (message.document.isNotEmpty()) {
-//                    Row {
-//                        repeat(message.document.size) {
-//                            Box(
-//                                Modifier.padding(start = rDP(12.dp)),
-//                                contentAlignment = Alignment.Center
-//                            ) {
-//                                Text(
-//                                    text = message.document[it].doc.name,
-//                                    style = MaterialTheme.typography.bodyMedium,
-//                                    color = MaterialTheme.colorScheme.primary
-//                                )
-//                            }
-//                        }
-//                    }
-//                }
-//            }
-//
-//            if (isThinkingMessage) {
-//                ThinkingBubble(message.copy(content = cleanThinking))
-//            }
-//
-//            if (actualResponse.isNotBlank()) {
-//                MarkdownText(
-//                    text = actualResponse,
-//                    canCopy = message.role != ROLE.USER,
-//                    style = MaterialTheme.typography.bodyLarge.copy(
-//                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Normal
-//                    ),
-//                    modifier = Modifier
-//                        .then(
-//                            if (message.role == ROLE.USER) {
-//                                Modifier.background(
-//                                        color = MaterialTheme.colorScheme.surface,
-//                                        shape = MaterialTheme.shapes.extraLarge
-//                                    ).widthIn(max = rDP(300.dp))
-//                            } else Modifier
-//                        )
-//                        .padding(vertical = rDP(8.dp), horizontal = rDP(18.dp))
-//                )
-//            }
-//
-//            if (message.role != ROLE.USER && actualResponse.isNotBlank()) {
-//                Row(
-//                    modifier = Modifier.padding(
-//                        top = rDP(4.dp), start = rDP(18.dp)
-//                    ), horizontalArrangement = Arrangement.spacedBy(rDP(14.dp))
-//                ) {
-//                    Icon(
-//                        painter = painterResource(R.drawable.copy),
-//                        contentDescription = "Copy",
-//                        modifier = Modifier.size(rDP(14.dp))
-//                    )
-//
-//                    Icon(
-//                        painter = painterResource(R.drawable.new_action),
-//                        contentDescription = "Layers",
-//                        modifier = Modifier.size(rDP(14.dp))
-//                    )
-//                }
-//            }
-//        }
-//    }
-//
-//    val messages = viewModel.messages.collectAsState().value.toMutableList()
-//
-//    LazyColumn(
-//        modifier = modifier
-//            .fillMaxWidth()
-//            .padding(top = rDP(16.dp)),
-//        verticalArrangement = Arrangement.spacedBy(rDP(12.dp)),
-//        contentPadding = PaddingValues(bottom = rDP(26.dp))
-//    ) {
-//        items(messages.size) { index ->
-//            ChatBubble(message = messages[index])
-//        }
-//    }
-//}
-//
-//@OptIn(ExperimentalMaterial3ExpressiveApi::class)
-//@Composable
-//internal fun BottomBar(viewModel: ChattingViewModel) {
-//    var userInput by remember { mutableStateOf("") }
-//    val isGenerating by viewModel.isGenerating.collectAsState()
-//    val attachedFiles by viewModel.attachedFiles.collectAsState()
-//
-//    val context = LocalContext.current
-//    val filePickerLauncher = rememberLauncherForActivityResult(
-//        contract = ActivityResultContracts.GetContent()
-//    ) { uri: Uri? ->
-//      //  viewModel.handleFileUri(context, uri ?: return@rememberLauncherForActivityResult)
-//    }
-//
-//    Column(Modifier.padding(8.dp)) {
-//
-//        AnimatedVisibility(attachedFiles.isNotEmpty()) {
-//            LazyRow {
-//                itemsIndexed(attachedFiles) { index, item ->
-//                    FileItem(item, onRemove = { viewModel.clearAttachment(index) })
-//                }
-//            }
-//        }
-//
-//        Row(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .padding(horizontal = rDP(16.dp))
-//                .clip(MaterialTheme.shapes.medium)
-//                .background(color = MaterialTheme.colorScheme.primary)
-//                .heightIn(max = 400.dp)
-//                .padding(vertical = rDP(8.dp))
-//                .padding(start = rDP(12.dp), end = rDP(10.dp)),
-//            verticalAlignment = Alignment.Bottom,
-//            horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
-//        ) {
-//            Box(
-//                modifier = Modifier
-//                    .weight(1f)
-//                    .padding(8.dp)
-//            ) {
-//                BasicTextField(
-//                    value = userInput,
-//                    textStyle = MaterialTheme.typography.titleMedium.copy(
-//                        color = MaterialTheme.colorScheme.onPrimary
-//                    ),
-//                    onValueChange = { userInput = it },
-//                    singleLine = false,
-//                    decorationBox = { innerTextField ->
-//                        if (userInput.isEmpty()) {
-//                            Text(
-//                                "Say Anything...",
-//                                style = MaterialTheme.typography.titleMedium,
-//                                fontFamily = FontFamily.Serif,
-//                                fontWeight = FontWeight.Bold,
-//                                color = Color.Gray
-//                            )
-//                        }
-//                        innerTextField()
-//                    })
-//            }
-//
-//            ActionButton(R.drawable.attachment, "Attachment") {
-//                filePickerLauncher.launch("*/*")
-//            }
-//
-//            ActionButtonWithCircleProgressIndicator(R.drawable.send_chat, "Send", isGenerating) {
-//                if (isGenerating) {
-//                    viewModel.stopGenerating()
-//                    return@ActionButtonWithCircleProgressIndicator
-//                }
-//
-//                if (userInput.isNotEmpty()) {
-//                    viewModel.sendMessage(userInput)
-//                    userInput = ""
-//                }
-//            }
-//        }
-//    }
-//}
-//
-//@Composable
-//fun FileItem(fileAttachment: FileAttachment, onRemove: () -> Unit) {
-//    Row(
-//        modifier = Modifier
-//            .padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
-//            .clip(MaterialTheme.shapes.medium)
-//            .background(MaterialTheme.colorScheme.surfaceVariant)
-//            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp)),
-//        verticalAlignment = Alignment.CenterVertically
-//    ) {
-//        Icon(
-//            painter = painterResource(id = R.drawable.attachment),
-//            contentDescription = "Attached",
-//            modifier = Modifier.size(rDP(16.dp)),
-//            tint = MaterialTheme.colorScheme.onSurfaceVariant
-//        )
-//        Spacer(modifier = Modifier.width(rDP(6.dp)))
-//
-//        Text(
-//            text = fileAttachment.doc.name,
-//            style = MaterialTheme.typography.bodyMedium,
-//            color = MaterialTheme.colorScheme.onSurfaceVariant
-//        )
-//
-//        if (fileAttachment.isLoading) {
-//            Spacer(Modifier.width(rDP(6.dp)))
-//            CircularProgressIndicator(
-//                modifier = Modifier.size(rDP(14.dp)),
-//                strokeWidth = rDP(2.dp),
-//                color = MaterialTheme.colorScheme.primary
-//            )
-//        } else {
-//            Spacer(modifier = Modifier.width(rDP(6.dp)))
-//            Icon(
-//                Icons.Default.Close,
-//                contentDescription = "Remove",
-//                modifier = Modifier
-//                    .size(rDP(12.dp))
-//                    .clickable { onRemove() },
-//                tint = MaterialTheme.colorScheme.error
-//            )
-//        }
-//    }
-//}
-//
-//
-//internal object UIComponents {
-//
-//    @Composable
-//    fun ActionButton(
-//        @DrawableRes icon: Int, contentDescription: String, onClick: () -> Unit
-//    ) {
-//        IconButton(
-//            modifier = Modifier.size(rDP(26.dp)), onClick = {
-//                onClick()
-//            }, colors = IconButtonDefaults.iconButtonColors(
-//                containerColor = MaterialTheme.colorScheme.onPrimary,
-//                contentColor = MaterialTheme.colorScheme.primary
-//            )
-//        ) {
-//            Icon(
-//                painter = painterResource(icon),
-//                contentDescription = contentDescription,
-//                modifier = Modifier.size(rDP(14.dp))
-//            )
-//        }
-//    }
-//
-//    @Composable
-//    fun ActionButtonWithCircleProgressIndicator(
-//        @DrawableRes icon: Int, contentDescription: String, show: Boolean, onClick: () -> Unit
-//    ) {
-//        Box(contentAlignment = Alignment.Center) {
-//            AnimatedVisibility(show) {
-//                CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary)
-//            }
-//
-//            IconButton(
-//                modifier = Modifier.size(rDP(26.dp)), onClick = {
-//                    onClick()
-//                }, colors = IconButtonDefaults.iconButtonColors(
-//                    containerColor = MaterialTheme.colorScheme.onPrimary,
-//                    contentColor = MaterialTheme.colorScheme.primary
-//                )
-//            ) {
-//                AnimatedContent(show) { isGeneratingText ->
-//                    when {
-//                        isGeneratingText -> {
-//                            Icon(
-//                                imageVector = Icons.Default.Stop, contentDescription = "Mic"
-//                            )
-//                        }
-//
-//                        else -> {
-//                            Icon(
-//                                painter = painterResource(icon),
-//                                contentDescription = contentDescription,
-//                                modifier = Modifier.size(rDP(14.dp))
-//                            )
-//                        }
-//                    }
-//                }
-//            }
-//        }
-//    }
-//
-//    @Composable
-//    fun ThinkingBubble(message: Message) {
-//        var expanded by remember { mutableStateOf(false) }
-//
-//        Column(
-//            modifier = Modifier
-//                .fillMaxWidth()
-//                .padding(horizontal = rDP(16.dp))
-//        ) {
-//            Row(
-//                verticalAlignment = Alignment.CenterVertically,
-//                modifier = Modifier
-//                    .clickable { expanded = !expanded }
-//                    .background(
-//                        color = MaterialTheme.colorScheme.surfaceVariant,
-//                        shape = MaterialTheme.shapes.medium
-//                    )
-//                    .padding(rDP(10.dp))) {
-//                Icon(
-//                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-//                    contentDescription = "Expand",
-//                    modifier = Modifier.size(rDP(16.dp))
-//                )
-//                Spacer(modifier = Modifier.width(rDP(8.dp)))
-//                Text(
-//                    text = if (expanded) "AI Reasoning (tap to hide)" else "AI is thinking...",
-//                    style = MaterialTheme.typography.labelMedium
-//                )
-//            }
-//
-//            AnimatedVisibility(visible = expanded) {
-//                MarkdownText(
-//                    text = message.content,
-//                    canCopy = message.role != ROLE.USER,
-//                    style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .padding(rDP(12.dp))
-//                )
-//            }
-//        }
-//    }
-//
-//}
 
+@Composable
+private fun AssistTag(name: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0x1A3B82F6)) // faint blue chip
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text = "via $name",
+            fontSize = 12.sp,
+            color = Color(0xFF2563EB),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+fun ToolsList(
+    modifier: Modifier = Modifier,
+    tools: List<Pair<String, List<Tools>>>, // Pair(pluginName, tools)
+    onToolSelected: (Tools) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        tools.forEach { (pluginName, toolList) ->
+            item {
+                // Plugin header
+                Text(
+                    text = pluginName,
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+
+            items(toolList) { tool ->
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 32.dp, vertical = 4.dp)
+                        .clickable { onToolSelected(tool) },
+                    elevation = CardDefaults.cardElevation(0.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.background
+                    )
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                            text = tool.toolName, style = MaterialTheme.typography.bodyLarge
+                        )
+                        if (tool.path.isNotBlank()) {
+                            Text(
+                                text = tool.path,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.Gray
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModelList(
+    modifier: Modifier = Modifier, modelList: List<ModelsData>, // Pair(pluginName, tools)
+    onModelSelected: (ModelsData) -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
+        contentPadding = PaddingValues(vertical = 8.dp)
+    ) {
+        item {
+            // Plugin header
+            Text(
+                text = "Local Models",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+
+        items(modelList) { modelsData ->
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 32.dp, vertical = 4.dp)
+                    .clickable { onModelSelected(modelsData) },
+                elevation = CardDefaults.cardElevation(0.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Text(
+                        text = modelsData.modeName, style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+@SuppressLint("StateFlowValueCalledInComposition")
+@Composable
+private fun ChatInputBar(
+    value: String,
+    tools: List<Pair<String, List<Tools>>>,
+    modelList: List<ModelsData>,
+    selectedTools: List<Tools>,
+    onToolSelected: (Tools) -> Unit,
+    onModelSelected: (ModelsData) -> Unit,
+    onValueChange: (String) -> Unit,
+    onAttach: () -> Unit,
+    onSend: () -> Unit
+) {
+    var showToolsList by remember { mutableStateOf(false) }
+    var showModelList by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        AnimatedVisibility(showToolsList) {
+
+            ToolsList(
+                modifier = Modifier, tools = tools, onToolSelected = {
+                    onToolSelected(it)
+                    showToolsList = false
+                })
+        }
+        AnimatedVisibility(showModelList) {
+
+            ModelList(
+                modifier = Modifier, modelList = modelList, onModelSelected = {
+                    onModelSelected(it)
+                    showModelList = false
+                })
+        }
+
+        Row(
+            modifier = Modifier
+                .padding(top = 16.dp)
+                .padding(horizontal = 16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = {
+                    showToolsList = !showToolsList
+                    showModelList = false
+                }, colors = ButtonDefaults.textButtonColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                ), shape = RoundedCornerShape(rDP(8.dp))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(painterResource(R.drawable.tools), contentDescription = "Add")
+                    Text(text = "Tools")
+                }
+            }
+
+            LazyRow(Modifier.weight(1f)) {
+                items(selectedTools, key = { it.toolName } // stable key for animation
+                ) { tool ->
+                    ToolCard(
+                        modifier = Modifier
+                            .animateItem() // smooth slide when inserted/removed
+                            .padding(8.dp), tool = tool
+                    )
+                }
+            }
+
+            IconButton(
+                onClick = {
+                    showModelList = !showModelList
+                    showToolsList = false
+                },
+                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.background),
+                shape = RoundedCornerShape(rDP(8.dp))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(painterResource(R.drawable.tools), contentDescription = "Add")
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp)
+                .padding(bottom = 4.dp)
+                .padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 6.dp),
+                placeholder = { Text("Say Anything…", color = SlateGrey) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                ),
+                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.primary)
+            )
+
+            IconButton(onClick = onAttach) {
+                Icon(
+                    Icons.Outlined.AttachFile,
+                    contentDescription = "Attach",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+            // Send button with gradient pill
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primary)
+                    .clickable { onSend() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painterResource(R.drawable.send_chat),
+                    modifier = Modifier.padding(8.dp),
+                    contentDescription = "Send",
+                    tint = MaterialTheme.colorScheme.background
+                )
+            }
+        }
+    }
+
+}
+
+@Composable
+private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
+    val accentColor = Color(0xFF0066FF)
+    val backgroundColor = accentColor.copy(alpha = 0.2f)
+
+    Box(
+        modifier
+            .size(ButtonDefaults.MinHeight)
+            .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp))),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(Icons.Default.Web, contentDescription = "Open File", tint = accentColor)
+    }
+}

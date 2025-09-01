@@ -5,17 +5,14 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.viewModelScope
-import com.dark.ai_module.workers.ModelManager
 import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
-import java.io.File
 
 
-class PluginHostViewModel : ViewModel() {
+class DrawerViewModel : ViewModel() {
 
     /** All loaded plugins (directly mirrored from PluginManager). */
     val installedPlugins =

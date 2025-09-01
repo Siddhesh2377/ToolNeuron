@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.data.ModelsList
+import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
@@ -21,12 +22,13 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.util.UUID
 
-class TempViewModel : ViewModel() {
+class ChatScreenViewModel : ViewModel() {
     //Define State Variables
     private var _messages = MutableStateFlow<List<Message>>(emptyList())
     val messages: StateFlow<List<Message>> = _messages
     val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
     val selectedTools: MutableStateFlow<List<Tools>> = MutableStateFlow(emptyList())
+    val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -47,11 +49,33 @@ class TempViewModel : ViewModel() {
 
             //Load Tools
             toolList.value = PluginManager.toolsList.value
+            viewModelScope.launch(Dispatchers.IO) {
+                modelList.value = ModelManager.getAllModels()
+            }
 
             Log.d("Tools", "Tools loaded successfully ${toolList.value.size}")
         }
     }
 
+
+    fun selectModel(model: ModelsData) {
+        ModelManager.unLoadModel()
+        viewModelScope.launch(Dispatchers.IO) {
+            ModelManager.loadModel(
+                modelData = model,
+                defaults = ModelManager.ManagerDefaults(
+                    systemPrompt = if (toolList.value.isEmpty()) ModelsList.generalPurposeSystemPrompt else ModelsList.getToolCallSystemPrompt(
+                        buildToolsListForPrompt = selectedTools.value.joinToString {
+                            it.toolName + ":" + it.args.entries.joinToString { (key, value) -> "$key:$value" }
+                        })
+                ),
+                chatTemplate = ModelsList.chatTemplate,
+                forceReload = true
+            ) {
+                Log.d("Model", "Model loaded successfully ${modelList.value[0]}")
+            }
+        }
+    }
 
     fun selectTool(tools: Tools) {
         selectedTools.value += tools
@@ -67,7 +91,11 @@ class TempViewModel : ViewModel() {
         var token = ""
 
         viewModelScope.launch(Dispatchers.IO) {
-            _messages.value += Message(role = Role.Assistant, text = "", id = "-1", viaPlugin = if (selectedTools.value.isNotEmpty()) selectedTools.value.joinToString { it.toolName } else "")
+            _messages.value += Message(
+                role = Role.Assistant,
+                text = "",
+                id = "-1",
+                viaPlugin = if (selectedTools.value.isNotEmpty()) selectedTools.value.joinToString { it.toolName } else "")
 
             val response = Neuron.generateStreaming(
                 prompt = input, onToken = { tok ->
