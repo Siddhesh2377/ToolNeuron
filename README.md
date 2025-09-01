@@ -8,7 +8,7 @@ NeuroVerse is a privacy‑first Android app that runs fully on‑device and show
   <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational" />
   <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
   <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green" /></a>
-  <a href="https://discord.gg/tG5r9aDF"><img src="https://img.shields.io/badge/Discord-Join%20the%20community-5865F2?logo=discord&logoColor=white" /></a>
+  <a href="https://discord.gg/tG5r9aDF"><img src="https://img.shields.io/badge/Discord-Join%20NeuroV-5865F2?logo=discord&logoColor=white" /></a>
 </p>
 ---
 
