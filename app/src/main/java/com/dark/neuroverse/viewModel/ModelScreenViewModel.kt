@@ -31,7 +31,7 @@ data class DownloadState(
 )
 
 
-class ModelScreenViewModel(context: Context, private val nativeLib: NativeLib = NativeLib()) : ViewModel() {
+class ModelScreenViewModel(context: Context) : ViewModel() {
 
     private val _models = MutableStateFlow<List<ModelsData>>(emptyList())
     val models: StateFlow<List<ModelsData>> = _models
@@ -44,7 +44,6 @@ class ModelScreenViewModel(context: Context, private val nativeLib: NativeLib = 
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     init {
-        ModelManager.init(context)
         observeModels()
     }
 

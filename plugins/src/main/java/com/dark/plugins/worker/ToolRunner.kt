@@ -9,12 +9,14 @@ object ToolRunner {
 
     fun run(loadedPlugin: LoadedPlugin, context: Context, data: JSONObject) {
         Log.d("ToolRunner", "Running tool for plugin ${loadedPlugin.manifest?.name}")
-
-        if (loadedPlugin.api == null) Log.e("ToolRunner", "API is null")
-        if (loadedPlugin.api != null) Log.e("ToolRunner", "API is Not Null ${loadedPlugin.api.getPluginInfo()}")
-
-        loadedPlugin.api?.runTool(context, data.getString("tool"), data.getJSONObject("arguments")) { result ->
-            Log.d("ToolRunner", "Tool result: $result")
+        data.has("tool").let {
+            if (!it) {
+                Log.e("ToolRunner", "No tool specified in data")
+                return
+            }
+            loadedPlugin.api?.runTool(context, data.getString("tool"), data.getJSONObject("arguments")) { result ->
+                Log.d("ToolRunner", "Tool result: $result")
+            }
         }
     }
 

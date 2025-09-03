@@ -69,7 +69,6 @@ fun PluginStoreScreen(
     viewModel: PluginStoreScreenViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    LaunchedEffect(Unit) { viewModel.init(context) }
 
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle(emptyList())
     val running by viewModel.runningPlugins.collectAsStateWithLifecycle(emptyList())

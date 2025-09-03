@@ -82,59 +82,109 @@ class NativeLib {
         maxTokens: Int = 512,
         uiScope: CoroutineScope,
         onStart: () -> Unit,
-        onGenerate: (String) -> Unit,
+        onGenerate: (String) -> Unit, // will be called with coalesced chunks
         onError: (String) -> Unit,
         onDone: () -> Unit
     ): Job {
-        // Model check before generating
+        // Guard: model present?
         val modelInfo = runCatching { nativeGetModelInfo() }.getOrNull()
         if (modelInfo.isNullOrEmpty()) {
             val err = "No model loaded. Please call initModel() first."
             Log.e(TAG, err)
             onError(err)
-            return Job().apply { complete() }
+            // Return an already-completed job (no work running)
+            return SupervisorJob().apply { complete() }
         }
 
-        val channel = Channel<String>(Channel.UNLIMITED)
+        // Channel for tokens coming from JNI callback (no per-token coroutines)
+        // Small buffer keeps memory bounded; adjust if needed.
+        val tokenCh = Channel<String>(capacity = 256)
 
+        // A tiny batcher to reduce UI updates; adjust period as you like
+        val batchPeriodMs = 35L
+        val batcherJob = uiScope.launch(Dispatchers.Default) {
+            val sb = StringBuilder()
+            var lastFlush = System.nanoTime()
+
+            fun flushIfNeeded(force: Boolean = false) {
+                if (sb.isNotEmpty() && (force ||
+                            ((System.nanoTime() - lastFlush) / 1_000_000) >= batchPeriodMs)) {
+                    val chunk = sb.toString()
+                    sb.setLength(0)
+                    lastFlush = System.nanoTime()
+                    // Switch to Main only for the actual UI callback
+                    uiScope.launch(Dispatchers.Main.immediate) {
+                        onGenerate(chunk)
+                    }
+                }
+            }
+
+            try {
+                for (tok in tokenCh) {
+                    sb.append(tok)
+                    flushIfNeeded(force = false)
+                }
+            } finally {
+                // Final flush on normal close or cancellation
+                flushIfNeeded(force = true)
+            }
+        }
+
+        // JNI callback -> push tokens without launching a coroutine each time
         val cb = object : StreamCallback {
             override fun onToken(token: String) {
-                uiScope.launch { channel.send(token) }
-            }
-
-            override fun onDone() {
-                uiScope.launch { channel.close() }
-            }
-
-            override fun onError(message: String) {
-                uiScope.launch {
-                    onError(message)
-                    channel.close()
+                // Non-suspending, thread-safe. If buffer is full, drop the token to protect UI.
+                // If you prefer to block instead, use tokenCh.trySend(token).isSuccess check.
+                if (!tokenCh.trySend(token).isSuccess) {
+                    // Optional: count drops for diagnostics
+                    Log.w(TAG, "Token dropped due to backpressure")
                 }
+            }
+            override fun onDone() {
+                // Close from callback side as well (safe even if already closed)
+                tokenCh.close()
+            }
+            override fun onError(message: String) {
+                // Surface error and close stream
+                uiScope.launch(Dispatchers.Main.immediate) { onError(message) }
+                tokenCh.close()
             }
         }
 
         onStart()
 
-        // Native call in IO scope
-        return uiScope.launch(Dispatchers.IO) {
+        // Parent job that runs native call and ties all children together
+        val parentJob = uiScope.launch(Dispatchers.IO) {
             try {
+                // This blocks until native finishes or is stopped
                 nativeGenerateStream(prompt, maxTokens, cb)
             } catch (t: Throwable) {
                 Log.e(TAG, "nativeGenerateStream error", t)
-                onError(t.message ?: "Native error")
-                channel.close()
-            }
-        }.also { job ->
-            // Token collector on UI
-            uiScope.launch {
-                channel.receiveAsFlow().collectLatest { token ->
-                    onGenerate(token)
+                withContext(Dispatchers.Main.immediate) {
+                    onError(t.message ?: "Native error")
                 }
-                onDone()
+            } finally {
+                // Ensure the channel is closed even if native didn't call onDone()
+                tokenCh.close()
             }
         }
+
+        // When the parent completes (normal/stop/cancel), finish batcher then call onDone once.
+        parentJob.invokeOnCompletion {
+            // Ensure batcher is finished and last chunk delivered
+            batcherJob.cancel() // this triggers final flush in finally{}
+            uiScope.launch {
+                // Give the batcher a turn to flush
+                batcherJob.join()
+                withContext(Dispatchers.Main.immediate) {
+                    onDone()
+                }
+            }
+        }
+
+        return parentJob
     }
+
 }
 
 @Keep

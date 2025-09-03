@@ -1,7 +1,7 @@
 package com.dark.ai_module.ai
 
-import android.content.Context
 import android.util.Log
+import com.dark.ai_module.ai.Neuron.replies
 import com.mp.ai_core.NativeLib
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -30,9 +30,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object Neuron {
 
-    /* ------------------------------------------------------------- */
-    /*  Types & params                                               */
-    /* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- *//*  Types & params                                               *//* ------------------------------------------------------------- */
 
     private const val TAG = "Neuron"
 
@@ -78,9 +76,7 @@ object Neuron {
         val loadJob: Job?,
     )
 
-    /* ------------------------------------------------------------- */
-    /*  State                                                        */
-    /* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- *//*  State                                                        *//* ------------------------------------------------------------- */
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val models = ConcurrentHashMap<String, Variant>() // key = absolutePath
@@ -96,16 +92,17 @@ object Neuron {
     private val queue = Channel<Request>(capacity = 64)
 
     /** the current native generation job, for cancellation */
-    @Volatile private var currentGenJob: Job? = null
+    @Volatile
+    private var currentGenJob: Job? = null
 
     /** Dispatcher for delivering tokens to UI; override if needed. */
     var tokenDispatcher: CoroutineDispatcher = Dispatchers.Main
 
-    init { startProcessor() }
+    init {
+        startProcessor()
+    }
 
-    /* ------------------------------------------------------------- */
-    /*  Model lifecycle                                              */
-    /* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- *//*  Model lifecycle                                              *//* ------------------------------------------------------------- */
 
     fun loadModel(
         path: File,
@@ -179,9 +176,7 @@ object Neuron {
 
     fun listLoadedModels(): List<String> = models.keys.toList()
 
-    /* ------------------------------------------------------------- */
-    /*  Public API — enqueue generation                              */
-    /* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- *//*  Public API — enqueue generation                              *//* ------------------------------------------------------------- */
 
     /** Fire‑and‑forget; observe results on [replies]. */
     suspend fun enqueuePrompt(prompt: String, gen: GenerationParams = GenerationParams()) {
@@ -191,11 +186,15 @@ object Neuron {
     }
 
     /** Queue prompt and await full reply. */
-    suspend fun generateAndWait(prompt: String, gen: GenerationParams = GenerationParams()): String {
+    suspend fun generateAndWait(
+        prompt: String,
+        gen: GenerationParams = GenerationParams()
+    ): String {
         val def = CompletableDeferred<String>()
         queue.send(Request.Blocking(prompt, gen, def))
         return def.await()
     }
+
     /** Queue a streaming request; returns the final reply. */
     suspend fun generateStreaming(
         prompt: String,
@@ -207,9 +206,7 @@ object Neuron {
         return def.await()
     }
 
-    /* ------------------------------------------------------------- */
-    /*  Processor — single consumer; serializes native calls         */
-    /* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- *//*  Processor — single consumer; serializes native calls         *//* ------------------------------------------------------------- */
 
     private fun startProcessor() {
         scope.launch {
@@ -217,16 +214,17 @@ object Neuron {
                 try {
                     isGenerating.value = true
                     when (req) {
-                        is Request.Blocking  -> handleBlocking(req)
+                        is Request.Blocking -> handleBlocking(req)
                         is Request.Streaming -> handleStreaming(req)
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Generation error", t)
                     when (req) {
-                        is Request.Blocking  -> req.completer.completeExceptionally(t)
+                        is Request.Blocking -> req.completer.completeExceptionally(t)
                         is Request.Streaming -> req.completer.completeExceptionally(t)
                     }
                 } finally {
+                    currentGenJob = null
                     isGenerating.value = false
                 }
             }
@@ -251,8 +249,7 @@ object Neuron {
             },
             onDone = {
                 done.complete(Unit)
-            }
-        )
+            })
         // Wait for native side to signal completion
         done.await()
 
@@ -262,46 +259,35 @@ object Neuron {
     }
 
     private suspend fun handleStreaming(r: Request.Streaming) {
-        val lib = activeModelOrThrow().lib
-        val acc = StringBuilder()
+        val lib  = activeModelOrThrow().lib
+        val acc  = StringBuilder()
         val done = CompletableDeferred<Unit>()
-
-        // collect launched UI jobs so we can join them before finishing
-        val uiJobs = mutableListOf<Job>()
 
         currentGenJob = lib.generateStreaming(
             prompt = r.prompt,
             maxTokens = r.gen.maxTokens,
-            uiScope = scope,
-            onStart = {},
+            uiScope   = scope, // ok
+            onStart   = {},
             onGenerate = { tok ->
                 acc.append(tok)
-                // Post to UI but keep a handle so we can join later
-                val j = scope.launch(tokenDispatcher) { r.onToken(tok) }
-                uiJobs += j
+                // Direct call; no per-token launch, no uiJobs list:
+                r.onToken(tok)
             },
-            onError = { msg ->
-                done.completeExceptionally(IllegalStateException(msg))
-            },
-            onDone = {
-                done.complete(Unit)
-            }
+            onError = { msg -> done.completeExceptionally(IllegalStateException(msg)) },
+            onDone  = { done.complete(Unit) }
         )
 
-        // Wait for native completion
         done.await()
-        // Ensure every last onToken has been applied to UI before finalizing
-        uiJobs.forEach { it.join() }
 
-        val reply = acc.toString() // keep exact bytes; no trim
+        val reply = acc.toString()
         r.completer.complete(reply)
         replies.tryEmit(reply)
+
     }
 
 
-    /* ------------------------------------------------------------- */
-    /*  Helpers                                                      */
-    /* ------------------------------------------------------------- */
+
+    /* ------------------------------------------------------------- *//*  Helpers                                                      *//* ------------------------------------------------------------- */
 
     private fun activeModel(): Variant? = activeModelId?.let { models[it] }
 

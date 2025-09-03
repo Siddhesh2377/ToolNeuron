@@ -63,15 +63,22 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     val selectedTools: MutableStateFlow<List<Tools>> = MutableStateFlow(emptyList())
     val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
     val chatId = MutableStateFlow("")
+    val _isGenerating = MutableStateFlow(false)
+    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
+
+    private val streamBuffer = StringBuilder()
+    private var streamingMsgIndex = -1
+    private var streamingMsgId    = "-1"
+
+    // Throttle gate: post at most every 30–40ms
+    @Volatile private var lastUiPost = 0L
+    private fun shouldPost(now: Long, everyMs: Long = 35L) = (now - lastUiPost) >= everyMs
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
             // Keys & brain
             key.value = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
             rootNode.value = readBrainFile(key.value, context)
-
-            // Initialize plugins & models ONCE
-            PluginManager.init(context)
 
             val root = rootNode.value.getNodeDirect("root")
             val chatHistory = getDefaultChatHistory(root)
@@ -163,53 +170,77 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     }
 
     fun sendMessage(input: String, context: Context) {
-        // Add user message
         _messages.update { it + Message(role = Role.User, text = input) }
-        var token = ""
+        _isGenerating.value = true
 
-        viewModelScope.launch(Dispatchers.IO) {
-            // Temporary streaming placeholder
-            withContext(Dispatchers.Main) {
-                _messages.update {
-                    it + Message(
-                        role = Role.Assistant,
-                        text = "",
-                        id = "-1",
-                        viaPlugin = if (selectedTools.value.isNotEmpty()) selectedTools.value.joinToString { t -> t.toolName } else ""
-                    )
-                }
-            }
+        viewModelScope.launch(Dispatchers.Main) {
+            // 1) Create streaming placeholder exactly once
+            val list = _messages.value.toMutableList()
+            streamingMsgIndex = list.size
+            streamingMsgId = "-1"
+            list += Message(
+                role = Role.Assistant,
+                text = "",
+                id   = streamingMsgId,
+                viaPlugin = if (selectedTools.value.isNotEmpty())
+                    selectedTools.value.joinToString { t -> t.toolName } else ""
+            )
+            _messages.value = list
 
-            val response = Neuron.generateStreaming(
-                prompt = input,
-                onToken = { tok ->
-                    token += tok
-                    _messages.update { list ->
-                        list.map { m -> if (m.id == "-1") m.copy(text = token) else m }
+            // 2) Start generation on IO, but push tokens via a throttled updater
+            withContext(Dispatchers.IO) {
+                streamBuffer.setLength(0)
+
+                val final = Neuron.generateStreaming(
+                    prompt = input,
+                    onToken = { tok ->
+                        streamBuffer.append(tok)
+                        val now = System.nanoTime() / 1_000_000
+                        if (shouldPost(now)) {
+                            lastUiPost = now
+                            // Post a coalesced chunk to Main
+                            viewModelScope.launch(Dispatchers.Main.immediate) {
+                                if (streamingMsgIndex >= 0) {
+                                    val cur = _messages.value.toMutableList()
+                                    // mutate only the one item
+                                    val m = cur[streamingMsgIndex]
+                                    cur[streamingMsgIndex] = m.copy(text = streamBuffer.toString())
+                                    _messages.value = cur
+                                }
+                            }
+                        }
+                    }
+                )
+
+                // Final apply (ensures last few tokens render)
+                withContext(Dispatchers.Main.immediate) {
+                    if (streamingMsgIndex >= 0) {
+                        val cur = _messages.value.toMutableList()
+                        val m = cur[streamingMsgIndex]
+                        cur[streamingMsgIndex] = m.copy(
+                            id = UUID.randomUUID().toString(),
+                            text = streamBuffer.toString()
+                        )
+                        _messages.value = cur
                     }
                 }
-            )
 
-            // Finalize assistant message id
-            withContext(Dispatchers.Main) {
-                _messages.update { list ->
-                    list.map { m -> if (m.id == "-1") m.copy(id = UUID.randomUUID().toString()) else m }
+                // Tool call (if any)
+                if (selectedTools.value.isNotEmpty()) {
+                    runCatching {
+                        val json = extractPureJson(final)
+                        val loaded = PluginManager.runPlugin(context, "Web-Searching", json)
+                        ToolRunner.run(loaded, context, JSONObject(json))
+                    }.onFailure { Log.e("ToolCall", "failed", it) }
                 }
-            }
 
-            // Tool call (if any)
-            if (selectedTools.value.isNotEmpty()) {
-                val json = extractPureJson(response)
-                val loadedPlugin = PluginManager.runPlugin(context, "Web-Searching", json)
-                ToolRunner.run(loadedPlugin, context, JSONObject(json))
+                generateTitle()
+                updateConversation(context)
+                _isGenerating.value = false
             }
-
-            // Title + persist + list refresh
-            generateTitle()
-            updateConversation(context)   // writes & sets chatId if new
-            updateChatList()
         }
     }
+
 
     fun updateChatList() {
         try {
@@ -269,7 +300,9 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
 
 
     fun stopGenerating() {
-        Neuron.stopGeneration()
+        Neuron.stopGeneration().let {
+            _isGenerating.value = false
+        }
     }
     private fun generateTitle() {
         if (_chatTitle.value.isNotBlank()) return

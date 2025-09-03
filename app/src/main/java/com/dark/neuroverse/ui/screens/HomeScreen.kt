@@ -5,6 +5,7 @@ import android.content.Intent
 import android.util.Log
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
@@ -44,6 +46,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
@@ -52,7 +55,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,7 +75,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
@@ -103,7 +104,6 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
-    PluginManager.init(context)
 
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
@@ -210,7 +210,11 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 reverseLayout = false,
                 contentPadding = PaddingValues(bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp)
             ) {
-                items(messages) { msg ->
+                items(
+                    items = messages,
+                    key = { it.id },                    // <-- stable!
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }
+                ) { msg ->
                     ChatBubble(msg)
                     Spacer(Modifier.height(18.dp))
                 }
@@ -229,6 +233,7 @@ private fun BottomBar(
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
+    val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
 
 
     selectedTools.forEach {
@@ -237,14 +242,21 @@ private fun BottomBar(
 
     ChatInputBar(value = input, onValueChange = {
         input = it
-    }, tools = tools, modelList = modelList, onAttach = {}, onToolSelected = {
+    }, tools = tools, isGenerating = isGenerating, modelList = modelList, onAttach = {}, onToolSelected = {
         viewModel.selectTool(it)
     }, selectedTools = selectedTools, onModelSelected = {
         viewModel.selectModel(it)
     }, onSend = {
-        if (input.isNotBlank()) {
-            viewModel.sendMessage(input, context)
-            input = ""
+        when(isGenerating){
+            true -> {
+                viewModel.stopGenerating()
+            }
+            false -> {
+                if (input.isNotBlank()) {
+                    viewModel.sendMessage(input, context)
+                    input = ""
+                }
+            }
         }
     })
 }
@@ -304,49 +316,50 @@ private fun ChatBubble(msg: Message) {
                     msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
                 )
 
-                if (!isUser) {
-                    if (msg.viaPlugin?.isNotEmpty() == true) {
-                        val lp = PluginManager.currentPlugin.collectAsState().value
+                if (!isUser && !msg.viaPlugin.isNullOrEmpty()) {
+                    // Only collect when this bubble is actually showing plugin content
+                    val pluginLoading by remember(msg.id) {
+                        PluginManager.currentPlugin   // Flow<...>
+                    }.collectAsState(initial = null)
 
-                        AnimatedContent(lp == null) {
-                            when (it) {
-                                true -> {
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surface
-                                        ),
-                                        elevation = CardDefaults.cardElevation(0.dp),
-                                        modifier = Modifier.size(200.dp),
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(24.dp),
-                                            verticalArrangement = Arrangement.spacedBy(
-                                                16.dp, Alignment.CenterVertically
-                                            ),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(32.dp), // a bit larger than before
-                                                strokeWidth = 3.dp
-                                            )
-                                            Text(
-                                                text = "Loading...Plugin \n ${msg.viaPlugin}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                textAlign = TextAlign.Center,
-                                                fontFamily = FontFamily.Serif
-                                            )
-                                        }
-                                    }
+                    val isLoading = pluginLoading == null
 
+                    Crossfade(
+                        targetState = isLoading,
+                        label = "plugin"
+                    ) { loading ->
+                        if (loading) {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                elevation = CardDefaults.cardElevation(0.dp),
+                                modifier = Modifier.size(200.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(
+                                        16.dp, Alignment.CenterVertically
+                                    ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp), // a bit larger than before
+                                        strokeWidth = 3.dp
+                                    )
+                                    Text(
+                                        text = "Loading...Plugin \n ${msg.viaPlugin}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                        fontFamily = FontFamily.Serif
+                                    )
                                 }
-
-                                false -> {
-                                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                                        lp?.api?.content()?.invoke()
-                                    }
-                                }
+                            }
+                        } else {
+                            Card(elevation = CardDefaults.cardElevation(0.dp)) {
+                                PluginManager.currentPlugin.collectAsState().value?.api?.content()?.invoke()
                             }
                         }
                     }
@@ -475,7 +488,8 @@ private fun ChatInputBar(
     onModelSelected: (ModelsData) -> Unit,
     onValueChange: (String) -> Unit,
     onAttach: () -> Unit,
-    onSend: () -> Unit
+    onSend: () -> Unit,
+    isGenerating: Boolean
 ) {
     var showToolsList by remember { mutableStateOf(false) }
     var showModelList by remember { mutableStateOf(false) }
@@ -597,12 +611,26 @@ private fun ChatInputBar(
                     .clickable { onSend() },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    painterResource(R.drawable.send_chat),
-                    modifier = Modifier.padding(8.dp),
-                    contentDescription = "Send",
-                    tint = MaterialTheme.colorScheme.background
-                )
+                when(isGenerating){
+                    true -> {
+                        Icon(
+                            Icons.Default.Stop,
+                            modifier = Modifier.padding(8.dp),
+                            contentDescription = "Send",
+                            tint = MaterialTheme.colorScheme.background
+                        )
+                        CircularProgressIndicator(trackColor = MaterialTheme.colorScheme.background)
+                    }
+                    false -> {
+                        Icon(
+                            painterResource(R.drawable.send_chat),
+                            modifier = Modifier.padding(8.dp),
+                            contentDescription = "Send",
+                            tint = MaterialTheme.colorScheme.background
+                        )
+                    }
+                }
+
             }
         }
     }

@@ -16,14 +16,6 @@ import java.io.File
 
 class PluginStoreScreenViewModel : ViewModel() {
 
-    /**
-     * Call once (e.g., from Fragment/Activity onCreate) to initialize the manager.
-     * Safe to call multiple times; manager is idempotent.
-     */
-    fun init(context: Context) {
-        PluginManager.init(context.applicationContext)
-    }
-
     // Installed plugins -> map to your UI model
     val pluginsList: StateFlow<List<PluginLocalDB>> =
         PluginManager.installedPlugins
