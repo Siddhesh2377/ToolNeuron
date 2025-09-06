@@ -55,13 +55,10 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     }
 
     open suspend fun aiCall(
-        input: JSONObject,
-        onToken: (String) -> Unit
+        input: JSONObject, onToken: (String) -> Unit
     ): JSONObject {
         val temp: String = Neuron.generateStreaming(
-            prompt = input.toString(),
-            gen = Neuron.GenerationParams(),
-            onToken = onToken
+            prompt = input.toString(), gen = Neuron.GenerationParams(), onToken = onToken
         )
         return JSONObject().apply { put("response", temp) }
     }
@@ -71,7 +68,12 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     }
 
     @Keep
-    open fun runTool(context: Context, toolName: String, args: JSONObject, callback: (result: Any) -> Unit){
+    open fun runTool(
+        context: Context,
+        toolName: String,
+        args: JSONObject,
+        callback: (result: Any) -> Unit,
+    ) {
 
     }
 

@@ -45,21 +45,22 @@ fun addNewChat(root: NeuronNode, data: JSONObject): NeuronNode {
 
 fun writeBitmapImage(
     bitmap: Bitmap,
-    format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG, // or PNG/JPEG
+    format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG,
     quality: Int = 100
 ): String {
     val bos = ByteArrayOutputStream()
     bitmap.compress(format, quality, bos)
-    val bytes = bos.toByteArray()
-    return Base64.encodeToString(bytes, Base64.NO_WRAP)
+    return Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
 }
 
 fun readBitmapImage(b64: String): Bitmap? {
     return try {
-        val bytes = Base64.decode(b64, Base64.DEFAULT)
+        if (b64.isBlank()) return null
+        val bytes = Base64.decode(b64, Base64.NO_WRAP) // <- match writer
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
     } catch (_: Throwable) { null }
 }
+
 
 fun saveTree(tree: NeuronTree, context: Context, alise: String){
     val key = getOrCreateHardwareBackedAesKey(alise)

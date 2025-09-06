@@ -3,10 +3,12 @@ package com.dark.neuroverse.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -67,6 +69,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
@@ -222,6 +225,10 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                     contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
                     ChatBubble(msg, generationState) {
                         val preview = writeBitmapImage(it)
+
+                        Log.d("ChatBubble", "BITMAP: $it")
+                        Log.d("ChatBubble", "STRING BITMAP: $preview")
+
                         viewModel.writeToolPreviewByID(msg.id, preview)
                     }
                     Spacer(Modifier.height(18.dp))
@@ -349,28 +356,49 @@ private fun ChatBubble(
 
                 if (!isUser && msg.tool != null) {
                     // Only collect when this bubble is actually showing plugin content
-                    val pluginLoading by remember(msg.tool) {
-                        PluginManager.currentPlugin   // Flow<...>
-                    }.collectAsState(initial = null)
+                    val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
 
                     val bitmap: Bitmap? = readBitmapImage(msg.tool.toolPreview)
                     if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = null,
-                            modifier = Modifier.size(200.dp)
-                        )
-                    }else{
+                        val decoded = remember(msg.tool.toolPreview) {
+                            readBitmapImage(msg.tool.toolPreview)
+                        }
+
+                        if (decoded != null) {
+                            Log.d(
+                                "Bitmap",
+                                "showing preview ${decoded.width}x${decoded.height}, b64len=${msg.tool!!.toolPreview.length}"
+                            )
+
+                            Box(
+                                Modifier
+                                    .padding(top = 8.dp)
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant) // visible contrast
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.outline,
+                                        RoundedCornerShape(12.dp)
+                                    )
+                            ) {
+                                Image(
+                                    bitmap = decoded.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                    } else {
+                        Log.d("Bitmap", "Bitmap is null :: ${msg.tool.toolPreview}")
                         val isLoading = pluginLoading == null
-                        val captureReady = shouldCaptureNow && !isLoading    // only capture once plugin content is shown
 
                         ProjectedCapturable(
-                            size = DpSize(200.dp, 200.dp),
-                            captureKey = msg.id to captureReady,         // stable + flips when ready
-                            captureWhen = captureReady,
+                            captureKey = msg.id,         // stable + flips when ready
+                            captureWhen = shouldCaptureNow,
                             onCaptured = { bmp ->
-                                onCapture(bmp)                           // <-- CALL the lambda you passed from BodyContent
-                                // optional: stop further captures for this bubble
+                                onCapture(bmp)
                                 shouldCaptureNow = false
                             },
                         ) {
@@ -387,7 +415,10 @@ private fun ChatBubble(
                                             modifier = Modifier
                                                 .fillMaxSize()
                                                 .padding(24.dp),
-                                            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+                                            verticalArrangement = Arrangement.spacedBy(
+                                                16.dp,
+                                                Alignment.CenterVertically
+                                            ),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             CircularProgressIndicator(
@@ -395,7 +426,7 @@ private fun ChatBubble(
                                                 strokeWidth = 3.dp
                                             )
                                             Text(
-                                                text = "Loading...Plugin \n ${msg.tool?.toolName ?: ""}",
+                                                text = "Loading...Plugin \n ${msg.tool.toolName}",
                                                 style = MaterialTheme.typography.bodyMedium,
                                                 textAlign = TextAlign.Center,
                                                 fontFamily = FontFamily.Serif
@@ -411,9 +442,7 @@ private fun ChatBubble(
                                 }
                             }
                         }
-
                     }
-
                 }
             }
         }
