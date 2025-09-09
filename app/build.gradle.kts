@@ -1,8 +1,8 @@
-import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
 import java.util.Properties
+import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.application)
@@ -34,57 +34,11 @@ android {
         }
     }
 
-    // ****** sign apk ******
-    signingConfigs {
-        create("releaseee") {
-            val localProperties = Properties()
-            val localPropertiesFile = rootProject.file("local.properties")
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
-            if (localPropertiesFile.exists()) {
-                localProperties.load(FileInputStream(localPropertiesFile))
-
-                val storeFilePath = localProperties.getProperty("storeFile")
-                val storePasswordValue = localProperties.getProperty("storePassword")
-                val keyAliasValue = localProperties.getProperty("keyAlias")
-                val keyPasswordValue = localProperties.getProperty("keyPassword")
-
-                if (storeFilePath != null && storePasswordValue != null && 
-                    keyAliasValue != null && keyPasswordValue != null) {
-                    storeFile = file(storeFilePath)
-                    storePassword = storePasswordValue
-                    keyAlias = keyAliasValue
-                    keyPassword = keyPasswordValue
-                } else {
-                    logger.error("There is sth wrong with file content:local.properties !")
-                }
-            } else {
-                logger.error("File not exist:local.properties !")
-            }
-        }
-    }
-
-        buildTypes {
-            debug {
-                //signingConfig = signingConfigs.getByName("releaseee")
-                //applicationIdSuffix '.debug'
-                versionNameSuffix = "-debug"
-            }
-            release {
-                signingConfig = signingConfigs.getByName("releaseee")
-
-            }
-        }
-    // ****** sign apk ******
-
-
     buildTypes {
         release {
             isMinifyEnabled = false           // Enable code shrinking
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
 
         }
@@ -102,92 +56,67 @@ android {
         compose = true
         buildConfig = true
     }
-//    flavorDimensions += "pyVersion"
-//    productFlavors {
-//        create("neuroV") { dimension = "pyVersion" }
-//    }
+
+    dependencies {
+
+        //NET
+        implementation(libs.jsoup)
+        implementation(libs.okhttp)
+        implementation(libs.moshi)
+        implementation(libs.moshi.kotlin)
+
+        implementation(libs.androidx.lifecycle.runtime.compose)
+        //CORE
+        implementation(libs.kotlin.stdlib)
+        implementation(libs.androidx.lifecycle.viewmodel.ktx)
+
+        coreLibraryDesugaring(libs.desugar.jdk.libs)
+
+        //PROJECTS
+        implementation(project(":ai-module"))
+        implementation(project(":ai-core"))
+        implementation(project(":userData"))
+        implementation(project(":updateManager"))
+        implementation(project(":plugins"))
+
+        //UTILS
+        implementation(libs.androidx.datastore.preferences)
+        implementation(libs.androidx.biometric)
+        implementation(libs.kotlinx.serialization.json)
+
+        //KTX
+        implementation(libs.androidx.lifecycle.runtime.ktx)
+        implementation(libs.androidx.lifecycle.viewmodel.compose)
+
+        //CORE-UI-LIBS
+        implementation(libs.accompanist.insets)
+        implementation(libs.accompanist.insets.ui)
+        implementation(libs.androidx.navigation.compose)
+        implementation(libs.accompanist.navigation.animation)
+        implementation(platform(libs.androidx.compose.bom))
+        implementation(libs.androidx.material.icons.extended)
+        implementation(libs.androidx.core.ktx)
+        implementation(libs.androidx.activity.compose)
+        implementation(libs.androidx.ui)
+        implementation(libs.androidx.ui.graphics)
+        implementation(libs.androidx.ui.tooling.preview)
+        implementation(libs.androidx.material)
+        implementation(libs.androidx.material3)
+        implementation(libs.androidx.animation)
+
+        //TESTING
+        testImplementation(libs.junit)
+        androidTestImplementation(libs.androidx.junit)
+        androidTestImplementation(libs.androidx.espresso.core)
+        androidTestImplementation(platform(libs.androidx.compose.bom))
+        androidTestImplementation(libs.androidx.ui.test.junit4)
+
+        //DEBUG
+        debugImplementation(libs.androidx.ui.tooling)
+        debugImplementation(libs.androidx.ui.test.manifest)
+    }
+
 }
-
-//chaquopy {
-//    productFlavors {
-//        getByName("neuroV") { version = "3.10" }
-//    }
-//
-//    sourceSets.getByName("main") {
-//        setSrcDirs(listOf("src/main/python"))
-//    }
-//
-//    defaultConfig {
-//        pip {
-//            install("python-docx")
-//            install("python-pptx")
-//            install("openpyxl")
-//            install("pdfminer.six==20221105")
-//            install("pandas")
-//            install("chardet")
-//        }
-//    }
-//}
-
-dependencies {
-
-    //NET
-    implementation(libs.jsoup)
-    implementation(libs.okhttp)
-    implementation(libs.moshi)
-    implementation(libs.moshi.kotlin)
-
-    implementation(libs.androidx.lifecycle.runtime.compose)
-    //CORE
-    implementation("org.jetbrains.kotlin:kotlin-stdlib")
-    implementation(libs.androidx.lifecycle.viewmodel.ktx)
-
-    coreLibraryDesugaring(libs.desugar.jdk.libs)
-
-    //PROJECTS
-    implementation(project(":ai-module"))
-    implementation(project(":ai-core"))
-    implementation(project(":userData"))
-    implementation(project(":updateManager"))
-    implementation(project(":plugins"))
-
-    //UTILS
-    implementation(libs.androidx.datastore.preferences)
-    implementation(libs.androidx.biometric)
-    implementation(libs.kotlinx.serialization.json)
-
-    //KTX
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-
-    //CORE-UI-LIBS
-    implementation(libs.accompanist.insets)
-    implementation(libs.accompanist.insets.ui)
-    implementation(libs.androidx.navigation.compose)
-    implementation(libs.accompanist.navigation.animation)
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.material.icons.extended)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material)
-    implementation(libs.androidx.material3)
-    implementation(libs.androidx.animation)
-
-    //TESTING
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
-
-    //DEBUG
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
-}
-
 fun getProperty(value: String): String {
     return if (localPropertiesFile.exists()) {
         val localProps = Properties().apply {

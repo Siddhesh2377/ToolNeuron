@@ -22,7 +22,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -56,15 +55,19 @@ fun SettingsDrawerContent(
     ) {
         Text(
             text = "More Options", style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
-            ), modifier = Modifier.padding(top = 12.dp, bottom = 24.dp)
+                fontFamily = FontFamily.Serif,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            ), modifier = Modifier.padding(top = 24.dp, bottom = 24.dp)
         )
 
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Text(
                     text = "Chat History", style = MaterialTheme.typography.headlineSmall.copy(
-                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
                     ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
                 )
             }
@@ -83,6 +86,7 @@ fun SettingsDrawerContent(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.weight(1f)
                     )
 
@@ -113,9 +117,14 @@ fun SettingsDrawerContent(
             horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "Plugin-Store",
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+                color = MaterialTheme.colorScheme.primary
             )
-            Icon(Icons.Outlined.GridView, contentDescription = "Settings")
+            Icon(
+                Icons.Outlined.GridView,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -131,9 +140,14 @@ fun SettingsDrawerContent(
             horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "Models",
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+                color = MaterialTheme.colorScheme.primary
             )
-            Icon(Icons.Outlined.ArrowCircleDown, contentDescription = "Settings")
+            Icon(
+                Icons.Outlined.ArrowCircleDown,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
 
         Spacer(Modifier.height(16.dp))
@@ -149,9 +163,14 @@ fun SettingsDrawerContent(
             horizontalArrangement = Arrangement.SpaceBetween) {
             Text(
                 "Settings",
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+                color = MaterialTheme.colorScheme.primary
             )
-            Icon(Icons.Outlined.Settings, contentDescription = "Settings")
+            Icon(
+                Icons.Outlined.Settings,
+                contentDescription = "Settings",
+                tint = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }

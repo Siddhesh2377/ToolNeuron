@@ -6,6 +6,16 @@ import android.graphics.Bitmap
 import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +40,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
@@ -73,11 +84,11 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,8 +98,10 @@ import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
+import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
@@ -204,6 +217,8 @@ private fun TopBar(
 private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val generationState by viewModel.generationState.collectAsStateWithLifecycle()
+    // ✅ collect the reasoning-visibility toggle from VM (must exist there)
+    val showReasoning by viewModel.showReasoning.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -223,7 +238,7 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 items(
                     items = messages, key = { it.id },                    // <-- stable!
                     contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
-                    ChatBubble(msg, generationState) {
+                    ChatBubble(msg, generationState, showReasoning) {
                         val preview = writeBitmapImage(it)
 
                         Log.d("ChatBubble", "BITMAP: $it")
@@ -249,6 +264,7 @@ private fun BottomBar(
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
 
     ChatInputBar(
         value = input,
@@ -266,6 +282,7 @@ private fun BottomBar(
         onModelSelected = {
             viewModel.selectModel(it)
         },
+        selectedModel = selectedModel,
         onSend = {
             when (isGenerating) {
                 true -> {
@@ -300,11 +317,13 @@ private fun EmptyHint() {
 
 @Composable
 private fun ChatBubble(
-    msg: Message, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+    msg: Message,
+    generationState: GenerationState,
+    showReasoning: Boolean,
+    onCapture: (Bitmap) -> Unit
 ) {
 
     val isUser = msg.role == Role.User
-
     val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
     else Color.Transparent
 
@@ -312,11 +331,8 @@ private fun ChatBubble(
         if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
     val align = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     val radius = with(LocalDensity.current) { 18.dp }
-    LocalContext.current
 
-    val corner = RoundedCornerShape(
-        radius
-    )
+    val corner = RoundedCornerShape(radius)
 
     var shouldCaptureNow by remember { mutableStateOf(false) }
 
@@ -343,16 +359,65 @@ private fun ChatBubble(
                     corner
                 )
                 .background(bubbleColor)
-                .padding(14.dp), contentAlignment = align
+                .padding(14.dp)
+                .animateContentSize(animationSpec = tween(120)), // ✅ micro-resize when content changes
+            contentAlignment = align
         ) {
             Column {
                 if (msg.tool != null) {
                     AssistTag(msg.tool.toolName)
                     Spacer(Modifier.height(6.dp))
                 }
-                Text(
-                    msg.text, color = textColor, fontSize = 15.sp, lineHeight = 20.sp
-                )
+
+                Log.d("Message", "showing message: ${msg.thought}")
+                // ✅ Animated show/hide for reasoning panel
+                val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
+                AnimatedVisibility(
+                    visible = thoughtVisible,
+                    enter = fadeIn(animationSpec = tween(120)) + expandVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    ) + slideInVertically(initialOffsetY = { -it / 6 }),
+                    exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    ) + slideOutVertically(targetOffsetY = { -it / 6 })
+                ) {
+                    var showThinkingText by remember { mutableStateOf(true) }
+
+                    Spacer(Modifier.height(6.dp))
+                    Box(Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            showThinkingText = !showThinkingText
+                        }
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(Color(0xFF0F172A))          // slate-ish
+                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
+                        .padding(10.dp)
+                        .animateContentSize(animationSpec = tween(120))) {
+                        Crossfade(
+                            if (showThinkingText) "Thinking..." else "Thought: \n${msg.thought}",
+                            label = msg.thought!!
+                        ) { txt ->
+                            Text(
+                                text = txt,
+                                color = Color(0xFFCBD5E1),
+                                fontSize = 12.sp,
+                                lineHeight = 18.sp,
+                                fontFamily = FontFamily.Monospace
+                            )
+                        }
+                    }
+                }
+
+                if (!isUser) Spacer(Modifier.height(12.dp))
+
+                MarkdownText(msg.text, color = textColor, style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp))
 
                 if (!isUser && msg.tool != null) {
                     // Only collect when this bubble is actually showing plugin content
@@ -367,7 +432,7 @@ private fun ChatBubble(
                         if (decoded != null) {
                             Log.d(
                                 "Bitmap",
-                                "showing preview ${decoded.width}x${decoded.height}, b64len=${msg.tool!!.toolPreview.length}"
+                                "showing preview ${decoded.width}x${decoded.height}, b64len=${msg.tool.toolPreview.length}"
                             )
 
                             Box(
@@ -416,14 +481,12 @@ private fun ChatBubble(
                                                 .fillMaxSize()
                                                 .padding(24.dp),
                                             verticalArrangement = Arrangement.spacedBy(
-                                                16.dp,
-                                                Alignment.CenterVertically
+                                                16.dp, Alignment.CenterVertically
                                             ),
                                             horizontalAlignment = Alignment.CenterHorizontally
                                         ) {
                                             CircularProgressIndicator(
-                                                modifier = Modifier.size(32.dp),
-                                                strokeWidth = 3.dp
+                                                modifier = Modifier.size(32.dp), strokeWidth = 3.dp
                                             )
                                             Text(
                                                 text = "Loading...Plugin \n ${msg.tool.toolName}",
@@ -435,9 +498,8 @@ private fun ChatBubble(
                                     }
                                 } else {
                                     Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                                        PluginManager.currentPlugin
-                                            .collectAsState().value
-                                            ?.api?.content()?.invoke()
+                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                                            ?.invoke()
                                     }
                                 }
                             }
@@ -520,7 +582,7 @@ fun ToolsList(
 @Composable
 fun ModelList(
     modifier: Modifier = Modifier, modelList: List<ModelsData>, // Pair(pluginName, tools)
-    onModelSelected: (ModelsData) -> Unit
+    onModelSelected: (ModelsData) -> Unit, selectedModel: ModelsData
 ) {
     LazyColumn(
         modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
@@ -536,6 +598,7 @@ fun ModelList(
         }
 
         items(modelList) { modelsData ->
+            val isSelected = modelsData.modeName == selectedModel.modeName
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -543,13 +606,15 @@ fun ModelList(
                     .clickable { onModelSelected(modelsData) },
                 elevation = CardDefaults.cardElevation(0.dp),
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = if (isSelected) Mint.copy(alpha = 0.5f) else MaterialTheme.colorScheme.background
                 )
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
+                Row(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = modelsData.modeName, style = MaterialTheme.typography.bodyLarge
                     )
+                    Spacer(Modifier.weight(1f))
+                    if (isSelected) Icon(Icons.Default.Check, "Check", tint = Mint)
                 }
             }
         }
@@ -569,6 +634,7 @@ private fun ChatInputBar(
     onValueChange: (String) -> Unit,
     onAttach: () -> Unit,
     onSend: () -> Unit,
+    selectedModel: ModelsData,
     isGenerating: Boolean
 ) {
     var showToolsList by remember { mutableStateOf(false) }
@@ -591,7 +657,10 @@ private fun ChatInputBar(
         AnimatedVisibility(showModelList) {
 
             ModelList(
-                modifier = Modifier, modelList = modelList, onModelSelected = {
+                modifier = Modifier,
+                selectedModel = selectedModel,
+                modelList = modelList,
+                onModelSelected = {
                     onModelSelected(it)
                     showModelList = false
                 })

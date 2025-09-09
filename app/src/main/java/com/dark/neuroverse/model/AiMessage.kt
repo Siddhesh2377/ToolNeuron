@@ -22,5 +22,7 @@ data class Message(
     val id: String = UUID.randomUUID().toString(),
     val role: Role,
     val text: String,
+    val thought: String? = null,
     val tool: RunningTool? = null
 )
+
