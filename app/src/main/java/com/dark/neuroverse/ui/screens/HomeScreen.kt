@@ -417,7 +417,11 @@ private fun ChatBubble(
 
                 if (!isUser) Spacer(Modifier.height(12.dp))
 
-                MarkdownText(msg.text, color = textColor, style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp))
+                MarkdownText(
+                    msg.text,
+                    color = textColor,
+                    style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
+                )
 
                 if (!isUser && msg.tool != null) {
                     // Only collect when this bubble is actually showing plugin content
@@ -679,7 +683,7 @@ private fun ChatInputBar(
                     showToolsList = !showToolsList
                     showModelList = false
                 }, colors = ButtonDefaults.textButtonColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background
                 ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
@@ -707,15 +711,10 @@ private fun ChatInputBar(
                     showModelList = !showModelList
                     showToolsList = false
                 },
-                colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.background),
+                colors = IconButtonDefaults.iconButtonColors(containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background),
                 shape = RoundedCornerShape(rDP(8.dp))
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Icon(Icons.Default.SmartToy, contentDescription = "Add")
-                }
+                Icon(Icons.Default.SmartToy, contentDescription = "Add")
             }
         }
 
