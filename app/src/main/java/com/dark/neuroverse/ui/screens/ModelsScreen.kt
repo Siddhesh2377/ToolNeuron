@@ -47,6 +47,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -60,6 +61,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
@@ -71,6 +73,7 @@ import com.dark.neuroverse.ui.components.StandardBottomBar
 import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.DownloadState
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
@@ -81,9 +84,6 @@ fun ModelsScreen(onNext: () -> Unit) {
     val context = LocalContext.current
     val factory = remember { ModelScreenViewModelFactory(context) }
     val viewModel: ModelScreenViewModel = viewModel(factory = factory)
-
-    // Marketplace data (remote catalog)
-    val marketplace = remember { getModelList(context) }
 
     // Installed state from VM
     val installedModels by viewModel.models.collectAsState()
@@ -103,38 +103,47 @@ fun ModelsScreen(onNext: () -> Unit) {
     }
 
     // Tabs: Marketplace | Installed LLM
-    var selectedTab by remember { mutableStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("MarketPlace", "Installed LLM")
 
     Scaffold { innerPadding ->
-        Column(Modifier.padding(innerPadding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            Modifier
+                .padding(innerPadding)
+                .fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             // Header + Import button
             Row(
                 Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 26.dp),
+                    .padding(horizontal = rDP(26.dp)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Choose Your\nModels",
-                    modifier = Modifier.padding(top = 24.dp, bottom = 12.dp),
+                    modifier = Modifier.padding(top = rDP(24.dp), bottom = rDP(12.dp)),
                     style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Serif,
+                        fontSize = rSp(28.sp)
                     )
                 )
 
-                Button(onClick = {
-                    // Launch dedicated import screen
-                    context.startActivity(Intent(context, ModelLoadingActivity::class.java))
-                }) {
+                Button(
+                    onClick = {
+                        // Launch dedicated import screen
+                        context.startActivity(Intent(context, ModelLoadingActivity::class.java))
+                    }
+                ) {
                     Icon(Icons.TwoTone.FileOpen, contentDescription = "Import Model")
-                    Spacer(Modifier.width(12.dp))
-                    Text("Import")
+                    Spacer(Modifier.width(rDP(12.dp)))
+                    Text("Import", fontSize = rSp(15.sp))
                 }
             }
 
-            // Optional legacy local import dialog (still supported if you call filePickerLauncher elsewhere)
+            // Optional legacy local import dialog
             if (showDialog) {
                 ModelDialog(
                     modelInfo = selectedModelPath ?: java.io.File("default_model.gguf"),
@@ -152,7 +161,7 @@ fun ModelsScreen(onNext: () -> Unit) {
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(label) }
+                        text = { Text(label, fontSize = rSp(14.sp)) }
                     )
                 }
             }
@@ -169,7 +178,7 @@ fun ModelsScreen(onNext: () -> Unit) {
                 }
             }
 
-            StandardBottomBar(Modifier.padding(bottom = 14.dp)) {
+            StandardBottomBar(Modifier.padding(bottom = rDP(14.dp))) {
                 CollapsableButton(
                     text = "Finish",
                     icon = Icons.AutoMirrored.Filled.ArrowForward,
@@ -178,6 +187,7 @@ fun ModelsScreen(onNext: () -> Unit) {
             }
         }
     }
+
 }
 
 // ——————————————————————————————————————————————————————————
@@ -235,28 +245,41 @@ private fun InstalledModelCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = rDP(16.dp), vertical = rDP(10.dp)),
         colors = CardDefaults.cardColors(containerColor = colors.surface)
     ) {
-        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(rDP(14.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+        ) {
             // Header row
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Column(Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             model.modeName,
-                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = rSp(18.sp)
+                            ),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(rDP(8.dp)))
                         Pill(if (isLocalImport) "Local" else "Remote")
                     }
                     if (!isLocalImport && model.modelDescription.isNotBlank()) {
-                        Spacer(Modifier.height(2.dp))
+                        Spacer(Modifier.height(rDP(2.dp)))
                         Text(
                             model.modelDescription,
-                            style = MaterialTheme.typography.bodyMedium,
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                fontSize = rSp(14.sp)
+                            ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -277,16 +300,30 @@ private fun InstalledModelCard(
 
             // External page for remote models
             if (!isLocalImport && model.modelPageLink.isNotBlank()) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
                     val ctx = LocalContext.current
                     IconButton(onClick = {
-                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, model.modelPageLink.toUri())) } catch (_: Exception) {}
-                    }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) }
+                        try {
+                            ctx.startActivity(
+                                Intent(
+                                    Intent.ACTION_VIEW,
+                                    model.modelPageLink.toUri()
+                                )
+                            )
+                        } catch (_: Exception) {
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
+                    }
                 }
             }
         }
     }
 }
+
 
 // ——————————————————————————————————————————————————————————
 // Marketplace card — optimized info layout
@@ -315,14 +352,14 @@ fun ModelCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = rDP(16.dp), vertical = rDP(10.dp)),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(rDP(14.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
             // Header
             Text(
@@ -409,7 +446,7 @@ private fun Pill(text: String) {
     Text(
         text,
         modifier = Modifier
-            .padding(vertical = 2.dp, horizontal = 0.dp)
+            .padding(vertical = rDP(2.dp), horizontal = 0.dp)
             .padding(end = 0.dp),
         style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
     )
@@ -417,7 +454,7 @@ private fun Pill(text: String) {
 
 @Composable
 private fun SpecGrid(vararg pairs: Pair<String, String>) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
         pairs.forEach { (k, v) -> SpecRow(k, v) }
     }
 }

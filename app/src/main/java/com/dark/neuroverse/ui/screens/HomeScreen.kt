@@ -104,6 +104,7 @@ import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.GenerationState
@@ -163,54 +164,60 @@ fun HomeScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(
-    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+fun TopBar(
+    title: String = "NeuroV Chat",
+    onMenu: () -> Unit = {},
+    onLeftMenu: () -> Unit = {}
 ) {
     TopAppBar(
         title = {
-        Text(
-            text = title,
-            fontSize = 22.sp,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold
-        )
-    }, navigationIcon = {
-        IconButton(onClick = onMenu) {
-            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-        }
-    }, actions = {
-        // Circular “spark” button (for future quick actions / mic)
-        Box(
-            modifier = Modifier
-                .padding(end = 8.dp)
-                .size(32.dp)
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(listOf(MaterialTheme.colorScheme.onPrimary, SkyBlue))
-                )
-                .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
-        ) {
-            // tiny white dot “spark”
+            Text(
+                text = title,
+                fontSize = rSp(22.sp),
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onMenu) {
+                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+            }
+        },
+        actions = {
+            // circular spark button
             Box(
                 modifier = Modifier
-                    .size(6.dp)
+                    .padding(end = rDP(8.dp))
+                    .size(rDP(32.dp))
                     .clip(CircleShape)
-                    .background(Color.White)
-            )
-        }
-        IconButton(onClick = onLeftMenu) {
-            Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
-    }, colors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.background
-    )
+                    .background(
+                        Brush.linearGradient(
+                            listOf(MaterialTheme.colorScheme.onPrimary, Color(0xFF0089FF)) // SkyBlue
+                        )
+                    )
+                    .clickable { onLeftMenu() },
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(6.dp)
+                        .clip(CircleShape)
+                        .background(Color.White)
+                )
+            }
+            IconButton(onClick = onLeftMenu) {
+                Icon(
+                    imageVector = Icons.Outlined.MoreVert,
+                    contentDescription = "More",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background
+        )
     )
 }
-
 
 @Composable
 private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
@@ -228,18 +235,25 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = rDP(16.dp)),
                 reverseLayout = false,
-                contentPadding = PaddingValues(bottom = 96.dp, top = 8.dp, start = 8.dp, end = 8.dp)
+                contentPadding = PaddingValues(
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(8.dp),
+                    end = rDP(8.dp)
+                )
             ) {
                 items(
-                    items = messages, key = { it.id },                    // <-- stable!
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
+                    items = messages,
+                    key = { it.id },                    // <-- stable!
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }
+                ) { msg ->
                     ChatBubble(msg, generationState) {
                         val preview = writeBitmapImage(it)
                         viewModel.writeToolPreviewByID(msg.id, preview)
                     }
-                    Spacer(Modifier.height(18.dp))
+                    Spacer(Modifier.height(rDP(18.dp)))
                 }
             }
         }
@@ -300,16 +314,19 @@ private fun EmptyHint() {
     Column(
         Modifier
             .fillMaxSize()
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = rDP(24.dp)),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
-        Spacer(Modifier.height(24.dp))
+        Spacer(Modifier.height(rDP(24.dp)))
         Text(
-            "Here is Your PDF Document About General Science", color = SlateGrey, fontSize = 16.sp
+            text = "Here is Your PDF Document About General Science",
+            color = SlateGrey,
+            fontSize = rSp(16.sp)
         )
     }
 }
+
 
 
 @Composable
@@ -317,19 +334,20 @@ private fun AssistTag(name: String) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
-            .clip(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(rDP(10.dp)))
             .background(Color(0x1A3B82F6)) // faint blue chip
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+            .padding(horizontal = rDP(8.dp), vertical = rDP(4.dp))
     ) {
         Text(
             text = "via $name",
-            fontSize = 12.sp,
+            fontSize = rSp(12.sp),
             color = Color(0xFF2563EB),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
     }
 }
+
 
 @Composable
 fun ToolsList(
@@ -338,16 +356,21 @@ fun ToolsList(
     onToolSelected: (Pair<String, Tools>) -> Unit
 ) {
     LazyColumn(
-        modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
+        contentPadding = PaddingValues(vertical = rDP(8.dp))
     ) {
         tools.forEach { (pluginName, toolList) ->
             item {
                 // Plugin header
                 Text(
                     text = pluginName,
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontSize = rSp(18.sp) // scaled font
+                    ),
+                    modifier = Modifier.padding(
+                        horizontal = rDP(16.dp),
+                        vertical = rDP(8.dp)
+                    )
                 )
             }
 
@@ -355,21 +378,26 @@ fun ToolsList(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 32.dp, vertical = 4.dp)
+                        .padding(horizontal = rDP(32.dp), vertical = rDP(4.dp))
                         .clickable { onToolSelected(Pair(pluginName, tool)) },
-                    elevation = CardDefaults.cardElevation(0.dp),
+                    elevation = CardDefaults.cardElevation(rDP(0.dp)),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.background
                     )
                 ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
+                    Column(modifier = Modifier.padding(rDP(12.dp))) {
                         Text(
-                            text = tool.toolName, style = MaterialTheme.typography.bodyLarge
+                            text = tool.toolName,
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontSize = rSp(16.sp)
+                            )
                         )
                         if (tool.path.isNotBlank()) {
                             Text(
                                 text = tool.path,
-                                style = MaterialTheme.typography.bodySmall,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    fontSize = rSp(13.sp)
+                                ),
                                 color = Color.Gray
                             )
                         }
@@ -380,21 +408,29 @@ fun ToolsList(
     }
 }
 
+
 @Composable
 fun ModelList(
-    modifier: Modifier = Modifier, modelList: List<ModelsData>, // Pair(pluginName, tools)
-    onModelSelected: (ModelsData) -> Unit, selectedModel: ModelsData
+    modifier: Modifier = Modifier,
+    modelList: List<ModelsData>, // list of models
+    onModelSelected: (ModelsData) -> Unit,
+    selectedModel: ModelsData
 ) {
     LazyColumn(
-        modifier = modifier.heightIn(min = 100.dp, max = 300.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
+        contentPadding = PaddingValues(vertical = rDP(8.dp))
     ) {
         item {
-            // Plugin header
+            // Section header
             Text(
                 text = "Local Models",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                style = MaterialTheme.typography.titleMedium.copy(
+                    fontSize = rSp(18.sp)
+                ),
+                modifier = Modifier.padding(
+                    horizontal = rDP(16.dp),
+                    vertical = rDP(8.dp)
+                )
             )
         }
 
@@ -403,24 +439,38 @@ fun ModelList(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 32.dp, vertical = 4.dp)
+                    .padding(horizontal = rDP(32.dp), vertical = rDP(4.dp))
                     .clickable { onModelSelected(modelsData) },
-                elevation = CardDefaults.cardElevation(0.dp),
+                elevation = CardDefaults.cardElevation(rDP(0.dp)),
                 colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) Mint.copy(alpha = 0.5f) else MaterialTheme.colorScheme.background
+                    containerColor = if (isSelected)
+                        Mint.copy(alpha = 0.5f)
+                    else
+                        MaterialTheme.colorScheme.background
                 )
             ) {
-                Row(modifier = Modifier.padding(12.dp)) {
+                Row(modifier = Modifier.padding(rDP(12.dp))) {
                     Text(
-                        text = modelsData.modeName, style = MaterialTheme.typography.bodyLarge
+                        text = modelsData.modeName,
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontSize = rSp(16.sp)
+                        )
                     )
                     Spacer(Modifier.weight(1f))
-                    if (isSelected) Icon(Icons.Default.Check, "Check", tint = Mint)
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = "Check",
+                            tint = Mint,
+                            modifier = Modifier.size(rDP(20.dp))
+                        )
+                    }
                 }
             }
         }
     }
 }
+
 
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -446,18 +496,20 @@ private fun ChatInputBar(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         AnimatedVisibility(showToolsList) {
-
             ToolsList(
-                modifier = Modifier, tools = tools, onToolSelected = {
+                modifier = Modifier,
+                tools = tools,
+                onToolSelected = {
                     onToolSelected(it)
                     showToolsList = false
-                })
+                }
+            )
         }
-        AnimatedVisibility(showModelList) {
 
+        AnimatedVisibility(showModelList) {
             ModelList(
                 modifier = Modifier,
                 selectedModel = selectedModel,
@@ -465,44 +517,47 @@ private fun ChatInputBar(
                 onModelSelected = {
                     onModelSelected(it)
                     showModelList = false
-                })
+                }
+            )
         }
 
         Row(
             modifier = Modifier
-                .padding(top = 16.dp)
-                .padding(horizontal = 16.dp)
+                .padding(top = rDP(16.dp))
+                .padding(horizontal = rDP(16.dp))
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
         ) {
             Button(
                 onClick = {
                     showToolsList = !showToolsList
                     showModelList = false
-                }, colors = ButtonDefaults.textButtonColors(
+                },
+                colors = ButtonDefaults.textButtonColors(
                     containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                     contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ), shape = RoundedCornerShape(rDP(8.dp))
+                ),
+                shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
                 ) {
                     Icon(painterResource(R.drawable.tools), contentDescription = "Add")
-                    Text(text = "Tools")
+                    Text(text = "Tools", fontSize = rSp(14.sp))
                 }
             }
 
             LazyRow(Modifier.weight(1f)) {
-                items(selectedTools, key = { it.toolName } // stable key for animation
-                ) { tool ->
-                    ToolCard(modifier = Modifier
-                        .animateItem()
-                        .clickable {
-                            onToolRemoved(tool)
-                        }
-                        .padding(8.dp), tool = tool)
+                items(selectedTools, key = { it.toolName }) { tool ->
+                    ToolCard(
+                        modifier = Modifier
+                            .animateItem()
+                            .clickable { onToolRemoved(tool) }
+                            .padding(rDP(8.dp)),
+                        tool = tool
+                    )
                 }
             }
 
@@ -510,10 +565,12 @@ private fun ChatInputBar(
                 onClick = {
                     showModelList = !showModelList
                     showToolsList = false
-                }, colors = IconButtonDefaults.iconButtonColors(
+                },
+                colors = IconButtonDefaults.iconButtonColors(
                     containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
                     contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ), shape = RoundedCornerShape(rDP(8.dp))
+                ),
+                shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Icon(Icons.Default.SmartToy, contentDescription = "Add")
             }
@@ -522,17 +579,20 @@ private fun ChatInputBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 8.dp)
-                .padding(bottom = 4.dp)
-                .padding(end = 18.dp), verticalAlignment = Alignment.CenterVertically
+                .padding(vertical = rDP(8.dp))
+                .padding(bottom = rDP(4.dp))
+                .padding(end = rDP(18.dp)),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             TextField(
                 value = value,
                 onValueChange = onValueChange,
                 modifier = Modifier
                     .weight(1f)
-                    .padding(horizontal = 6.dp),
-                placeholder = { Text("Say Anything…", color = SlateGrey) },
+                    .padding(horizontal = rDP(6.dp)),
+                placeholder = {
+                    Text("Say Anything…", color = SlateGrey, fontSize = rSp(14.sp))
+                },
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.Transparent,
                     unfocusedContainerColor = Color.Transparent,
@@ -541,7 +601,10 @@ private fun ChatInputBar(
                     unfocusedIndicatorColor = Color.Transparent,
                     cursorColor = MaterialTheme.colorScheme.primary
                 ),
-                textStyle = LocalTextStyle.current.copy(color = MaterialTheme.colorScheme.primary)
+                textStyle = LocalTextStyle.current.copy(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = rSp(15.sp)
+                )
             )
 
             IconButton(onClick = onAttach) {
@@ -551,10 +614,11 @@ private fun ChatInputBar(
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
+
             // Send button with gradient pill
             Box(
                 modifier = Modifier
-                    .size(36.dp)
+                    .size(rDP(36.dp))
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.primary)
                     .clickable { onSend() },
@@ -564,28 +628,30 @@ private fun ChatInputBar(
                     true -> {
                         Icon(
                             Icons.Default.Stop,
-                            modifier = Modifier.padding(8.dp),
+                            modifier = Modifier.padding(rDP(8.dp)),
                             contentDescription = "Send",
                             tint = MaterialTheme.colorScheme.background
                         )
-                        CircularProgressIndicator(trackColor = MaterialTheme.colorScheme.background)
+                        CircularProgressIndicator(
+                            trackColor = MaterialTheme.colorScheme.background,
+                            modifier = Modifier.size(rDP(28.dp))
+                        )
                     }
 
                     false -> {
                         Icon(
                             painterResource(R.drawable.send_chat),
-                            modifier = Modifier.padding(8.dp),
+                            modifier = Modifier.padding(rDP(8.dp)),
                             contentDescription = "Send",
                             tint = MaterialTheme.colorScheme.background
                         )
                     }
                 }
-
             }
         }
     }
-
 }
+
 
 @Composable
 private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
@@ -605,31 +671,34 @@ private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
 
 @Composable
 private fun ChatBubble(
-    msg: Message, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+    msg: Message,
+    generationState: GenerationState,
+    onCapture: (Bitmap) -> Unit
 ) {
-    //Main Bool's
+    // role check
     val isUser = msg.role == Role.User
 
-    //data flow
+    // trigger capture when generation is DONE
     var shouldCaptureNow by remember { mutableStateOf(false) }
-
     LaunchedEffect(generationState) {
-        shouldCaptureNow = when (generationState) {
-            GenerationState.DONE -> true
-            else -> false
-        }
+        shouldCaptureNow = generationState == GenerationState.DONE
     }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.End.takeIf { isUser } ?: Arrangement.Start) {
-        Column {
+        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+    ) {
+        Column(
+            modifier = Modifier
+        ) {
+            // optional "thoughts"
             val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
             if (thoughtVisible) {
                 ThinkingChatUI(msg)
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(rDP(8.dp)))
             }
 
+            // role-specific bubble UI
             when (msg.role) {
                 Role.User -> {
                     UserChatUI(msg)
@@ -640,23 +709,32 @@ private fun ChatBubble(
                 }
 
                 Role.Tool -> {
-                    ToolChatUI(msg, shouldCaptureNow) {
-                        shouldCaptureNow = false
-                        onCapture(it)
-                    }
+                    ToolChatUI(
+                        message = msg,
+                        shouldCaptureNow = shouldCaptureNow,
+                        onCapture = {
+                            shouldCaptureNow = false
+                            onCapture(it)
+                        }
+                    )
                 }
             }
         }
     }
 }
 
+
 @Composable
-private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit) {
+private fun ToolChatUI(
+    message: Message,
+    shouldCaptureNow: Boolean,
+    onCapture: (Bitmap) -> Unit
+) {
     Column {
         AssistTag(message.tool?.toolName ?: "Unknown Tool")
-        Spacer(Modifier.height(6.dp))
-        val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
+        Spacer(Modifier.height(rDP(6.dp)))
 
+        val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
         val pluginPreviewLoading: Bitmap? = readBitmapImage(message.tool?.toolPreview ?: "")
 
         when (pluginPreviewLoading == null) {
@@ -666,9 +744,7 @@ private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (
                 ProjectedCapturable(
                     captureKey = message.id,         // stable + flips when ready
                     captureWhen = shouldCaptureNow,
-                    onCaptured = { bmp ->
-                        onCapture(bmp)
-                    },
+                    onCaptured = { bmp -> onCapture(bmp) },
                 ) {
                     Crossfade(targetState = isLoading, label = "plugin") { loading ->
                         if (loading) {
@@ -676,32 +752,36 @@ private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface
                                 ),
-                                elevation = CardDefaults.cardElevation(0.dp),
-                                modifier = Modifier.size(200.dp),
+                                elevation = CardDefaults.cardElevation(rDP(0.dp)),
+                                modifier = Modifier.size(rDP(200.dp)),
                             ) {
                                 Column(
                                     modifier = Modifier
                                         .fillMaxSize()
-                                        .padding(24.dp),
+                                        .padding(rDP(24.dp)),
                                     verticalArrangement = Arrangement.spacedBy(
-                                        16.dp, Alignment.CenterVertically
+                                        rDP(16.dp), Alignment.CenterVertically
                                     ),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     CircularProgressIndicator(
-                                        modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                                        modifier = Modifier.size(rDP(32.dp)),
+                                        strokeWidth = rDP(3.dp)
                                     )
                                     Text(
                                         text = "Loading...Plugin \n ${message.tool?.toolName}",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        textAlign = TextAlign.Center,
-                                        fontFamily = FontFamily.Serif
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            fontSize = rSp(14.sp),
+                                            fontFamily = FontFamily.Serif
+                                        ),
+                                        textAlign = TextAlign.Center
                                     )
                                 }
                             }
                         } else {
-                            Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                                PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                            Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                                PluginManager.currentPlugin.collectAsState()
+                                    .value?.api?.content()
                                     ?.invoke()
                             }
                         }
@@ -712,17 +792,18 @@ private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (
             false -> {
                 var showToolOutput by remember { mutableStateOf(false) }
 
-
-                Box(Modifier
-                    .clickable {
-                        showToolOutput = !showToolOutput
-                    }
-                    .padding(top = 8.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.surface) // visible contrast
-                    .border(
-                        1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)
-                    )) {
+                Box(
+                    Modifier
+                        .clickable { showToolOutput = !showToolOutput }
+                        .padding(top = rDP(8.dp))
+                        .clip(RoundedCornerShape(rDP(12.dp)))
+                        .background(MaterialTheme.colorScheme.surface)
+                        .border(
+                            rDP(1.dp),
+                            MaterialTheme.colorScheme.outline,
+                            RoundedCornerShape(rDP(12.dp))
+                        )
+                ) {
                     Crossfade(targetState = showToolOutput) { visible ->
                         when (visible) {
                             true -> {
@@ -736,18 +817,24 @@ private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (
 
                             false -> {
                                 Card(
-                                    elevation = CardDefaults.cardElevation(0.dp),
-                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
+                                    elevation = CardDefaults.cardElevation(rDP(0.dp)),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.primary
+                                    )
                                 ) {
                                     Text(
                                         "Show Tool Output",
-                                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                        Modifier.padding(
+                                            horizontal = rDP(16.dp),
+                                            vertical = rDP(12.dp)
+                                        ),
+                                        fontSize = rSp(14.sp),
+                                        color = MaterialTheme.colorScheme.onPrimary
                                     )
                                 }
                             }
                         }
                     }
-
                 }
             }
         }
@@ -759,37 +846,45 @@ private fun RegularChatUI(message: Message) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(14.dp),
+            .padding(vertical = rDP(14.dp))
     ) {
         MarkdownText(
             message.text,
             color = MaterialTheme.colorScheme.primary,
-            style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
+            style = TextStyle.Default.copy(
+                fontSize = rSp(15.sp),
+                lineHeight = rSp(20.sp)
+            )
         )
     }
 }
 
+
 @Composable
 private fun UserChatUI(message: Message) {
-    val radius = with(LocalDensity.current) { 18.dp }
+    val radius = with(LocalDensity.current) { rDP(18.dp) }
 
-    //shape
+    // shape
     val corner = RoundedCornerShape(radius)
 
     Box(
         modifier = Modifier
-            .widthIn(max = 300.dp)
+            .widthIn(max = rDP(300.dp))
             .clip(corner)
             .background(MaterialTheme.colorScheme.primary)
-            .padding(14.dp),
+            .padding(rDP(14.dp))
     ) {
         MarkdownText(
             message.text,
             color = MaterialTheme.colorScheme.onPrimary,
-            style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
+            style = TextStyle.Default.copy(
+                fontSize = rSp(15.sp),
+                lineHeight = rSp(20.sp)
+            )
         )
     }
 }
+
 
 @Composable
 private fun ThinkingChatUI(message: Message) {
@@ -797,37 +892,39 @@ private fun ThinkingChatUI(message: Message) {
         visible = true,
         enter = fadeIn(animationSpec = tween(120)) + expandVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
             )
         ) + slideInVertically(initialOffsetY = { -it / 6 }),
         exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
             )
         ) + slideOutVertically(targetOffsetY = { -it / 6 })
     ) {
         var showThinkingText by remember { mutableStateOf(true) }
 
-        Spacer(Modifier.height(6.dp))
-        Box(Modifier
-            .fillMaxWidth()
-            .clickable {
-                showThinkingText = !showThinkingText
-            }
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF0F172A))          // slate-ish
-            .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
-            .padding(10.dp)
-            .animateContentSize(animationSpec = tween(120))) {
+        Spacer(Modifier.height(rDP(6.dp)))
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clickable { showThinkingText = !showThinkingText }
+                .clip(RoundedCornerShape(rDP(8.dp)))
+                .background(Color(0xFF0F172A)) // slate-ish
+                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+                .padding(rDP(10.dp))
+                .animateContentSize(animationSpec = tween(120))
+        ) {
             Crossfade(
                 if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
-                label = message.thought!!
+                label = message.thought ?: "thought"
             ) { txt ->
                 Text(
                     text = txt,
                     color = Color(0xFFCBD5E1),
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp,
+                    fontSize = rSp(12.sp),
+                    lineHeight = rSp(18.sp),
                     fontFamily = FontFamily.Monospace
                 )
             }

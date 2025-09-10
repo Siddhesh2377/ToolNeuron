@@ -60,6 +60,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
@@ -73,6 +74,7 @@ import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.CyberViolet
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.UpdateStatus
 import com.dark.neuroverse.viewModel.UpdateViewModel
 import com.dark.userdata.getDefaultChatHistory
@@ -96,11 +98,10 @@ fun SettingsScreen(
     onResetTweaks: () -> Unit = {},
 ) {
     // —— Spacing tokens ——
-    val screenPadding = 20.dp
-    val sectionSpacing = 20.dp
-    16.dp
-    val innerCorner = 12.dp
-    val outerCorner = 22.dp
+    val screenPadding = rDP(20.dp)
+    val sectionSpacing = rDP(20.dp)
+    val innerCorner = rDP(12.dp)
+    val outerCorner = rDP(22.dp)
 
     // —— Brain state ——
     lateinit var key: MutableStateFlow<SecretKey>
@@ -111,7 +112,6 @@ fun SettingsScreen(
     val updateViewModel: UpdateViewModel = viewModel()
     val updateInfo by updateViewModel.updateInfo.collectAsState()
 
-    // Local flag to animate the \"checking\" phase
     var isChecking by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -138,7 +138,6 @@ fun SettingsScreen(
         rootNode.value.printTree()
     }
 
-    // Reset the checking banner once status resolves out of IDLE
     LaunchedEffect(updateInfo.status, updateInfo.hasUpdate) {
         if (updateInfo.status != UpdateStatus.IDLE) isChecking = false
         if (updateInfo.status == UpdateStatus.IDLE && !updateInfo.hasUpdate) isChecking = false
@@ -169,8 +168,11 @@ fun SettingsScreen(
         ) {
             item {
                 Text(
-                    "NeuroV Settings", style = MaterialTheme.typography.headlineLarge.copy(
-                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
+                    "NeuroV Settings",
+                    style = MaterialTheme.typography.headlineLarge.copy(
+                        fontFamily = FontFamily.Serif,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = rSp(26.sp)
                     )
                 )
             }
@@ -190,12 +192,7 @@ fun SettingsScreen(
 
                     ModelManager.observeModels().collectLatest { data ->
                         modelList.clear(); modelList += data
-                        Log.d("ModelManager", "Model list updated: $data")
                     }
-                }
-
-                LaunchedEffect(currentModel.value) {
-                    Log.d("ModelManager", "Current model updated: ${currentModel.value}")
                 }
 
                 LaunchedEffect(professionalism, emotionalTone) {
@@ -206,12 +203,16 @@ fun SettingsScreen(
                 SectionHeader("Model Settings")
 
                 SettingCard(
-                    title = "Current Model", roundedCornerShape = RoundedCornerShape(
+                    title = "Current Model",
+                    roundedCornerShape = RoundedCornerShape(
                         topStart = outerCorner,
                         topEnd = outerCorner,
                         bottomEnd = innerCorner,
                         bottomStart = innerCorner
-                    ), actionLabel = "Switch", onAction = { showModelPicker = true }) {
+                    ),
+                    actionLabel = "Switch",
+                    onAction = { showModelPicker = true }
+                ) {
                     if (showModelPicker) {
                         ModelDialog(modelList) { selected ->
                             showModelPicker = false
@@ -237,34 +238,41 @@ fun SettingsScreen(
                             append("• Context Size: ${currentModel.value.modelCtxSize}\n")
                             append("• Model Size: ${currentModel.value.modelSize} MB\n")
                             append("• Tool Call: ${currentModel.value.toolUse}")
-                        }, modifier = Modifier.padding(12.dp)
+                        },
+                        modifier = Modifier.padding(rDP(12.dp)),
+                        fontSize = rSp(14.sp)
                     )
                 }
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(rDP(8.dp)))
 
                 SettingCard(
-                    title = "Model Tweaks", roundedCornerShape = RoundedCornerShape(
+                    title = "Model Tweaks",
+                    roundedCornerShape = RoundedCornerShape(
                         topStart = innerCorner,
                         topEnd = innerCorner,
                         bottomEnd = outerCorner,
                         bottomStart = outerCorner
-                    ), actionLabel = "Reset", onAction = onResetTweaks
+                    ),
+                    actionLabel = "Reset",
+                    onAction = onResetTweaks
                 ) {
                     Column(
-                        Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        Modifier.padding(rDP(16.dp)),
+                        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
                     ) {
                         LabeledSlider(
                             label = "Professionalism",
                             value = professionalism,
                             range = 0.1f..9.0f,
-                            onChange = { professionalism = it })
+                            onChange = { professionalism = it }
+                        )
                         LabeledSlider(
                             label = "Emotional",
                             value = emotionalTone,
                             range = 0.1f..9.0f,
-                            onChange = { emotionalTone = it })
+                            onChange = { emotionalTone = it }
+                        )
                     }
                 }
             }
@@ -275,15 +283,17 @@ fun SettingsScreen(
                 SettingCard(
                     title = "Clear User Data",
                     actionLabel = "Clear",
-                    onAction = { clearChatHistory() })
+                    onAction = { clearChatHistory() }
+                )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(rDP(8.dp)))
                 SettingCard(
                     title = "View Brain Map",
                     actionLabel = "View",
                     onAction = {
                         context.startActivity(Intent(context, TempActivity::class.java))
-                    })
+                    }
+                )
             }
 
             // ——— APP SETTINGS ———
@@ -315,25 +325,22 @@ fun SettingsScreen(
                                 updateViewModel.checkForUpdateAndStartDownload()
                                 showCard = true
                             }
-
                             UpdateStatus.FAILED -> {
                                 updateViewModel.downloadApk(context)
                                 showCard = true
                             }
-
-                            UpdateStatus.DOWNLOADING -> Unit // already downloading
+                            UpdateStatus.DOWNLOADING -> Unit
                         }
-                    }) {
+                    }
+                ) {
                     AnimatedContent(
                         targetState = Triple(updateInfo.status, updateInfo.hasUpdate, isChecking),
                         transitionSpec = {
-                            slideInVertically(animationSpec = tween(220)) { it / 2 } + fadeIn() togetherWith slideOutVertically(
-                                animationSpec = tween(220)
-                            ) { -it / 2 } + fadeOut()
+                            slideInVertically(animationSpec = tween(220)) { it / 2 } + fadeIn() togetherWith
+                                    slideOutVertically(animationSpec = tween(220)) { -it / 2 } + fadeOut()
                         },
                         label = "UpdateStatusAnimatedContent"
                     ) { (status, hasUpdate, checking) ->
-                        // 10s timeout guard — stop checking if nothing changes
                         var checkTimedOut by remember { mutableStateOf(false) }
                         LaunchedEffect(checking, status, hasUpdate) {
                             if (checking) {
@@ -351,64 +358,71 @@ fun SettingsScreen(
                         when (status) {
                             UpdateStatus.IDLE -> {
                                 if (checking) {
-                                    Column(Modifier.padding(16.dp)) {
+                                    Column(Modifier.padding(rDP(16.dp))) {
                                         Text(
                                             "Checking for updates…",
                                             style = MaterialTheme.typography.titleMedium.copy(
-                                                color = CyberViolet
+                                                color = CyberViolet,
+                                                fontSize = rSp(16.sp)
                                             )
                                         )
-                                        Spacer(Modifier.height(8.dp))
+                                        Spacer(Modifier.height(rDP(8.dp)))
                                         LinearWavyProgressIndicator(
                                             modifier = Modifier.fillMaxWidth(),
                                         )
-                                        Spacer(Modifier.height(12.dp))
+                                        Spacer(Modifier.height(rDP(12.dp)))
                                         SubtleNote("Hang tight while we ping the mothership.")
                                     }
                                 } else if (hasUpdate) {
-                                    Column(Modifier.padding(16.dp)) {
+                                    Column(Modifier.padding(rDP(16.dp))) {
                                         Text(
                                             "Update available",
                                             style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold, color = Coral
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = Coral,
+                                                fontSize = rSp(20.sp)
                                             )
                                         )
-                                        Spacer(Modifier.height(6.dp))
+                                        Spacer(Modifier.height(rDP(6.dp)))
                                         MarkdownText("Tap **Update** to download the latest build.")
                                     }
                                 } else if (checkTimedOut) {
-                                    Column(Modifier.padding(16.dp)) {
+                                    Column(Modifier.padding(rDP(16.dp))) {
                                         Text(
                                             "No update found",
                                             style = MaterialTheme.typography.titleLarge.copy(
-                                                fontWeight = FontWeight.SemiBold
+                                                fontWeight = FontWeight.SemiBold,
+                                                fontSize = rSp(20.sp)
                                             )
                                         )
-                                        Spacer(Modifier.height(6.dp))
+                                        Spacer(Modifier.height(rDP(6.dp)))
                                         SubtleNote("We checked for 10s. Servers might be sleepy—try again later.")
                                     }
                                 } else {
-                                    Column(Modifier.padding(16.dp)) {
+                                    Column(Modifier.padding(rDP(16.dp))) {
                                         Text(
                                             "You're up to date",
                                             style = MaterialTheme.typography.titleLarge.copy(
                                                 fontWeight = FontWeight.SemiBold,
-                                                color = Mint
+                                                color = Mint,
+                                                fontSize = rSp(20.sp)
                                             )
                                         )
-                                        Spacer(Modifier.height(6.dp))
+                                        Spacer(Modifier.height(rDP(6.dp)))
                                         MarkdownText("Current version: **${BuildConfig.VERSION_NAME}**")
                                     }
                                 }
                             }
 
                             UpdateStatus.DOWNLOADING -> {
-                                Column(Modifier.padding(16.dp)) {
+                                Column(Modifier.padding(rDP(16.dp))) {
                                     Text(
                                         "Downloading update…",
-                                        style = MaterialTheme.typography.titleLarge
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontSize = rSp(20.sp)
+                                        )
                                     )
-                                    Spacer(Modifier.height(8.dp))
+                                    Spacer(Modifier.height(rDP(8.dp)))
 
                                     val animatedProgress by animateFloatAsState(
                                         targetValue = updateInfo.downloadProgress.coerceIn(0f, 1f),
@@ -431,48 +445,56 @@ fun SettingsScreen(
                                     }
 
                                     if (updateInfo.whatsNew.isNotEmpty()) {
-                                        Spacer(Modifier.height(12.dp))
+                                        Spacer(Modifier.height(rDP(12.dp)))
                                         Text(
                                             buildAnnotatedString {
                                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
                                                     append("What's New:\n")
                                                 }
                                                 updateInfo.whatsNew.forEach { append("• $it\n") }
-                                            })
+                                            },
+                                            fontSize = rSp(14.sp)
+                                        )
                                     }
                                 }
                             }
 
                             UpdateStatus.FAILED -> {
-                                Column(Modifier.padding(16.dp)) {
+                                Column(Modifier.padding(rDP(16.dp))) {
                                     Text(
                                         "Download failed",
-                                        style = MaterialTheme.typography.titleLarge.copy(color = MaterialTheme.colorScheme.error)
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            color = MaterialTheme.colorScheme.error,
+                                            fontSize = rSp(20.sp)
+                                        )
                                     )
-                                    Spacer(Modifier.height(6.dp))
+                                    Spacer(Modifier.height(rDP(6.dp)))
                                     SubtleNote("Network gremlins? Tap **Retry** to try again.")
                                 }
                             }
 
                             UpdateStatus.READY_TO_INSTALL -> {
-                                Column(Modifier.padding(16.dp)) {
+                                Column(Modifier.padding(rDP(16.dp))) {
                                     Text(
                                         "Ready to install",
-                                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold)
+                                        style = MaterialTheme.typography.titleLarge.copy(
+                                            fontWeight = FontWeight.SemiBold,
+                                            fontSize = rSp(20.sp)
+                                        )
                                     )
                                     if (updateInfo.whatsNew.isNotEmpty()) {
-                                        Spacer(Modifier.height(8.dp))
+                                        Spacer(Modifier.height(rDP(8.dp)))
                                         Text(
                                             buildAnnotatedString {
                                                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                                    append(
-                                                        "What's New:\n"
-                                                    )
+                                                    append("What's New:\n")
                                                 }
                                                 updateInfo.whatsNew.forEach { append("• $it\n") }
-                                            })
+                                            },
+                                            fontSize = rSp(14.sp)
+                                        )
                                     }
-                                    Spacer(Modifier.height(6.dp))
+                                    Spacer(Modifier.height(rDP(6.dp)))
                                     SubtleNote("Tap **Install** to finish the upgrade.")
                                 }
                             }
@@ -484,15 +506,19 @@ fun SettingsScreen(
     }
 }
 
+
 @Composable
 private fun SectionHeader(title: String) {
     Column(Modifier.fillMaxWidth()) {
         Text(
             title,
-            modifier = Modifier.padding(vertical = 8.dp),
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
+            modifier = Modifier.padding(vertical = rDP(8.dp)),
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontFamily = FontFamily.Serif,
+                fontSize = rSp(20.sp)
+            )
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(Modifier.height(rDP(4.dp)))
     }
 }
 
@@ -503,16 +529,21 @@ private fun LabeledSlider(
     range: ClosedFloatingPointRange<Float>,
     onChange: (Float) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("$label : ${"%.1f".format(value)}")
+            Text(
+                "$label : ${"%.1f".format(value)}",
+                fontSize = rSp(14.sp)
+            )
             Text(
                 "${range.start} – ${range.endInclusive}",
-                style = MaterialTheme.typography.labelMedium
+                style = MaterialTheme.typography.labelMedium.copy(
+                    fontSize = rSp(12.sp)
+                )
             )
         }
         Slider(
@@ -534,6 +565,7 @@ private fun SubtleNote(text: String) {
     Text(
         text,
         style = MaterialTheme.typography.bodyMedium.copy(
+            fontSize = rSp(13.sp),
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
     )
@@ -543,7 +575,7 @@ private fun SubtleNote(text: String) {
 fun SettingCard(
     title: String,
     actionLabel: String? = null,
-    roundedCornerShape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    roundedCornerShape: RoundedCornerShape = RoundedCornerShape(rDP(18.dp)),
     onAction: (() -> Unit)? = null,
 ) {
     Column(
@@ -551,7 +583,7 @@ fun SettingCard(
             .fillMaxWidth()
             .clip(roundedCornerShape)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp)
+            .padding(rDP(16.dp))
             .animateContentSize(animationSpec = tween(250))
     ) {
         Row(
@@ -559,14 +591,21 @@ fun SettingCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = rSp(16.sp)
+                )
+            )
             if (actionLabel != null && onAction != null) {
                 Button(
-                    onClick = onAction, colors = ButtonDefaults.buttonColors(
+                    onClick = onAction,
+                    colors = ButtonDefaults.buttonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
-                    ), modifier = Modifier.height(rDP(28.dp))
-                ) { Text(actionLabel) }
+                    ),
+                    modifier = Modifier.height(rDP(28.dp))
+                ) { Text(actionLabel, fontSize = rSp(12.sp)) }
             }
         }
     }
@@ -576,7 +615,7 @@ fun SettingCard(
 fun SettingCard(
     title: String,
     actionLabel: String? = null,
-    roundedCornerShape: RoundedCornerShape = RoundedCornerShape(18.dp),
+    roundedCornerShape: RoundedCornerShape = RoundedCornerShape(rDP(18.dp)),
     onAction: (() -> Unit)? = null,
     showCard: Boolean = true,
     content: @Composable ColumnScope.() -> Unit = { }
@@ -586,7 +625,7 @@ fun SettingCard(
             .fillMaxWidth()
             .clip(roundedCornerShape)
             .background(MaterialTheme.colorScheme.surface)
-            .padding(16.dp)
+            .padding(rDP(16.dp))
             .animateContentSize(animationSpec = tween(250))
     ) {
         Row(
@@ -594,17 +633,24 @@ fun SettingCard(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(title, style = MaterialTheme.typography.titleLarge)
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontSize = rSp(16.sp)
+                )
+            )
             if (actionLabel != null && onAction != null) {
                 Button(
-                    onClick = onAction, colors = ButtonDefaults.buttonColors(
+                    onClick = onAction,
+                    colors = ButtonDefaults.buttonColors(
                         contentColor = MaterialTheme.colorScheme.primary,
                         containerColor = MaterialTheme.colorScheme.background
-                    ), modifier = Modifier.height(rDP(28.dp))
-                ) { Text(actionLabel) }
+                    ),
+                    modifier = Modifier.height(rDP(28.dp))
+                ) { Text(actionLabel, fontSize = rSp(12.sp)) }
             }
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(rDP(12.dp)))
         AnimatedVisibility(
             visible = showCard,
             enter = slideInVertically(initialOffsetY = { it / 4 }) + fadeIn(),
@@ -619,3 +665,4 @@ fun SettingCard(
         }
     }
 }
+

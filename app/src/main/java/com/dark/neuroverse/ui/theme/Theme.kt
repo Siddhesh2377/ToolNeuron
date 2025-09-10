@@ -1,6 +1,8 @@
 package com.dark.neuroverse.ui.theme
 
 import android.annotation.SuppressLint
+import android.os.Build
+import androidx.annotation.RequiresApi
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
@@ -13,8 +15,15 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.isUnspecified
+import androidx.compose.ui.unit.sp
+import kotlin.math.min
+
 
 private val DarkColorScheme = darkColorScheme(
     primary = White,
@@ -53,6 +62,51 @@ fun rDP(baseDp: Dp, designWidth: Float = 360f): Dp {
     return (baseDp.value * scaleFactor).dp
 }
 
+// responsive sp (width-based), keeps system fontScale by default
+@Composable
+fun rSp(
+    baseSp: TextUnit,
+    designWidth: Float = 360f,
+    minSp: TextUnit? = null,
+    maxSp: TextUnit? = null,
+    respectFontScale: Boolean = true
+): TextUnit {
+    val config = LocalConfiguration.current
+    val density = LocalDensity.current
+    val screenWidthDp = config.screenWidthDp.toFloat()
+    val scale = screenWidthDp / designWidth
+
+    // scaled value (still in sp units)
+    var v = baseSp.value * scale
+
+    // if you want to IGNORE accessibility fontScale (rare), neutralize it:
+    if (!respectFontScale) {
+        v /= density.fontScale.coerceAtLeast(0.001f)
+    }
+
+    // clamp if provided
+    minSp?.let { v = maxOf(v, it.value) }
+    maxSp?.let { v = min(v, maxSp.value) }
+
+    return v.sp
+}
+
+// optional: shortest-dimension scaling (better for orientation changes)
+@Composable
+fun rSpShortest(baseSp: TextUnit, designShortSide: Float = 360f): TextUnit {
+    val cfg = LocalConfiguration.current
+    val shortSide = min(cfg.screenWidthDp, cfg.screenHeightDp).toFloat()
+    val scale = shortSide / designShortSide
+    return (baseSp.value * scale).sp
+}
+
+// convenience to scale an existing TextStyle’s fontSize if set
+@Composable
+fun TextStyle.scaled(designWidth: Float = 360f): TextStyle =
+    if (fontSize.isUnspecified) this else copy(fontSize = rSp(fontSize, designWidth))
+
+
+@RequiresApi(Build.VERSION_CODES.S)
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NeuroVerseTheme(

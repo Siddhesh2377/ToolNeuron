@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.ui.components.IntroComposable
+import com.dark.neuroverse.ui.theme.rDP
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -30,9 +31,9 @@ fun IntroScreen(isJNIDownloading: Boolean) {
                 modifier = Modifier.fillMaxSize()
             ) {
                 LoadingIndicator(
-                    modifier = Modifier.size(48.dp)
+                    modifier = Modifier.size(rDP(48.dp))
                 )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(rDP(16.dp)))
                 Text(
                     text = "Initiating the required libs\n Keep The Internet On..!",
                     style = MaterialTheme.typography.bodyLarge.copy(
