@@ -70,7 +70,10 @@ object PluginManager {
         val db = LocalPluginDBManager.getInstance(context.applicationContext)
         daoRef.set(db.getPluginLocalDBDao())
         Log.d(TAG, "Database is initialized: ${daoRef.get()}")
+
         pluginScope.launch {
+            //Register Plugin From Assets :: FOR DEBUG PURPOSE ONLY
+            registerPluginFromAssets(context, arrayOf("web-searching-plugin.zip"))
             Log.d(TAG, "Starting collection of plugins from DB...")
             try {
                 daoRef.get()?.getAll()?.collect { rows ->
@@ -82,8 +85,7 @@ object PluginManager {
             }
         }
 
-        //Register Plugin From Assets :: FOR DEBUG PURPOSE ONLY
-        registerPluginFromAssets(context, arrayOf("web-searching-plugin.zip"))
+
     }
 
 

@@ -372,7 +372,6 @@ private fun ChatBubble(
                     Spacer(Modifier.height(6.dp))
                 }
 
-                Log.d("Message", "showing message: ${msg.thought}")
                 // ✅ Animated show/hide for reasoning panel
                 val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
                 AnimatedVisibility(
@@ -463,7 +462,6 @@ private fun ChatBubble(
                             }
                         }
                     } else {
-                        Log.d("Bitmap", "Bitmap is null :: ${msg.tool.toolPreview}")
                         val isLoading = pluginLoading == null
 
                         ProjectedCapturable(
