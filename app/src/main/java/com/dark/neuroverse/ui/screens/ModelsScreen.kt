@@ -1,13 +1,15 @@
 package com.dark.neuroverse.ui.screens
 
-
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,18 +29,19 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.FileOpen
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearWavyProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,12 +57,14 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelsData
+import com.dark.neuroverse.activity.ModelLoadingActivity
 import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.components.StandardBottomBar
@@ -69,38 +74,41 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.DownloadState
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.dark.neuroverse.viewModel.ModelScreenViewModelFactory
-import java.io.File
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun ModelsScreen(onNext: () -> Unit) {
     val context = LocalContext.current
-    val models = getModelList(context)
     val factory = remember { ModelScreenViewModelFactory(context) }
     val viewModel: ModelScreenViewModel = viewModel(factory = factory)
 
-    var isEnabled by remember { mutableStateOf(false) }
+    // Marketplace data (remote catalog)
+    val marketplace = remember { getModelList(context) }
+
+    // Installed state from VM
     val installedModels by viewModel.models.collectAsState()
+    var isEnabled by remember { mutableStateOf(false) }
+    LaunchedEffect(installedModels) { isEnabled = installedModels.isNotEmpty() }
 
-    LaunchedEffect(installedModels) {
-        isEnabled = installedModels.isNotEmpty()
-    }
-    var show by remember { mutableStateOf(false) }
-    // --- File Picker Setup ---
-    var selectedModelPath by remember { mutableStateOf<File?>(null) }
-
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
+    // (Kept for future) File picker for local .gguf imports
+    var showDialog by remember { mutableStateOf(false) }
+    var selectedModelPath by remember { mutableStateOf<java.io.File?>(null) }
+    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         uri?.let {
             viewModel.loadModelDetailsFromFile(it, context) { file ->
                 selectedModelPath = file
+                showDialog = true
             }
         }
     }
 
+    // Tabs: Marketplace | Installed LLM
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("MarketPlace", "Installed LLM")
+
     Scaffold { innerPadding ->
-        Column(Modifier.padding(innerPadding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(innerPadding).fillMaxSize()) {
+            // Header + Import button
             Row(
                 Modifier
                     .fillMaxWidth()
@@ -108,8 +116,6 @@ fun ModelsScreen(onNext: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-
-
                 Text(
                     "Choose Your\nModels",
                     modifier = Modifier.padding(top = 24.dp, bottom = 12.dp),
@@ -118,74 +124,173 @@ fun ModelsScreen(onNext: () -> Unit) {
                     )
                 )
 
-                // In your Composable
-                if (show) {
-                    val isLoading by viewModel.isLoading.collectAsState()
-
-                    if (isLoading) {
-                        AlertDialog(onDismissRequest = {}, confirmButton = {}, text = {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                CircularWavyProgressIndicator(waveSpeed = 50.dp)
-                                Spacer(Modifier.height(16.dp))
-                                Text("Loading model…", style = MaterialTheme.typography.bodyLarge)
-                            }
-                        })
-                    } else {
-                        ModelDialog(
-                            modelInfo = selectedModelPath ?: File("default_model.gguf"),
-                            onDismiss = { show = false },
-                            onSave = {
-                                val modelsData = it
-
-
-                                Log.d("ModelDialog", "ModelDialog: $modelsData")
-                                viewModel.loadModel(modelsData)
-                            })
-                    }
-                }
-
-
                 Button(onClick = {
-                    // Launch file picker only for .gguf
-                    filePickerLauncher.launch("application/octet-stream")
-                    viewModel.updateLoadingState(true)
-                    show = true
+                    // Launch dedicated import screen
+                    context.startActivity(Intent(context, ModelLoadingActivity::class.java))
                 }) {
-                    Icon(Icons.TwoTone.FileOpen, "Models")
+                    Icon(Icons.TwoTone.FileOpen, contentDescription = "Import Model")
                     Spacer(Modifier.width(12.dp))
                     Text("Import")
                 }
             }
 
-            val downloadStates by viewModel.downloadStates.collectAsState()
+            // Optional legacy local import dialog (still supported if you call filePickerLauncher elsewhere)
+            if (showDialog) {
+                ModelDialog(
+                    modelInfo = selectedModelPath ?: java.io.File("default_model.gguf"),
+                    onDismiss = { showDialog = false },
+                    onSave = { vmModel ->
+                        viewModel.loadModel(vmModel)
+                        showDialog = false
+                    }
+                )
+            }
 
-            LazyColumn(Modifier.weight(1f)) {
-                items(models) { modelData ->
-                    val state = downloadStates[modelData.modeName] ?: DownloadState()
+            // Tabs
+            TabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
+                tabs.forEachIndexed { index, label ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(label) }
+                    )
+                }
+            }
 
-                    ModelCard(
-                        modelsData = modelData,
-                        isDownloading = state.isDownloading,
-                        progress = state.progress,
-                        onDownloadComplete = state.isComplete,
-                        viewModel = viewModel,
-                        onDownload = { viewModel.startDownload(modelData) })
+            // Animated content per tab
+            AnimatedContent(
+                targetState = selectedTab,
+                transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(150)) },
+                modifier = Modifier.weight(1f)
+            ) { tab ->
+                when (tab) {
+                    0 -> MarketplaceList(viewModel)
+                    else -> InstalledList(viewModel)
                 }
             }
 
             StandardBottomBar(Modifier.padding(bottom = 14.dp)) {
                 CollapsableButton(
-                    text = "Finish", icon = Icons.AutoMirrored.Default.ArrowForward, enabled = isEnabled
+                    text = "Finish",
+                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+                    enabled = isEnabled
                 ) { onNext() }
             }
         }
     }
-
 }
 
+// ——————————————————————————————————————————————————————————
+// Marketplace Tab
+// ——————————————————————————————————————————————————————————
+@Composable
+private fun MarketplaceList(viewModel: ModelScreenViewModel) {
+    val context = LocalContext.current
+    val models = remember { getModelList(context) }
+    val downloadStates by viewModel.downloadStates.collectAsState()
+
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(models) { modelData ->
+            val state: DownloadState = downloadStates[modelData.modeName] ?: DownloadState()
+            ModelCard(
+                modelsData = modelData,
+                isDownloading = state.isDownloading,
+                progress = state.progress,
+                onDownloadComplete = state.isComplete,
+                viewModel = viewModel,
+                onDownload = { viewModel.startDownload(modelData) }
+            )
+        }
+    }
+}
+
+// ——————————————————————————————————————————————————————————
+// Installed LLM Tab
+// ——————————————————————————————————————————————————————————
+@Composable
+private fun InstalledList(viewModel: ModelScreenViewModel) {
+    val installed by viewModel.models.collectAsState()
+
+    LazyColumn(Modifier.fillMaxSize()) {
+        items(installed, key = { it.modeName }) { model ->
+            InstalledModelCard(
+                model = model,
+                onDelete = { viewModel.removeModel(model.modeName) }
+            )
+        }
+    }
+}
+
+// ——————————————————————————————————————————————————————————
+// Installed card — compact, readable specs
+// ——————————————————————————————————————————————————————————
+@Composable
+private fun InstalledModelCard(
+    model: ModelsData,
+    onDelete: () -> Unit
+) {
+    val isLocalImport = model.modelLink.isBlank() && model.modelPageLink.isBlank()
+    val colors = MaterialTheme.colorScheme
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        colors = CardDefaults.cardColors(containerColor = colors.surface)
+    ) {
+        Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            // Header row
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            model.modeName,
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Pill(if (isLocalImport) "Local" else "Remote")
+                    }
+                    if (!isLocalImport && model.modelDescription.isNotBlank()) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            model.modelDescription,
+                            style = MaterialTheme.typography.bodyMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                IconButton(onClick = onDelete) {
+                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete")
+                }
+            }
+
+            // Specs grid
+            SpecGrid(
+                "Size" to ("${model.modelSize} MB"),
+                "Context" to model.modelCtxSize.toString(),
+                "Tools" to model.toolUse.uppercase(),
+                "Path" to model.modelPath,
+            )
+
+            // External page for remote models
+            if (!isLocalImport && model.modelPageLink.isNotBlank()) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                    val ctx = LocalContext.current
+                    IconButton(onClick = {
+                        try { ctx.startActivity(Intent(Intent.ACTION_VIEW, model.modelPageLink.toUri())) } catch (_: Exception) {}
+                    }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) }
+                }
+            }
+        }
+    }
+}
+
+// ——————————————————————————————————————————————————————————
+// Marketplace card — optimized info layout
+// ——————————————————————————————————————————————————————————
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelCard(
@@ -196,111 +301,75 @@ fun ModelCard(
     viewModel: ModelScreenViewModel,
     onDownload: () -> Unit = {}
 ) {
-
     val context = LocalContext.current
     var isInstalled by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        viewModel.checkIfInstalled(modelsData.modeName, onResult = {
-            isInstalled = it
-        })
-    }
+    LaunchedEffect(Unit) { viewModel.checkIfInstalled(modelsData.modeName) { isInstalled = it } }
+    LaunchedEffect(onDownloadComplete) { if (onDownloadComplete) isInstalled = true }
 
-    LaunchedEffect(onDownloadComplete) {
-        if (onDownloadComplete) {
-            isInstalled = true
-        }
-    }
-
-    val buttonColor = if (!isInstalled) {
-        ButtonDefaults.buttonColors()
-    } else {
-        ButtonDefaults.buttonColors(containerColor = onSuccess, contentColor = Success)
-    }
+    val buttonColor = if (!isInstalled) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(
+        containerColor = onSuccess,
+        contentColor = Success
+    )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(26.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header
             Text(
                 modelsData.modeName,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
-            Text(
-                modelsData.modelDescription, style = MaterialTheme.typography.bodyLarge
-            )
-
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-            ) {
-                Text(
-                    buildAnnotatedString {
-                        withStyle(
-                            style = SpanStyle(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = MaterialTheme.typography.titleMedium.fontSize
-                            )
-                        ) {
-                            append("Details\n")
-                        }
-                        append("\u2023 Context Size: ${modelsData.modelCtxSize}\n")
-                        append("\u2023 Model Size: ${modelsData.modelSize} MB\n")
-                        append("\u2023 Tool Call: ${modelsData.toolUse.uppercase()}")
-                    })
+            if (modelsData.modelDescription.isNotBlank()) {
+                Text(modelsData.modelDescription, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
 
-            AnimatedVisibility(isDownloading) {
-                LinearWavyProgressIndicator(
-                    modifier = Modifier.fillMaxWidth(),
-                    progress = { progress },
-                )
+            // Specs as chips + grid
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Pill("${modelsData.modelSize} MB")
+                Spacer(Modifier.width(8.dp))
+                Pill("Ctx ${modelsData.modelCtxSize}")
+                Spacer(Modifier.width(8.dp))
+                Pill(modelsData.toolUse.uppercase())
             }
+
+            SpecGrid(
+                "Context" to modelsData.modelCtxSize.toString(),
+                "Size" to ("${modelsData.modelSize} MB"),
+                "Tools" to modelsData.toolUse.uppercase(),
+                "Path" to modelsData.modelPath
+            )
+
+            AnimatedVisibility(visible = isDownloading) {
+                LinearProgressIndicator(modifier = Modifier.fillMaxWidth(), progress = { progress })
+            }
+
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-
-                Button(onClick = {
-                    if (!isInstalled) {
-                        if (isDownloading) {
-                            viewModel.cancelDownload(modelsData.modeName, modelsData.modelPath)
-                        } else {
-                            onDownload()
+                Button(
+                    onClick = {
+                        if (!isInstalled) {
+                            if (isDownloading) viewModel.cancelDownload(modelsData.modeName, modelsData.modelPath) else onDownload()
                         }
-                    }
-                }, colors = buttonColor) {
-                    Crossfade(isInstalled) {
-                        when (it) {
-                            true -> {
-                                Icon(Icons.Default.Check, contentDescription = "")
-                            }
-
-                            false -> {
-                                Crossfade(isDownloading) { isDownload ->
-                                    when (isDownload) {
-                                        true -> {
-                                            Icon(
-                                                Icons.Default.Stop,
-                                                contentDescription = "Cancel Download",
-                                            )
-                                        }
-
-                                        false -> {
-                                            Icon(
-                                                Icons.Default.ArrowCircleDown,
-                                                contentDescription = "Download",
-                                            )
-                                        }
-                                    }
-                                }
+                    },
+                    colors = buttonColor
+                ) {
+                    AnimatedContent(targetState = isInstalled, transitionSpec = { fadeIn() togetherWith fadeOut() }) { installed ->
+                        if (installed) {
+                            Icon(Icons.Filled.Check, contentDescription = null)
+                        } else {
+                            AnimatedContent(targetState = isDownloading, transitionSpec = { fadeIn() togetherWith fadeOut() }) { downloading ->
+                                if (downloading) Icon(Icons.Filled.Stop, contentDescription = null) else Icon(Icons.Filled.ArrowCircleDown, contentDescription = null)
                             }
                         }
                     }
@@ -308,18 +377,17 @@ fun ModelCard(
 
                 Spacer(Modifier.width(rDP(8.dp)))
 
-                AnimatedVisibility(isInstalled) {
+                AnimatedVisibility(visible = isInstalled) {
                     Button(
                         onClick = {
                             viewModel.removeModel(modelsData.modeName)
                             isInstalled = false
-                        }, colors = ButtonDefaults.buttonColors(
+                        },
+                        colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.error
                         )
-                    ) {
-                        Icon(Icons.TwoTone.Delete, contentDescription = "")
-                    }
+                    ) { Icon(Icons.TwoTone.Delete, contentDescription = null) }
                 }
 
                 Spacer(Modifier.weight(1f))
@@ -327,10 +395,37 @@ fun ModelCard(
                 IconButton(onClick = {
                     val intent = Intent(Intent.ACTION_VIEW, modelsData.modelPageLink.toUri())
                     context.startActivity(intent)
-                }) {
-                    Icon(Icons.AutoMirrored.Default.OpenInNew, contentDescription = "")
-                }
+                }) { Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null) }
             }
         }
+    }
+}
+
+// ——————————————————————————————————————————————————————————
+// Reusable UI bits
+// ——————————————————————————————————————————————————————————
+@Composable
+private fun Pill(text: String) {
+    Text(
+        text,
+        modifier = Modifier
+            .padding(vertical = 2.dp, horizontal = 0.dp)
+            .padding(end = 0.dp),
+        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+    )
+}
+
+@Composable
+private fun SpecGrid(vararg pairs: Pair<String, String>) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        pairs.forEach { (k, v) -> SpecRow(k, v) }
+    }
+}
+
+@Composable
+private fun SpecRow(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

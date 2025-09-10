@@ -11,6 +11,7 @@ data class PluginManifest(
     val tools: List<Tools> = emptyList(),
     val version: String = "",
     val rawCode: String = "",
+    val metaData: MetaData = MetaData(),
     val rawToolsCode: String = ""
 )
 
@@ -18,12 +19,18 @@ data class Tools(
     val toolName: String = "",
     val path: String = "",
     val args: Map<String, Any?> = emptyMap() // allow numbers/bools too
+)
 
+data class MetaData(
+    val author: String = "",
+    val role: String = "",
+    val pluginApi: String = "",
 )
 
 object PluginTypeConverters {
     private val gson = Gson()
 
+    // ----- List<Tools> -----
     @TypeConverter
     @JvmStatic
     fun toolsListToJson(value: List<Tools>?): String =
@@ -37,6 +44,7 @@ object PluginTypeConverters {
         return gson.fromJson(json, type)
     }
 
+    // ----- Map<String, Any?> (Tools.args) -----
     @TypeConverter
     @JvmStatic
     fun mapToJson(map: Map<String, Any?>?): String =
@@ -49,4 +57,15 @@ object PluginTypeConverters {
         val type = object : TypeToken<Map<String, Any?>>() {}.type
         return gson.fromJson(json, type)
     }
+
+    // ----- MetaData -----
+    @TypeConverter
+    @JvmStatic
+    fun metaDataToJson(meta: MetaData?): String =
+        gson.toJson(meta ?: MetaData())
+
+    @TypeConverter
+    @JvmStatic
+    fun jsonToMetaData(json: String?): MetaData =
+        if (json.isNullOrBlank()) MetaData() else gson.fromJson(json, MetaData::class.java)
 }

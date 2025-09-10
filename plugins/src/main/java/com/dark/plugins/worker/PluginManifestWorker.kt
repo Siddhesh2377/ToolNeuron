@@ -1,6 +1,6 @@
 package com.dark.plugins.worker
 
-import android.util.Log
+import com.dark.plugins.model.MetaData
 import com.dark.plugins.model.PluginManifest
 import com.dark.plugins.model.Tools
 import org.json.JSONArray
@@ -35,6 +35,18 @@ class PluginManifestWorker {
     fun getPluginVersion(): String = root.optString("version", "")
 
     /**
+     * Optional. Returns default MetaData() if missing.
+     */
+    fun getMetaData(): MetaData {
+        val m = root.optJSONObject("metaData") ?: return MetaData()
+        return MetaData(
+            author = m.optString("author", ""),
+            role = m.optString("role", ""),
+            pluginApi = m.optString("pluginApi", "")
+        )
+    }
+
+    /**
      * Parse the tools array safely. Each tool: { toolName, path, args:{} }
      */
     fun getTools(): List<Tools> {
@@ -48,9 +60,7 @@ class PluginManifestWorker {
             val argsObj = tObj.optJSONObject("args") ?: JSONObject()
 
             out += Tools(
-                toolName = toolName,
-                path = path,
-                args = argsObj.toMap()
+                toolName = toolName, path = path, args = argsObj.toMap()
             )
         }
         return out
@@ -66,11 +76,14 @@ class PluginManifestWorker {
             tools = getTools(),
             version = getPluginVersion(),
             rawCode = this.jsonCode,
+            metaData = getMetaData(),            // <- include parsed MetaData
             rawToolsCode = toolsArr.toString()
         )
     }
 
     fun getManifestCode(): String = this.jsonCode
+
+
 }
 
 /** ---------- JSON helpers ---------- */
