@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
+import android.content.Intent
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContent
@@ -52,6 +53,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -62,6 +64,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
+import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.ui.components.MarkdownText
@@ -103,7 +106,7 @@ fun SettingsScreen(
     lateinit var key: MutableStateFlow<SecretKey>
     var rootNode: MutableStateFlow<NeuronTree>? = null
     val chatList = remember { MutableStateFlow(emptyList<ChatINFO>()) }
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
     val updateViewModel: UpdateViewModel = viewModel()
     val updateInfo by updateViewModel.updateInfo.collectAsState()
@@ -273,6 +276,14 @@ fun SettingsScreen(
                     title = "Clear User Data",
                     actionLabel = "Clear",
                     onAction = { clearChatHistory() })
+
+                Spacer(Modifier.height(8.dp))
+                SettingCard(
+                    title = "View Brain Map",
+                    actionLabel = "View",
+                    onAction = {
+                        context.startActivity(Intent(context, TempActivity::class.java))
+                    })
             }
 
             // ——— APP SETTINGS ———

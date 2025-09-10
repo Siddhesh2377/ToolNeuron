@@ -3,7 +3,6 @@ package com.dark.neuroverse.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
-import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -217,8 +216,6 @@ private fun TopBar(
 private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val generationState by viewModel.generationState.collectAsStateWithLifecycle()
-    // ✅ collect the reasoning-visibility toggle from VM (must exist there)
-    val showReasoning by viewModel.showReasoning.collectAsStateWithLifecycle()
 
     Box(
         modifier = Modifier
@@ -238,12 +235,8 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 items(
                     items = messages, key = { it.id },                    // <-- stable!
                     contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
-                    ChatBubble(msg, generationState, showReasoning) {
+                    ChatBubble(msg, generationState) {
                         val preview = writeBitmapImage(it)
-
-                        Log.d("ChatBubble", "BITMAP: $it")
-                        Log.d("ChatBubble", "STRING BITMAP: $preview")
-
                         viewModel.writeToolPreviewByID(msg.id, preview)
                     }
                     Spacer(Modifier.height(18.dp))
@@ -318,203 +311,6 @@ private fun EmptyHint() {
     }
 }
 
-@Composable
-private fun ChatBubble(
-    msg: Message,
-    generationState: GenerationState,
-    showReasoning: Boolean,
-    onCapture: (Bitmap) -> Unit
-) {
-
-    val isUser = msg.role == Role.User
-    val bubbleColor = if (isUser) MaterialTheme.colorScheme.primary
-    else Color.Transparent
-
-    val textColor =
-        if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.primary
-    val align = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
-    val radius = with(LocalDensity.current) { 18.dp }
-
-    val corner = RoundedCornerShape(radius)
-
-    var shouldCaptureNow by remember { mutableStateOf(false) }
-
-    LaunchedEffect(generationState) {
-        shouldCaptureNow = when (generationState) {
-            GenerationState.DONE -> {
-                true
-            }
-
-            else -> {
-                false
-            }
-        }
-    }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
-    ) {
-        Box(
-            modifier = Modifier
-                .then(if (isUser) Modifier.widthIn(max = 300.dp) else Modifier.fillMaxWidth())
-                .clip(
-                    corner
-                )
-                .background(bubbleColor)
-                .padding(14.dp)
-                .animateContentSize(animationSpec = tween(120)), // ✅ micro-resize when content changes
-            contentAlignment = align
-        ) {
-            Column {
-                if (msg.tool != null) {
-                    AssistTag(msg.tool.toolName)
-                    Spacer(Modifier.height(6.dp))
-                }
-
-                // ✅ Animated show/hide for reasoning panel
-                val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
-                AnimatedVisibility(
-                    visible = thoughtVisible,
-                    enter = fadeIn(animationSpec = tween(120)) + expandVertically(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    ) + slideInVertically(initialOffsetY = { -it / 6 }),
-                    exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) + slideOutVertically(targetOffsetY = { -it / 6 })
-                ) {
-                    var showThinkingText by remember { mutableStateOf(true) }
-
-                    Spacer(Modifier.height(6.dp))
-                    Box(Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            showThinkingText = !showThinkingText
-                        }
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF0F172A))          // slate-ish
-                        .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
-                        .padding(10.dp)
-                        .animateContentSize(animationSpec = tween(120))) {
-                        Crossfade(
-                            if (showThinkingText) "Thinking..." else "Thought: \n${msg.thought}",
-                            label = msg.thought!!
-                        ) { txt ->
-                            Text(
-                                text = txt,
-                                color = Color(0xFFCBD5E1),
-                                fontSize = 12.sp,
-                                lineHeight = 18.sp,
-                                fontFamily = FontFamily.Monospace
-                            )
-                        }
-                    }
-                }
-
-                if (!isUser) Spacer(Modifier.height(12.dp))
-
-                MarkdownText(
-                    msg.text,
-                    color = textColor,
-                    style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
-                )
-
-                if (!isUser && msg.tool != null) {
-                    // Only collect when this bubble is actually showing plugin content
-                    val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
-
-                    val bitmap: Bitmap? = readBitmapImage(msg.tool.toolPreview)
-                    if (bitmap != null) {
-                        val decoded = remember(msg.tool.toolPreview) {
-                            readBitmapImage(msg.tool.toolPreview)
-                        }
-
-                        if (decoded != null) {
-                            Log.d(
-                                "Bitmap",
-                                "showing preview ${decoded.width}x${decoded.height}, b64len=${msg.tool.toolPreview.length}"
-                            )
-
-                            Box(
-                                Modifier
-                                    .padding(top = 8.dp)
-                                    .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(MaterialTheme.colorScheme.surfaceVariant) // visible contrast
-                                    .border(
-                                        1.dp,
-                                        MaterialTheme.colorScheme.outline,
-                                        RoundedCornerShape(12.dp)
-                                    )
-                            ) {
-                                Image(
-                                    bitmap = decoded.asImageBitmap(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillWidth,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            }
-                        }
-                    } else {
-                        val isLoading = pluginLoading == null
-
-                        ProjectedCapturable(
-                            captureKey = msg.id,         // stable + flips when ready
-                            captureWhen = shouldCaptureNow,
-                            onCaptured = { bmp ->
-                                onCapture(bmp)
-                                shouldCaptureNow = false
-                            },
-                        ) {
-                            Crossfade(targetState = isLoading, label = "plugin") { loading ->
-                                if (loading) {
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surface
-                                        ),
-                                        elevation = CardDefaults.cardElevation(0.dp),
-                                        modifier = Modifier.size(200.dp),
-                                    ) {
-                                        Column(
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .padding(24.dp),
-                                            verticalArrangement = Arrangement.spacedBy(
-                                                16.dp, Alignment.CenterVertically
-                                            ),
-                                            horizontalAlignment = Alignment.CenterHorizontally
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(32.dp), strokeWidth = 3.dp
-                                            )
-                                            Text(
-                                                text = "Loading...Plugin \n ${msg.tool.toolName}",
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                textAlign = TextAlign.Center,
-                                                fontFamily = FontFamily.Serif
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    Card(elevation = CardDefaults.cardElevation(0.dp)) {
-                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
-                                            ?.invoke()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun AssistTag(name: String) {
@@ -701,14 +497,12 @@ private fun ChatInputBar(
             LazyRow(Modifier.weight(1f)) {
                 items(selectedTools, key = { it.toolName } // stable key for animation
                 ) { tool ->
-                    ToolCard(
-                        modifier = Modifier
-                            .animateItem()
-                            .clickable {
-                                onToolRemoved(tool)
-                            }
-                            .padding(8.dp), tool = tool
-                    )
+                    ToolCard(modifier = Modifier
+                        .animateItem()
+                        .clickable {
+                            onToolRemoved(tool)
+                        }
+                        .padding(8.dp), tool = tool)
                 }
             }
 
@@ -716,12 +510,10 @@ private fun ChatInputBar(
                 onClick = {
                     showModelList = !showModelList
                     showToolsList = false
-                },
-                colors = IconButtonDefaults.iconButtonColors(
+                }, colors = IconButtonDefaults.iconButtonColors(
                     containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
                     contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Icon(Icons.Default.SmartToy, contentDescription = "Add")
             }
@@ -807,5 +599,238 @@ private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
         contentAlignment = Alignment.Center
     ) {
         Icon(Icons.Default.Web, contentDescription = "Open File", tint = accentColor)
+    }
+}
+
+
+@Composable
+private fun ChatBubble(
+    msg: Message, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+) {
+    //Main Bool's
+    val isUser = msg.role == Role.User
+
+    //data flow
+    var shouldCaptureNow by remember { mutableStateOf(false) }
+
+    LaunchedEffect(generationState) {
+        shouldCaptureNow = when (generationState) {
+            GenerationState.DONE -> true
+            else -> false
+        }
+    }
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End.takeIf { isUser } ?: Arrangement.Start) {
+        Column {
+            val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
+            if (thoughtVisible) {
+                ThinkingChatUI(msg)
+                Spacer(Modifier.height(8.dp))
+            }
+
+            when (msg.role) {
+                Role.User -> {
+                    UserChatUI(msg)
+                }
+
+                Role.Assistant -> {
+                    RegularChatUI(msg)
+                }
+
+                Role.Tool -> {
+                    ToolChatUI(msg, shouldCaptureNow) {
+                        shouldCaptureNow = false
+                        onCapture(it)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ToolChatUI(message: Message, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit) {
+    Column {
+        AssistTag(message.tool?.toolName ?: "Unknown Tool")
+        Spacer(Modifier.height(6.dp))
+        val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
+
+        val pluginPreviewLoading: Bitmap? = readBitmapImage(message.tool?.toolPreview ?: "")
+
+        when (pluginPreviewLoading == null) {
+            true -> {
+                val isLoading = pluginLoading == null
+
+                ProjectedCapturable(
+                    captureKey = message.id,         // stable + flips when ready
+                    captureWhen = shouldCaptureNow,
+                    onCaptured = { bmp ->
+                        onCapture(bmp)
+                    },
+                ) {
+                    Crossfade(targetState = isLoading, label = "plugin") { loading ->
+                        if (loading) {
+                            Card(
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface
+                                ),
+                                elevation = CardDefaults.cardElevation(0.dp),
+                                modifier = Modifier.size(200.dp),
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(24.dp),
+                                    verticalArrangement = Arrangement.spacedBy(
+                                        16.dp, Alignment.CenterVertically
+                                    ),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp), strokeWidth = 3.dp
+                                    )
+                                    Text(
+                                        text = "Loading...Plugin \n ${message.tool?.toolName}",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        textAlign = TextAlign.Center,
+                                        fontFamily = FontFamily.Serif
+                                    )
+                                }
+                            }
+                        } else {
+                            Card(elevation = CardDefaults.cardElevation(0.dp)) {
+                                PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                                    ?.invoke()
+                            }
+                        }
+                    }
+                }
+            }
+
+            false -> {
+                var showToolOutput by remember { mutableStateOf(false) }
+
+
+                Box(Modifier
+                    .clickable {
+                        showToolOutput = !showToolOutput
+                    }
+                    .padding(top = 8.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surface) // visible contrast
+                    .border(
+                        1.dp, MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp)
+                    )) {
+                    Crossfade(targetState = showToolOutput) { visible ->
+                        when (visible) {
+                            true -> {
+                                Image(
+                                    bitmap = pluginPreviewLoading.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.FillWidth,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            false -> {
+                                Card(
+                                    elevation = CardDefaults.cardElevation(0.dp),
+                                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary)
+                                ) {
+                                    Text(
+                                        "Show Tool Output",
+                                        Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RegularChatUI(message: Message) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(14.dp),
+    ) {
+        MarkdownText(
+            message.text,
+            color = MaterialTheme.colorScheme.primary,
+            style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
+        )
+    }
+}
+
+@Composable
+private fun UserChatUI(message: Message) {
+    val radius = with(LocalDensity.current) { 18.dp }
+
+    //shape
+    val corner = RoundedCornerShape(radius)
+
+    Box(
+        modifier = Modifier
+            .widthIn(max = 300.dp)
+            .clip(corner)
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(14.dp),
+    ) {
+        MarkdownText(
+            message.text,
+            color = MaterialTheme.colorScheme.onPrimary,
+            style = TextStyle.Default.copy(fontSize = 15.sp, lineHeight = 20.sp)
+        )
+    }
+}
+
+@Composable
+private fun ThinkingChatUI(message: Message) {
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(120)) + expandVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
+            )
+        ) + slideInVertically(initialOffsetY = { -it / 6 }),
+        exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
+            )
+        ) + slideOutVertically(targetOffsetY = { -it / 6 })
+    ) {
+        var showThinkingText by remember { mutableStateOf(true) }
+
+        Spacer(Modifier.height(6.dp))
+        Box(Modifier
+            .fillMaxWidth()
+            .clickable {
+                showThinkingText = !showThinkingText
+            }
+            .clip(RoundedCornerShape(8.dp))
+            .background(Color(0xFF0F172A))          // slate-ish
+            .border(1.dp, Color(0xFF334155), RoundedCornerShape(8.dp))
+            .padding(10.dp)
+            .animateContentSize(animationSpec = tween(120))) {
+            Crossfade(
+                if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
+                label = message.thought!!
+            ) { txt ->
+                Text(
+                    text = txt,
+                    color = Color(0xFFCBD5E1),
+                    fontSize = 12.sp,
+                    lineHeight = 18.sp,
+                    fontFamily = FontFamily.Monospace
+                )
+            }
+        }
     }
 }

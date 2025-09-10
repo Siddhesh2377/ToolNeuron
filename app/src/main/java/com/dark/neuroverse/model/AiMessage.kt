@@ -9,7 +9,7 @@ data class ChatINFO(
 )
 
 @Serializable
-enum class Role { User, Assistant, Error }
+enum class Role { User, Assistant, Tool }
 
 @Serializable
 data class RunningTool(

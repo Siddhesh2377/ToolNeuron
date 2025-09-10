@@ -22,7 +22,7 @@ import kotlinx.serialization.Serializable
  * ```
  */
 @Serializable
-class NeuronTree(internal val root: NeuronNode) {
+class NeuronTree(val root: NeuronNode) {
 
     /** Maps node ID to its unique path in the tree (e.g., root/0/1). */
     private val nodeIndex = mutableMapOf<String, String>()
