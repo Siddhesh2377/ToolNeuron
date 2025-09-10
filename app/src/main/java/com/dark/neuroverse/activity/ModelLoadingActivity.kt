@@ -223,6 +223,7 @@ fun ModelLoadingScreen(
                                     }
                                 ) { Text("Overwrite") }
                             },
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
                             dismissButton = {
                                 TextButton(onClick = { showDupDialog = false }) { Text("Cancel") }
                             },
