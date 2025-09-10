@@ -79,6 +79,17 @@ fun ModelLoadingScreen(
     var ctxSize by remember { mutableStateOf(TextFieldValue("2048")) }
     var toolCalling by remember { mutableStateOf(false) }
 
+    // Duplicate handling
+    var showDupDialog by remember { mutableStateOf(false) }
+    var pendingModel by remember { mutableStateOf<ModelsData?>(null) }
+
+    fun saveAndExit(model: ModelsData) {
+        viewModel.addModel(model)
+        Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
+        context.startActivity(Intent(context, MainActivity::class.java))
+        activity?.finish()
+    }
+
     // File picker
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
         if (uri == null) return@rememberLauncherForActivityResult
@@ -150,9 +161,9 @@ fun ModelLoadingScreen(
                             toolCalling = toolCalling,
                             onToolCalling = { toolCalling = it }
                         ) {
-                            // Save
+                            // Build candidate and check for duplicates
                             val sizeMb = ((f.length() / 1024.0 / 1024.0).toInt())
-                            val model = ModelsData(
+                            val candidate = ModelsData(
                                 modeName = name.text.ifBlank { deriveModelName(f) },
                                 modelDescription = buildString {
                                     if (info != null && info.optJSONObject("core") != null) {
@@ -173,10 +184,15 @@ fun ModelLoadingScreen(
                                 chatTemplate = "",
                                 modelSize = sizeMb
                             )
-                            viewModel.addModel(model)
-                            Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
-                            context.startActivity(Intent(context, MainActivity::class.java))
-                            activity?.finish()
+
+                            viewModel.checkIfInstalled(candidate.modeName) { exists ->
+                                if (exists) {
+                                    pendingModel = candidate
+                                    showDupDialog = true
+                                } else {
+                                    saveAndExit(candidate)
+                                }
+                            }
                         }
                     }
                 }
@@ -187,6 +203,33 @@ fun ModelLoadingScreen(
                         color = MaterialTheme.colorScheme.error,
                         modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp)
                     )
+                }
+
+                // Duplicate dialog
+                if (showDupDialog) {
+                    val dup = pendingModel
+                    if (dup != null) {
+                        AlertDialog(
+                            onDismissRequest = { showDupDialog = false },
+                            confirmButton = {
+                                // Overwrite
+                                TextButton(
+                                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
+                                    onClick = {
+                                        showDupDialog = false
+                                        // remove then save
+                                        viewModel.removeModel(dup.modeName)
+                                        saveAndExit(dup)
+                                    }
+                                ) { Text("Overwrite") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showDupDialog = false }) { Text("Cancel") }
+                            },
+                            title = { Text("Name already exists") },
+                            text = { Text("A model named \"${dup.modeName}\" already exists. Overwrite it, or cancel and choose a different name.") }
+                        )
+                    }
                 }
             }
         }

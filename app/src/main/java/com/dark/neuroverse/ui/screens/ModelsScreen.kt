@@ -107,7 +107,7 @@ fun ModelsScreen(onNext: () -> Unit) {
     val tabs = listOf("MarketPlace", "Installed LLM")
 
     Scaffold { innerPadding ->
-        Column(Modifier.padding(innerPadding).fillMaxSize()) {
+        Column(Modifier.padding(innerPadding).fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
             // Header + Import button
             Row(
                 Modifier
