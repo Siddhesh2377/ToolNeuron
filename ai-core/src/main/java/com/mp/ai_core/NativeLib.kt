@@ -34,6 +34,9 @@ class NativeLib {
         callback: StreamCallback
     ): Boolean
 
+    external fun nativeSetToolsJson(toolsJson: String) // NEW
+
+
     external fun nativeSetSystemPrompt(prompt: String)
 
     external fun nativeGetModelInfo(): String
@@ -52,7 +55,7 @@ class NativeLib {
         gpuLayers: Int = 0,
         useMMAP: Boolean = true,
         useMLOCK: Boolean = false,
-        ctxSize: Int = 2048,
+        ctxSize: Int = 4096,
         temp: Float = 0.7f,
         topK: Int = 20,
         topP: Float = 0.9f,
@@ -82,9 +85,11 @@ class NativeLib {
         maxTokens: Int = 512,
         uiScope: CoroutineScope,
         onStart: () -> Unit,
-        onGenerate: (String) -> Unit, // will be called with coalesced chunks
+        onGenerate: (String) -> Unit,
         onError: (String) -> Unit,
-        onDone: () -> Unit
+        onDone: () -> Unit,
+        toolsJson: String? = null,                                        // NEW (optional)
+        onToolCall: (name: String, argsJson: String) -> Unit = { _, _ -> } // NEW (optional)
     ): Job {
         // Guard: model present?
         val modelInfo = runCatching { nativeGetModelInfo() }.getOrNull()
@@ -92,60 +97,50 @@ class NativeLib {
             val err = "No model loaded. Please call initModel() first."
             Log.e(TAG, err)
             onError(err)
-            // Return an already-completed job (no work running)
             return SupervisorJob().apply { complete() }
         }
 
-        // Channel for tokens coming from JNI callback (no per-token coroutines)
-        // Small buffer keeps memory bounded; adjust if needed.
+        // Enable/disable tools for this turn
+        if (toolsJson != null) nativeSetToolsJson(toolsJson) else nativeSetToolsJson("")
+
         val tokenCh = Channel<String>(capacity = 256)
 
-        // A tiny batcher to reduce UI updates; adjust period as you like
         val batchPeriodMs = 35L
         val batcherJob = uiScope.launch(Dispatchers.Default) {
             val sb = StringBuilder()
             var lastFlush = System.nanoTime()
-
-            fun flushIfNeeded(force: Boolean = false) {
-                if (sb.isNotEmpty() && (force ||
-                            ((System.nanoTime() - lastFlush) / 1_000_000) >= batchPeriodMs)) {
+            fun flush(force: Boolean = false) {
+                if (sb.isNotEmpty() && (force || (System.nanoTime() - lastFlush) / 1_000_000 >= batchPeriodMs)) {
                     val chunk = sb.toString()
                     sb.setLength(0)
                     lastFlush = System.nanoTime()
-                    // Switch to Main only for the actual UI callback
-                    uiScope.launch(Dispatchers.Main.immediate) {
-                        onGenerate(chunk)
-                    }
+                    uiScope.launch(Dispatchers.Main.immediate) { onGenerate(chunk) }
                 }
             }
-
             try {
                 for (tok in tokenCh) {
                     sb.append(tok)
-                    flushIfNeeded(force = false)
+                    flush(false)
                 }
             } finally {
-                // Final flush on normal close or cancellation
-                flushIfNeeded(force = true)
+                flush(true)
             }
         }
 
-        // JNI callback -> push tokens without launching a coroutine each time
         val cb = object : StreamCallback {
             override fun onToken(token: String) {
-                // Non-suspending, thread-safe. If buffer is full, drop the token to protect UI.
-                // If you prefer to block instead, use tokenCh.trySend(token).isSuccess check.
                 if (!tokenCh.trySend(token).isSuccess) {
-                    // Optional: count drops for diagnostics
                     Log.w(TAG, "Token dropped due to backpressure")
                 }
             }
-            override fun onDone() {
-                // Close from callback side as well (safe even if already closed)
-                tokenCh.close()
+            // 🔥 NEW: tool-call surfaced to app; native will also end the turn with onDone()
+            override fun onToolCall(name: String, argsJson: String) {
+                uiScope.launch(Dispatchers.Main.immediate) {
+                    onToolCall(name, argsJson)
+                }
             }
+            override fun onDone() { tokenCh.close() }
             override fun onError(message: String) {
-                // Surface error and close stream
                 uiScope.launch(Dispatchers.Main.immediate) { onError(message) }
                 tokenCh.close()
             }
@@ -153,43 +148,34 @@ class NativeLib {
 
         onStart()
 
-        // Parent job that runs native call and ties all children together
         val parentJob = uiScope.launch(Dispatchers.IO) {
             try {
-                // This blocks until native finishes or is stopped
                 nativeGenerateStream(prompt, maxTokens, cb)
             } catch (t: Throwable) {
                 Log.e(TAG, "nativeGenerateStream error", t)
-                withContext(Dispatchers.Main.immediate) {
-                    onError(t.message ?: "Native error")
-                }
+                withContext(Dispatchers.Main.immediate) { onError(t.message ?: "Native error") }
             } finally {
-                // Ensure the channel is closed even if native didn't call onDone()
                 tokenCh.close()
             }
         }
 
-        // When the parent completes (normal/stop/cancel), finish batcher then call onDone once.
         parentJob.invokeOnCompletion {
-            // Ensure batcher is finished and last chunk delivered
-            batcherJob.cancel() // this triggers final flush in finally{}
+            batcherJob.cancel()
             uiScope.launch {
-                // Give the batcher a turn to flush
                 batcherJob.join()
-                withContext(Dispatchers.Main.immediate) {
-                    onDone()
-                }
+                withContext(Dispatchers.Main.immediate) { onDone() }
             }
         }
-
         return parentJob
     }
+
 
 }
 
 @Keep
 interface StreamCallback {
     fun onToken(token: String)
+    fun onToolCall(name: String, argsJson: String) // NEW
     fun onDone()
     fun onError(message: String)
 }

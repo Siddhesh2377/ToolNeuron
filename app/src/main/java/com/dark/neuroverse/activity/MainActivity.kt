@@ -1,7 +1,6 @@
 package com.dark.neuroverse.activity
 
 import android.Manifest
-import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -10,18 +9,12 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.ai_module.ai.Neuron
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.Screen
@@ -36,75 +29,74 @@ import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.saveEncryptedTree
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class MainActivity : ComponentActivity() {
+    val permission = Manifest.permission.POST_NOTIFICATIONS
+    val requestNotificationPermission =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (!isGranted) "Permission denied".makeToast(this)
+        }
 
-    @RequiresApi(Build.VERSION_CODES.TIRAMISU)
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        //startActivity(Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"))
-        val permission = Manifest.permission.POST_NOTIFICATIONS
-        val requestNotificationPermission =
-            registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-                if (!isGranted) "Permission denied".makeToast(this)
+        setContent {
+            //Init Nav Controller
+            val navController = rememberNavController()
+
+            //Heavy Work
+            LaunchedEffect(Unit) {
+                // Request notification permission
+                requestNotificationPermission.launch(permission)
+                // Ensure the brain file exists
+                withContext(Dispatchers.IO) { ensureBrainFileExists() }
             }
 
-        setContent {
-            val navController = rememberNavController()
-            var isInitializing by remember { mutableStateOf(true) }
-
-            // Kick off runtime permission (no-op on old Android versions)
-            LaunchedEffect(Unit) { requestNotificationPermission.launch(permission) }
-
-            // App bootstrap: ensure brain file, then choose start destination.
+            // Navigation logic
             LaunchedEffect(Unit) {
-                // Non-blocking: prepare encrypted brain tree if missing
-                withContext(Dispatchers.IO) { ensureBrainFileExists() }
+                // Navigate to the intro screen
+                navController.navigate(Screen.Intro.route)
 
-                // Decide where to start: Home if a model exists or pluginName is provided, else Models
-                val hasModel = ModelManager.isAnyModelInstalled()
-                val startScreen = when {
-                    hasModel -> Screen.Home.route
-                    else -> Screen.Model.route
-                }
-                navController.navigate(startScreen) {
-                    popUpTo(Screen.Intro.route) { inclusive = true }
-                }
-                isInitializing = false
+                // Wait for 3 seconds
+                delay(3000)
+
+                // Determine the start screen based on whether a model is installed
+                navController.navigate(if (ModelManager.isAnyModelInstalled()) Screen.Home.route else Screen.Model.route)
             }
 
             NeuroVerseTheme {
-                    NavHost(
-                        navController = navController,
-                        startDestination = Screen.Intro.route,
-                    ) {
-                        composable(Screen.Intro.route) {
-                            IntroScreen(isInitializing)
-                        }
-                        composable(Screen.Model.route) {
-                            ModelsScreen {
-                                navController.navigate(Screen.Home.route) {
-                                    popUpTo(Screen.Model.route) { inclusive = true }
-                                }
+                NavHost(
+                    navController = navController,
+                    startDestination = Screen.Intro.route,
+                ) {
+                    composable(Screen.Intro.route) {
+                        IntroScreen()
+                    }
+                    composable(Screen.Model.route) {
+                        ModelsScreen {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Model.route) { inclusive = true }
                             }
                         }
-                        composable(Screen.Home.route) {
-                            HomeScreen(
-                                onRequestModelChange = {
-                                    navController.navigate(Screen.Model.route)
-                                },
-                                onRequestSettingsChange = {
-                                    navController.navigate(Screen.Settings.route)
-                                },
-                            )
-                        }
-                        composable(Screen.Settings.route) {
-                            SettingsScreen()
-                        }
                     }
+                    composable(Screen.Home.route) {
+                        HomeScreen(
+                            onRequestModelChange = {
+                                navController.navigate(Screen.Model.route)
+                            },
+                            onRequestSettingsChange = {
+                                navController.navigate(Screen.Settings.route)
+                            },
+                        )
+                    }
+                    composable(Screen.Settings.route) {
+                        SettingsScreen()
+                    }
+                }
             }
         }
     }
@@ -121,5 +113,10 @@ class MainActivity : ComponentActivity() {
         }.onFailure { err ->
             Log.e("MainActivity", "Failed to initialize brain file", err)
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Neuron.shutdown()
     }
 }

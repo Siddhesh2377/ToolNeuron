@@ -1,7 +1,7 @@
 package com.dark.ai_module.ai
 
+import android.os.Process
 import android.util.Log
-import com.dark.ai_module.ai.Neuron.replies
 import com.mp.ai_core.NativeLib
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -17,27 +19,30 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
 
 /**
- * Neuron — a small, scalable manager around [NativeLib].
+ * Neuron — small, scalable manager around [NativeLib].
  *
- * Key goals:
- *  - Single-queue, serialized generations (no interleaving)
+ * Goals
+ *  - Single-queue serialized generations (no interleaving)
  *  - Clean model lifecycle (load/switch/unload)
  *  - Safe cancellation via nativeStopGeneration + coroutine Job cancel
  *  - Streaming + blocking APIs
- *  - Sensible defaults via data classes
+ *  - Background-priority compute so UI stays smooth
  */
 object Neuron {
 
-    /* ------------------------------------------------------------- *//*  Types & params                                               *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  Types & params                                               */
+    /* ------------------------------------------------------------- */
 
     private const val TAG = "Neuron"
 
     /** Defaults for model init. */
     data class ModelInitParams(
         val threads: Int = (Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) / 2,
-        val gpuLayers: Int = -1,
+        val gpuLayers: Int = 0,
         val useMMAP: Boolean = true,
         val useMLOCK: Boolean = false,
         val ctxSize: Int = 2048,
@@ -76,33 +81,53 @@ object Neuron {
         val loadJob: Job?,
     )
 
-    /* ------------------------------------------------------------- *//*  State                                                        *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  State                                                        */
+    /* ------------------------------------------------------------- */
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // Dedicated gen thread so Vulkan/CPU work never competes with UI
+    private val genExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread({
+            // ↓ key line: run all compute at background priority
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            r.run()
+        }, "LLM-Gen")
+    }
+    private val genDispatcher: CoroutineDispatcher = genExecutor.asCoroutineDispatcher()
+
+    // All native calls & the queue processor live here
+    private val scope = CoroutineScope(SupervisorJob() + genDispatcher)
+
+    // Stable UI scope for things that must hop to main
+    private val uiScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
     private val models = ConcurrentHashMap<String, Variant>() // key = absolutePath
     private var activeModelId: String? = null
 
     /** Emits true while *any* generation is running. */
     val isGenerating = MutableStateFlow(false)
 
-    /** Broadcasts every completed assistant reply (fire-and-forget API). */
+    /** Broadcasts every completed assistant reply. */
     val replies = MutableSharedFlow<String>(extraBufferCapacity = 16)
 
     /** Back-pressure aware queue; keeps RAM stable under load. */
     private val queue = Channel<Request>(capacity = 64)
 
-    /** the current native generation job, for cancellation */
-    @Volatile
-    private var currentGenJob: Job? = null
+    /** Current native generation job, for cancellation. */
+    @Volatile private var currentGenJob: Job? = null
 
-    /** Dispatcher for delivering tokens to UI; override if needed. */
-    var tokenDispatcher: CoroutineDispatcher = Dispatchers.Main
+    /** Dispatcher for delivering tokens to UI (unused by default; UI throttles itself). */
+    var tokenDispatcher: CoroutineDispatcher = Dispatchers.Main.immediate
+
+    private var processorJob: Job? = null
 
     init {
         startProcessor()
     }
 
-    /* ------------------------------------------------------------- *//*  Model lifecycle                                              *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  Model lifecycle                                              */
+    /* ------------------------------------------------------------- */
 
     fun loadModel(
         path: File,
@@ -141,7 +166,7 @@ object Neuron {
 
                 lib.setSystemPrompt(init.systemPrompt)
                 init.chatTemplate?.let { lib.nativeSetChatTemplate(it) }
-                withContext(Dispatchers.Main) { onLoaded?.invoke() }
+                withContext(Dispatchers.Main.immediate) { onLoaded?.invoke() }
             }.onFailure {
                 Log.e(TAG, "Model load failed", it)
                 lib.nativeRelease()
@@ -176,7 +201,9 @@ object Neuron {
 
     fun listLoadedModels(): List<String> = models.keys.toList()
 
-    /* ------------------------------------------------------------- *//*  Public API — enqueue generation                              *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  Public API — enqueue generation                              */
+    /* ------------------------------------------------------------- */
 
     /** Fire‑and‑forget; observe results on [replies]. */
     suspend fun enqueuePrompt(prompt: String, gen: GenerationParams = GenerationParams()) {
@@ -206,10 +233,16 @@ object Neuron {
         return def.await()
     }
 
-    /* ------------------------------------------------------------- *//*  Processor — single consumer; serializes native calls         *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  Processor — single consumer; serializes native calls         */
+    /* ------------------------------------------------------------- */
 
     private fun startProcessor() {
-        scope.launch {
+        processorJob?.cancel()
+        processorJob = scope.launch {
+            Log.d(TAG, "processor on ${Thread.currentThread().name}, prio=" +
+                    Process.getThreadPriority(Process.myTid()))
+
             queue.consumeEach { req ->
                 try {
                     isGenerating.value = true
@@ -234,23 +267,19 @@ object Neuron {
     private suspend fun handleBlocking(r: Request.Blocking) {
         val lib = activeModelOrThrow().lib
         val acc = StringBuilder()
-
         val done = CompletableDeferred<Unit>()
+
         currentGenJob = lib.generateStreaming(
             prompt = r.prompt,
             maxTokens = r.gen.maxTokens,
-            uiScope = scope,
+            uiScope = uiScope, // ensure native posts UI work to main
             onStart = {},
-            onGenerate = { tok ->
-                acc.append(tok)
-            },
-            onError = { msg ->
-                done.completeExceptionally(IllegalStateException(msg))
-            },
-            onDone = {
-                done.complete(Unit)
-            })
-        // Wait for native side to signal completion
+            onGenerate = { tok -> acc.append(tok) },
+            onError = { msg -> done.completeExceptionally(IllegalStateException(msg)) },
+            onDone = { done.complete(Unit) }
+        )
+
+        // wait for native side to signal completion
         done.await()
 
         val reply = acc.toString().trim()
@@ -259,22 +288,22 @@ object Neuron {
     }
 
     private suspend fun handleStreaming(r: Request.Streaming) {
-        val lib  = activeModelOrThrow().lib
-        val acc  = StringBuilder()
+        val lib = activeModelOrThrow().lib
+        val acc = StringBuilder()
         val done = CompletableDeferred<Unit>()
 
         currentGenJob = lib.generateStreaming(
             prompt = r.prompt,
             maxTokens = r.gen.maxTokens,
-            uiScope   = scope, // ok
-            onStart   = {},
+            uiScope = uiScope, // ensure any UI callbacks use main
+            onStart = {},
             onGenerate = { tok ->
                 acc.append(tok)
-                // Direct call; no per-token launch, no uiJobs list:
+                // let the caller throttle; no per-token launch here
                 r.onToken(tok)
             },
             onError = { msg -> done.completeExceptionally(IllegalStateException(msg)) },
-            onDone  = { done.complete(Unit) }
+            onDone = { done.complete(Unit) }
         )
 
         done.await()
@@ -282,12 +311,11 @@ object Neuron {
         val reply = acc.toString()
         r.completer.complete(reply)
         replies.tryEmit(reply)
-
     }
 
-
-
-    /* ------------------------------------------------------------- *//*  Helpers                                                      *//* ------------------------------------------------------------- */
+    /* ------------------------------------------------------------- */
+    /*  Helpers                                                      */
+    /* ------------------------------------------------------------- */
 
     private fun activeModel(): Variant? = activeModelId?.let { models[it] }
 
@@ -296,5 +324,18 @@ object Neuron {
 
     fun setSystemPrompt(systemPrompt: String) {
         activeModel()?.lib?.setSystemPrompt(systemPrompt)
+    }
+
+    fun shutdown() {
+        // Stop taking new work
+        runCatching { queue.close() }
+        // Cancel processor and any in-flight job
+        processorJob?.cancel()
+        stopGeneration()
+        // Release native
+        unloadAllModels()
+        // Stop executor
+        genDispatcher.cancel()
+        genExecutor.shutdown()
     }
 }

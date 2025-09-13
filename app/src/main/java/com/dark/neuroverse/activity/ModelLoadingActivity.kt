@@ -9,10 +9,12 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 
 import android.net.Uri
+import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.RequiresApi
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -47,6 +49,7 @@ import org.json.JSONObject
 import java.io.File
 
 class ModelLoadingActivity: ComponentActivity() {
+    @RequiresApi(Build.VERSION_CODES.S)
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
