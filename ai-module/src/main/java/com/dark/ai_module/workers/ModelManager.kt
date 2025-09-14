@@ -6,15 +6,23 @@ import com.dark.ai_module.db.DatabaseProvider
 import com.dark.ai_module.db.ModelDAO
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.model.getDefaultModelData
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.time.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * ModelManager — single source of truth for installed models and the active selection.
@@ -46,8 +54,8 @@ object ModelManager {
 
     sealed class LoadState {
         object Idle : LoadState()
-        data class Loading(val path: String) : LoadState()
-        data class Ready(val model: ModelsData) : LoadState()
+        data class Loading(val progress: Float) : LoadState()
+        data class OnLoaded(val model: ModelsData): LoadState()
         data class Error(val message: String) : LoadState()
     }
 
@@ -66,9 +74,6 @@ object ModelManager {
 
     private val _params = MutableStateFlow(ParamsBundle())
     val params: StateFlow<ParamsBundle> = _params.asStateFlow()
-
-    private val _loadState = MutableStateFlow<LoadState>(LoadState.Idle)
-    val loadState: StateFlow<LoadState> = _loadState.asStateFlow()
 
     // -------------------------------------------------------------
     //  Lifecycle
@@ -89,7 +94,7 @@ object ModelManager {
     // -------------------------------------------------------------
 
     /** Fire-and-forget load that updates [loadState] and [currentModel]. */
-    fun loadModel(
+    private fun loadModel(
         modelData: ModelsData,
         defaults: ManagerDefaults = ManagerDefaults(),
         chatTemplate: String = modelData.chatTemplate,
@@ -99,11 +104,8 @@ object ModelManager {
     ) {
         val modelFile = File(modelData.modelPath)
         if (!modelFile.exists()) {
-            _loadState.value = LoadState.Error("Model file not found: ${modelFile.path}")
             return
         }
-
-        _loadState.value = LoadState.Loading(modelFile.path)
 
         Neuron.loadModel(
             path = modelFile,
@@ -116,7 +118,6 @@ object ModelManager {
             forceReload = forceReload,
         ) {
             _currentModel.value = modelData
-            _loadState.value = LoadState.Ready(modelData)
             onLoaded?.let { it() }
         }
     }
@@ -128,16 +129,63 @@ object ModelManager {
         chatTemplate: String = modelData.chatTemplate,
         forceReload: Boolean = false,
         keepInMemory: Boolean = false,
+        onLoaded: ((LoadState) -> Unit),
     ): Result<Unit> = withContext(io) {
+        onLoaded(LoadState.Idle)
+        onLoaded(LoadState.Loading(0f))
+
         try {
             val f = File(modelData.modelPath)
-            if (!f.exists()) return@withContext Result.failure(IllegalArgumentException("Missing model: ${f.path}"))
-            val latch = kotlinx.coroutines.CompletableDeferred<Unit>()
-            loadModel(modelData, defaults, chatTemplate, forceReload, keepInMemory) { latch.complete(Unit) }
-            latch.await()
+            if (!f.exists()) {
+                val err = IllegalArgumentException("Missing model: ${f.path}")
+                onLoaded(LoadState.Error(err.message ?: "Load failed"))
+                return@withContext Result.failure(err)
+            }
+
+            // correct parent for the deferred
+            val parentJob: Job? = coroutineContext.job
+            val done = CompletableDeferred<Unit>(parentJob)
+
+            var progress = 0f
+            val capBeforeComplete = 0.92f
+
+            // keep a handle so we can cancel in finally
+            val progressJob = launch {
+                while (isActive && !done.isCompleted) {
+                    val step = ((capBeforeComplete - progress) * 0.12f).coerceAtLeast(0.0025f)
+                    progress = (progress + step).coerceAtMost(capBeforeComplete)
+                    onLoaded(LoadState.Loading(progress))
+                    delay(50.milliseconds) // Duration API
+                }
+            }
+
+            loadModel(
+                modelData,
+                defaults,
+                chatTemplate,
+                forceReload,
+                keepInMemory
+            ) {
+                done.complete(Unit)
+            }
+
+            done.await()
+
+            var p = progress
+            repeat(12) {
+                p += ((1f - p) * 0.45f)
+                onLoaded(LoadState.Loading(p.coerceAtMost(0.999f)))
+                delay(16.milliseconds)
+            }
+            onLoaded(LoadState.Loading(1f))
+            onLoaded(LoadState.OnLoaded(modelData))
+
+            // make sure the ticker is shut down
+            progressJob.cancelAndJoin()
+
             Result.success(Unit)
         } catch (t: Throwable) {
-            _loadState.value = LoadState.Error(t.message ?: "Load failed")
+            onLoaded(LoadState.Error(t.message ?: "Load failed"))
             Result.failure(t)
         }
     }

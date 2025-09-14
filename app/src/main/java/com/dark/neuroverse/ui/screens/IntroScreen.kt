@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,12 +19,17 @@ fun IntroScreen() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
     ) {
         IntroComposable()
         Text(
             text = "Welcome to NeuroV..!",
-            style = MaterialTheme.typography.headlineMedium.copy(fontFamily = FontFamily.Serif)
+            style = MaterialTheme.typography.headlineMedium.copy(
+                fontFamily = FontFamily.Serif,
+                color = MaterialTheme.colorScheme.primary
+            )
         )
     }
 }

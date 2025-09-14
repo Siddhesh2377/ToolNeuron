@@ -10,6 +10,9 @@ pluginManagement {
         mavenCentral()
         gradlePluginPortal()
         maven(url = "https://jitpack.io")
+        flatDir {
+            dirs("libs")
+        }
     }
 }
 dependencyResolutionManagement {
@@ -19,6 +22,9 @@ dependencyResolutionManagement {
         mavenCentral()
         mavenLocal()
         maven(url = "https://jitpack.io")
+        flatDir {
+            dirs("libs")
+        }
     }
 }
 
@@ -28,4 +34,3 @@ include(":ai-module")
 include(":userData")
 include(":updateManager")
 include(":plugins")
-include(":ai-core")

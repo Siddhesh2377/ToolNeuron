@@ -44,7 +44,22 @@ class NVApplication : Application() {
                 val candidate = preferred ?: ModelManager.getFirstModel()
                 if (candidate != null) {
                     // Suspends until the model is fully ready
-                    ModelManager.loadModelAwait(modelData = candidate)
+                    ModelManager.loadModelAwait(modelData = candidate, onLoaded = { loadState ->
+                        when (loadState) {
+                            is ModelManager.LoadState.Error -> {
+
+                            }
+                            is ModelManager.LoadState.Idle -> {
+
+                            }
+                            is ModelManager.LoadState.Loading -> {
+
+                            }
+                            is ModelManager.LoadState.OnLoaded -> {
+
+                            }
+                        }
+                    })
                 }
             }.onFailure { err ->
                 Log.e(TAG, "Auto-load model failed", err)

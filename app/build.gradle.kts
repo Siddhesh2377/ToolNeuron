@@ -1,3 +1,4 @@
+import org.gradle.kotlin.dsl.invoke
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
@@ -72,9 +73,11 @@ android {
 
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
+        //LIBS
+        compileOnly(files("libs/ai-core-release.aar"))
+
         //PROJECTS
         implementation(project(":ai-module"))
-        implementation(project(":ai-core"))
         implementation(project(":userData"))
         implementation(project(":updateManager"))
         implementation(project(":plugins"))
