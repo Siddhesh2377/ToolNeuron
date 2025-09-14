@@ -64,6 +64,8 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
     val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow(Pair("", Tools()))
     val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
+    val _modelLoadingState = MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
+    val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
     val chatId = MutableStateFlow("")
     val _isGenerating = MutableStateFlow(false)
     val _generationState = MutableStateFlow(GenerationState.IDLE)
@@ -102,15 +104,15 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             updateChatList()
 
             ModelManager.getFirstModel()?.let { model ->
-//                ModelManager.loadModel(
-//                    modelData = model,
-//                    defaults = ModelManager.ManagerDefaults(systemPrompt = ModelsList.generalPurposeSystemPrompt),
-//                    chatTemplate = ModelsList.chatTemplate,
-//                    forceReload = true
-//                ) {
-//                    Log.d("Model", "Model loaded successfully $model")
-//                    selectedModel.value = model
-//                }
+                ModelManager.loadModelAwait(
+                    modelData = model,
+                    defaults = ModelManager.ManagerDefaults(systemPrompt = ModelsList.generalPurposeSystemPrompt),
+                    chatTemplate = ModelsList.chatTemplate,
+                    forceReload = true
+                ) { state ->
+                    _modelLoadingState.value = state
+                    selectedModel.value = model
+                }
             }
 
             // Load Tools & Models
@@ -157,20 +159,7 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                         })
                 ), chatTemplate = ModelsList.chatTemplate, forceReload = true
             ) {
-                when(it){
-                    is ModelManager.LoadState.Error -> {
-                        Log.e("Model Loading", "Error : ${it.message}")
-                    }
-                    ModelManager.LoadState.Idle -> {
-                        Log.v("Model Loading", "IDLE")
-                    }
-                    is ModelManager.LoadState.Loading -> {
-                        Log.d("Model Loading", "${it.progress}")
-                    }
-                    is ModelManager.LoadState.OnLoaded -> {
-                        Log.d("Model Loading", "Loaded")
-                    }
-                }
+                _modelLoadingState.value = it
                 selectedModel.value = model
             }
         }

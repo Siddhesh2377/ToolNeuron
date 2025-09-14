@@ -1,9 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
 import android.content.Intent
-import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -18,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -27,6 +25,7 @@ import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.ArrowCircleDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.FileOpen
 import androidx.compose.material3.Button
@@ -54,12 +53,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
@@ -67,10 +63,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.activity.GgufPickerActivity
-import com.dark.neuroverse.activity.ModelLoadingActivity
 import com.dark.neuroverse.ui.components.CollapsableButton
-import com.dark.neuroverse.ui.components.ModelDialog
 import com.dark.neuroverse.ui.components.StandardBottomBar
+import com.dark.neuroverse.ui.theme.Coral
+import com.dark.neuroverse.ui.theme.Mint
+import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.onSuccess
 import com.dark.neuroverse.ui.theme.rDP
@@ -91,10 +88,8 @@ fun ModelsScreen(onNext: () -> Unit) {
     var isEnabled by remember { mutableStateOf(false) }
     LaunchedEffect(installedModels) { isEnabled = installedModels.isNotEmpty() }
 
-    var selectedModelPath by remember { mutableStateOf<java.io.File?>(null) }
-
     // Tabs: Marketplace | Installed LLM
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(1) }
     val tabs = listOf("MarketPlace", "Installed LLM")
 
     Scaffold { innerPadding ->
@@ -108,13 +103,19 @@ fun ModelsScreen(onNext: () -> Unit) {
             Row(
                 Modifier
                     .fillMaxWidth()
+                    .padding(top = rDP(24.dp), bottom = rDP(12.dp))
                     .padding(horizontal = rDP(26.dp)),
-                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                Icon(
+                    Icons.Rounded.SmartToy,
+                    modifier = Modifier.size(rDP(30.dp)),
+                    contentDescription = "Import Model"
+                )
+                Spacer(Modifier.width(rDP(12.dp)))
                 Text(
-                    "Choose Your\nModels",
-                    modifier = Modifier.padding(top = rDP(24.dp), bottom = rDP(12.dp)),
+                    "Models",
+                    modifier = Modifier,
                     style = MaterialTheme.typography.headlineLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Serif,
@@ -122,15 +123,22 @@ fun ModelsScreen(onNext: () -> Unit) {
                     )
                 )
 
+                Spacer(Modifier.weight(1f))
+
                 Button(
                     onClick = {
                         // Launch dedicated import screen
                         context.startActivity(Intent(context, GgufPickerActivity::class.java))
-                    }
-                ) {
-                    Icon(Icons.TwoTone.FileOpen, contentDescription = "Import Model")
+                    }) {
+                    Icon(
+                        Icons.TwoTone.FileOpen,
+                        modifier = Modifier.size(rDP(18.dp)),
+                        contentDescription = "Import Model"
+                    )
                     Spacer(Modifier.width(rDP(12.dp)))
-                    Text("Import", fontSize = rSp(15.sp))
+                    Text(
+                        "Import", fontSize = rSp(15.sp), style = MaterialTheme.typography.labelSmall
+                    )
                 }
             }
 
@@ -140,8 +148,7 @@ fun ModelsScreen(onNext: () -> Unit) {
                     Tab(
                         selected = selectedTab == index,
                         onClick = { selectedTab = index },
-                        text = { Text(label, fontSize = rSp(14.sp)) }
-                    )
+                        text = { Text(label, fontSize = rSp(14.sp)) })
                 }
             }
 
@@ -187,8 +194,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel) {
                 progress = state.progress,
                 onDownloadComplete = state.isComplete,
                 viewModel = viewModel,
-                onDownload = { viewModel.startDownload(modelData) }
-            )
+                onDownload = { viewModel.startDownload(modelData) })
         }
     }
 }
@@ -203,9 +209,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
     LazyColumn(Modifier.fillMaxSize()) {
         items(installed, key = { it.modeName }) { model ->
             InstalledModelCard(
-                model = model,
-                onDelete = { viewModel.removeModel(model.modeName) }
-            )
+                model = model, onDelete = { viewModel.removeModel(model.modeName) })
         }
     }
 }
@@ -215,8 +219,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 // ——————————————————————————————————————————————————————————
 @Composable
 private fun InstalledModelCard(
-    model: ModelsData,
-    onDelete: () -> Unit
+    model: ModelsData, onDelete: () -> Unit
 ) {
     val isLocalImport = model.modelLink.isBlank() && model.modelPageLink.isBlank()
     val colors = MaterialTheme.colorScheme
@@ -235,19 +238,14 @@ private fun InstalledModelCard(
         ) {
             // Header row
             Row(
-                Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+                Modifier.fillMaxWidth()
             ) {
                 Column(Modifier.weight(1f)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column {
                         Text(
-                            model.modeName,
-                            style = MaterialTheme.typography.titleLarge.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = rSp(18.sp)
-                            ),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            model.modeName, style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold, fontSize = rSp(18.sp)
+                            ), maxLines = 1, overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.width(rDP(8.dp)))
                         Pill(if (isLocalImport) "Local" else "Remote")
@@ -257,7 +255,8 @@ private fun InstalledModelCard(
                         Text(
                             model.modelDescription,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                fontSize = rSp(14.sp)
+                                fontSize = rSp(12.sp),
+                                color = colors.onSurface.copy(alpha = 0.6f)
                             ),
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis
@@ -265,7 +264,7 @@ private fun InstalledModelCard(
                     }
                 }
                 IconButton(onClick = onDelete) {
-                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete")
+                    Icon(Icons.TwoTone.Delete, contentDescription = "Delete", tint = Coral)
                 }
             }
 
@@ -280,16 +279,14 @@ private fun InstalledModelCard(
             // External page for remote models
             if (!isLocalImport && model.modelPageLink.isNotBlank()) {
                 Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End
                 ) {
                     val ctx = LocalContext.current
                     IconButton(onClick = {
                         try {
                             ctx.startActivity(
                                 Intent(
-                                    Intent.ACTION_VIEW,
-                                    model.modelPageLink.toUri()
+                                    Intent.ACTION_VIEW, model.modelPageLink.toUri()
                                 )
                             )
                         } catch (_: Exception) {
@@ -323,10 +320,10 @@ fun ModelCard(
     LaunchedEffect(Unit) { viewModel.checkIfInstalled(modelsData.modeName) { isInstalled = it } }
     LaunchedEffect(onDownloadComplete) { if (onDownloadComplete) isInstalled = true }
 
-    val buttonColor = if (!isInstalled) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(
-        containerColor = onSuccess,
-        contentColor = Success
-    )
+    val buttonColor =
+        if (!isInstalled) ButtonDefaults.buttonColors() else ButtonDefaults.buttonColors(
+            containerColor = onSuccess, contentColor = Success
+        )
 
     Card(
         modifier = Modifier
@@ -348,16 +345,12 @@ fun ModelCard(
                 overflow = TextOverflow.Ellipsis
             )
             if (modelsData.modelDescription.isNotBlank()) {
-                Text(modelsData.modelDescription, style = MaterialTheme.typography.bodyMedium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-
-            // Specs as chips + grid
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Pill("${modelsData.modelSize} MB")
-                Spacer(Modifier.width(8.dp))
-                Pill("Ctx ${modelsData.modelCtxSize}")
-                Spacer(Modifier.width(8.dp))
-                Pill(modelsData.toolUse.uppercase())
+                Text(
+                    modelsData.modelDescription,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
 
             SpecGrid(
@@ -375,17 +368,24 @@ fun ModelCard(
                 Button(
                     onClick = {
                         if (!isInstalled) {
-                            if (isDownloading) viewModel.cancelDownload(modelsData.modeName, modelsData.modelPath) else onDownload()
+                            if (isDownloading) viewModel.cancelDownload(
+                                modelsData.modeName, modelsData.modelPath
+                            ) else onDownload()
                         }
-                    },
-                    colors = buttonColor
+                    }, colors = buttonColor
                 ) {
-                    AnimatedContent(targetState = isInstalled, transitionSpec = { fadeIn() togetherWith fadeOut() }) { installed ->
+                    AnimatedContent(
+                        targetState = isInstalled,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() }) { installed ->
                         if (installed) {
                             Icon(Icons.Filled.Check, contentDescription = null)
                         } else {
-                            AnimatedContent(targetState = isDownloading, transitionSpec = { fadeIn() togetherWith fadeOut() }) { downloading ->
-                                if (downloading) Icon(Icons.Filled.Stop, contentDescription = null) else Icon(Icons.Filled.ArrowCircleDown, contentDescription = null)
+                            AnimatedContent(
+                                targetState = isDownloading,
+                                transitionSpec = { fadeIn() togetherWith fadeOut() }) { downloading ->
+                                if (downloading) Icon(
+                                    Icons.Filled.Stop, contentDescription = null
+                                ) else Icon(Icons.Filled.ArrowCircleDown, contentDescription = null)
                             }
                         }
                     }
@@ -398,8 +398,7 @@ fun ModelCard(
                         onClick = {
                             viewModel.removeModel(modelsData.modeName)
                             isInstalled = false
-                        },
-                        colors = ButtonDefaults.buttonColors(
+                        }, colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                             contentColor = MaterialTheme.colorScheme.error
                         )
@@ -427,7 +426,7 @@ private fun Pill(text: String) {
         modifier = Modifier
             .padding(vertical = rDP(2.dp), horizontal = 0.dp)
             .padding(end = 0.dp),
-        style = MaterialTheme.typography.labelMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+        style = MaterialTheme.typography.labelMedium.copy(color = if (text != "Remote") Mint else SkyBlue)
     )
 }
 
@@ -441,7 +440,19 @@ private fun SpecGrid(vararg pairs: Pair<String, String>) {
 @Composable
 private fun SpecRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(value, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.primary
+            ),
+        )
+        Text(
+            value,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

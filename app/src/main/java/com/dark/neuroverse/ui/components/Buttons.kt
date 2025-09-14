@@ -75,33 +75,3 @@ fun CollapsableButton(
         }
     }
 }
-
-
-@Composable
-fun NVActionButton(
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit,
-    text: String,
-    icon: @Composable (() -> Unit)? = null,
-    colors: ActionColors,
-    enabled: Boolean = true
-) {
-    Button(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = modifier,
-        colors = ButtonDefaults.buttonColors(
-            containerColor = colors.bg,
-            contentColor   = colors.fg,
-            disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            disabledContentColor   = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-        ),
-        shape = MaterialTheme.shapes.medium
-    ) {
-        if (icon != null) {
-            icon()
-            Spacer(Modifier.width(NVSpacing.xs))
-        }
-        Text(text)
-    }
-}

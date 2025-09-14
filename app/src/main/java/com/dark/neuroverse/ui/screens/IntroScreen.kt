@@ -25,7 +25,7 @@ fun IntroScreen() {
     ) {
         IntroComposable()
         Text(
-            text = "Welcome to NeuroV..!",
+            text = "Welcome to\nTool-Neuron..!",
             style = MaterialTheme.typography.headlineMedium.copy(
                 fontFamily = FontFamily.Serif,
                 color = MaterialTheme.colorScheme.primary

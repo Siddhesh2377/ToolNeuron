@@ -98,6 +98,7 @@ import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.components.MarkdownText
+import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Mint
@@ -114,9 +115,10 @@ import com.dark.userdata.readBitmapImage
 import com.dark.userdata.writeBitmapImage
 import kotlinx.coroutines.launch
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestModelChange: () -> Unit, // For navigating to model screen
+    onRequestModelChange: () -> Unit,
     onRequestSettingsChange: () -> Unit,
     viewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
@@ -126,36 +128,40 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
+    val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
 
     ModalNavigationDrawer(
-        drawerState = drawerState, drawerContent = {
+        drawerState = drawerState,
+        drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
-                viewModel,
+                viewModel = viewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
-                onPluginClick = {
-                    scope.launch {
-                        drawerState.close()
-                    }
-                },
+                onPluginClick = { scope.launch { drawerState.close() } },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
-                })
-        }) {
-        Scaffold(modifier = Modifier
-            .fillMaxSize()
-            .imePadding(), topBar = {
-            TopBar(title = chatTitle, onMenu = {
-                scope.launch {
-                    drawerState.open()
                 }
-            }, onLeftMenu = {
-                viewModel.newChat()
-            })
-        }, bottomBar = {
-            BottomBar(viewModel)
-        }) { inner ->
+            )
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
+            topBar = {
+                Column {
+                    TopBar(
+                        title = chatTitle,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onLeftMenu = { viewModel.newChat() }
+                    )
+
+                    ModelLoadProgressBar(loadState = modelState)
+                }
+            },
+            bottomBar = { BottomBar(viewModel) }
+        ) { inner ->
             BodyContent(inner, viewModel)
         }
     }
@@ -452,6 +458,7 @@ fun ModelList(
                 Row(modifier = Modifier.padding(rDP(12.dp))) {
                     Text(
                         text = modelsData.modeName,
+                        maxLines = 1,
                         style = MaterialTheme.typography.bodyLarge.copy(
                             fontSize = rSp(16.sp)
                         )
@@ -862,7 +869,7 @@ private fun RegularChatUI(message: Message) {
 
 @Composable
 private fun UserChatUI(message: Message) {
-    val radius = with(LocalDensity.current) { rDP(18.dp) }
+    val radius = with(LocalDensity.current) { rDP(12.dp) }
 
     // shape
     val corner = RoundedCornerShape(radius)
@@ -872,15 +879,12 @@ private fun UserChatUI(message: Message) {
             .widthIn(max = rDP(300.dp))
             .clip(corner)
             .background(MaterialTheme.colorScheme.primary)
-            .padding(rDP(14.dp))
+            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp))
     ) {
         MarkdownText(
             message.text,
             color = MaterialTheme.colorScheme.onPrimary,
-            style = TextStyle.Default.copy(
-                fontSize = rSp(15.sp),
-                lineHeight = rSp(20.sp)
-            )
+            style = MaterialTheme.typography.bodyLarge
         )
     }
 }
@@ -916,18 +920,14 @@ private fun ThinkingChatUI(message: Message) {
                 .padding(rDP(10.dp))
                 .animateContentSize(animationSpec = tween(120))
         ) {
-            Crossfade(
-                if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
-                label = message.thought ?: "thought"
-            ) { txt ->
-                Text(
-                    text = txt,
-                    color = Color(0xFFCBD5E1),
-                    fontSize = rSp(12.sp),
-                    lineHeight = rSp(18.sp),
-                    fontFamily = FontFamily.Monospace
-                )
-            }
+
+            Text(
+                text = if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
+                color = Color(0xFFCBD5E1),
+                fontSize = rSp(12.sp),
+                lineHeight = rSp(18.sp),
+                fontFamily = FontFamily.Monospace
+            )
         }
     }
 }
