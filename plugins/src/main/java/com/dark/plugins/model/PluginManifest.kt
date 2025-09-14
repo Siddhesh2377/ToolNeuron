@@ -17,7 +17,7 @@ data class PluginManifest(
 
 data class Tools(
     val toolName: String = "",
-    val path: String = "",
+    val description: String = "",
     val args: Map<String, Any?> = emptyMap() // allow numbers/bools too
 )
 

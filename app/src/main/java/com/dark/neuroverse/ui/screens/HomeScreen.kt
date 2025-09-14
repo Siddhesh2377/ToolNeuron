@@ -380,9 +380,9 @@ fun ToolsList(
                                 fontSize = rSp(16.sp)
                             )
                         )
-                        if (tool.path.isNotBlank()) {
+                        if (tool.description.isNotBlank()) {
                             Text(
-                                text = tool.path, style = MaterialTheme.typography.bodySmall.copy(
+                                text = tool.description, style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = rSp(13.sp)
                                 ), color = Color.Gray
                             )

@@ -329,7 +329,7 @@ private fun ToolCard(tool: Tools) {
                 tool.toolName.ifBlank { "Unnamed tool" },
                 style = MaterialTheme.typography.titleSmall
             )
-            InfoLine("Path", tool.path.ifBlank { "—" })
+            InfoLine("Description", tool.description.ifBlank { "—" })
             if (tool.args.isNotEmpty()) {
                 Text("Args", style = MaterialTheme.typography.labelLarge)
                 KeyValueBlock(tool.args)

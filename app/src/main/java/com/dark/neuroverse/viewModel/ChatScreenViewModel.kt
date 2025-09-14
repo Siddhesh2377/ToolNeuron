@@ -174,6 +174,8 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                     it.second.toolName + ":" + it.second.args.entries.joinToString { (k, v) -> "$k:$v" }
                 })
         )
+
+        Log.d("selectTool", "Selected tool: ${convertToolsToJson(selectedTools.value.second)}")
     }
 
     fun unSelectTool() {
@@ -210,7 +212,8 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 streamAndRender(
                     prompt = input,
                     context = context,
-                    enableTools = selectedTools.value.first.isNotEmpty()
+                    enableTools = selectedTools.value.first.isNotEmpty(),
+                    toolJson = null
                 )
             }
         }
@@ -234,14 +237,15 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                 streamAndRender(
                     prompt = input,
                     context = context,
-                    enableTools = false // internal reasoning never triggers tools
+                    enableTools = false, // internal reasoning never triggers tools
+                    toolJson = null
                 )
             }
         }
     }
 
     // ===================== Shared streaming routine =====================
-    private suspend fun streamAndRender(prompt: String, context: Context, enableTools: Boolean) {
+    private suspend fun streamAndRender(prompt: String, toolJson: String?, context: Context, enableTools: Boolean) {
         // Local buffers for stream assembly
         val visibleSb = StringBuilder()
         val thoughtSb = StringBuilder()
@@ -350,7 +354,9 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
                         else -> visibleSb.append(tok)
                     }
                     postCoalesced()
-                })
+                }, toolJson = toolJson, onToolCalled = { _, _ ->{
+
+                } })
 
             // 2nd pass to pick up JSON or missed tags
             var finalText = visibleSb.toString()
@@ -586,6 +592,38 @@ class ChatScreenViewModel(context: Context) : ViewModel() {
             saveTree(rootNode.value, context, BuildConfig.ALIAS)
         } catch (e: Exception) {
             Log.e("updateConversation", "Failed updating chat", e)
+        }
+    }
+
+    private fun convertToolsToJson(tools: Tools): JSONObject {
+        val properties = JSONObject()
+        val required = mutableListOf<String>()
+
+        tools.args.forEach { (key, value) ->
+            val type = when (value) {
+                is Int, is Double, is Float -> "number"
+                is Boolean -> "boolean"
+                else -> "string"
+            }
+            properties.put(key, JSONObject().put("type", type))
+            if (value != null) required.add(key)
+        }
+
+        val parameters = JSONObject().apply {
+            put("type", "object")
+            put("properties", properties)
+            put("required", required)
+        }
+
+        val function = JSONObject().apply {
+            put("name", tools.toolName)
+            put("description", tools.description) // or replace with a real description field if you add one
+            put("parameters", parameters)
+        }
+
+        return JSONObject().apply {
+            put("type", "function")
+            put("function", function)
         }
     }
 }

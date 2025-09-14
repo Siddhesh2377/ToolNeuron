@@ -58,8 +58,10 @@ open class PluginApi(ctx: Context) : ComposePlugin {
         input: JSONObject, onToken: (String) -> Unit
     ): JSONObject {
         val temp: String = ModelManager.generateStreaming(
-            prompt = input.toString(), gen = ModelManager.GenerationParams(), onToken = onToken
-        )
+            prompt = input.toString(),
+            gen = ModelManager.GenerationParams(),
+            onToken = onToken,
+            toolJson = null)
         return JSONObject().apply { put("response", temp) }
     }
 

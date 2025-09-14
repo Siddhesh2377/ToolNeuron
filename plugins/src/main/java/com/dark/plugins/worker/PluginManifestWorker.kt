@@ -1,5 +1,6 @@
 package com.dark.plugins.worker
 
+import android.util.Log
 import com.dark.plugins.model.MetaData
 import com.dark.plugins.model.PluginManifest
 import com.dark.plugins.model.Tools
@@ -56,11 +57,13 @@ class PluginManifestWorker {
         for (i in 0 until toolsArr.length()) {
             val tObj = toolsArr.optJSONObject(i) ?: continue
             val toolName = tObj.optString("toolName", "")
-            val path = tObj.optString("path", "")
+            val description = tObj.optString("description", "")
             val argsObj = tObj.optJSONObject("args") ?: JSONObject()
 
+            Log.d("TOOL MANAGER","Tool: $toolName, description: $description")
+
             out += Tools(
-                toolName = toolName, path = path, args = argsObj.toMap()
+                toolName = toolName, description = description, args = argsObj.toMap()
             )
         }
         return out

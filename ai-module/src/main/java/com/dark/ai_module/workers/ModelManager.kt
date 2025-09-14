@@ -197,8 +197,7 @@ object ModelManager {
 
     /** Queue prompt and await the full reply. */
     suspend fun generateAndWait(
-        prompt: String,
-        gen: GenerationParams = GenerationParams()
+        prompt: String, gen: GenerationParams = GenerationParams()
     ): String {
         val def = CompletableDeferred<String>()
         queue.send(Request.Blocking(prompt, gen, def))
@@ -209,10 +208,12 @@ object ModelManager {
     suspend fun generateStreaming(
         prompt: String,
         gen: GenerationParams = GenerationParams(),
-        onToken: (String) -> Unit,
+        toolJson: String?,
+        onToolCalled: (String, String) -> Unit = { _, _ ->},
+        onToken: (String) -> Unit = {},
     ): String {
         val def = CompletableDeferred<String>()
-        queue.send(Request.Streaming(prompt, gen, onToken, def))
+        queue.send(Request.Streaming(prompt, gen, onToken, toolJson, onToolCalled, def))
         return def.await()
     }
 
@@ -349,6 +350,8 @@ object ModelManager {
             val prompt: String,
             val gen: GenerationParams,
             val onToken: (String) -> Unit,
+            val toolJson: String?,
+            val onToolCalled: (String, String) -> Unit,
             val completer: CompletableDeferred<String>
         ) : Request
     }
@@ -495,6 +498,8 @@ object ModelManager {
                 acc.append(tok)
                 r.onToken(tok)
             },
+            toolsJson = r.toolJson,
+            onToolCall = r.onToolCalled,
             onError = { msg -> done.completeExceptionally(IllegalStateException(msg)) },
             onDone = { done.complete(Unit) })
 
