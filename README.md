@@ -15,6 +15,11 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets us
 
 ---
 
+### Note ..!
+- This Repo's C++ code has be Transfered to a Different Repo For Optimization link can be found here :: https://github.com/Siddhesh2377/Ai-Core
+
+---
+
 ## Try it now
 
 * **Download APK:** [Latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
