@@ -1,7 +1,9 @@
 package com.dark.neuroverse.ui.components
 
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -13,30 +15,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Done
-import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextStyle
@@ -48,8 +52,11 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.launch
 
 // ——————————————————————————————————————————————————————————————
 // Public API (drop-in): MarkdownText(text = message.text)
@@ -87,12 +94,15 @@ fun MarkdownText(
 // Canvas for code blocks: header + copy/edit + NO SOFT WRAP
 // Also: better syntax highlighting (keywords, types, funcs, numbers, annotations)
 // ——————————————————————————————————————————————————————————————
+
 @Composable
 fun CodeCanvas(
     modifier: Modifier = Modifier,
     code: String,
     language: String? = null,
-    isDarkMode: Boolean = isSystemInDarkTheme()
+    isDarkMode: Boolean = isSystemInDarkTheme(),
+    autoFollowInit: Boolean = true,
+    autoScrollHorizontal: Boolean = false,
 ) {
     var editing by remember { mutableStateOf(false) }
     var text by remember(code) { mutableStateOf(code) }
@@ -100,109 +110,154 @@ fun CodeCanvas(
 
     val radius = rDP(12.dp)
     val bg = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
-    MaterialTheme.colorScheme.outlineVariant
+
+    // Scroll states
+    val vScroll = rememberScrollState()
+    val hScroll = rememberScrollState()
+    val scope = rememberCoroutineScope()
+
+    // Auto-follow state: turns off if user scrolls up; can be re-enabled via FAB
+    var follow by remember { mutableStateOf(autoFollowInit) }
+
+    // Detect user moving away from bottom → disable follow
+    LaunchedEffect(Unit) {
+        snapshotFlow { vScroll.value to vScroll.maxValue }.collect { (value, max) ->
+                val nearBottom = max - value < 24
+                if (!nearBottom && vScroll.isScrollInProgress) follow = false
+            }
+    }
+
+    // When content grows and follow is on, scroll to bottom (and optionally right)
+    LaunchedEffect(text, editing, follow) {
+        if (!editing && follow) {
+            // Wait a frame for layout to update maxValue
+            snapshotFlow { vScroll.maxValue }.take(1)
+                .collect { end -> scope.launch { vScroll.animateScrollTo(end) } }
+            if (autoScrollHorizontal) {
+                snapshotFlow { hScroll.maxValue }.take(1)
+                    .collect { end -> scope.launch { hScroll.animateScrollTo(end) } }
+            }
+        }
+    }
 
     Column(
         modifier = modifier
             .clip(RoundedCornerShape(radius))
             .background(bg)
-            //  .border(rDP(1.dp), stroke, RoundedCornerShape(radius))
             .padding(horizontal = rDP(10.dp))
-            .padding(bottom = rDP(10.dp), top = rDP(6.dp))
+            .padding(bottom = rDP(10.dp))
     ) {
         // Header
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
             LanguagePill(language ?: "code")
             Spacer(Modifier.weight(1f))
-            IconButton(
-                onClick = { clipboard.setText(AnnotatedString(if (editing) text else code)) },
-                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-            ) { Icon(Icons.Rounded.ContentCopy, contentDescription = "Copy") }
-            IconButton(
-                onClick = { editing = !editing },
-                colors = IconButtonDefaults.iconButtonColors(contentColor = MaterialTheme.colorScheme.primary)
-            ) {
-                Icon(
-                    if (editing) Icons.Rounded.Done else Icons.Rounded.Edit,
-                    contentDescription = "Edit"
-                )
-            }
+            Icon(
+                painterResource(R.drawable.copy),
+                modifier = Modifier
+                    .size(rDP(15.dp))
+                    .clickable { clipboard.setText(AnnotatedString(if (editing) text else code)) },
+                contentDescription = "Copy"
+            )
+            Icon(
+                painterResource(if (!editing) R.drawable.edit else R.drawable.done),
+                modifier = Modifier
+                    .size(rDP(15.dp))
+                    .clickable { editing = !editing },
+                contentDescription = "Edit"
+            )
         }
 
         Spacer(Modifier.height(rDP(6.dp)))
 
         // Body → no soft wrap: horizontal + vertical scroll
-        val vScroll = rememberScrollState()
-        val hScroll = rememberScrollState()
-
-        if (!editing) {
-            val highlighted = remember(text, language) { highlight(text, language, isDarkMode) }
-            Box(
-                modifier = Modifier
-                    .heightIn(max = rDP(260.dp))
-                    .verticalScroll(vScroll)
-                    .fillMaxWidth()
-            ) {
-                Row(modifier = Modifier.horizontalScroll(hScroll)) {
-                    SelectionContainer {
-                        Text(
-                            text = highlighted,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = TextStyle(
+        Box(
+            modifier = Modifier
+                .heightIn(max = rDP(260.dp))
+                .fillMaxWidth()
+        ) {
+            if (!editing) {
+                val highlighted =
+                    remember(text, language, isDarkMode) { highlight(text, language, isDarkMode) }
+                Box(
+                    modifier = Modifier
+                        .verticalScroll(vScroll)
+                        .padding(horizontal = rDP(12.dp))
+                        .fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.horizontalScroll(hScroll)) {
+                        SelectionContainer {
+                            Text(
+                                text = highlighted,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                style = TextStyle(
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = rSp(12.sp),
+                                    lineHeight = rSp(20.sp)
+                                ),
+                                softWrap = false,
+                                maxLines = Int.MAX_VALUE
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .verticalScroll(vScroll)
+                        .fillMaxWidth()
+                ) {
+                    Row(modifier = Modifier.horizontalScroll(hScroll)) {
+                        BasicTextField(
+                            value = text, onValueChange = { text = it }, textStyle = TextStyle(
                                 fontFamily = FontFamily.Monospace,
-                                fontSize = rSp(12.sp),
-                                lineHeight = rSp(20.sp)
-                            ),
-                            softWrap = false,              // 🚫 no wrapping
-                            maxLines = Int.MAX_VALUE
+                                fontSize = rSp(13.sp),
+                                lineHeight = rSp(20.sp),
+                                color = MaterialTheme.colorScheme.onSurface
+                            ), singleLine = false, maxLines = Int.MAX_VALUE
                         )
                     }
                 }
             }
-        } else {
-            Box(
+
+            // Floating "Jump to bottom" when not following
+            androidx.compose.animation.AnimatedVisibility(
+                visible = !follow,
+                enter = fadeIn(),
+                exit = fadeOut(),
                 modifier = Modifier
-                    .heightIn(max = rDP(260.dp))
-                    .verticalScroll(vScroll)
-                    .fillMaxWidth()
+                    .align(Alignment.BottomEnd)
+                    .padding(end = rDP(6.dp), bottom = rDP(6.dp))
             ) {
-                Row(modifier = Modifier.horizontalScroll(hScroll)) {
-                    BasicTextField(
-                        value = text, onValueChange = { text = it }, textStyle = TextStyle(
-                            fontFamily = FontFamily.Monospace,
-                            fontSize = rSp(13.sp),
-                            lineHeight = rSp(20.sp),
-                            color = MaterialTheme.colorScheme.onSurface
-                        ), singleLine = false, maxLines = Int.MAX_VALUE
-                    )
+                SmallFloatingActionButton(
+                    onClick = {
+                        follow = true
+                        scope.launch { vScroll.animateScrollTo(vScroll.maxValue) }
+                        if (autoScrollHorizontal) scope.launch { hScroll.animateScrollTo(hScroll.maxValue) }
+                    },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom")
                 }
             }
+
         }
     }
 }
 
+
 @Composable
 private fun LanguagePill(label: String) {
-    Row(
-        modifier = Modifier
-            .clip(RoundedCornerShape(rDP(18.dp)))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                rDP(1.dp), MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(18.dp))
-            )
-            .padding(horizontal = rDP(14.dp), vertical = rDP(2.dp)),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label.lowercase(),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = rSp(11.sp)
-        )
-    }
+    Text(
+        text = label, color = MaterialTheme.colorScheme.primary, fontSize = rSp(11.sp)
+    )
 }
 
 // ——————————————————————————————————————————————————————————————
@@ -304,8 +359,7 @@ private fun highlight(code: String, language: String?, isDarkMode: Boolean): Ann
 
     // Numbers & annotations (rough; good enough for code blocks)
     styleAll(
-        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"),
-        num
+        Regex("\\b(?:0x[0-9a-fA-F_]+|[0-9][0-9_]*(?:\\.[0-9_]+)?(?:[eE][+-]?[0-9_]+)?)\\b"), num
     )
     styleAll(Regex("@[_A-Za-z][_A-Za-z0-9]*"), ann)
 
@@ -451,8 +505,7 @@ fun RichText(
                     t.startsWith("> ") -> {
                         withStyle(
                             SpanStyle(
-                                fontStyle = FontStyle.Italic,
-                                color = color.copy(alpha = 0.7f)
+                                fontStyle = FontStyle.Italic, color = color.copy(alpha = 0.7f)
                             )
                         ) { append("❝ "); appendStyledSegment(t.removePrefix("> ")) }; append("\n")
                     }
@@ -470,8 +523,7 @@ fun RichText(
 
                     t.matches(Regex("^\\d+\\. .*")) -> {
                         val parts = t.split(
-                            ". ",
-                            limit = 2
+                            ". ", limit = 2
                         ); append("${parts[0]}. "); if (parts.size > 1) appendStyledSegment(parts[1]); append(
                             "\n"
                         )
@@ -499,9 +551,7 @@ fun RichText(
 }
 
 private fun AnnotatedString.Builder.appendStyledHeader(
-    text: String,
-    style: TextStyle,
-    scale: Float
+    text: String, style: TextStyle, scale: Float
 ) {
     withStyle(SpanStyle(fontWeight = FontWeight.Bold, fontSize = style.fontSize * scale)) {
         append(
@@ -533,8 +583,7 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 val end = text.indexOf("***", idx + 3)
                 withStyle(
                     SpanStyle(
-                        fontWeight = FontWeight.ExtraBold,
-                        fontStyle = FontStyle.Italic
+                        fontWeight = FontWeight.ExtraBold, fontStyle = FontStyle.Italic
                     )
                 ) { append(text.substring(idx + 3, end)) }
                 idx = end + 3
@@ -545,8 +594,7 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 withStyle(SpanStyle(fontWeight = FontWeight.ExtraBold)) {
                     append(
                         text.substring(
-                            idx + 2,
-                            end
+                            idx + 2, end
                         )
                     )
                 }
@@ -558,8 +606,7 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
                     append(
                         text.substring(
-                            idx + 1,
-                            end
+                            idx + 1, end
                         )
                     )
                 }
@@ -571,8 +618,7 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) {
                     append(
                         text.substring(
-                            idx + 2,
-                            end
+                            idx + 2, end
                         )
                     )
                 }
@@ -584,8 +630,7 @@ private fun AnnotatedString.Builder.appendStyledSegment(text: String) {
                 withStyle(SpanStyle(textDecoration = TextDecoration.Underline)) {
                     append(
                         text.substring(
-                            idx + 2,
-                            end
+                            idx + 2, end
                         )
                     )
                 }

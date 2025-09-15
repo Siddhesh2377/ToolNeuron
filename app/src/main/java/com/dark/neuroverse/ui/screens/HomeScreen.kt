@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -45,6 +46,7 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SelectAll
@@ -63,6 +65,7 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -72,11 +75,13 @@ import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -106,6 +111,7 @@ import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.ProjectedCapturable
+import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
@@ -226,10 +232,46 @@ fun TopBar(
     )
 }
 
+
+
 @Composable
-private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
+fun BodyContent(
+    inner: PaddingValues,
+    viewModel: ChatScreenViewModel
+) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val generationState by viewModel.generationState.collectAsStateWithLifecycle()
+
+    val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
+
+    // Whether we should auto-follow new messages
+    var follow by remember { mutableStateOf(true) }
+
+    // Are we at the bottom? (last item visible)
+    val isAtBottom by remember {
+        derivedStateOf {
+            val total = listState.layoutInfo.totalItemsCount
+            if (total == 0) return@derivedStateOf true
+            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisible >= total - 1
+        }
+    }
+
+    // If the user scrolls up, pause auto-follow
+    LaunchedEffect(Unit) {
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }
+            .collect { (scrolling, atBottom) ->
+                if (scrolling && !atBottom) follow = false
+            }
+    }
+
+    // When messages change and follow is on, go to bottom
+    LaunchedEffect(messages.size, follow) {
+        if (messages.isNotEmpty() && follow) {
+            scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -243,14 +285,20 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = rDP(16.dp)),
+                state = listState,
                 reverseLayout = false,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(8.dp),
+                    end = rDP(8.dp)
                 )
             ) {
                 items(
-                    items = messages, key = { it.id },                    // <-- stable!
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
+                    items = messages,
+                    key = { it.id },
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }
+                ) { msg ->
                     ChatBubble(msg, viewModel, generationState) {
                         val preview = writeBitmapImage(it)
                         viewModel.writeToolPreviewByID(msg.id, preview)
@@ -259,8 +307,33 @@ private fun BodyContent(inner: PaddingValues, viewModel: ChatScreenViewModel) {
                 }
             }
         }
+
+        // Jump-to-bottom FAB when the user scrolled up
+        AnimatedVisibility(
+            visible = !isAtBottom && messages.isNotEmpty(),
+            enter = fadeIn(),
+            exit = fadeOut(),
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = rDP(12.dp), bottom = rDP(20.dp))
+        ) {
+            SmallFloatingActionButton(
+                onClick = {
+                    follow = true
+                    scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.primary
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
+                )
+            }
+        }
     }
 }
+
 
 
 @Composable
@@ -806,7 +879,7 @@ private fun ToolChatUI(
 @Composable
 private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
     //Copy, Select Text, Regenerate, Share
-
+    var showPicker by remember { mutableStateOf(false) }
     val actionIconSize = rDP(16.dp)
     Column(
         modifier = Modifier
@@ -819,26 +892,18 @@ private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
             )
         )
         Spacer(Modifier.height(rDP(10.dp)))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
             Icon(
-                Icons.Rounded.ContentCopy,
+                painterResource(R.drawable.copy),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier.size(actionIconSize)
             )
             Icon(
-                Icons.Rounded.SelectAll,
+                painterResource(R.drawable.regen),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize)
-            )
-            Icon(
-                Icons.Rounded.Refresh,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize).clickable {
-                    viewModel.regenerateResponse(ModelManager.currentModel.value, message.id)
-                }
+                modifier = Modifier.size(actionIconSize).clickable { showPicker = true }
             )
             Icon(
                 Icons.Rounded.Share,
@@ -847,6 +912,9 @@ private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
                 modifier = Modifier.size(actionIconSize)
             )
         }
+    }
+    if (showPicker) {
+        RegenerateModelPickerDialog(viewModel = viewModel, messageId = message.id) { showPicker = false }
     }
 }
 
