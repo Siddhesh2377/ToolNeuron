@@ -857,12 +857,12 @@ private fun UserChatUI(message: Message) {
         modifier = Modifier
             .widthIn(max = rDP(300.dp))
             .clip(corner)
-            .background(MaterialTheme.colorScheme.primary)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
             .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp))
     ) {
         MarkdownText(
             message.text,
-            color = MaterialTheme.colorScheme.onPrimary,
+            color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyLarge
         )
     }
