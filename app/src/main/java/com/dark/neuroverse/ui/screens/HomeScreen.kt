@@ -3,6 +3,7 @@ package com.dark.neuroverse.ui.screens
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.graphics.Bitmap
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -47,9 +48,6 @@ import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.rounded.ArrowDownward
-import androidx.compose.material.icons.rounded.ContentCopy
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material.icons.rounded.SelectAll
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -89,21 +87,22 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
-import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
@@ -112,6 +111,7 @@ import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
+import com.dark.neuroverse.ui.components.RobotDecodePlaceholder
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
@@ -179,19 +179,19 @@ fun TopBar(
 ) {
     TopAppBar(
         title = {
-            val capitalizedTitle = title.replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase() else it.toString()
-            }
+        val capitalizedTitle = title.replaceFirstChar {
+            if (it.isLowerCase()) it.titlecase() else it.toString()
+        }
 
-            Text(
-                text = capitalizedTitle,
-                modifier = Modifier.widthIn(max = rDP(180.dp)),
-                fontSize = rSp(22.sp),
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold
-            )
+        Text(
+            text = capitalizedTitle,
+            modifier = Modifier.widthIn(max = rDP(180.dp)),
+            fontSize = rSp(22.sp),
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            fontWeight = FontWeight.SemiBold
+        )
     }, navigationIcon = {
         IconButton(onClick = onMenu) {
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
@@ -233,14 +233,13 @@ fun TopBar(
 }
 
 
-
 @Composable
 fun BodyContent(
-    inner: PaddingValues,
-    viewModel: ChatScreenViewModel
+    inner: PaddingValues, viewModel: ChatScreenViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val generationState by viewModel.generationState.collectAsStateWithLifecycle()
+
 
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -260,10 +259,9 @@ fun BodyContent(
 
     // If the user scrolls up, pause auto-follow
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress to isAtBottom }
-            .collect { (scrolling, atBottom) ->
-                if (scrolling && !atBottom) follow = false
-            }
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }.collect { (scrolling, atBottom) ->
+            if (scrolling && !atBottom) follow = false
+        }
     }
 
     // When messages change and follow is on, go to bottom
@@ -288,17 +286,13 @@ fun BodyContent(
                 state = listState,
                 reverseLayout = false,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp),
-                    top = rDP(8.dp),
-                    start = rDP(8.dp),
-                    end = rDP(8.dp)
+                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }
-                ) { msg ->
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
                     ChatBubble(msg, viewModel, generationState) {
                         val preview = writeBitmapImage(it)
                         viewModel.writeToolPreviewByID(msg.id, preview)
@@ -326,8 +320,7 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -335,12 +328,11 @@ fun BodyContent(
 }
 
 
-
 @Composable
 private fun BottomBar(
     viewModel: ChatScreenViewModel
 ) {
-    val context = LocalContext.current
+    LocalContext.current
     var input by remember { mutableStateOf("Hi Bro Search For Hats") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
@@ -464,9 +456,11 @@ fun ToolsList(
                         )
                         if (tool.description.isNotBlank()) {
                             Text(
-                                text = tool.description, style = MaterialTheme.typography.bodySmall.copy(
+                                text = tool.description,
+                                style = MaterialTheme.typography.bodySmall.copy(
                                     fontSize = rSp(13.sp)
-                                ), color = Color.Gray
+                                ),
+                                color = Color.Gray
                             )
                         }
                     }
@@ -720,11 +714,16 @@ private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
 
 @Composable
 private fun ChatBubble(
-    msg: Message, viewModel: ChatScreenViewModel, generationState: GenerationState, onCapture: (Bitmap) -> Unit
+    msg: Message,
+    viewModel: ChatScreenViewModel,
+    generationState: GenerationState,
+    onCapture: (Bitmap) -> Unit
 ) {
     // role check
     val isUser = msg.role == Role.User
-
+    val isDecoding by viewModel.isDecoding.collectAsStateWithLifecycle()
+    val decodingMsgId by viewModel.decodingMessageId.collectAsStateWithLifecycle()
+    val waitingForThis = isDecoding && decodingMsgId == msg.id
     // trigger capture when generation is DONE
     var shouldCaptureNow by remember { mutableStateOf(false) }
     LaunchedEffect(generationState) {
@@ -735,6 +734,7 @@ private fun ChatBubble(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
+
         Column(
             modifier = Modifier
         ) {
@@ -752,12 +752,15 @@ private fun ChatBubble(
                 }
 
                 Role.Assistant -> {
-                    RegularChatUI(msg, viewModel)
+                    RegularChatUI(msg, waitingForThis, viewModel)
                 }
 
                 Role.Tool -> {
                     ToolChatUI(
-                        message = msg, shouldCaptureNow = shouldCaptureNow, onCapture = {
+                        message = msg,
+                        isDecoding = waitingForThis,
+                        shouldCaptureNow = shouldCaptureNow,
+                        onCapture = {
                             shouldCaptureNow = false
                             onCapture(it)
                         })
@@ -770,102 +773,117 @@ private fun ChatBubble(
 
 @Composable
 private fun ToolChatUI(
-    message: Message, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit
+    message: Message, isDecoding: Boolean, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit
 ) {
-    Column {
-        AssistTag(message.tool?.toolName ?: "Unknown Tool")
-        Spacer(Modifier.height(rDP(6.dp)))
-
-        val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
-        val pluginPreviewLoading: Bitmap? = readBitmapImage(message.tool?.toolPreview ?: "")
-
-        when (pluginPreviewLoading == null) {
+    Crossfade(isDecoding, label = "assistant-waiting") {
+        when (it) {
             true -> {
-                val isLoading = pluginLoading == null
-
-                ProjectedCapturable(
-                    captureKey = message.id,         // stable + flips when ready
-                    captureWhen = shouldCaptureNow,
-                    onCaptured = { bmp -> onCapture(bmp) },
-                ) {
-                    Crossfade(targetState = isLoading, label = "plugin") { loading ->
-                        if (loading) {
-                            Card(
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surface
-                                ),
-                                elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                                modifier = Modifier.size(rDP(200.dp)),
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(rDP(24.dp)),
-                                    verticalArrangement = Arrangement.spacedBy(
-                                        rDP(16.dp), Alignment.CenterVertically
-                                    ),
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(rDP(32.dp)),
-                                        strokeWidth = rDP(3.dp)
-                                    )
-                                    Text(
-                                        text = "Loading...Plugin \n ${message.tool?.toolName}",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontSize = rSp(14.sp), fontFamily = FontFamily.Serif
-                                        ),
-                                        textAlign = TextAlign.Center
-                                    )
-                                }
-                            }
-                        } else {
-                            Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                PluginManager.currentPlugin.collectAsState().value?.api?.content()
-                                    ?.invoke()
-                            }
-                        }
-                    }
-                }
+                RobotDecodePlaceholder(active = true, modifier = Modifier.fillMaxWidth())
             }
 
             false -> {
-                var showToolOutput by remember { mutableStateOf(false) }
+                Column {
+                    AssistTag(message.tool?.toolName ?: "Unknown Tool")
+                    Spacer(Modifier.height(rDP(6.dp)))
 
-                Box(Modifier
-                    .clickable { showToolOutput = !showToolOutput }
-                    .padding(top = rDP(8.dp))
-                    .clip(RoundedCornerShape(rDP(12.dp)))
-                    .background(MaterialTheme.colorScheme.surface)
-                    .border(
-                        rDP(1.dp), MaterialTheme.colorScheme.outline, RoundedCornerShape(rDP(12.dp))
-                    )) {
-                    Crossfade(targetState = showToolOutput) { visible ->
-                        when (visible) {
-                            true -> {
-                                Image(
-                                    bitmap = pluginPreviewLoading.asImageBitmap(),
-                                    contentDescription = null,
-                                    contentScale = ContentScale.FillWidth,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
+                    val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
+                    val pluginPreviewLoading: Bitmap? =
+                        readBitmapImage(message.tool?.toolPreview ?: "")
+
+                    when (pluginPreviewLoading == null) {
+                        true -> {
+                            val isLoading = pluginLoading == null
+
+                            ProjectedCapturable(
+                                captureKey = message.id,         // stable + flips when ready
+                                captureWhen = shouldCaptureNow,
+                                onCaptured = { bmp -> onCapture(bmp) },
+                            ) {
+                                Crossfade(targetState = isLoading, label = "plugin") { loading ->
+                                    if (loading) {
+                                        Card(
+                                            colors = CardDefaults.cardColors(
+                                                containerColor = MaterialTheme.colorScheme.surface
+                                            ),
+                                            elevation = CardDefaults.cardElevation(rDP(0.dp)),
+                                            modifier = Modifier.size(rDP(200.dp)),
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .padding(rDP(24.dp)),
+                                                verticalArrangement = Arrangement.spacedBy(
+                                                    rDP(16.dp), Alignment.CenterVertically
+                                                ),
+                                                horizontalAlignment = Alignment.CenterHorizontally
+                                            ) {
+                                                CircularProgressIndicator(
+                                                    modifier = Modifier.size(rDP(32.dp)),
+                                                    strokeWidth = rDP(3.dp)
+                                                )
+                                                Text(
+                                                    text = "Loading...Plugin \n ${message.tool?.toolName}",
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontSize = rSp(14.sp),
+                                                        fontFamily = FontFamily.Serif
+                                                    ),
+                                                    textAlign = TextAlign.Center
+                                                )
+                                            }
+                                        }
+                                    } else {
+                                        Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                                            PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                                                ?.invoke()
+                                        }
+                                    }
+                                }
                             }
+                        }
 
-                            false -> {
-                                Card(
-                                    elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primary
-                                    )
-                                ) {
-                                    Text(
-                                        "Show Tool Output",
-                                        Modifier.padding(
-                                            horizontal = rDP(16.dp), vertical = rDP(12.dp)
-                                        ),
-                                        fontSize = rSp(14.sp),
-                                        color = MaterialTheme.colorScheme.onPrimary
-                                    )
+                        false -> {
+                            var showToolOutput by remember { mutableStateOf(false) }
+
+                            Box(Modifier
+                                .clickable { showToolOutput = !showToolOutput }
+                                .padding(top = rDP(8.dp))
+                                .clip(RoundedCornerShape(rDP(12.dp)))
+                                .background(MaterialTheme.colorScheme.surface)
+                                .border(
+                                    rDP(1.dp),
+                                    MaterialTheme.colorScheme.outline,
+                                    RoundedCornerShape(rDP(12.dp))
+                                )) {
+                                Crossfade(targetState = showToolOutput) { visible ->
+                                    when (visible) {
+                                        true -> {
+                                            Image(
+                                                bitmap = pluginPreviewLoading.asImageBitmap(),
+                                                contentDescription = null,
+                                                contentScale = ContentScale.FillWidth,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+
+                                        false -> {
+                                            Card(
+                                                elevation = CardDefaults.cardElevation(rDP(0.dp)),
+                                                colors = CardDefaults.cardColors(
+                                                    containerColor = MaterialTheme.colorScheme.primary
+                                                )
+                                            ) {
+                                                Text(
+                                                    "Show Tool Output",
+                                                    Modifier.padding(
+                                                        horizontal = rDP(16.dp),
+                                                        vertical = rDP(12.dp)
+                                                    ),
+                                                    fontSize = rSp(14.sp),
+                                                    color = MaterialTheme.colorScheme.onPrimary
+                                                )
+                                            }
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -877,44 +895,69 @@ private fun ToolChatUI(
 }
 
 @Composable
-private fun RegularChatUI(message: Message, viewModel: ChatScreenViewModel) {
-    //Copy, Select Text, Regenerate, Share
-    var showPicker by remember { mutableStateOf(false) }
-    val actionIconSize = rDP(16.dp)
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = rDP(14.dp))
-    ) {
-        MarkdownText(
-            message.text, color = MaterialTheme.colorScheme.primary, style = TextStyle.Default.copy(
-                fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
-            )
-        )
-        Spacer(Modifier.height(rDP(10.dp)))
-        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
-            Icon(
-                painterResource(R.drawable.copy),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize)
-            )
-            Icon(
-                painterResource(R.drawable.regen),
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize).clickable { showPicker = true }
-            )
-            Icon(
-                Icons.Rounded.Share,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier.size(actionIconSize)
-            )
+private fun RegularChatUI(message: Message, isDecoding: Boolean, viewModel: ChatScreenViewModel) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    Crossfade(isDecoding, label = "assistant-waiting") {
+        when (it) {
+            true -> {
+                RobotDecodePlaceholder(active = true, modifier = Modifier.fillMaxWidth())
+            }
+
+            false -> {
+                //Copy, Select Text, Regenerate, Share
+                var showPicker by remember { mutableStateOf(false) }
+                val actionIconSize = rDP(16.dp)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = rDP(14.dp))
+                ) {
+                    MarkdownText(
+                        message.text,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = TextStyle.Default.copy(
+                            fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
+                        )
+                    )
+                    Spacer(Modifier.height(rDP(10.dp)))
+                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+                        Icon(
+                            painterResource(R.drawable.copy),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(actionIconSize).
+                            clickable {
+                                // Copy the text
+                                clipboardManager.setText(AnnotatedString(message.text))
+
+                                // Show a toast confirmation
+                                Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                        Icon(
+                            painterResource(R.drawable.regen),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable { showPicker = true })
+                        Icon(
+                            Icons.Rounded.Share,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier.size(actionIconSize)
+                        )
+                    }
+                }
+                if (showPicker) {
+                    RegenerateModelPickerDialog(
+                        viewModel = viewModel, messageId = message.id
+                    ) { showPicker = false }
+                }
+            }
         }
-    }
-    if (showPicker) {
-        RegenerateModelPickerDialog(viewModel = viewModel, messageId = message.id) { showPicker = false }
     }
 }
 
@@ -928,12 +971,13 @@ private fun UserChatUI(message: Message) {
 
     Box(
         modifier = Modifier
-            .widthIn(max = rDP(300.dp))
+            .widthIn(min = rDP(50.dp), max = rDP(240.dp))
             .clip(corner)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp))
+            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
+        contentAlignment = Alignment.CenterEnd
     ) {
-        MarkdownText(
+        Text(
             message.text,
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyLarge

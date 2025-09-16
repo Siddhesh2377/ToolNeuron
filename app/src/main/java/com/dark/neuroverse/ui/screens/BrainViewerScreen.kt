@@ -3,9 +3,12 @@
 package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,6 +20,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -113,7 +119,7 @@ fun DetailedLook(modifier: Modifier = Modifier) {
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Column(
-            Modifier.padding(rDP(8.dp)), verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            Modifier.padding(rDP(8.dp))
         ) {
             Text(
                 "Quick Looks",
@@ -123,21 +129,20 @@ fun DetailedLook(modifier: Modifier = Modifier) {
                 )
             )
 
-            QuickChips(
-                Modifier, Pair("Root", ""), Coral.copy(alpha = 0.1f)
-            ) {
+            QuickChipsWithChild(
+                Modifier, "Root", Coral.copy(alpha = 0.1f), childComposable = {
+                    QuickChipsWithChild(
+                        Modifier.padding(start = rDP(14.dp)), "Chat", Coral.copy(alpha = 0.1f)
+                    ) {
+                        QuickChips(
+                            Modifier.padding(start = rDP(34.dp)),
+                            "Hi Bro",
+                            Coral.copy(alpha = 0.1f)
+                        ) {
 
-            }
-            QuickChips(
-                Modifier.padding(start = rDP(14.dp)), Pair("Chat", ""), Coral.copy(alpha = 0.1f)
-            ) {
-
-            }
-            QuickChips(
-                Modifier.padding(start = rDP(34.dp)), Pair("Hi Bro", ""), Coral.copy(alpha = 0.1f)
-            ) {
-
-            }
+                        }
+                    }
+                })
         }
     }
 }
@@ -215,8 +220,8 @@ fun QuickChips(
 @Composable
 fun QuickChips(
     modifier: Modifier = Modifier,
-    data: Pair<String, String> = Pair("", ""),
-    backgroundColor: Color = SkyBlue.copy(alpha = 0.1f),
+    data: String = "",
+    backgroundColor: Color = Coral.copy(alpha = 0.1f),
     tailAction: @Composable () -> Unit = {}
 ) {
     Row(
@@ -227,11 +232,62 @@ fun QuickChips(
             .padding(rDP(8.dp))
     ) {
         Text(
-            data.first, style = MaterialTheme.typography.bodyLarge.copy(
+            data, style = MaterialTheme.typography.bodyLarge.copy(
                 fontFamily = FontFamily.Serif,
             )
         )
         Spacer(modifier = Modifier.weight(1f))
         tailAction()
     }
+}
+
+@Composable
+fun QuickChipsWithChild(
+    modifier: Modifier = Modifier,
+    data: String = "",
+    backgroundColor: Color = SkyBlue.copy(alpha = 0.1f),
+    childComposable: @Composable () -> Unit = {},
+) {
+    var showChats by remember { mutableStateOf(true) }
+
+    Column {
+        Row(
+            modifier
+                .background(
+                    backgroundColor, RoundedCornerShape(rDP(8.dp))
+                )
+                .padding(rDP(8.dp))
+        ) {
+            Text(
+                data, style = MaterialTheme.typography.bodyLarge.copy(
+                    fontFamily = FontFamily.Serif,
+                )
+            )
+            Spacer(modifier = Modifier.weight(1f))
+            Box(Modifier.clickable {
+                showChats = !showChats
+            }) {
+                Crossfade(showChats) {
+                    when (it) {
+                        true -> {
+                            Icon(Icons.Default.KeyboardArrowDown, "")
+                        }
+
+                        false -> {
+                            Icon(Icons.Default.KeyboardArrowUp, "")
+                        }
+                    }
+                }
+            }
+        }
+        AnimatedVisibility(showChats) {
+            Column(
+                Modifier.padding(vertical = rDP(8.dp)), verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            ) {
+                childComposable()
+            }
+
+        }
+    }
+
 }

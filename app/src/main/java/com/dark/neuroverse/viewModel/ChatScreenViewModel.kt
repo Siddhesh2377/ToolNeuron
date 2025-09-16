@@ -25,8 +25,11 @@ import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -61,6 +64,43 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
     //endregion
 
+    enum class DecodeType { NORMAL, REGENERATE }
+
+    data class DecodingEvent(
+        val type: DecodeType,
+        val chatId: String,
+        val modelId: String,
+        val startedAtNs: Long,
+        val firstTokenAtNs: Long,
+        val durationMs: Long
+    )
+
+    private val _decodingEvents = MutableSharedFlow<DecodingEvent>(extraBufferCapacity = 8)
+    val decodingEvents: SharedFlow<DecodingEvent> = _decodingEvents.asSharedFlow()
+
+    private val _lastDecodingMs = MutableStateFlow<Long?>(null)
+    val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
+
+    private fun emitDecodeNow(
+        type: DecodeType,
+        startedAtNs: Long,
+        firstTokenAtNs: Long
+    ) {
+        val ms = (firstTokenAtNs - startedAtNs) / 1_000_000
+        _lastDecodingMs.value = ms
+        _decodingEvents.tryEmit(
+            DecodingEvent(
+                type = type,
+                chatId = chatId.value,
+                modelId = "${selectedModel.value.id}", // you already compare by id elsewhere
+                startedAtNs = startedAtNs,
+                firstTokenAtNs = firstTokenAtNs,
+                durationMs = ms
+            )
+        )
+    }
+
+
     //region Dispatchers
     private val io: CoroutineDispatcher = Dispatchers.IO
     private val cpu: CoroutineDispatcher = Dispatchers.Default
@@ -75,6 +115,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private val _isGenerating = MutableStateFlow(false)
     private val _generationState = MutableStateFlow(GenerationState.IDLE)
 
+    private val _isDecoding = MutableStateFlow(false)
+    private val _decodingMessageId = MutableStateFlow<String?>(null)
+
+
+
+
     // Exposed immutable state
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
     val chatTitle: StateFlow<String> = _chatTitle.asStateFlow()
@@ -82,6 +128,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
     val generationState: StateFlow<GenerationState> = _generationState.asStateFlow()
+    val isDecoding: StateFlow<Boolean> = _isDecoding.asStateFlow()
+    val decodingMessageId: StateFlow<String?> = _decodingMessageId.asStateFlow()
 
     // Other observable state
     val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
@@ -258,6 +306,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     fun sendMessage(input: String) {
         _messages.update { it + Message(role = Role.User, text = input) }
         _isGenerating.value = true
+        _isDecoding.value = true
+        _decodingMessageId.value = "-1"
+
         _generationState.value = GenerationState.GENERATING
 
         // Create streaming placeholder on Main
@@ -305,6 +356,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val thoughtSb = StringBuilder()
         val rawSb = StringBuilder()
         var inThink = false
+        val decodeStartNs = System.nanoTime()
+        var firstTokenSeen = false
+
 
         // Change detection
         var lastPostedVisibleLen = 0
@@ -382,6 +436,17 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 prompt = prompt,
                 toolJson = if (enableTools) convertToolsToJson(selectedTools.value.second).toString() else null,
                 onToken = { tok ->
+                    if (!firstTokenSeen) {
+                        firstTokenSeen = true
+                        _isDecoding.value = false
+                        _decodingMessageId.value = null
+                        emitDecodeNow(
+                            type = DecodeType.NORMAL,
+                            startedAtNs = decodeStartNs,
+                            firstTokenAtNs = System.nanoTime()
+                        )
+                    }
+
                     rawSb.append(tok)
                     val lower = tok.lowercase()
                     when {
@@ -494,6 +559,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             applyFinal(visibleSb.toString(), thoughtSb.toString().ifBlank { null })
         } finally {
             _isGenerating.value = false
+            _isDecoding.value = false
+            _decodingMessageId.value = null
             if (_generationState.value != GenerationState.DONE) _generationState.value =
                 GenerationState.IDLE
         }
@@ -627,6 +694,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         _isGenerating.value = true
         _generationState.value = GenerationState.GENERATING
 
+        _isDecoding.value = true
+        _decodingMessageId.value = messageId
+
+        val decodeStartNs = System.nanoTime()
+        var firstTokenSeen = false
+
+
         // Prepare context: most recent user message *before* this assistant reply
         val userCtx = _messages.value.take(idx).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
@@ -745,6 +819,17 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     toolJson = null,
                     onToolCalled = { _, _ -> },
                     onToken = { tok ->
+                        if (!firstTokenSeen) {
+                            firstTokenSeen = true
+                            _isDecoding.value = false
+                            _decodingMessageId.value = null
+                            emitDecodeNow(
+                                type = DecodeType.REGENERATE,
+                                startedAtNs = decodeStartNs,
+                                firstTokenAtNs = System.nanoTime()
+                            )
+                        }
+
                         rawSb.append(tok)
                         val lower = tok.lowercase()
                         when {
@@ -787,6 +872,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 applyFinal(visibleSb.toString(), thoughtSb.toString().ifBlank { null })
             } finally {
                 _isGenerating.value = false
+                _isDecoding.value = false
+                _decodingMessageId.value = null
+
                 if (_generationState.value != GenerationState.DONE) _generationState.value = GenerationState.IDLE
             }
         }
