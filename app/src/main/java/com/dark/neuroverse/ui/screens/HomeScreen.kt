@@ -1,12 +1,16 @@
 package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -123,7 +127,6 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.util.readToolOutputJson
 import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
@@ -131,7 +134,6 @@ import com.dark.neuroverse.viewModel.chatViewModel.GenerationState
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.launch
-import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,7 +149,14 @@ fun HomeScreen(
     val context = LocalContext.current
     val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
-
+    BackHandler {
+        // Check if the context is an Activity and close the app
+        if (context is Activity) {
+            // Log to ensure this is being called
+            Log.d("HomeScreen", "Closing the app and removing the task...")
+            context.finishAffinity()
+        }
+    }
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
 
@@ -794,15 +803,12 @@ private fun ToolChatUI(
                     AssistTag(message.tool?.toolName ?: "Unknown Tool")
                     Spacer(Modifier.height(rDP(6.dp)))
 
+
                     val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
-                    Log.d("ToolChatUI", "ToolChatUI: ${message.tool?.toolPreview}")
-
-
 
                     when (message.tool?.toolOutput == null) {
                         true -> {
                             val isLoading = pluginLoading == null
-
                             Crossfade(targetState = isLoading, label = "plugin") { loading ->
                                 if (loading) {
                                     Card(
@@ -843,7 +849,7 @@ private fun ToolChatUI(
                         }
 
                         false -> {
-                            ToolCalledUi(toolOutput = message.tool.toolOutput)
+                            ToolOutputToggle(toolOutput = message.tool.toolOutput)
                         }
                     }
                 }
@@ -851,6 +857,60 @@ private fun ToolChatUI(
         }
     }
 }
+
+@Composable
+fun ToolOutputToggle(toolOutput: ToolOutput) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
+        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
+            tween(1200, easing = LinearEasing), RepeatMode.Restart
+        ), label = "shimmerFloat"
+    )
+
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
+        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
+    )
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+    ) {
+        // Toggle Button
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(rDP(5.dp)))
+                .border(
+                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
+                )
+                .drawWithContent {
+                    drawContent()
+                    // shimmer overlay
+                    drawRect(
+                        brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
+                    )
+                }
+                .clickable { expanded = !expanded } // toggle expand/collapse
+            .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+            Text(
+                text = "Show Tool Output",
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        // Animated expansion for Tool Output
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            ToolCalledUi(toolOutput = toolOutput)
+        }
+    }
+}
+
 
 @Composable
 private fun RegularChatUI(message: Message, isDecoding: Boolean, viewModel: ChatScreenViewModel) {
@@ -986,23 +1046,19 @@ private fun ThinkingChatUI(message: Message) {
 
 @Composable
 fun ToolCalledUi(
-    modifier: Modifier = Modifier,
-    toolOutput: ToolOutput
+    modifier: Modifier = Modifier, toolOutput: ToolOutput
 ) {
-    // blink the caret
-    val blink by rememberInfiniteTransition(label = "caret")
-        .animateFloat(
-            initialValue = 1f,
-            targetValue = 0.25f,
-            animationSpec = infiniteRepeatable(animation = tween(500), repeatMode = RepeatMode.Reverse),
-            label = "caretFloat"
-        )
+
 
     val ctx = LocalContext.current
 
     val runningPlugin = PluginManager.runPlugin(ctx, toolOutput.toolName, toolOutput.output)
 
-    runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+
+
+    Card {
+        runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+    }
 
 
 }
