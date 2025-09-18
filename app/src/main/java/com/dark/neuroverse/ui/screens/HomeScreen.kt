@@ -998,24 +998,11 @@ fun ToolCalledUi(
             label = "caretFloat"
         )
 
-    Column (
-        modifier
-            .clip(RoundedCornerShape(rDP(8.dp)))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(8.dp)))
-            .padding(rDP(9.dp))
-    ) {
-        Text(
-            text = toolOutput.toolName,
-            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-        )
-        Text(
-            text = toolOutput.output,
-            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = blink),
-            modifier = Modifier
-        )
-    }
+    val ctx = LocalContext.current
+
+    val runningPlugin = PluginManager.runPlugin(ctx, toolOutput.toolName, toolOutput.output)
+
+    runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+
+
 }
