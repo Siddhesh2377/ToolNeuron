@@ -1,4 +1,4 @@
-package com.dark.neuroverse.viewModel
+package com.dark.neuroverse.viewModel.chatViewModel
 
 import android.content.Context
 import android.util.Log
@@ -13,7 +13,9 @@ import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
+import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.util.extractPureJson
+import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
@@ -118,7 +120,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private val _isDecoding = MutableStateFlow(false)
     private val _decodingMessageId = MutableStateFlow<String?>(null)
 
-
+    private var currentID = MutableStateFlow("")
 
 
     // Exposed immutable state
@@ -322,7 +324,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 id = "-1",
                 tool = if (isTool) RunningTool(
                     toolName = selectedTools.value.second.toolName,
-                    toolPreview = ""
+                    toolPreview = "",
+                    toolOutput = ToolOutput()
                 ) else null
             )
             _messages.value = list
@@ -396,8 +399,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 if (idx in _messages.value.indices) {
                     val cur = _messages.value.toMutableList()
                     val m = cur[idx]
+                    currentID.value = UUID.randomUUID().toString()
                     cur[idx] = m.copy(
-                        id = UUID.randomUUID().toString(),
+                        id = currentID.value,
                         text = text,
                         thought = thought?.take(MAX_THOUGHT_SAVE)
                     )
@@ -481,7 +485,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                     val lastUserQuery =
                         messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
-                    val selectedToolRealName = selectedTools.value.second.toolName.orEmpty()
+                    val selectedToolRealName = selectedTools.value.second.toolName
                     val fallbackTool = nativeName.ifBlank { selectedToolRealName }
 
                     val repaired = try {
@@ -522,15 +526,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                             viewModelScope.launch(cpu) {
                                 ModelManager.setSystemPrompt("You are a crisp summarizer. Be concise, factual.")
                                 val rawOutput = result.toString()
+                                Log.d("ToolRunner", "rawOutput: $rawOutput")
+                                writeToolPreviewByID(currentID.value, writeToolOutputJson(rawOutput) ?: ToolOutput())
                                 if (rawOutput.isNotBlank()) {
                                     sendInternalReasoningMessage(
                                         "Summarize the tool output in 5–6 tight lines. Preserve entities, numbers, urls.\n$rawOutput"
-                                    )
+                                    ).let {
+                                        currentID.value = ""
+                                    }
                                 }
-                                PluginManager.stopPlugin(
-                                    PluginManager.currentPlugin.value?.manifest?.name
-                                        ?: "Unknown Plugin"
-                                )
                             }
                         }
                     }
@@ -568,9 +572,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //endregion
 
     //region Tool Preview
-    fun writeToolPreviewByID(id: String, runningTool: String) {
+    fun writeToolPreviewByID(id: String, runningTool: ToolOutput) {
         val selectedToolName = selectedTools.value.second.toolName
-        Log.d(TAG, "writePreview(id=$id, tool=$selectedToolName, bytes=${runningTool.length})")
 
         viewModelScope.launch(io) {
             val beforeSize = _messages.value.size
@@ -578,15 +581,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 _messages.update { list ->
                     list.map { message ->
+                        Log.d("MSG IDS", "Message id: ${message.id}")
                         if (message.id == id) {
+                            Log.d(TAG, "Found message with id $id")
                             hits++
                             message.copy(
                                 tool = RunningTool(
                                     toolName = selectedToolName,
-                                    toolPreview = runningTool
+                                    toolPreview = runningTool.toString(),
+                                    toolOutput = runningTool
                                 )
                             )
-                        } else message
+                        } else {
+                            Log.d(TAG, "Message id $id not found")
+                            message
+                        }
                     }
                 }
                 if (hits > 0) {

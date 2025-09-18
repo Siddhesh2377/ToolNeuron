@@ -1,6 +1,5 @@
 package com.dark.userdata
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -13,9 +12,7 @@ import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.ntds.neuron_tree.NodeData
 import com.dark.userdata.ntds.neuron_tree.NodeType
 import com.dark.userdata.ntds.saveEncryptedTree
-import kotlinx.serialization.json.Json
 import org.json.JSONObject
-import java.io.ByteArrayOutputStream
 import javax.crypto.SecretKey
 
 fun getDefaultBrainStructure(): NeuronTree {
@@ -43,23 +40,7 @@ fun addNewChat(root: NeuronNode, data: JSONObject): NeuronNode {
     return newChat
 }
 
-fun writeBitmapImage(
-    bitmap: Bitmap,
-    format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG,
-    quality: Int = 100
-): String {
-    val bos = ByteArrayOutputStream()
-    bitmap.compress(format, quality, bos)
-    return Base64.encodeToString(bos.toByteArray(), Base64.NO_WRAP)
-}
 
-fun readBitmapImage(b64: String): Bitmap? {
-    return try {
-        if (b64.isBlank()) return null
-        val bytes = Base64.decode(b64, Base64.NO_WRAP) // <- match writer
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-    } catch (_: Throwable) { null }
-}
 
 
 fun saveTree(tree: NeuronTree, context: Context, alise: String){

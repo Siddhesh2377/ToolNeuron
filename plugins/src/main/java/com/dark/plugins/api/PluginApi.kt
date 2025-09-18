@@ -10,6 +10,7 @@ import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import com.dark.ai_module.workers.ModelManager
 import com.dark.plugins.manager.PluginManager
+import kotlinx.serialization.json.Json
 import org.json.JSONObject
 
 typealias ComposableBlock = @Composable () -> Unit
@@ -20,6 +21,9 @@ interface ComposePlugin {
     @Keep
             /** Return top-level UI to render. Host will call this frequently; avoid heavy work. */
     fun content(): ComposableBlock
+
+    @Keep
+    fun toolPreviewContent(data: String): ComposableBlock
 }
 
 @Keep
@@ -45,29 +49,21 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     open fun onDestroy() {
     }
 
-    open fun callPlugin(name: String, data: Any) {
-        PluginManager.runPlugin(appContext, name, data)
-    }
-
     @Composable
     open fun AppContent() {
         Text("Hello From Default Plugin :)")
     }
 
-    open suspend fun aiCall(
-        input: JSONObject, onToken: (String) -> Unit
-    ): JSONObject {
-        val temp: String = ModelManager.generateStreaming(
-            prompt = input.toString(),
-            gen = ModelManager.GenerationParams(),
-            onToken = onToken,
-            toolJson = null)
-        return JSONObject().apply { put("response", temp) }
+    @Composable
+    open fun ToolPreviewContent(data: String) {
+        Text("Hello From Default Plugin :)")
     }
 
-    open suspend fun stopGeneration() {
-        ModelManager.stopGeneration()
-    }
+    @Keep
+    override fun content(): ComposableBlock = { AppContent() }
+
+    @Keep
+    override fun toolPreviewContent(data: String): ComposableBlock = { ToolPreviewContent(data) }
 
     @Keep
     open fun runTool(
@@ -78,8 +74,4 @@ open class PluginApi(ctx: Context) : ComposePlugin {
     ) {
 
     }
-
-    @Keep
-    override fun content(): ComposableBlock = { AppContent() }
-
 }

@@ -31,7 +31,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.viewModel.ChatScreenViewModel
+import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 
 @Composable
 fun SettingsDrawerContent(

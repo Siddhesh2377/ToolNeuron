@@ -20,23 +20,24 @@ object ToolRunner {
         context: Context,
         data: JSONObject,
         timeoutMs: Long = 30_000L,
-        onResult: (result: Any) -> Unit
+        onResult: (result: JSONObject) -> Unit
     ) {
         val api = loadedPlugin.api ?: return onResult(errorJson("plugin_api_null"))
         val originalTool = data.optString("tool", "").trim()
         val args = data.optJSONObject("args") ?: return onResult(errorJson("invalid_payload"))
 
         fun invoke(tool: String, alreadyRetried: Boolean) {
-            val handler = android.os.Handler(android.os.Looper.getMainLooper())
-            val done = java.util.concurrent.atomic.AtomicBoolean(false)
-            fun complete(any: Any) { if (done.compareAndSet(false, true)) onResult(any) }
+            val handler = Handler(Looper.getMainLooper())
+            val done = AtomicBoolean(false)
+            fun complete(any: JSONObject) { if (done.compareAndSet(false, true)) onResult(any) }
             val timeout = Runnable { complete(errorJson("timeout", mapOf("tool" to tool, "ms" to timeoutMs))) }
             handler.postDelayed(timeout, timeoutMs)
 
             try {
                 api.runTool(context, tool, args) { result ->
                     handler.removeCallbacks(timeout)
-                    val s = result?.toString().orEmpty()
+                    val s = result.toString()
+                    Log.i("TOOL RES", "here it is $result")
                     // Detect "Unknown tool" style message and retry via alias once
                     if (!alreadyRetried && s.contains("Unknown tool", ignoreCase = true)) {
                         val alias = ALIASES[tool]
@@ -45,7 +46,7 @@ object ToolRunner {
                             invoke(alias, true); return@runTool
                         }
                     }
-                    complete(result ?: errorJson("null_result", mapOf("tool" to tool)))
+                    complete(JSONObject(result.toString()))
                 }
             } catch (t: Throwable) {
                 handler.removeCallbacks(timeout)

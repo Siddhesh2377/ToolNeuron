@@ -2,12 +2,16 @@ package com.dark.neuroverse.ui.screens
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Bitmap
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -16,7 +20,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -84,10 +87,11 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -107,25 +111,27 @@ import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
+import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
-import com.dark.neuroverse.ui.components.ProjectedCapturable
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
 import com.dark.neuroverse.ui.components.RobotDecodePlaceholder
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
+import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.viewModel.ChatScreenViewModel
-import com.dark.neuroverse.viewModel.ChattingViewModelFactory
-import com.dark.neuroverse.viewModel.GenerationState
+import com.dark.neuroverse.util.readToolOutputJson
+import com.dark.neuroverse.util.writeToolOutputJson
+import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
+import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
+import com.dark.neuroverse.viewModel.chatViewModel.GenerationState
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
-import com.dark.userdata.readBitmapImage
-import com.dark.userdata.writeBitmapImage
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -297,8 +303,8 @@ fun BodyContent(
                     key = { it.id },
                     contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
                     ChatBubble(msg, viewModel, generationState) {
-                        val preview = writeBitmapImage(it)
-                        viewModel.writeToolPreviewByID(msg.id, preview)
+                        val preview = writeToolOutputJson(it)
+                        viewModel.writeToolPreviewByID(msg.id, preview ?: return@ChatBubble)
                     }
                     Spacer(Modifier.height(rDP(18.dp)))
                 }
@@ -722,7 +728,7 @@ private fun ChatBubble(
     msg: Message,
     viewModel: ChatScreenViewModel,
     generationState: GenerationState,
-    onCapture: (Bitmap) -> Unit
+    onCapture: (String) -> Unit
 ) {
     // role check
     val isUser = msg.role == Role.User
@@ -762,10 +768,7 @@ private fun ChatBubble(
 
                 Role.Tool -> {
                     ToolChatUI(
-                        message = msg,
-                        isDecoding = waitingForThis,
-                        shouldCaptureNow = shouldCaptureNow,
-                        onCapture = {
+                        message = msg, isDecoding = waitingForThis, shouldCaptureNow, onCapture = {
                             shouldCaptureNow = false
                             onCapture(it)
                         })
@@ -778,7 +781,7 @@ private fun ChatBubble(
 
 @Composable
 private fun ToolChatUI(
-    message: Message, isDecoding: Boolean, shouldCaptureNow: Boolean, onCapture: (Bitmap) -> Unit
+    message: Message, isDecoding: Boolean, shouldCapture: Boolean, onCapture: (String) -> Unit
 ) {
     Crossfade(isDecoding, label = "assistant-waiting") {
         when (it) {
@@ -792,105 +795,55 @@ private fun ToolChatUI(
                     Spacer(Modifier.height(rDP(6.dp)))
 
                     val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
-                    val pluginPreviewLoading: Bitmap? =
-                        readBitmapImage(message.tool?.toolPreview ?: "")
+                    Log.d("ToolChatUI", "ToolChatUI: ${message.tool?.toolPreview}")
 
-                    when (pluginPreviewLoading == null) {
+
+
+                    when (message.tool?.toolOutput == null) {
                         true -> {
                             val isLoading = pluginLoading == null
 
-                            ProjectedCapturable(
-                                captureKey = message.id,         // stable + flips when ready
-                                captureWhen = shouldCaptureNow,
-                                onCaptured = { bmp -> onCapture(bmp) },
-                            ) {
-                                Crossfade(targetState = isLoading, label = "plugin") { loading ->
-                                    if (loading) {
-                                        Card(
-                                            colors = CardDefaults.cardColors(
-                                                containerColor = MaterialTheme.colorScheme.surface
-                                            ),
-                                            elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                                            modifier = Modifier.size(rDP(200.dp)),
+                            Crossfade(targetState = isLoading, label = "plugin") { loading ->
+                                if (loading) {
+                                    Card(
+                                        colors = CardDefaults.cardColors(
+                                            containerColor = MaterialTheme.colorScheme.surface
+                                        ),
+                                        elevation = CardDefaults.cardElevation(rDP(0.dp)),
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(rDP(24.dp)),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
                                         ) {
-                                            Column(
-                                                modifier = Modifier
-                                                    .fillMaxSize()
-                                                    .padding(rDP(24.dp)),
-                                                verticalArrangement = Arrangement.spacedBy(
-                                                    rDP(16.dp), Alignment.CenterVertically
+                                            CircularProgressIndicator(
+                                                modifier = Modifier.size(rDP(32.dp)),
+                                                strokeWidth = rDP(3.dp)
+                                            )
+                                            Text(
+                                                text = "Loading...Plugin \n ${message.tool?.toolName}",
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = rSp(14.sp),
+                                                    fontFamily = FontFamily.Serif
                                                 ),
-                                                horizontalAlignment = Alignment.CenterHorizontally
-                                            ) {
-                                                CircularProgressIndicator(
-                                                    modifier = Modifier.size(rDP(32.dp)),
-                                                    strokeWidth = rDP(3.dp)
-                                                )
-                                                Text(
-                                                    text = "Loading...Plugin \n ${message.tool?.toolName}",
-                                                    style = MaterialTheme.typography.bodyMedium.copy(
-                                                        fontSize = rSp(14.sp),
-                                                        fontFamily = FontFamily.Serif
-                                                    ),
-                                                    textAlign = TextAlign.Center
-                                                )
-                                            }
+                                                textAlign = TextAlign.Center
+                                            )
                                         }
-                                    } else {
-                                        Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                            PluginManager.currentPlugin.collectAsState().value?.api?.content()
-                                                ?.invoke()
-                                        }
+                                    }
+                                } else {
+                                    Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
+                                            ?.invoke()
                                     }
                                 }
                             }
                         }
 
                         false -> {
-                            var showToolOutput by remember { mutableStateOf(false) }
-
-                            Box(Modifier
-                                .clickable { showToolOutput = !showToolOutput }
-                                .padding(top = rDP(8.dp))
-                                .clip(RoundedCornerShape(rDP(12.dp)))
-                                .background(MaterialTheme.colorScheme.surface)
-                                .border(
-                                    rDP(1.dp),
-                                    MaterialTheme.colorScheme.outline,
-                                    RoundedCornerShape(rDP(12.dp))
-                                )) {
-                                Crossfade(targetState = showToolOutput) { visible ->
-                                    when (visible) {
-                                        true -> {
-                                            Image(
-                                                bitmap = pluginPreviewLoading.asImageBitmap(),
-                                                contentDescription = null,
-                                                contentScale = ContentScale.FillWidth,
-                                                modifier = Modifier.fillMaxWidth()
-                                            )
-                                        }
-
-                                        false -> {
-                                            Card(
-                                                elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                                                colors = CardDefaults.cardColors(
-                                                    containerColor = MaterialTheme.colorScheme.primary
-                                                )
-                                            ) {
-                                                Text(
-                                                    "Show Tool Output",
-                                                    Modifier.padding(
-                                                        horizontal = rDP(16.dp),
-                                                        vertical = rDP(12.dp)
-                                                    ),
-                                                    fontSize = rSp(14.sp),
-                                                    color = MaterialTheme.colorScheme.onPrimary
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            ToolCalledUi(toolOutput = message.tool.toolOutput)
                         }
                     }
                 }
@@ -940,9 +893,7 @@ private fun RegularChatUI(message: Message, isDecoding: Boolean, viewModel: Chat
 
                                     // Show a toast confirmation
                                     Toast.makeText(
-                                        context,
-                                        "Copied to clipboard!",
-                                        Toast.LENGTH_SHORT
+                                        context, "Copied to clipboard!", Toast.LENGTH_SHORT
                                     ).show()
                                 })
                         Icon(
@@ -1030,5 +981,41 @@ private fun ThinkingChatUI(message: Message) {
                 fontFamily = FontFamily.Monospace
             )
         }
+    }
+}
+
+@Composable
+fun ToolCalledUi(
+    modifier: Modifier = Modifier,
+    toolOutput: ToolOutput
+) {
+    // blink the caret
+    val blink by rememberInfiniteTransition(label = "caret")
+        .animateFloat(
+            initialValue = 1f,
+            targetValue = 0.25f,
+            animationSpec = infiniteRepeatable(animation = tween(500), repeatMode = RepeatMode.Reverse),
+            label = "caretFloat"
+        )
+
+    Column (
+        modifier
+            .clip(RoundedCornerShape(rDP(8.dp)))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(8.dp)))
+            .padding(rDP(9.dp))
+    ) {
+        Text(
+            text = toolOutput.toolName,
+            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+        )
+        Text(
+            text = toolOutput.output,
+            style = MaterialTheme.typography.bodyLarge.copy(fontFamily = FontFamily.Monospace),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = blink),
+            modifier = Modifier
+        )
     }
 }
