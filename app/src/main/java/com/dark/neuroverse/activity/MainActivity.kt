@@ -32,6 +32,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
+
 @RequiresApi(Build.VERSION_CODES.TIRAMISU)
 class MainActivity : ComponentActivity() {
     val permission = Manifest.permission.POST_NOTIFICATIONS
@@ -48,6 +49,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             //Init Nav Controller
             val navController = rememberNavController()
+            val intent = getIntent()
+            val isDirectChatScreen = intent.getBooleanExtra("nav", false)
 
             //Heavy Work
             LaunchedEffect(Unit) {
@@ -60,7 +63,11 @@ class MainActivity : ComponentActivity() {
             // Navigation logic
             LaunchedEffect(Unit) {
                 // Navigate to the intro screen
-                navController.navigate(Screen.Intro.route)
+                if (isDirectChatScreen) {
+                    navController.navigate(Screen.Intro.route)
+                }else{
+                    navController.navigate(Screen.Home.route)
+                }
 
                 // Wait for 3 seconds
                 delay(3000)
