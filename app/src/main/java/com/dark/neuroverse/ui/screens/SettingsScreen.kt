@@ -65,6 +65,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
+import com.dark.neuroverse.activity.ScrapActivity
 import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
@@ -290,10 +291,10 @@ fun SettingsScreen(
 
                 Spacer(Modifier.height(rDP(8.dp)))
                 SettingCard(
-                    title = "View Brain Map",
-                    actionLabel = "View",
+                    title = "Data Hub",
+                    actionLabel = "Open",
                     onAction = {
-                        context.startActivity(Intent(context, TempActivity::class.java))
+                        context.startActivity(Intent(context, ScrapActivity::class.java))
                     }
                 )
             }

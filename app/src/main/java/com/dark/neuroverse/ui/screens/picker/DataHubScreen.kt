@@ -75,6 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.dark.neuroverse.activity.ScrapActivity
 import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.ui.theme.rDP
@@ -97,7 +98,7 @@ import kotlin.math.min
  * - Only folders + .gguf files are shown
  * - Long-press opens a blurred-background info dialog with richer metadata
  */
-class DataHubActivity : ComponentActivity() {
+class DataHubPickerActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.S)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -107,7 +108,7 @@ class DataHubActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     DataHubPickerScreen(finishWithPath = { absPath ->
                         startActivity(
-                            Intent(this, TempActivity::class.java).apply {
+                            Intent(this, ScrapActivity::class.java).apply {
                                 putExtra(EXTRA_RESULT_FILE_PATH, absPath)
                             }
                         )

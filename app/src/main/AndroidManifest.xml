@@ -68,7 +68,7 @@
 
 
         <activity
-            android:name=".ui.screens.picker.DataHubActivity"
+            android:name=".ui.screens.picker.DataHubPickerActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NeuroVerse"

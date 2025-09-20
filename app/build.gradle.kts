@@ -81,7 +81,6 @@ android {
 
         //LIBS
         implementation(files("libs/ai-core-release.aar"))
-        implementation(files("libs/libsodium-1.0.20.0.aar"))
 
         //PROJECTS
         implementation(project(":ai-module"))
