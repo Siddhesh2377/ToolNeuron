@@ -28,28 +28,63 @@ import com.dark.userdata.saveTree
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.DataNativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
-import com.mp.data_hub_lib.model.DataSetModel
 import com.mp.data_hub_lib.model.RagResult
-import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
+/**
+ * Unified UI State - Single source of truth
+ */
+sealed class ChatUiState {
+    object Idle : ChatUiState()
 
+    data class Loading(
+        val operation: String,
+        val progress: Float? = null
+    ) : ChatUiState()
+
+    data class Generating(
+        val messageId: String,
+        val isFirstToken: Boolean = false
+    ) : ChatUiState()
+
+    data class DecodingStream(
+        val messageId: String,
+        val startTimeNs: Long
+    ) : ChatUiState()
+
+    data class ExecutingTool(
+        val toolName: String,
+        val messageId: String
+    ) : ChatUiState()
+
+    data class Error(
+        val message: String,
+        val isRetryable: Boolean = true,
+        val cause: Throwable? = null
+    ) : ChatUiState()
+}
+
+/**
+ * Decoding metrics for performance tracking
+ */
+data class DecodingMetrics(
+    val type: DecodeType,
+    val chatId: String,
+    val modelId: String,
+    val startedAtNs: Long,
+    val firstTokenAtNs: Long,
+    val durationMs: Long
+)
+
+enum class DecodeType { NORMAL, REGENERATE }
 
 /**
  * Factory
@@ -62,163 +97,145 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
 }
 
 /**
- * Chat VM – optimized, de-duplicated, and sectioned.
+ * Clean, refactored ChatScreenViewModel with proper state management
  */
 class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
-    //region Constants & Logging
     companion object {
         private const val TAG = "ChatVM"
-        private const val UI_POST_MS = 35L
-        private const val MAX_THINK_CHARS = 16_000
-        private const val MAX_THOUGHT_SAVE = 6_000
+        private const val UI_UPDATE_THROTTLE_MS = 35L
+        private const val MAX_THINK_DISPLAY_CHARS = 16_000
+        private const val MAX_THOUGHT_SAVE_CHARS = 6_000
+        private const val SAVE_DEBOUNCE_MS = 1000L
+        private const val MAX_CONCURRENT_OPERATIONS = 3
     }
-    //endregion
 
-    enum class DecodeType { NORMAL, REGENERATE }
+    // Core Dependencies
+    private val dataLib = DataNativeLib()
 
-    data class DecodingEvent(
-        val type: DecodeType,
-        val chatId: String,
-        val modelId: String,
-        val startedAtNs: Long,
-        val firstTokenAtNs: Long,
-        val durationMs: Long
-    )
+    // Coroutine Management
+    private val operationSemaphore = Semaphore(MAX_CONCURRENT_OPERATIONS)
+    private var currentGenerationJob: Job? = null
 
-    private val _decodingEvents = MutableSharedFlow<DecodingEvent>(extraBufferCapacity = 8)
-    val decodingEvents: SharedFlow<DecodingEvent> = _decodingEvents.asSharedFlow()
+    // Debounced save channel
+    private val saveChannel = Channel<Unit>(Channel.CONFLATED)
+
+    //region Core State
+    private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Idle)
+    val uiState: StateFlow<ChatUiState> = _uiState.asStateFlow()
+
+    private val _messages = MutableStateFlow<List<Message>>(emptyList())
+    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
+
+    private val _chatTitle = MutableStateFlow("")
+    val chatTitle: StateFlow<String> = _chatTitle.asStateFlow()
+
+    private val _chatList = MutableStateFlow<List<ChatINFO>>(emptyList())
+    val chatList: StateFlow<List<ChatINFO>> = _chatList.asStateFlow()
+
+    private val _modelLoadingState = MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
+    val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
+
+    private val _decodingMetrics = MutableSharedFlow<DecodingMetrics>(extraBufferCapacity = 8)
+    val decodingMetrics: SharedFlow<DecodingMetrics> = _decodingMetrics.asSharedFlow()
 
     private val _lastDecodingMs = MutableStateFlow<Long?>(null)
     val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
-
-    val lib = DataNativeLib()
-
-    private fun emitDecodeNow(
-        type: DecodeType,
-        startedAtNs: Long,
-        firstTokenAtNs: Long
-    ) {
-        val ms = (firstTokenAtNs - startedAtNs) / 1_000_000
-        _lastDecodingMs.value = ms
-        _decodingEvents.tryEmit(
-            DecodingEvent(
-                type = type,
-                chatId = chatId.value,
-                modelId = "${selectedModel.value.id}", // you already compare by id elsewhere
-                startedAtNs = startedAtNs,
-                firstTokenAtNs = firstTokenAtNs,
-                durationMs = ms
-            )
-        )
-    }
-
-
-    //region Dispatchers
-    private val io: CoroutineDispatcher = Dispatchers.IO
-    private val cpu: CoroutineDispatcher = Dispatchers.Default
     //endregion
 
-    //region Backing State
-    private val _messages = MutableStateFlow<List<Message>>(emptyList())
-    private val _chatTitle = MutableStateFlow("")
-    private val _chatList = MutableStateFlow<List<ChatINFO>>(emptyList())
-    private val _modelLoadingState =
-        MutableStateFlow<ModelManager.LoadState>(ModelManager.LoadState.Idle)
-    private val _isGenerating = MutableStateFlow(false)
-    private val _generationState = MutableStateFlow(GenerationState.IDLE)
-
-    private val _isDecoding = MutableStateFlow(false)
-    private val _decodingMessageId = MutableStateFlow<String?>(null)
-
-    private var currentID = MutableStateFlow("")
-
-    private val _isRag = MutableStateFlow(false)
-
-
-    // Exposed immutable state
-    val messages: StateFlow<List<Message>> = _messages.asStateFlow()
-    val chatTitle: StateFlow<String> = _chatTitle.asStateFlow()
-    val chatList: StateFlow<List<ChatINFO>> = _chatList.asStateFlow()
-    val modelLoadingState: StateFlow<ModelManager.LoadState> = _modelLoadingState.asStateFlow()
-    val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
-    val generationState: StateFlow<GenerationState> = _generationState.asStateFlow()
-    val isDecoding: StateFlow<Boolean> = _isDecoding.asStateFlow()
-    val decodingMessageId: StateFlow<String?> = _decodingMessageId.asStateFlow()
-
-    // Other observable state
+    //region Configuration State
     val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
     val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow("" to Tools())
     val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
-
     val chatId = MutableStateFlow("")
     val currentRunningToolName = MutableStateFlow("")
+    private val _isRag = MutableStateFlow(false)
 
-    // Crypto & brain
-    private val key = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
-    private val rootNode = MutableStateFlow(readBrainFile(key.value, appContext))
+    // Crypto & Storage
+    private val encryptionKey = MutableStateFlow(getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS))
+    private val rootNode = MutableStateFlow(readBrainFile(encryptionKey.value, appContext))
     //endregion
 
-    //region Streaming control
-    private var streamingMsgIndex = -1
-    @Volatile
-    private var lastUiPost = 0L
-    private fun shouldPost(nowMs: Long, everyMs: Long = UI_POST_MS) =
-        (nowMs - lastUiPost) >= everyMs
+    //region Streaming State
+    private var streamingMessageIndex = -1
+    @Volatile private var lastUiUpdateMs = 0L
+
+    private fun shouldUpdateUi(nowMs: Long): Boolean =
+        (nowMs - lastUiUpdateMs) >= UI_UPDATE_THROTTLE_MS
     //endregion
 
-    //region Init
     init {
-        viewModelScope.launch(io) {
-            // Keys & brain
-            key.value = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
-            rootNode.value = readBrainFile(key.value, appContext)
-            rootNode.value.printTree()
+        setupDebouncedSave()
+        initializeViewModel()
+    }
 
-            // Load latest chat if present
-            val root = rootNode.value.getNodeDirect("root")
-            val chatHistory = getDefaultChatHistory(root)
-            val validChats = NeuronTree(chatHistory).getAllChildrenRecursive()
-                .filter { it.data.content.isNotBlank() }
-            if (validChats.isNotEmpty()) {
-                val firstChat = validChats.first()
-                loadChatById(firstChat.id)
-            }
-            updateChatList()
-
-            // Load first model eagerly
-            ModelManager.getFirstModel()?.let { model ->
-                ModelManager.loadModelAwait(
-                    modelData = model,
-                    defaults = ModelManager.ManagerDefaults(systemPrompt = ModelsList.generalPurposeSystemPrompt),
-                    chatTemplate = ModelsList.chatTemplate,
-                    forceReload = true
-                ) { state ->
-                    _modelLoadingState.value = state
-                    selectedModel.value = model
+    @OptIn(FlowPreview::class)
+    private fun setupDebouncedSave() {
+        viewModelScope.launch {
+            saveChannel.consumeAsFlow()
+                .debounce(SAVE_DEBOUNCE_MS)
+                .collect {
+                    try {
+                        performSave()
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Debounced save failed", e)
+                    }
                 }
-            }
-
-            // Load Tools & Models
-            toolList.value = PluginManager.toolsList.value
-            modelList.value = ModelManager.getAllModels()
         }
     }
-    //endregion
 
-    //region Model & Tool Selection
-    fun selectModel(model: ModelsData) {
-        ModelManager.unLoadModel()
-        viewModelScope.launch(io) {
-            val sysPrompt = if (selectedTools.value.first.isBlank()) {
-                ModelsList.generalPurposeSystemPrompt
-            } else {
-                ModelsList.toolCallSYSTEMP
+    private fun initializeViewModel() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = ChatUiState.Loading("Initializing...")
+
+                // Initialize crypto and brain
+                encryptionKey.value = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
+                rootNode.value = readBrainFile(encryptionKey.value, appContext)
+                rootNode.value.printTree()
+
+                // Load chat history
+                loadInitialChat()
+                updateChatList()
+
+                // Load first model
+                loadInitialModel()
+
+                // Load tools and models
+                toolList.value = PluginManager.toolsList.value
+                modelList.value = ModelManager.getAllModels()
+
+                _uiState.value = ChatUiState.Idle
+            } catch (e: Exception) {
+                Log.e(TAG, "Initialization failed", e)
+                _uiState.value = ChatUiState.Error(
+                    "Failed to initialize: ${e.message}",
+                    isRetryable = true,
+                    cause = e
+                )
             }
+        }
+    }
+
+    private fun loadInitialChat() {
+        val root = rootNode.value.getNodeDirect("root")
+        val chatHistory = getDefaultChatHistory(root)
+        val validChats = NeuronTree(chatHistory).getAllChildrenRecursive()
+            .filter { it.data.content.isNotBlank() }
+
+        if (validChats.isNotEmpty()) {
+            loadChatById(validChats.first().id)
+        }
+    }
+
+    private suspend fun loadInitialModel() {
+        ModelManager.getFirstModel()?.let { model ->
             ModelManager.loadModelAwait(
                 modelData = model,
-                defaults = ModelManager.ManagerDefaults(systemPrompt = sysPrompt),
+                defaults = ModelManager.ManagerDefaults(
+                    systemPrompt = ModelsList.generalPurposeSystemPrompt
+                ),
                 chatTemplate = ModelsList.chatTemplate,
                 forceReload = true
             ) { state ->
@@ -228,9 +245,45 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun setRag(rag: Boolean) {
-        _isRag.value = rag
-        Log.d(TAG, "RAG set to: ${_isRag.value}")
+    //region Public API - Model & Tool Selection
+    fun selectModel(model: ModelsData) {
+        viewModelScope.launch {
+            if (_uiState.value is ChatUiState.Generating) {
+                Log.w(TAG, "Cannot change model during generation")
+                return@launch
+            }
+
+            try {
+                _uiState.value = ChatUiState.Loading("Loading model...")
+                ModelManager.unLoadModel()
+
+                val systemPrompt = if (selectedTools.value.first.isBlank()) {
+                    ModelsList.generalPurposeSystemPrompt
+                } else {
+                    ModelsList.toolCallSYSTEMP
+                }
+
+                ModelManager.loadModelAwait(
+                    modelData = model,
+                    defaults = ModelManager.ManagerDefaults(systemPrompt = systemPrompt),
+                    chatTemplate = ModelsList.chatTemplate,
+                    forceReload = true
+                ) { state ->
+                    _modelLoadingState.value = state
+                    selectedModel.value = model
+                }
+
+                _uiState.value = ChatUiState.Idle
+            } catch (e: Exception) {
+                Log.e(TAG, "Model selection failed", e)
+                _uiState.value = ChatUiState.Error("Failed to load model: ${e.message}")
+            }
+        }
+    }
+
+    fun setRag(enabled: Boolean) {
+        _isRag.value = enabled
+        Log.d(TAG, "RAG set to: $enabled")
     }
 
     fun selectTool(tool: Pair<String, Tools>) {
@@ -244,14 +297,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
     //endregion
 
-    //region Chat CRUD
+    //region Public API - Chat Management
     fun loadChatById(chatIdToLoad: String) {
-        viewModelScope.launch(io) {
+        viewModelScope.launch {
             try {
+                Log.d(TAG, "Loading chat $chatIdToLoad")
+                _uiState.value = ChatUiState.Loading("Loading chat...")
+
                 val root = rootNode.value.getNodeDirect("root")
                 val chatHistory = getDefaultChatHistory(root)
                 val node = NeuronTree(chatHistory).getNodeDirect(chatIdToLoad)
-                if (node.data.content.isBlank()) return@launch
+
+                if (node.data.content.isBlank()) {
+                    _uiState.value = ChatUiState.Error("Chat not found or empty")
+                    return@launch
+                }
 
                 val json = JSONObject(node.data.content)
                 val title = json.optString("title", "")
@@ -259,813 +319,816 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     json.getJSONArray("conversations").toString()
                 )
 
-                withContext(Dispatchers.Main) {
-                    _chatTitle.value = title
-                    _messages.value = conversations
-                    chatId.value = chatIdToLoad
-                }
+                _chatTitle.value = title
+                _messages.value = conversations
+                chatId.value = chatIdToLoad
+
+                _uiState.value = ChatUiState.Idle
             } catch (e: Exception) {
                 Log.e(TAG, "Failed loading chat $chatIdToLoad", e)
+                _uiState.value = ChatUiState.Error("Failed to load chat: ${e.message}")
             }
         }
     }
 
     fun updateChatList() {
-        try {
-            val chatInfo = mutableListOf<ChatINFO>()
-            val root = rootNode.value.getNodeDirect("root")
-            val history = getDefaultChatHistory(root)
+        viewModelScope.launch {
+            try {
+                val chatInfo = mutableListOf<ChatINFO>()
+                val root = rootNode.value.getNodeDirect("root")
+                val history = getDefaultChatHistory(root)
 
-            NeuronTree(history).getAllChildrenRecursive().forEach { node ->
-                if (node.data.content.isNotBlank()) {
-                    val title = runCatching {
-                        JSONObject(node.data.content).optString(
-                            "title",
-                            "Untitled"
-                        )
-                    }.getOrElse { "Untitled" }
-                    chatInfo.add(ChatINFO(node.id, title))
+                NeuronTree(history).getAllChildrenRecursive().forEach { node ->
+                    if (node.data.content.isNotBlank()) {
+                        val title = runCatching {
+                            JSONObject(node.data.content).optString("title", "Untitled")
+                        }.getOrElse { "Untitled" }
+                        chatInfo.add(ChatINFO(node.id, title))
+                    }
                 }
+                _chatList.value = chatInfo
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed updating chat list", e)
             }
-            _chatList.value = chatInfo
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed loading chat titles", e)
         }
     }
 
     fun newChat() {
-        viewModelScope.launch(Dispatchers.Main) {
-            _messages.value = emptyList()
-            _chatTitle.value = ""
-            chatId.value = ""
-            ModelManager.stopGeneration()
+        if (_uiState.value is ChatUiState.Generating) {
+            stopGenerating()
         }
+
+        _messages.value = emptyList()
+        _chatTitle.value = ""
+        chatId.value = ""
+        _uiState.value = ChatUiState.Idle
     }
 
     fun deleteChatById(id: String) {
-        viewModelScope.launch(io) {
+        viewModelScope.launch {
             try {
+                Log.d(TAG, "Deleting chat $id")
+
+                // Delete from tree
                 rootNode.value.deleteNodeById(id)
-                saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
-                rootNode.value = readBrainFile(key.value, appContext)
+
+                // Save tree immediately (don't use debounced save)
+                performTreeSave()
+
+                // Reload tree from disk to ensure consistency
+                rootNode.value = readBrainFile(encryptionKey.value, appContext)
+
+                // Update chat list
                 updateChatList()
 
+                // Clear current chat if it was deleted
                 if (chatId.value == id) {
                     withContext(Dispatchers.Main) {
-                        _messages.value = emptyList()
-                        _chatTitle.value = ""
-                        chatId.value = ""
+                        newChat()
                     }
                 }
+
+                Log.d(TAG, "Chat $id deleted successfully")
+
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to delete chat $id", e)
+                _uiState.value = ChatUiState.Error("Failed to delete chat: ${e.message}")
             }
         }
     }
     //endregion
 
-    //region Sending & Streaming
+    //region Public API - Message Sending
     fun sendMessage(input: String) {
-        if (_isGenerating.value) {
-            Log.w(TAG, "Generation already in progress")
+        if (_uiState.value is ChatUiState.Generating) {
+            Log.w(TAG, "Already generating, ignoring new message")
             return
         }
 
-        _messages.update { it + Message(role = Role.User, text = input) }
-        _isGenerating.value = true
-        _isDecoding.value = true
-        _decodingMessageId.value = "-1"
-        _generationState.value = GenerationState.GENERATING
+        // Cancel any existing generation
+        currentGenerationJob?.cancel()
 
-        viewModelScope.launch(Dispatchers.Main) {
-            val list = _messages.value.toMutableList()
-            streamingMsgIndex = list.size
-            val isTool = selectedTools.value.second.toolName.isNotEmpty()
-            list += Message(
-                role = if (isTool) Role.Tool else Role.Assistant,
-                text = "",
-                id = "-1",
-                tool = if (isTool) RunningTool(
-                    toolName = selectedTools.value.second.toolName,
-                    toolPreview = "",
-                    toolOutput = ToolOutput()
-                ) else null
-            )
-            _messages.value = list
-
-            viewModelScope.launch(Dispatchers.IO) {
+        currentGenerationJob = viewModelScope.launch {
+            operationSemaphore.withPermit {
                 try {
-                    if (_isRag.value) {
-                        handleRAGRequest(input, isTool)
-                    } else {
-                        streamAndRender(prompt = input, enableTools = isTool)
-                    }
+                    executeSendMessage(input)
+                } catch (e: CancellationException) {
+                    Log.d(TAG, "Message sending cancelled")
+                    _uiState.value = ChatUiState.Idle
                 } catch (e: Exception) {
                     Log.e(TAG, "Error in sendMessage", e)
-                    handleGenerationError("Failed to process message: ${e.message}")
+                    _uiState.value = ChatUiState.Error(
+                        "Failed to send message: ${e.message}",
+                        cause = e
+                    )
                 }
             }
         }
     }
 
-    private suspend fun handleRAGRequest(input: String, isTool: Boolean) {
+    private suspend fun executeSendMessage(input: String) {
+        // Add user message immediately
+        _messages.update { it + Message(role = Role.User, text = input) }
+
+        val messageId = UUID.randomUUID().toString()
+        _uiState.value = ChatUiState.Generating(messageId)
+
+        // Prepare assistant message for streaming
+        val isTool = selectedTools.value.second.toolName.isNotEmpty()
+        val assistantMessage = Message(
+            role = if (isTool) Role.Tool else Role.Assistant,
+            text = "",
+            id = messageId,
+            tool = if (isTool) RunningTool(
+                toolName = selectedTools.value.second.toolName,
+                toolPreview = "",
+                toolOutput = ToolOutput()
+            ) else null
+        )
+
+        _messages.update { it + assistantMessage }
+        streamingMessageIndex = _messages.value.size - 1
+
+        if (_isRag.value) {
+            handleRAGRequest(input, isTool, messageId)
+        } else {
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
+        }
+    }
+
+    fun regenerateResponse(model: ModelsData?, messageId: String) {
+        if (model == null) return
+
+        val messageIndex = _messages.value.indexOfFirst { it.id == messageId }
+        if (messageIndex == -1) return
+
+        val targetMessage = _messages.value[messageIndex]
+        if (targetMessage.role != Role.Assistant && targetMessage.role != Role.Tool) return
+
+        // Cancel any existing generation
+        currentGenerationJob?.cancel()
+
+        currentGenerationJob = viewModelScope.launch {
+            operationSemaphore.withPermit {
+                try {
+                    executeRegenerate(model, messageId, messageIndex, targetMessage)
+                } catch (e: CancellationException) {
+                    Log.d(TAG, "Regeneration cancelled")
+                    _uiState.value = ChatUiState.Idle
+                } catch (e: Exception) {
+                    Log.e(TAG, "Regeneration failed", e)
+                    _uiState.value = ChatUiState.Error(
+                        "Failed to regenerate: ${e.message}",
+                        cause = e
+                    )
+                }
+            }
+        }
+    }
+
+    private suspend fun executeRegenerate(
+        model: ModelsData,
+        messageId: String,
+        messageIndex: Int,
+        targetMessage: Message
+    ) {
+        _uiState.value = ChatUiState.Generating(messageId)
+
+        // Get context from previous user message
+        val userContext = _messages.value.take(messageIndex)
+            .lastOrNull { it.role == Role.User }?.text.orEmpty()
+
+        // Clear the message for streaming
+        _messages.update { messages ->
+            messages.toMutableList().apply {
+                set(messageIndex, targetMessage.copy(text = "", thought = null))
+            }
+        }
+        streamingMessageIndex = messageIndex
+
+        // Switch model if needed
+        if (selectedModel.value.id != model.id) {
+            _uiState.value = ChatUiState.Loading("Switching model...")
+            ModelManager.unLoadModel()
+            ModelManager.loadModelAwait(
+                modelData = model,
+                defaults = ModelManager.ManagerDefaults(
+                    systemPrompt = "You are a helpful assistant that improves message clarity and accuracy."
+                ),
+                chatTemplate = ModelsList.chatTemplate,
+                forceReload = true
+            ) { state ->
+                _modelLoadingState.value = state
+                selectedModel.value = model
+            }
+        }
+
+        val optimizePrompt = buildOptimizePrompt(userContext, targetMessage.text)
+        streamAndRender(
+            prompt = optimizePrompt,
+            enableTools = false,
+            messageId = messageId,
+            isRegeneration = true
+        )
+    }
+
+    private fun buildOptimizePrompt(userContext: String, originalText: String): String = buildString {
+        appendLine("Improve the following assistant reply for better clarity and accuracy.")
+        appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
+        appendLine("- Make it more concise and well-structured.")
+        appendLine("- Do not add meta commentary.")
+        appendLine()
+        if (userContext.isNotBlank()) {
+            appendLine("[User context]")
+            appendLine(userContext)
+            appendLine()
+        }
+        appendLine("[Original reply to improve]")
+        append(originalText)
+    }
+    //endregion
+
+    //region RAG Processing
+    private suspend fun handleRAGRequest(input: String, isTool: Boolean, messageId: String) {
         val currentDataset = DataHubManager.currentDataSet.value
         if (currentDataset == null) {
-            Log.d(TAG, "No dataset loaded, fallback to normal input")
-            streamAndRender(prompt = input, enableTools = isTool)
+            Log.d(TAG, "No dataset loaded, fallback to normal generation")
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
             return
         }
 
-        Log.d(TAG, "RAG enabled with dataset: ${currentDataset.modelName}")
-
         try {
-            // Step 1: Get RAG context using embedding instance
-            val ragResult = withContext(Dispatchers.IO) {
-                // Properly reinitialize embedding model
-                val initResult = DataHubManager.reinitializeEmbeddingModel()
-                if (initResult.isFailure) {
-                    Log.e(TAG, "Failed to initialize embedding model: ${initResult.exceptionOrNull()?.message}")
-                    return@withContext null to "Embedding model initialization failed"
-                }
+            _uiState.value = ChatUiState.Loading("Processing with RAG...")
 
-                // Run RAG after embedding is ready
-                val deferred = CompletableDeferred<Pair<RagResult?, String?>>()
-                DataHubManager.runRAG(
-                    query = input,
-                    topK = 5
-                ) { ragResult, error ->
-                    deferred.complete(ragResult to error)
-                }
-
-                deferred.await()
+            val initResult = DataHubManager.reinitializeEmbeddingModel()
+            if (initResult.isFailure) {
+                throw Exception("Embedding model initialization failed: ${initResult.exceptionOrNull()?.message}")
             }
 
-
-            val (ragData, error) = ragResult
-
-            Log.d(TAG, ragData?.docs.toString())
+            val (ragData, error) = suspendCancellableCoroutine { continuation ->
+                DataHubManager.runRAG(query = input, topK = 5) { ragResult, ragError ->
+                    continuation.resumeWith(Result.success(ragResult to ragError))
+                }
+            }
 
             if (ragData != null && error == null) {
-                // Step 2: Extract context
                 val ragContext = extractRAGContext(ragData)
-
-                if (ragContext.isBlank()) {
-                    Log.w(TAG, "Empty RAG context, falling back to normal generation")
-                    streamAndRender(prompt = input, enableTools = isTool)
-                    return
-                }
-
-                Log.i(TAG, "RAG context extracted: $ragContext")
-
-                val finalPrompt = buildString {
-                    append("Use the following context to answer::\n\n")
-                    append("Context:\n")
-                    append(ragContext)
-                    append("\n\nQuestion: ")
-                    append(input)
-                }
-
-                Log.i(TAG, "Final prompt: $finalPrompt")
-                // Step 3: Ensure generation model is ready (separate from embedding model)
-                ensureGenerationModelReady {
-                    viewModelScope.launch(Dispatchers.IO) {
-                        ModelManager.setSystemPrompt("You are a helpful assistant.")
-                        streamAndRender(prompt = finalPrompt, enableTools = isTool)
+                if (ragContext.isNotBlank()) {
+                    val finalPrompt = buildRAGPrompt(ragContext, input)
+                    ensureGenerationModelReady {
+                        viewModelScope.launch {
+                            streamAndRender(prompt = finalPrompt, enableTools = isTool, messageId = messageId)
+                        }
                     }
+                } else {
+                    streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
                 }
             } else {
-                Log.e(TAG, "RAG failed with error: $error")
-                NativeLib.getGenerationInstance().nativeSetChatTemplate(ModelsList.chatTemplate)
-                streamAndRender(prompt = input, enableTools = isTool)
+                throw Exception("RAG failed: $error")
             }
         } catch (e: Exception) {
             Log.e(TAG, "RAG processing failed", e)
-            NativeLib.getGenerationInstance().nativeSetChatTemplate(ModelsList.chatTemplate)
-            streamAndRender(prompt = input, enableTools = isTool)
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
         }
+    }
+
+    private fun buildRAGPrompt(context: String, input: String): String = buildString {
+        append("Use the following context to answer:\n\n")
+        append("Context:\n")
+        append(context)
+        append("\n\nQuestion: ")
+        append(input)
     }
 
     private fun extractRAGContext(ragData: RagResult): String {
         return try {
-            val docs = ragData.docs
-            docs.joinToString {
-                it.text
-            }
+            ragData.docs.joinToString("\n") { it.text }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to extract RAG context", e)
             ""
         }
     }
 
-    private fun handleGenerationError(message: String) {
-        viewModelScope.launch(Dispatchers.Main) {
-            _isGenerating.value = false
-            _isDecoding.value = false
-            _decodingMessageId.value = null
-            _generationState.value = GenerationState.IDLE
-
-            val errorMessage = Message(
-                role = Role.Assistant,
-                text = "I encountered an error: $message. Please try again.",
-                id = System.currentTimeMillis().toString()
-            )
-            _messages.update { it + errorMessage }
-
-            Log.e(TAG, "Generation error handled: $message")
-        }
-    }
-
     private suspend fun ensureGenerationModelReady(onReady: () -> Unit) {
         try {
             val currentModel = selectedModel.value
-
-            // Check if generation model is ready
             val generationLib = NativeLib.getGenerationInstance()
             generationLib.nativeRelease()
 
             delay(500)
 
-            ModelManager.loadModelAwait(
-                currentModel,
-                onLoaded = { loadState ->
-                    when (loadState) {
-                        is ModelManager.LoadState.OnLoaded -> {
-                            Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
-                            onReady()
-                        }
-                        is ModelManager.LoadState.Error -> {
-                            Log.e(TAG, "Generation model load failed: ${loadState.message}")
-                            handleGenerationError("Generation model load failed: ${loadState.message}")
-                        }
-                        else -> {
-                            Log.d(TAG, "Generation model loading: $loadState")
-                        }
+            ModelManager.loadModelAwait(currentModel) { loadState ->
+                when (loadState) {
+                    is ModelManager.LoadState.OnLoaded -> {
+                        Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
+                        onReady()
                     }
+                    is ModelManager.LoadState.Error -> {
+                        Log.e(TAG, "Generation model load failed: ${loadState.message}")
+                        _uiState.value = ChatUiState.Error("Model load failed: ${loadState.message}")
+                    }
+                    else -> Log.d(TAG, "Generation model loading: $loadState")
                 }
-            ).onFailure { error ->
-                Log.e(TAG, "Generation model load failed", error)
-                handleGenerationError("Generation model load failed: ${error.message}")
+            }.onFailure { error ->
+                _uiState.value = ChatUiState.Error("Model preparation failed: ${error.message}")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error ensuring generation model ready", e)
-            handleGenerationError("Generation model preparation error: ${e.message}")
+            _uiState.value = ChatUiState.Error("Model preparation error: ${e.message}")
         }
     }
+    //endregion
 
-    fun sendInternalReasoningMessage(input: String) {
-        _isGenerating.value = true
-        unSelectTool()
+    //region Streaming & Rendering
+    private suspend fun streamAndRender(
+        prompt: String,
+        enableTools: Boolean,
+        messageId: String,
+        isRegeneration: Boolean = false
+    ) {
+        val startTimeNs = System.nanoTime()
+        var firstTokenReceived = false
 
-        viewModelScope.launch(Dispatchers.Main) {
-            val list = _messages.value.toMutableList()
-            streamingMsgIndex = list.size
-            list += Message(role = Role.Assistant, text = "", id = "-1")
-            _messages.value = list
+        _uiState.value = ChatUiState.DecodingStream(messageId, startTimeNs)
 
-            viewModelScope.launch(cpu) {
-                streamAndRender(prompt = input, enableTools = false)
-            }
-        }
-    }
+        // Streaming buffers
+        val visibleBuffer = StringBuilder()
+        val thoughtBuffer = StringBuilder()
+        val rawBuffer = StringBuilder()
+        var inThinkTag = false
 
-    private suspend fun streamAndRender(prompt: String, enableTools: Boolean) {
-        // Local buffers
-        val visibleSb = StringBuilder()
-        val thoughtSb = StringBuilder()
-        val rawSb = StringBuilder()
-        var inThink = false
-        val decodeStartNs = System.nanoTime()
-        var firstTokenSeen = false
-
-
-        // Change detection
+        // Throttling state
         var lastPostedVisibleLen = 0
         var lastPostedThoughtLen = 0
 
-        fun coalescedPost() {
+        fun throttledUIUpdate() {
             val now = System.nanoTime() / 1_000_000
-            if (!shouldPost(now)) return
+            if (!shouldUpdateUi(now)) return
 
-            val visible = visibleSb.toString()
-            val thinking =
-                if (thoughtSb.isNotEmpty()) thoughtSb.toString().takeLast(MAX_THINK_CHARS) else null
+            val visibleText = visibleBuffer.toString()
+            val thinkingText = if (thoughtBuffer.isNotEmpty()) {
+                thoughtBuffer.toString().takeLast(MAX_THINK_DISPLAY_CHARS)
+            } else null
 
-            val vLen = visible.length
-            val tLen = thinking?.length ?: 0
+            val vLen = visibleText.length
+            val tLen = thinkingText?.length ?: 0
+
             if (vLen == lastPostedVisibleLen && tLen == lastPostedThoughtLen) return
+
             lastPostedVisibleLen = vLen
             lastPostedThoughtLen = tLen
-            lastUiPost = now
+            lastUiUpdateMs = now
 
-            viewModelScope.launch(Dispatchers.Main.immediate) {
-                val idx = streamingMsgIndex
-                if (idx in _messages.value.indices) {
-                    val cur = _messages.value.toMutableList()
-                    val m = cur[idx]
-                    cur[idx] = m.copy(text = visible, thought = thinking)
-                    _messages.value = cur
-                }
-            }
+            updateStreamingMessage(messageId, visibleText, thinkingText)
         }
 
-        suspend fun applyFinal(text: String, thought: String?) {
-            withContext(Dispatchers.Main.immediate) {
-                val idx = streamingMsgIndex
-                if (idx in _messages.value.indices) {
-                    val cur = _messages.value.toMutableList()
-                    val m = cur[idx]
-                    currentID.value = UUID.randomUUID().toString()
-                    cur[idx] = m.copy(
-                        id = currentID.value,
-                        text = text,
-                        thought = thought?.take(MAX_THOUGHT_SAVE)
-                    )
-                    _messages.value = cur
-                }
-            }
-        }
+        suspend fun finalizeMessage(text: String, thought: String?) {
+            val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
+            updateStreamingMessage(messageId, text, finalThought, isFinal = true)
 
-        fun splitReasoning(raw: String): Pair<String, String?> {
-            // 1) JSON {"final": "...", "thought": "..."}
-            runCatching {
-                val json = extractPureJson(raw)
-                val obj = JSONObject(json)
-                val final = obj.optString("final", obj.optString("answer", ""))
-                val thought = obj.optString("thought", obj.optString("reasoning", null))
-                if (final.isNotBlank() || thought != null) return final to thought
-            }
-            // 2) <think>…</think>
-            val tagRegex = Regex("(?is)<think>(.*?)</think>")
-            val thoughtTag = tagRegex.find(raw)?.groupValues?.getOrNull(1)
-            val visible = raw.replace(tagRegex, "").trim()
-            if (thoughtTag != null) return visible to thoughtTag
-            // 3) Reasoning: … Answer: …
-            val delim =
-                Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
-            delim.find(raw)?.let { m ->
-                val t = m.groupValues[1].trim()
-                val v = m.groupValues[2].trim()
-                return v to t
-            }
-            return raw to null
+            generateTitleIfNeeded()
+            requestSave()
+            updateChatList()
         }
 
         try {
             ModelManager.generateStreaming(
                 prompt = prompt,
                 toolJson = if (enableTools) convertToolsToJson(selectedTools.value.second).toString() else null,
-                onToken = { tok ->
-                    if (!firstTokenSeen) {
-                        firstTokenSeen = true
-                        _isDecoding.value = false
-                        _decodingMessageId.value = null
-                        emitDecodeNow(
-                            type = DecodeType.NORMAL,
-                            startedAtNs = decodeStartNs,
-                            firstTokenAtNs = System.nanoTime()
+                onToken = { token ->
+                    if (!firstTokenReceived) {
+                        firstTokenReceived = true
+                        val firstTokenTimeNs = System.nanoTime()
+                        emitDecodingMetrics(
+                            type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
+                            startTimeNs = startTimeNs,
+                            firstTokenTimeNs = firstTokenTimeNs,
+                            messageId = messageId
                         )
+                        _uiState.value = ChatUiState.Generating(messageId, isFirstToken = true)
                     }
 
-                    rawSb.append(tok)
-                    val lower = tok.lowercase()
-                    when {
-                        inThink && lower.contains("</think>") -> {
-                            val before = tok.substringBefore("</think>", tok)
-                            val after = tok.substringAfter("</think>", tok)
-                            thoughtSb.append(before)
-                            inThink = false
-                            visibleSb.append(after)
-                        }
-
-                        inThink -> thoughtSb.append(tok)
-                        lower.contains("<think>") -> {
-                            val before = tok.substringBefore("<think>", tok)
-                            val after = tok.substringAfter("<think>", tok)
-                            visibleSb.append(before)
-                            inThink = true
-                            thoughtSb.append(after)
-                        }
-
-                        else -> visibleSb.append(tok)
+                    rawBuffer.append(token)
+                    processStreamingToken(token, visibleBuffer, thoughtBuffer, inThinkTag) { newInThink ->
+                        inThinkTag = newInThink
                     }
-                    coalescedPost()
+                    throttledUIUpdate()
                 },
-                onToolCalled = { nativeName: String, argsJson: String ->
-                    Log.d(TAG, "Tool called: $nativeName args=$argsJson")
-
-                    fun isSchemaEcho(obj: JSONObject?): Boolean {
-                        if (obj == null) return true
-                        return obj.has("type") || obj.has("properties") || obj.has("required")
-                    }
-
-                    val lastUserQuery =
-                        messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
-                    val selectedToolRealName = selectedTools.value.second.toolName
-                    val fallbackTool = nativeName.ifBlank { selectedToolRealName }
-
-                    val repaired = try {
-                        val root = JSONObject(argsJson)                 // may throw if malformed
-                        val calls = root.optJSONArray("tool_calls")
-                        val first = calls?.optJSONObject(0)
-                        val toolName = first?.optString("name").orEmpty().ifBlank { fallbackTool }
-                        val argObj = first?.optJSONObject("arguments")
-
-                        if (isSchemaEcho(argObj)) {
-                            // Build minimal args the plugin understands; here we assume `query`
-                            JSONObject().put("tool", toolName)
-                                .put("args", JSONObject().put("query", lastUserQuery))
-                        } else {
-                            JSONObject().put("tool", toolName).put("args", argObj)
-                        }
-                    } catch (_: Throwable) {
-                        // argsJson malformed → keep the native/fallback tool name, synthesize args
-                        JSONObject().put("tool", fallbackTool)
-                            .put("args", JSONObject().put("query", lastUserQuery))
-                    }
-
-                    Log.d(TAG, "Repaired tool call: $repaired")
-
-                    // Run through plugin
-                    val loaded = PluginManager.runPlugin(
-                        appContext,
-                        selectedTools.value.first,
-                        repaired.toString()
-                    )
-                    currentRunningToolName.value = repaired.optString("tool")
-
-                    viewModelScope.launch(io) {
-                        ToolRunner.run(loaded, appContext, repaired) { result ->
-                            viewModelScope.launch(Dispatchers.Main) {
-                                _generationState.value = GenerationState.DONE
-                            }
-                            viewModelScope.launch(cpu) {
-                                ModelManager.setSystemPrompt("You are a crisp summarizer. Be concise, factual.")
-                                val rawOutput = result.toString()
-                                Log.d("ToolRunner", "rawOutput: $rawOutput")
-                                writeToolPreviewByID(currentID.value, writeToolOutputJson(rawOutput) ?: ToolOutput())
-                                if (rawOutput.isNotBlank()) {
-                                    sendInternalReasoningMessage(
-                                        "Summarize the tool output in 5–6 tight lines. Preserve entities, numbers, urls.\n$rawOutput"
-                                    ).let {
-                                        currentID.value = ""
-                                    }
-                                }
-                            }
-                        }
-                    }
+                onToolCalled = { toolName, argsJson ->
+                    handleToolExecution(toolName, argsJson, messageId)
                 }
-
             )
 
-            // 2nd pass to pick up JSON or missed tags
-            var finalText = visibleSb.toString()
-            var finalThought = thoughtSb.takeIf { it.isNotEmpty() }?.toString()
-            splitReasoning(rawSb.toString()).let { (v, t) ->
-                if (v.isNotBlank()) finalText = v
-                if (!t.isNullOrBlank()) finalThought = t
-            }
+            // Post-process for any missed reasoning patterns
+            val (finalText, finalThought) = processReasoningPatterns(
+                rawBuffer.toString(),
+                visibleBuffer.toString(),
+                thoughtBuffer.toString()
+            )
 
-            applyFinal(finalText, finalThought)
-            generateTitle()
-            updateConversation()
-            updateChatList()
-        } catch (ce: CancellationException) {
-            Log.w(TAG, "stream cancelled", ce)
-            throw ce
-        } catch (t: Throwable) {
-            Log.e(TAG, "stream failed", t)
-            // best-effort flush
-            applyFinal(visibleSb.toString(), thoughtSb.toString().ifBlank { null })
+            finalizeMessage(finalText, finalThought)
+
+        } catch (e: CancellationException) {
+            Log.d(TAG, "Streaming cancelled")
+            finalizeMessage(visibleBuffer.toString(), thoughtBuffer.toString().ifBlank { null })
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Streaming failed", e)
+            _uiState.value = ChatUiState.Error("Generation failed: ${e.message}", cause = e)
+            finalizeMessage(visibleBuffer.toString(), thoughtBuffer.toString().ifBlank { null })
         } finally {
-            _isGenerating.value = false
-            _isDecoding.value = false
-            _decodingMessageId.value = null
-            if (_generationState.value != GenerationState.DONE) _generationState.value =
-                GenerationState.IDLE
+            if (_uiState.value !is ChatUiState.ExecutingTool) {
+                _uiState.value = ChatUiState.Idle
+            }
         }
+    }
+
+    private fun processStreamingToken(
+        token: String,
+        visibleBuffer: StringBuilder,
+        thoughtBuffer: StringBuilder,
+        inThink: Boolean,
+        updateInThink: (Boolean) -> Unit
+    ) {
+        val lowerToken = token.lowercase()
+        when {
+            inThink && lowerToken.contains("</think>") -> {
+                val beforeEnd = token.substringBefore("</think>")
+                val afterEnd = token.substringAfter("</think>")
+                thoughtBuffer.append(beforeEnd)
+                updateInThink(false)
+                visibleBuffer.append(afterEnd)
+            }
+            inThink -> thoughtBuffer.append(token)
+            lowerToken.contains("<think>") -> {
+                val beforeStart = token.substringBefore("<think>")
+                val afterStart = token.substringAfter("<think>")
+                visibleBuffer.append(beforeStart)
+                updateInThink(true)
+                thoughtBuffer.append(afterStart)
+            }
+            else -> visibleBuffer.append(token)
+        }
+    }
+
+    private fun processReasoningPatterns(
+        rawText: String,
+        visibleText: String,
+        thoughtText: String
+    ): Pair<String, String?> {
+        // Try JSON pattern first
+        runCatching {
+            val json = extractPureJson(rawText)
+            val obj = JSONObject(json)
+            val final = obj.optString("final", obj.optString("answer", ""))
+            val thought = obj.optString("thought", obj.optString("reasoning", ""))
+            if (final.isNotBlank() || thought.isNotBlank()) {
+                return final to thought.takeIf { it.isNotBlank() }
+            }
+        }
+
+        // Try think tags
+        val thinkRegex = Regex("(?is)<think>(.*?)</think>")
+        val thinkMatch = thinkRegex.find(rawText)
+        if (thinkMatch != null) {
+            val extractedThought = thinkMatch.groupValues[1]
+            val cleanedVisible = rawText.replace(thinkRegex, "").trim()
+            return cleanedVisible to extractedThought
+        }
+
+        // Try reasoning/answer pattern
+        val reasoningRegex = Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
+        reasoningRegex.find(rawText)?.let { match ->
+            val thought = match.groupValues[1].trim()
+            val answer = match.groupValues[2].trim()
+            return answer to thought
+        }
+
+        return visibleText to thoughtText.takeIf { it.isNotBlank() }
+    }
+
+    private fun updateStreamingMessage(
+        messageId: String,
+        text: String,
+        thought: String?,
+        isFinal: Boolean = false
+    ) {
+        viewModelScope.launch {
+            _messages.update { messages ->
+                messages.mapIndexed { index, message ->
+                    if (message.id == messageId || index == streamingMessageIndex) {
+                        val finalId = if (isFinal && messageId == "-1") {
+                            UUID.randomUUID().toString()
+                        } else {
+                            message.id
+                        }
+                        message.copy(
+                            id = finalId,
+                            text = text,
+                            thought = thought
+                        )
+                    } else {
+                        message
+                    }
+                }
+            }
+        }
+    }
+
+    private fun emitDecodingMetrics(
+        type: DecodeType,
+        startTimeNs: Long,
+        firstTokenTimeNs: Long,
+        messageId: String
+    ) {
+        val durationMs = (firstTokenTimeNs - startTimeNs) / 1_000_000
+        _lastDecodingMs.value = durationMs
+
+        val metrics = DecodingMetrics(
+            type = type,
+            chatId = chatId.value,
+            modelId = messageId,
+            startedAtNs = startTimeNs,
+            firstTokenAtNs = firstTokenTimeNs,
+            durationMs = durationMs
+        )
+
+        _decodingMetrics.tryEmit(metrics)
     }
     //endregion
 
-    //region Tool Preview
-    fun writeToolPreviewByID(id: String, runningTool: ToolOutput) {
-        val selectedToolName = selectedTools.value.second.toolName
-
-        viewModelScope.launch(io) {
-            val beforeSize = _messages.value.size
-            var hits = 0
+    //region Tool Execution
+    private fun handleToolExecution(toolName: String, argsJson: String, messageId: String) {
+        viewModelScope.launch {
             try {
-                _messages.update { list ->
-                    list.map { message ->
-                        Log.d("MSG IDS", "Message id: ${message.id}")
-                        if (message.id == id) {
-                            Log.d(TAG, "Found message with id $id")
-                            hits++
-                            message.copy(
-                                tool = RunningTool(
-                                    toolName = selectedToolName,
-                                    toolPreview = runningTool.toString(),
-                                    toolOutput = runningTool
-                                )
-                            )
-                        } else {
-                            Log.d(TAG, "Message id $id not found")
-                            message
+                _uiState.value = ChatUiState.ExecutingTool(toolName, messageId)
+                currentRunningToolName.value = toolName
+
+                val repairedToolCall = repairToolCall(toolName, argsJson)
+                Log.d(TAG, "Executing tool: $repairedToolCall")
+
+                val pluginResult = PluginManager.runPlugin(
+                    appContext,
+                    selectedTools.value.first,
+                    repairedToolCall.toString()
+                )
+
+                ToolRunner.run(pluginResult, appContext, repairedToolCall) { result ->
+                    viewModelScope.launch {
+                        try {
+                            val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
+                            updateToolPreview(messageId, toolOutput)
+
+                            if (result.toString().isNotBlank()) {
+                                // Generate summary of tool output
+                                val summaryPrompt = buildSummaryPrompt(result.toString())
+                                executeInternalReasoning(summaryPrompt)
+                            }
+
+                            _uiState.value = ChatUiState.Idle
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Tool result processing failed", e)
+                            _uiState.value = ChatUiState.Error("Tool execution failed: ${e.message}")
                         }
                     }
                 }
-                if (hits > 0) {
-                    updateConversation() // persist preview to disk
-                } else {
-                    Log.w(TAG, "no-op: message id not found (id=$id) size=$beforeSize")
-                }
-            } catch (ce: CancellationException) {
-                Log.w(TAG, "writePreview cancelled", ce)
-                throw ce
             } catch (e: Exception) {
-                Log.e(TAG, "writePreview failed", e)
+                Log.e(TAG, "Tool execution failed", e)
+                _uiState.value = ChatUiState.Error("Tool execution failed: ${e.message}")
             }
         }
     }
+
+    private fun repairToolCall(toolName: String, argsJson: String): JSONObject {
+        val lastUserQuery = messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
+        val selectedToolName = selectedTools.value.second.toolName
+        val fallbackTool = toolName.ifBlank { selectedToolName }
+
+        return try {
+            val root = JSONObject(argsJson)
+            val calls = root.optJSONArray("tool_calls")
+            val firstCall = calls?.optJSONObject(0)
+            val extractedToolName = firstCall?.optString("name").orEmpty().ifBlank { fallbackTool }
+            val argObj = firstCall?.optJSONObject("arguments")
+
+            // Check if it's a schema echo (contains schema properties instead of actual args)
+            val isSchemaEcho = argObj?.let { obj ->
+                obj.has("type") || obj.has("properties") || obj.has("required")
+            } ?: true
+
+            if (isSchemaEcho) {
+                JSONObject().apply {
+                    put("tool", extractedToolName)
+                    put("args", JSONObject().put("query", lastUserQuery))
+                }
+            } else {
+                JSONObject().apply {
+                    put("tool", extractedToolName)
+                    put("args", argObj)
+                }
+            }
+        } catch (e: Exception) {
+            // Fallback for malformed JSON
+            JSONObject().apply {
+                put("tool", fallbackTool)
+                put("args", JSONObject().put("query", lastUserQuery))
+            }
+        }
+    }
+
+    private fun buildSummaryPrompt(toolOutput: String): String = buildString {
+        append("Summarize the tool output in 5-6 concise lines. ")
+        append("Preserve entities, numbers, and URLs. Be factual and crisp.\n\n")
+        append(toolOutput)
+    }
+
+    private suspend fun executeInternalReasoning(prompt: String) {
+        unSelectTool()
+        ModelManager.setSystemPrompt("You are a crisp summarizer. Be concise and factual.")
+
+        val reasoningMessageId = UUID.randomUUID().toString()
+        val reasoningMessage = Message(
+            role = Role.Assistant,
+            text = "",
+            id = reasoningMessageId
+        )
+
+        _messages.update { it + reasoningMessage }
+        streamingMessageIndex = _messages.value.size - 1
+
+        streamAndRender(
+            prompt = prompt,
+            enableTools = false,
+            messageId = reasoningMessageId
+        )
+    }
+
+    private suspend fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
+        val selectedToolName = selectedTools.value.second.toolName
+
+        _messages.update { messages ->
+            messages.map { message ->
+                if (message.id == messageId) {
+                    message.copy(
+                        tool = RunningTool(
+                            toolName = selectedToolName,
+                            toolPreview = toolOutput.toString(),
+                            toolOutput = toolOutput
+                        )
+                    )
+                } else {
+                    message
+                }
+            }
+        }
+
+        requestSave()
+    }
     //endregion
 
-    //region Controls
+    //region Utility Functions
     fun stopGenerating() {
+        currentGenerationJob?.cancel()
         ModelManager.stopGeneration()
-        _isGenerating.value = false
+        _uiState.value = ChatUiState.Idle
     }
-    //endregion
 
-    //region Persistence & Title
-    private fun generateTitle() {
+    private fun generateTitleIfNeeded() {
         if (_chatTitle.value.isNotBlank()) return
-        val firstUser = _messages.value.firstOrNull { it.role == Role.User }?.text.orEmpty().trim()
-        if (firstUser.isBlank()) return
-        _chatTitle.value = firstUser.take(48)
+
+        val firstUserMessage = _messages.value
+            .firstOrNull { it.role == Role.User }
+            ?.text
+            ?.trim()
+            .orEmpty()
+
+        if (firstUserMessage.isNotBlank()) {
+            _chatTitle.value = firstUserMessage.take(48)
+        }
     }
 
-    private fun updateConversation() {
+    // Replace your existing performSave() method with this:
+
+    private suspend fun performSave() {
         try {
+            Log.d(TAG, "=== Starting performSave ===")
+
+            // Only save if we have actual content to save
+            val currentMessages = _messages.value
+            val currentTitle = _chatTitle.value
+            val currentChatId = chatId.value
+
+            // Don't create empty chats
+            if (currentMessages.isEmpty() && currentTitle.isBlank()) {
+                Log.d(TAG, "No content to save, skipping")
+                return
+            }
+
+            Log.d(TAG, "Saving chat: id=$currentChatId, title='$currentTitle', messages=${currentMessages.size}")
+
             val root = rootNode.value.getNodeDirect("root")
             val history = getDefaultChatHistory(root)
             val tree = NeuronTree(history)
 
-            val currentList = _messages.value
             val jsonData = JSONObject().apply {
-                put("title", _chatTitle.value)
-                put("conversations", JSONArray(Json.encodeToString(currentList)))
+                put("title", currentTitle)
+                put("conversations", JSONArray(Json.encodeToString(currentMessages)))
             }
 
-            val existing = chatId.value.takeIf { it.isNotBlank() }?.let { id ->
-                runCatching { tree.getNodeDirect(id) }.getOrNull()
-            }
+            val existingNode = if (currentChatId.isNotBlank()) {
+                runCatching {
+                    tree.getNodeDirect(currentChatId)
+                }.getOrNull()?.takeIf {
+                    it.id.isNotBlank() // Ensure it's a valid node
+                }
+            } else null
 
-            if (existing != null) {
-                existing.data.content = jsonData.toString()
-            } else {
+            if (existingNode != null) {
+                Log.d(TAG, "Updating existing chat node: ${existingNode.id}")
+                existingNode.data.content = jsonData.toString()
+            } else if (currentMessages.isNotEmpty()) {
+                // Only create new chat if we have actual messages
+                Log.d(TAG, "Creating new chat node")
                 val newNode = addNewChat(history, jsonData)
                 chatId.value = newNode.id
+                Log.d(TAG, "Created new chat with id: ${newNode.id}")
             }
 
+            // Save the tree to disk
             saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
+            Log.d(TAG, "Chat saved successfully")
+
         } catch (e: Exception) {
-            Log.e(TAG, "Failed updating chat", e)
+            Log.e(TAG, "Save operation failed", e)
         }
     }
-    //endregion
 
-    //region Tools → JSON Schema
-    private fun convertToolsToJson(tools: Tools): JSONArray {
+    // Add this new method specifically for deletion saves
+    private suspend fun performTreeSave() {
+        try {
+            Log.d(TAG, "=== Saving tree structure to disk ===")
+            saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
+            Log.d(TAG, "Tree structure saved successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Tree save failed", e)
+        }
+    }
+
+    // Update requestSave to only handle conversation saves
+    private fun requestSave() {
+        // Only send save request if we have content worth saving
+        if (_messages.value.isNotEmpty() || _chatTitle.value.isNotBlank()) {
+            saveChannel.trySend(Unit)
+        }
+    }
+
+    private fun convertToolsToJson(tool: Tools): JSONArray {
         val properties = JSONObject()
         val required = mutableListOf<String>()
-        tools.args.forEach { (k, v) ->
-            properties.put(
-                k, JSONObject().put(
-                    "type", when (v) {
-                        is Int, is Double, is Float -> "number"; is Boolean -> "boolean"; else -> "string"
-                    }
-                )
-            )
-            if (v != null) required.add(k)
+
+        tool.args.forEach { (key, value) ->
+            val type = when (value) {
+                is Int, is Double, is Float -> "number"
+                is Boolean -> "boolean"
+                else -> "string"
+            }
+            properties.put(key, JSONObject().put("type", type))
+            if (value != null) required.add(key)
         }
 
-        val parameters = JSONObject().put("type", "object").put("properties", properties)
+        val parameters = JSONObject()
+            .put("type", "object")
+            .put("properties", properties)
             .put("required", JSONArray(required))
 
-        val function =
-            JSONObject().put("name", tools.toolName)                      // e.g., "searchWeb"
-                .put("description", tools.description ?: "").put("parameters", parameters)
+        val function = JSONObject()
+            .put("name", tool.toolName)
+            .put("description", tool.description ?: "")
+            .put("parameters", parameters)
 
         return JSONArray().put(
-            JSONObject().put("type", "function").put("function", function)
+            JSONObject()
+                .put("type", "function")
+                .put("function", function)
         )
     }
 
-    //Regenerate Response
-    // Drop-in replacement for the method inside ChatScreenViewModel
-    // Regenerates an existing assistant message *in place* with streaming UI updates,
-    // optional model switch, and safe handling of <think> blocks.
-    fun regenerateResponse(modelsData: ModelsData?, messageId: String) {
-        if (modelsData == null) return
-
-        val idx = _messages.value.indexOfFirst { it.id == messageId }
-        if (idx == -1) return
-
-        val target = _messages.value[idx]
-
-        // Only regenerate Assistant/Tool replies; ignore user messages
-        if (target.role != Role.Assistant && target.role != Role.Tool) return
-
-        _isGenerating.value = true
-        _generationState.value = GenerationState.GENERATING
-
-        _isDecoding.value = true
-        _decodingMessageId.value = messageId
-
-        val decodeStartNs = System.nanoTime()
-        var firstTokenSeen = false
-
-
-        // Prepare context: most recent user message *before* this assistant reply
-        val userCtx = _messages.value.take(idx).lastOrNull { it.role == Role.User }?.text.orEmpty()
-
-        // Empty out the visible text for streaming replacement (keep same message id)
-        viewModelScope.launch(Dispatchers.Main) {
-            val cur = _messages.value.toMutableList()
-            cur[idx] = cur[idx].copy(text = "", thought = null)
-            _messages.value = cur
-        }
-
-        viewModelScope.launch(io) {
-            // Load/switch model if needed + set a focused system prompt
-            val sys = "You are a Message Optimization Assistant. Improve clarity, concision, and factuality without altering meaning. Keep code, numbers, and URLs intact. Output only the final improved message in the same language."
-
-            // If model differs, (re)load it; otherwise just update system prompt
-            if (selectedModel.value.id != modelsData.id) {
-                ModelManager.unLoadModel()
-                ModelManager.loadModelAwait(
-                    modelData = modelsData,
-                    defaults = ModelManager.ManagerDefaults(systemPrompt = sys),
-                    chatTemplate = ModelsList.chatTemplate,
-                    forceReload = true
-                ) { state ->
-                    _modelLoadingState.value = state
-                    selectedModel.value = modelsData
-                }
-            } else {
-                ModelManager.setSystemPrompt(sys)
-            }
-
-            // Streaming buffers
-            val visibleSb = StringBuilder()
-            val thoughtSb = StringBuilder()
-            val rawSb = StringBuilder()
-            var inThink = false
-            var lastPostedVisibleLen = 0
-            var lastPostedThoughtLen = 0
-
-            fun coalescedPost() {
-                val now = System.nanoTime() / 1_000_000
-                if (!shouldPost(now)) return
-                val visible = visibleSb.toString()
-                val thinking = if (thoughtSb.isNotEmpty()) thoughtSb.toString().takeLast(MAX_THINK_CHARS) else null
-                val vLen = visible.length
-                val tLen = thinking?.length ?: 0
-                if (vLen == lastPostedVisibleLen && tLen == lastPostedThoughtLen) return
-                lastPostedVisibleLen = vLen
-                lastPostedThoughtLen = tLen
-                lastUiPost = now
-
-                viewModelScope.launch(Dispatchers.Main.immediate) {
-                    if (idx in _messages.value.indices) {
-                        val cur = _messages.value.toMutableList()
-                        val existing = cur[idx]
-                        cur[idx] = existing.copy(text = visible, thought = thinking)
-                        _messages.value = cur
-                    }
-                }
-            }
-
-            suspend fun applyFinal(text: String, thought: String?) {
-                withContext(Dispatchers.Main.immediate) {
-                    if (idx in _messages.value.indices) {
-                        val cur = _messages.value.toMutableList()
-                        val existing = cur[idx]
-                        cur[idx] = existing.copy(text = text, thought = thought?.take(MAX_THOUGHT_SAVE))
-                        _messages.value = cur
-                    }
-                }
-            }
-
-            fun splitReasoning(raw: String): Pair<String, String?> {
-                // 1) JSON {"final": "...", "thought": "..."}
-                runCatching {
-                    val json = extractPureJson(raw)
-                    val obj = JSONObject(json)
-                    val final = obj.optString("final", obj.optString("answer", ""))
-                    val thought = obj.optString("thought", obj.optString("reasoning", null))
-                    if (final.isNotBlank() || thought != null) return final to thought
-                }
-                // 2) <think>…</think>
-                val tagRegex = Regex("(?is)<think>(.*?)</think>")
-                val thoughtTag = tagRegex.find(raw)?.groupValues?.getOrNull(1)
-                val visible = raw.replace(tagRegex, "").trim()
-                if (thoughtTag != null) return visible to thoughtTag
-                // 3) Reasoning: … Answer: …
-                val delim = Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
-                delim.find(raw)?.let { m ->
-                    val t = m.groupValues[1].trim()
-                    val v = m.groupValues[2].trim()
-                    return v to t
-                }
-                return raw to null
-            }
-
-            try {
-                // Instruction for regeneration; uses user context and the original assistant text
-                val optimizePrompt = buildString {
-                    appendLine("Improve the following assistant reply for the user's last message.")
-                    appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
-                    appendLine("- Be tighter, clearer, and well-structured.")
-                    appendLine("- Do not add meta commentary or disclaimers.")
-                    appendLine()
-                    if (userCtx.isNotBlank()) {
-                        appendLine("[User message for context]")
-                        appendLine(userCtx)
-                        appendLine()
-                    }
-                    appendLine("[Original assistant reply to improve]")
-                    append(target.text)
-                }
-
-                ModelManager.generateStreaming(
-                    prompt = optimizePrompt,
-                    gen = ModelManager.GenerationParams(),
-                    toolJson = null,
-                    onToolCalled = { _, _ -> },
-                    onToken = { tok ->
-                        if (!firstTokenSeen) {
-                            firstTokenSeen = true
-                            _isDecoding.value = false
-                            _decodingMessageId.value = null
-                            emitDecodeNow(
-                                type = DecodeType.REGENERATE,
-                                startedAtNs = decodeStartNs,
-                                firstTokenAtNs = System.nanoTime()
-                            )
-                        }
-
-                        rawSb.append(tok)
-                        val lower = tok.lowercase()
-                        when {
-                            inThink && lower.contains("</think>") -> {
-                                val before = tok.substringBefore("</think>", tok)
-                                val after = tok.substringAfter("</think>", tok)
-                                thoughtSb.append(before)
-                                inThink = false
-                                visibleSb.append(after)
-                            }
-                            inThink -> thoughtSb.append(tok)
-                            lower.contains("<think>") -> {
-                                val before = tok.substringBefore("<think>", tok)
-                                val after = tok.substringAfter("<think>", tok)
-                                visibleSb.append(before)
-                                inThink = true
-                                thoughtSb.append(after)
-                            }
-                            else -> visibleSb.append(tok)
-                        }
-                        coalescedPost()
-                    }
-                )
-
-                var finalText = visibleSb.toString()
-                var finalThought = thoughtSb.takeIf { it.isNotEmpty() }?.toString()
-                splitReasoning(rawSb.toString()).let { (v, t) ->
-                    if (v.isNotBlank()) finalText = v
-                    if (!t.isNullOrBlank()) finalThought = t
-                }
-
-                applyFinal(finalText, finalThought)
-                updateConversation()
-            } catch (ce: CancellationException) {
-                Log.w(TAG, "regenerate cancelled", ce)
-                throw ce
-            } catch (t: Throwable) {
-                Log.e(TAG, "regenerate failed", t)
-                // best-effort flush of whatever we have
-                applyFinal(visibleSb.toString(), thoughtSb.toString().ifBlank { null })
-            } finally {
-                _isGenerating.value = false
-                _isDecoding.value = false
-                _decodingMessageId.value = null
-
-                if (_generationState.value != GenerationState.DONE) _generationState.value = GenerationState.IDLE
-            }
+    // Extension function to provide permits for semaphore
+    private suspend fun <T> Semaphore.withPermit(action: suspend () -> T): T {
+        acquire()
+        try {
+            return action()
+        } finally {
+            release()
         }
     }
+    //endregion
 
-
+    //region Cleanup
+    override fun onCleared() {
+        super.onCleared()
+        currentGenerationJob?.cancel()
+        saveChannel.close()
+    }
     //endregion
 }
-
-enum class GenerationState { IDLE, GENERATING, DONE }

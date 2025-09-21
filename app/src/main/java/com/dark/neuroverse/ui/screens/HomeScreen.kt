@@ -66,6 +66,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalNavigationDrawer
@@ -131,7 +132,7 @@ import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
-import com.dark.neuroverse.viewModel.chatViewModel.GenerationState
+import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.launch
@@ -150,16 +151,32 @@ fun HomeScreen(
     val context = LocalContext.current
     val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Handle error states with user feedback
+    LaunchedEffect(uiState) {
+        when (val state = uiState) {
+            is ChatUiState.Error -> {
+                Toast.makeText(
+                    context,
+                    "Error: ${state.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            else -> {}
+        }
+    }
+
     BackHandler {
-        // Check if the context is an Activity and close the app
         if (context is Activity) {
-            // Log to ensure this is being called
             Log.d("HomeScreen", "Closing the app and removing the task...")
             context.finishAffinity()
         }
     }
+
     ModalNavigationDrawer(
-        drawerState = drawerState, drawerContent = {
+        drawerState = drawerState,
+        drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
@@ -168,180 +185,223 @@ fun HomeScreen(
                 onChatSelected = { scope.launch { drawerState.close() } },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
-                })
-        }) {
-        Scaffold(modifier = Modifier
-            .fillMaxSize()
-            .imePadding(), topBar = {
-            Column {
-                TopBar(
-                    title = chatTitle,
-                    onMenu = { scope.launch { drawerState.open() } },
-                    onLeftMenu = { viewModel.newChat() })
+                }
+            )
+        }
+    ) {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .imePadding(),
+            topBar = {
+                Column {
+                    TopBar(
+                        title = chatTitle,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onLeftMenu = { viewModel.newChat() }
+                    )
+                    ModelLoadProgressBar(loadState = modelState)
 
-                ModelLoadProgressBar(loadState = modelState)
+                    // Global loading indicator for UI state
+                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                        Column {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (uiState is ChatUiState.Loading) {
+                                Text(
+                                    text = (uiState as ChatUiState.Loading).operation,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                BottomBar(viewModel = viewModel, uiState = uiState)
             }
-        }, bottomBar = { BottomBar(viewModel) }) { inner ->
-            BodyContent(inner, viewModel)
+        ) { innerPadding ->
+            BodyContent(innerPadding, viewModel, uiState)
         }
     }
 }
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+    title: String = "NeuroV Chat",
+    onMenu: () -> Unit = {},
+    onLeftMenu: () -> Unit = {}
 ) {
     TopAppBar(
         title = {
-        val capitalizedTitle = title.replaceFirstChar {
-            if (it.isLowerCase()) it.titlecase() else it.toString()
-        }
+            val capitalizedTitle = title.replaceFirstChar {
+                if (it.isLowerCase()) it.titlecase() else it.toString()
+            }
 
-        Text(
-            text = capitalizedTitle,
-            modifier = Modifier.widthIn(max = rDP(180.dp)),
-            fontSize = rSp(22.sp),
-            color = MaterialTheme.colorScheme.primary,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            fontWeight = FontWeight.SemiBold
-        )
-    }, navigationIcon = {
-        IconButton(onClick = onMenu) {
-            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-        }
-    }, actions = {
-        // circular spark button
-        var showDialog by remember { mutableStateOf(false) }
+            Text(
+                text = capitalizedTitle,
+                modifier = Modifier.widthIn(max = rDP(180.dp)),
+                fontSize = rSp(22.sp),
+                color = MaterialTheme.colorScheme.primary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.SemiBold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onMenu) {
+                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+            }
+        },
+        actions = {
+            var showDialog by remember { mutableStateOf(false) }
 
-        AnimatedVisibility(showDialog) {
-            if (showDialog) {
-                DataSetSelectorDialog {
-                    showDialog = false
+            AnimatedVisibility(showDialog) {
+                if (showDialog) {
+                    DataSetSelectorDialog {
+                        showDialog = false
+                    }
                 }
             }
-        }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-        ) {
-            Button(
-                onClick = {
-                    showDialog = true
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
             ) {
-                Text(
-                    "Data Set",
-                    style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onPrimary)
-                )
-                Spacer(Modifier.width(rDP(8.dp)))
+                Button(
+                    onClick = { showDialog = true },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    Text(
+                        "Data Set",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = MaterialTheme.colorScheme.onPrimary
+                        )
+                    )
+                    Spacer(Modifier.width(rDP(8.dp)))
+                    Box(
+                        modifier = Modifier
+                            .size(rDP(7.dp))
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onPrimary)
+                    )
+                }
+
                 Box(
                     modifier = Modifier
-                        .size(rDP(7.dp))
+                        .padding(end = rDP(2.dp))
+                        .size(ButtonDefaults.MinHeight)
                         .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.onPrimary)
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .padding(end = rDP(2.dp))
-                    .size(ButtonDefaults.MinHeight)
-                    .clip(CircleShape)
-                    .background(
-                        MaterialTheme.colorScheme.primary
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { onLeftMenu() },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Add,
+                        contentDescription = "New Chat",
+                        tint = MaterialTheme.colorScheme.onPrimary
                     )
-                    .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Add,
-                    contentDescription = "More",
-                    tint = MaterialTheme.colorScheme.onPrimary
-                )
-
+                }
             }
-        }
-
-    }, colors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.background
-    )
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background
+        )
     )
 }
 
-
 @Composable
 fun BodyContent(
-    inner: PaddingValues, viewModel: ChatScreenViewModel
+    innerPadding: PaddingValues,
+    viewModel: ChatScreenViewModel,
+    uiState: ChatUiState
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
-    val generationState by viewModel.generationState.collectAsStateWithLifecycle()
-
-
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
 
-    // Whether we should auto-follow new messages
-    var follow by remember { mutableStateOf(true) }
+    // Auto-scroll management
+    var autoScrollEnabled by remember { mutableStateOf(true) }
 
-    // Are we at the bottom? (last item visible)
     val isAtBottom by remember {
         derivedStateOf {
-            val total = listState.layoutInfo.totalItemsCount
-            if (total == 0) return@derivedStateOf true
-            val lastVisible = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
-            lastVisible >= total - 1
+            val totalItems = listState.layoutInfo.totalItemsCount
+            if (totalItems == 0) return@derivedStateOf true
+            val lastVisibleIndex = listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: 0
+            lastVisibleIndex >= totalItems - 1
         }
     }
 
-    // If the user scrolls up, pause auto-follow
+    // Disable auto-scroll when user scrolls up manually
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress to isAtBottom }.collect { (scrolling, atBottom) ->
-            if (scrolling && !atBottom) follow = false
-        }
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }
+            .collect { (scrolling, atBottom) ->
+                if (scrolling && !atBottom) {
+                    autoScrollEnabled = false
+                }
+            }
     }
 
-    // When messages change and follow is on, go to bottom
-    LaunchedEffect(messages.size, follow) {
-        if (messages.isNotEmpty() && follow) {
-            scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+    // Auto-scroll to new messages when enabled
+    LaunchedEffect(messages.size, autoScrollEnabled) {
+        if (messages.isNotEmpty() && autoScrollEnabled) {
+            scope.launch {
+                listState.animateScrollToItem(messages.lastIndex)
+            }
         }
     }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(inner)
+            .padding(innerPadding)
     ) {
         if (messages.isEmpty()) {
-            EmptyHint()
+            EmptyStateContent(uiState)
         } else {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = rDP(16.dp)),
                 state = listState,
-                reverseLayout = false,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(8.dp),
+                    end = rDP(8.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { msg ->
-                    ChatBubble(msg, viewModel, generationState) {
-                        val preview = writeToolOutputJson(it)
-                        viewModel.writeToolPreviewByID(msg.id, preview ?: return@ChatBubble)
-                    }
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }
+                ) { message ->
+                    ChatBubble(
+                        message = message,
+                        viewModel = viewModel,
+                        uiState = uiState,
+                        onToolCapture = { toolJson ->
+                            val preview = writeToolOutputJson(toolJson)
+                            if (preview != null) {
+                                // Note: This function needs to be added to the refactored ViewModel
+                                // or replaced with the appropriate state update method
+                                // viewModel.updateToolPreview(message.id, preview)
+                            }
+                        }
+                    )
                     Spacer(Modifier.height(rDP(18.dp)))
                 }
             }
         }
 
-        // Jump-to-bottom FAB when the user scrolled up
+        // Jump to bottom FAB
         AnimatedVisibility(
             visible = !isAtBottom && messages.isNotEmpty(),
             enter = fadeIn(),
@@ -352,114 +412,377 @@ fun BodyContent(
         ) {
             SmallFloatingActionButton(
                 onClick = {
-                    follow = true
-                    scope.launch { listState.animateScrollToItem(messages.lastIndex) }
+                    autoScrollEnabled = true
+                    scope.launch {
+                        listState.animateScrollToItem(messages.lastIndex)
+                    }
                 },
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
                 )
             }
         }
     }
 }
 
-
 @Composable
-private fun BottomBar(
-    viewModel: ChatScreenViewModel
-) {
-    LocalContext.current
-    var input by remember { mutableStateOf("What Happened To Ray ??") }
-    val tools by viewModel.toolList.collectAsStateWithLifecycle()
-    val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
-    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
-    val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
-    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-
-    ChatInputBar(
-        value = input,
-        onValueChange = {
-            input = it
-        },
-        tools = tools,
-        isGenerating = isGenerating,
-        modelList = modelList,
-        onRag = {
-            viewModel.setRag(it)
-        },
-        onToolSelected = {
-            viewModel.selectTool(it)
-        },
-        selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
-        onModelSelected = {
-            viewModel.selectModel(it)
-        },
-        selectedModel = selectedModel,
-        onToolRemoved = {
-            viewModel.unSelectTool()
-        },
-        onSend = {
-            when (isGenerating) {
-                true -> {
-                    viewModel.stopGenerating()
-                }
-
-                false -> {
-                    if (input.isNotBlank()) {
-                        viewModel.sendMessage(input)
-                        input = ""
-                    }
-                }
-            }
-        })
-}
-
-@Composable
-private fun EmptyHint() {
+private fun EmptyStateContent(uiState: ChatUiState) {
     Column(
         Modifier
             .fillMaxSize()
             .padding(horizontal = rDP(24.dp)),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.Start
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.height(rDP(24.dp)))
-        Text(
-            text = "Here is Your PDF Document About General Science",
-            color = SlateGrey,
-            fontSize = rSp(16.sp)
-        )
+        when (uiState) {
+            is ChatUiState.Loading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(rDP(48.dp))
+                )
+                Spacer(Modifier.height(rDP(16.dp)))
+                Text(
+                    text = uiState.operation,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = rSp(16.sp),
+                    textAlign = TextAlign.Center
+                )
+            }
+            is ChatUiState.Error -> {
+                Icon(
+                    painter = painterResource(R.drawable.menu), // Replace with error icon
+                    contentDescription = "Error",
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(rDP(48.dp))
+                )
+                Spacer(Modifier.height(rDP(16.dp)))
+                Text(
+                    text = "Something went wrong",
+                    color = MaterialTheme.colorScheme.error,
+                    fontSize = rSp(18.sp),
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = uiState.message,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = rSp(14.sp),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = rDP(32.dp))
+                )
+            }
+            else -> {
+                Text(
+                    text = "Ready to chat! Ask me anything.",
+                    color = SlateGrey,
+                    fontSize = rSp(16.sp),
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
     }
 }
-
 
 @Composable
-private fun AssistTag(name: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
+private fun BottomBar(
+    viewModel: ChatScreenViewModel,
+    uiState: ChatUiState
+) {
+    var input by remember { mutableStateOf("") }
+    val tools by viewModel.toolList.collectAsStateWithLifecycle()
+    val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
+    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+
+    // Derive generation state from unified UI state
+    val isGenerating = when (uiState) {
+        is ChatUiState.Generating,
+        is ChatUiState.DecodingStream,
+        is ChatUiState.ExecutingTool -> true
+        else -> false
+    }
+
+    // Determine if input should be disabled
+    val inputEnabled = when (uiState) {
+        is ChatUiState.Loading,
+        is ChatUiState.Generating,
+        is ChatUiState.DecodingStream,
+        is ChatUiState.ExecutingTool -> false
+        is ChatUiState.Error -> uiState.isRetryable
+        else -> true
+    }
+
+    ChatInputBar(
+        value = input,
+        onValueChange = { if (inputEnabled) input = it },
+        tools = tools,
+        isGenerating = isGenerating,
+        inputEnabled = inputEnabled,
+        modelList = modelList,
+        onRag = viewModel::setRag,
+        onToolSelected = viewModel::selectTool,
+        selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
+        onModelSelected = viewModel::selectModel,
+        selectedModel = selectedModel,
+        onToolRemoved = { viewModel.unSelectTool() },
+        onSend = {
+            when {
+                isGenerating -> viewModel.stopGenerating()
+                input.isNotBlank() -> {
+                    viewModel.sendMessage(input)
+                    input = ""
+                }
+            }
+        }
+    )
+}
+
+@SuppressLint("StateFlowValueCalledInComposition")
+@Composable
+private fun ChatInputBar(
+    value: String,
+    tools: List<Pair<String, List<Tools>>>,
+    modelList: List<ModelsData>,
+    selectedTools: List<Tools>,
+    onToolSelected: (Pair<String, Tools>) -> Unit,
+    onModelSelected: (ModelsData) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRag: (Boolean) -> Unit,
+    onSend: () -> Unit,
+    onToolRemoved: (Tools) -> Unit,
+    selectedModel: ModelsData,
+    isGenerating: Boolean,
+    inputEnabled: Boolean
+) {
+    var showToolsList by remember { mutableStateOf(false) }
+    var showModelList by remember { mutableStateOf(false) }
+    var isRag by remember { mutableStateOf(false) }
+
+    Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(rDP(10.dp)))
-            .background(Color(0x1A3B82F6)) // faint blue chip
-            .padding(horizontal = rDP(8.dp), vertical = rDP(4.dp))
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .imePadding()
+            .background(MaterialTheme.colorScheme.surface),
+        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        Text(
-            text = "via $name",
-            fontSize = rSp(12.sp),
-            color = Color(0xFF2563EB),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        // Tools list
+        AnimatedVisibility(showToolsList) {
+            ToolsList(
+                tools = tools,
+                onToolSelected = {
+                    onToolSelected(it)
+                    showToolsList = false
+                }
+            )
+        }
+
+        // Model list
+        AnimatedVisibility(showModelList) {
+            ModelList(
+                selectedModel = selectedModel,
+                modelList = modelList,
+                onModelSelected = {
+                    onModelSelected(it)
+                    showModelList = false
+                }
+            )
+        }
+
+        // Tool selection and model button row
+        Row(
+            modifier = Modifier
+                .padding(top = rDP(16.dp))
+                .padding(horizontal = rDP(16.dp))
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        ) {
+            Button(
+                onClick = {
+                    if (inputEnabled) {
+                        showToolsList = !showToolsList
+                        showModelList = false
+                    }
+                },
+                enabled = inputEnabled,
+                colors = ButtonDefaults.textButtonColors(
+                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
+                    contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                ),
+                shape = RoundedCornerShape(rDP(8.dp))
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+                ) {
+                    Icon(painterResource(R.drawable.tools), contentDescription = "Tools")
+                    Text(text = "Tools", fontSize = rSp(14.sp))
+                }
+            }
+
+            // Selected tools chips
+            LazyRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
+            ) {
+                items(selectedTools, key = { it.toolName }) { tool ->
+                    ToolChip(
+                        tool = tool,
+                        onRemove = { onToolRemoved(tool) },
+                        modifier = Modifier.animateItem()
+                    )
+                }
+            }
+
+            // Model selector button
+            IconButton(
+                onClick = {
+                    if (inputEnabled) {
+                        showModelList = !showModelList
+                        showToolsList = false
+                    }
+                },
+                enabled = inputEnabled,
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
+                    contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                )
+            ) {
+                Icon(Icons.Default.SmartToy, contentDescription = "Select Model")
+            }
+        }
+
+        // Input row
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = rDP(8.dp))
+                .padding(bottom = rDP(4.dp))
+                .padding(end = rDP(18.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = value,
+                onValueChange = onValueChange,
+                enabled = inputEnabled,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = rDP(6.dp)),
+                placeholder = {
+                    Text(
+                        text = if (inputEnabled) "Say Anything…" else "Processing...",
+                        color = SlateGrey,
+                        fontSize = rSp(14.sp)
+                    )
+                },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.Transparent,
+                    unfocusedContainerColor = Color.Transparent,
+                    disabledContainerColor = Color.Transparent,
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                    cursorColor = MaterialTheme.colorScheme.primary
+                ),
+                textStyle = LocalTextStyle.current.copy(
+                    color = MaterialTheme.colorScheme.primary,
+                    fontSize = rSp(15.sp)
+                )
+            )
+
+            // RAG toggle button
+            IconButton(
+                onClick = {
+                    if (inputEnabled) {
+                        isRag = !isRag
+                        onRag(isRag)
+                    }
+                },
+                enabled = inputEnabled,
+                modifier = Modifier.size(rDP(36.dp)),
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
+                )
+            ) {
+                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
+            }
+
+            Spacer(Modifier.width(rDP(8.dp)))
+
+            // Send/Stop button
+            Box(
+                modifier = Modifier
+                    .size(rDP(36.dp))
+                    .clip(CircleShape)
+                    .background(
+                        if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+                    )
+                    .clickable(enabled = inputEnabled || isGenerating) { onSend() },
+                contentAlignment = Alignment.Center
+            ) {
+                when {
+                    isGenerating -> {
+                        Icon(
+                            Icons.Default.Stop,
+                            modifier = Modifier.padding(rDP(8.dp)),
+                            contentDescription = "Stop",
+                            tint = MaterialTheme.colorScheme.background
+                        )
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDP(28.dp)),
+                            trackColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                            color = MaterialTheme.colorScheme.background
+                        )
+                    }
+                    else -> {
+                        Icon(
+                            painterResource(R.drawable.send_chat),
+                            modifier = Modifier.padding(rDP(8.dp)),
+                            contentDescription = "Send",
+                            tint = if (inputEnabled) MaterialTheme.colorScheme.background
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
+@Composable
+private fun ToolChip(
+    tool: Tools,
+    onRemove: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accentColor = Color(0xFF0066FF)
+    val backgroundColor = accentColor.copy(alpha = 0.2f)
+
+    Box(
+        modifier = modifier
+            .size(ButtonDefaults.MinHeight)
+            .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp)))
+            .clickable { onRemove() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Default.Web,
+            contentDescription = "Remove ${tool.toolName}",
+            tint = accentColor
+        )
+    }
+}
 
 @Composable
 fun ToolsList(
     modifier: Modifier = Modifier,
-    tools: List<Pair<String, List<Tools>>>, // Pair(pluginName, tools)
+    tools: List<Pair<String, List<Tools>>>,
     onToolSelected: (Pair<String, Tools>) -> Unit
 ) {
     LazyColumn(
@@ -468,13 +791,10 @@ fun ToolsList(
     ) {
         tools.forEach { (pluginName, toolList) ->
             item {
-                // Plugin header
                 Text(
-                    text = pluginName, style = MaterialTheme.typography.titleMedium.copy(
-                        fontSize = rSp(18.sp) // scaled font
-                    ), modifier = Modifier.padding(
-                        horizontal = rDP(16.dp), vertical = rDP(8.dp)
-                    )
+                    text = pluginName,
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = rSp(18.sp)),
+                    modifier = Modifier.padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
                 )
             }
 
@@ -491,16 +811,13 @@ fun ToolsList(
                 ) {
                     Column(modifier = Modifier.padding(rDP(12.dp))) {
                         Text(
-                            text = tool.toolName, style = MaterialTheme.typography.bodyLarge.copy(
-                                fontSize = rSp(16.sp)
-                            )
+                            text = tool.toolName,
+                            style = MaterialTheme.typography.bodyLarge.copy(fontSize = rSp(16.sp))
                         )
                         if (tool.description.isNotBlank()) {
                             Text(
                                 text = tool.description,
-                                style = MaterialTheme.typography.bodySmall.copy(
-                                    fontSize = rSp(13.sp)
-                                ),
+                                style = MaterialTheme.typography.bodySmall.copy(fontSize = rSp(13.sp)),
                                 color = Color.Gray
                             )
                         }
@@ -511,34 +828,32 @@ fun ToolsList(
     }
 }
 
-
 @Composable
 fun ModelList(
-    modifier: Modifier = Modifier, modelList: List<ModelsData>, // list of models
-    onModelSelected: (ModelsData) -> Unit, selectedModel: ModelsData
+    modifier: Modifier = Modifier,
+    modelList: List<ModelsData>,
+    onModelSelected: (ModelsData) -> Unit,
+    selectedModel: ModelsData
 ) {
     LazyColumn(
         modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
         contentPadding = PaddingValues(vertical = rDP(8.dp))
     ) {
         item {
-            // Section header
             Text(
-                text = "Local Models", style = MaterialTheme.typography.titleMedium.copy(
-                    fontSize = rSp(18.sp)
-                ), modifier = Modifier.padding(
-                    horizontal = rDP(16.dp), vertical = rDP(8.dp)
-                )
+                text = "Local Models",
+                style = MaterialTheme.typography.titleMedium.copy(fontSize = rSp(18.sp)),
+                modifier = Modifier.padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
             )
         }
 
-        items(modelList) { modelsData ->
-            val isSelected = modelsData.modeName == selectedModel.modeName
+        items(modelList) { model ->
+            val isSelected = model.modeName == selectedModel.modeName
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = rDP(32.dp), vertical = rDP(4.dp))
-                    .clickable { onModelSelected(modelsData) },
+                    .clickable { onModelSelected(model) },
                 elevation = CardDefaults.cardElevation(rDP(0.dp)),
                 colors = CardDefaults.cardColors(
                     containerColor = if (isSelected) Mint.copy(alpha = 0.5f)
@@ -547,17 +862,15 @@ fun ModelList(
             ) {
                 Row(modifier = Modifier.padding(rDP(12.dp))) {
                     Text(
-                        text = modelsData.modeName,
+                        text = model.modeName,
                         maxLines = 1,
-                        style = MaterialTheme.typography.bodyLarge.copy(
-                            fontSize = rSp(16.sp)
-                        )
+                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = rSp(16.sp))
                     )
                     Spacer(Modifier.weight(1f))
                     if (isSelected) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Check",
+                            contentDescription = "Selected",
                             tint = Mint,
                             modifier = Modifier.size(rDP(20.dp))
                         )
@@ -568,282 +881,205 @@ fun ModelList(
     }
 }
 
-
-@SuppressLint("StateFlowValueCalledInComposition")
-@Composable
-private fun ChatInputBar(
-    value: String,
-    tools: List<Pair<String, List<Tools>>>,
-    modelList: List<ModelsData>,
-    selectedTools: List<Tools>,
-    onToolSelected: (Pair<String, Tools>) -> Unit,
-    onModelSelected: (ModelsData) -> Unit,
-    onValueChange: (String) -> Unit,
-    onRag: (Boolean) -> Unit,
-    onSend: () -> Unit,
-    onToolRemoved: (Tools) -> Unit,
-    selectedModel: ModelsData,
-    isGenerating: Boolean
-) {
-    var showToolsList by remember { mutableStateOf(false) }
-    var showModelList by remember { mutableStateOf(false) }
-    var isRag by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .imePadding()
-            .background(MaterialTheme.colorScheme.surface),
-        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-    ) {
-        AnimatedVisibility(showToolsList) {
-            ToolsList(
-                modifier = Modifier, tools = tools, onToolSelected = {
-                    onToolSelected(it)
-                    showToolsList = false
-                })
-        }
-
-        AnimatedVisibility(showModelList) {
-            ModelList(
-                modifier = Modifier,
-                selectedModel = selectedModel,
-                modelList = modelList,
-                onModelSelected = {
-                    onModelSelected(it)
-                    showModelList = false
-                })
-        }
-
-        Row(
-            modifier = Modifier
-                .padding(top = rDP(16.dp))
-                .padding(horizontal = rDP(16.dp))
-                .fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-        ) {
-            Button(
-                onClick = {
-                    showToolsList = !showToolsList
-                    showModelList = false
-                }, colors = ButtonDefaults.textButtonColors(
-                    containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
-                    contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ), shape = RoundedCornerShape(rDP(8.dp))
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-                ) {
-                    Icon(painterResource(R.drawable.tools), contentDescription = "Add")
-                    Text(text = "Tools", fontSize = rSp(14.sp))
-                }
-            }
-
-            LazyRow(Modifier.weight(1f)) {
-                items(selectedTools, key = { it.toolName }) { tool ->
-                    ToolCard(modifier = Modifier
-                        .animateItem()
-                        .clickable { onToolRemoved(tool) }
-                        .padding(rDP(8.dp)), tool = tool)
-                }
-            }
-
-            IconButton(
-                onClick = {
-                    showModelList = !showModelList
-                    showToolsList = false
-                }, colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
-                    contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ), shape = RoundedCornerShape(rDP(8.dp))
-            ) {
-                Icon(Icons.Default.SmartToy, contentDescription = "Add")
-            }
-        }
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = rDP(8.dp))
-                .padding(bottom = rDP(4.dp))
-                .padding(end = rDP(18.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextField(
-                value = value,
-                onValueChange = onValueChange,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = rDP(6.dp)),
-                placeholder = {
-                    Text("Say Anything…", color = SlateGrey, fontSize = rSp(14.sp))
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.Transparent,
-                    unfocusedContainerColor = Color.Transparent,
-                    disabledContainerColor = Color.Transparent,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                    cursorColor = MaterialTheme.colorScheme.primary
-                ),
-                textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
-                )
-            )
-
-            IconButton(
-                onClick = {
-                    isRag = !isRag
-                    onRag(isRag)
-                },
-                modifier = Modifier.size(rDP(36.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
-                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
-            ) {
-                Icon(painterResource(R.drawable.database_zap), contentDescription = "Add")
-            }
-
-            Spacer(Modifier.width(rDP(8.dp)))
-
-            // Send button with gradient pill
-            Box(
-                modifier = Modifier
-                    .size(rDP(36.dp))
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primary)
-                    .clickable { onSend() },
-                contentAlignment = Alignment.Center
-            ) {
-                when (isGenerating) {
-                    true -> {
-                        Icon(
-                            Icons.Default.Stop,
-                            modifier = Modifier.padding(rDP(8.dp)),
-                            contentDescription = "Send",
-                            tint = MaterialTheme.colorScheme.background
-                        )
-                        CircularProgressIndicator(
-                            trackColor = MaterialTheme.colorScheme.background,
-                            modifier = Modifier.size(rDP(28.dp))
-                        )
-                    }
-
-                    false -> {
-                        Icon(
-                            painterResource(R.drawable.send_chat),
-                            modifier = Modifier.padding(rDP(8.dp)),
-                            contentDescription = "Send",
-                            tint = MaterialTheme.colorScheme.background
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun ToolCard(modifier: Modifier = Modifier, tool: Tools) {
-    val accentColor = Color(0xFF0066FF)
-    val backgroundColor = accentColor.copy(alpha = 0.2f)
-
-    Box(
-        modifier
-            .size(ButtonDefaults.MinHeight)
-            .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp))),
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(Icons.Default.Web, contentDescription = "Open File", tint = accentColor)
-    }
-}
-
-
 @Composable
 private fun ChatBubble(
-    msg: Message,
+    message: Message,
     viewModel: ChatScreenViewModel,
-    generationState: GenerationState,
-    onCapture: (String) -> Unit
+    uiState: ChatUiState,
+    onToolCapture: (String) -> Unit
 ) {
-    // role check
-    val isUser = msg.role == Role.User
-    val isDecoding by viewModel.isDecoding.collectAsStateWithLifecycle()
-    val decodingMsgId by viewModel.decodingMessageId.collectAsStateWithLifecycle()
-    val waitingForThis = isDecoding && decodingMsgId == msg.id
-    // trigger capture when generation is DONE
-    var shouldCaptureNow by remember { mutableStateOf(false) }
-    LaunchedEffect(generationState) {
-        shouldCaptureNow = generationState == GenerationState.DONE
+    val isUser = message.role == Role.User
+
+    // Check if this specific message is being processed
+    val isThisMessageDecoding = when (uiState) {
+        is ChatUiState.DecodingStream -> uiState.messageId == message.id
+        is ChatUiState.Generating -> uiState.messageId == message.id && uiState.isFirstToken
+        is ChatUiState.ExecutingTool -> uiState.messageId == message.id
+        else -> false
+    }
+
+    // Handle tool capture trigger
+    var shouldCaptureTool by remember { mutableStateOf(false) }
+    LaunchedEffect(uiState) {
+        shouldCaptureTool = uiState is ChatUiState.ExecutingTool &&
+                uiState.messageId == message.id
     }
 
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
     ) {
-
-        Column(
-            modifier = Modifier
-        ) {
-            // optional "thoughts"
-            val thoughtVisible = !isUser && !msg.thought.isNullOrBlank()
-            if (thoughtVisible) {
-                ThinkingChatUI(msg)
+        Column {
+            // Show thinking section for assistant messages
+            val showThinking = !isUser && !message.thought.isNullOrBlank()
+            if (showThinking) {
+                ThinkingChatUI(message)
                 Spacer(Modifier.height(rDP(8.dp)))
             }
 
-            // role-specific bubble UI
-            when (msg.role) {
-                Role.User -> {
-                    UserChatUI(msg)
+            // Main message content based on role
+            when (message.role) {
+                Role.User -> UserChatUI(message)
+                Role.Assistant -> RegularChatUI(message, isThisMessageDecoding, viewModel)
+                Role.Tool -> ToolChatUI(
+                    message = message,
+                    isDecoding = isThisMessageDecoding,
+                    shouldCapture = shouldCaptureTool,
+                    onCapture = {
+                        shouldCaptureTool = false
+                        onToolCapture(it)
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun UserChatUI(message: Message) {
+    val radius = with(LocalDensity.current) { rDP(12.dp) }
+    val corner = RoundedCornerShape(radius)
+
+    Box(
+        modifier = Modifier
+            .widthIn(min = rDP(50.dp), max = rDP(240.dp))
+            .clip(corner)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Text(
+            text = message.text,
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.bodyLarge
+        )
+    }
+}
+
+@Composable
+private fun RegularChatUI(
+    message: Message,
+    isDecoding: Boolean,
+    viewModel: ChatScreenViewModel
+) {
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
+
+    Crossfade(targetState = isDecoding, label = "assistant-content") { decoding ->
+        when (decoding) {
+            true -> {
+                RobotDecodePlaceholder(
+                    active = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            false -> {
+                var showRegenerateDialog by remember { mutableStateOf(false) }
+                val actionIconSize = rDP(16.dp)
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = rDP(14.dp))
+                ) {
+                    MarkdownText(
+                        text = message.text,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = TextStyle.Default.copy(
+                            fontSize = rSp(13.sp),
+                            lineHeight = rSp(20.sp)
+                        )
+                    )
+
+                    Spacer(Modifier.height(rDP(10.dp)))
+
+                    // Action buttons
+                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+                        // Copy button
+                        Icon(
+                            painter = painterResource(R.drawable.copy),
+                            contentDescription = "Copy text",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    clipboardManager.setText(AnnotatedString(message.text))
+                                    Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                                }
+                        )
+
+                        // Regenerate button
+                        Icon(
+                            painter = painterResource(R.drawable.regen),
+                            contentDescription = "Regenerate response",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable { showRegenerateDialog = true }
+                        )
+
+                        // Share button
+                        Icon(
+                            imageVector = Icons.Rounded.Share,
+                            contentDescription = "Share",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    val shareIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, message.text)
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(shareIntent, "Share message"))
+                                }
+                        )
+                    }
                 }
 
-                Role.Assistant -> {
-                    RegularChatUI(msg, waitingForThis, viewModel)
-                }
-
-                Role.Tool -> {
-                    ToolChatUI(
-                        message = msg, isDecoding = waitingForThis, shouldCaptureNow, onCapture = {
-                            shouldCaptureNow = false
-                            onCapture(it)
-                        })
+                // Regenerate dialog
+                if (showRegenerateDialog) {
+                    RegenerateModelPickerDialog(
+                        viewModel = viewModel,
+                        messageId = message.id
+                    ) {
+                        showRegenerateDialog = false
+                    }
                 }
             }
         }
     }
 }
 
-
 @Composable
 private fun ToolChatUI(
-    message: Message, isDecoding: Boolean, shouldCapture: Boolean, onCapture: (String) -> Unit
+    message: Message,
+    isDecoding: Boolean,
+    shouldCapture: Boolean,
+    onCapture: (String) -> Unit
 ) {
-    Crossfade(isDecoding, label = "assistant-waiting") {
-        when (it) {
+    Crossfade(targetState = isDecoding, label = "tool-content") { decoding ->
+        when (decoding) {
             true -> {
-                RobotDecodePlaceholder(active = true, modifier = Modifier.fillMaxWidth())
+                RobotDecodePlaceholder(
+                    active = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
-
             false -> {
                 Column {
+                    // Tool identifier tag
                     AssistTag(message.tool?.toolName ?: "Unknown Tool")
                     Spacer(Modifier.height(rDP(6.dp)))
-
 
                     val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
 
                     when (message.tool?.toolOutput == null) {
                         true -> {
                             val isLoading = pluginLoading == null
-                            Crossfade(targetState = isLoading, label = "plugin") { loading ->
+                            Crossfade(targetState = isLoading, label = "plugin-loading") { loading ->
                                 if (loading) {
+                                    // Loading state for plugin
                                     Card(
                                         colors = CardDefaults.cardColors(
                                             containerColor = MaterialTheme.colorScheme.surface
@@ -863,7 +1099,7 @@ private fun ToolChatUI(
                                                 strokeWidth = rDP(3.dp)
                                             )
                                             Text(
-                                                text = "Loading...Plugin \n ${message.tool?.toolName}",
+                                                text = "Loading Plugin\n${message.tool?.toolName ?: "Unknown"}",
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontSize = rSp(14.sp),
                                                     fontFamily = FontFamily.Serif
@@ -873,15 +1109,15 @@ private fun ToolChatUI(
                                         }
                                     }
                                 } else {
+                                    // Plugin content
                                     Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
-                                            ?.invoke()
+                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()?.invoke()
                                     }
                                 }
                             }
                         }
-
                         false -> {
+                            // Tool output available
                             ToolOutputToggle(toolOutput = message.tool.toolOutput)
                         }
                     }
@@ -892,19 +1128,87 @@ private fun ToolChatUI(
 }
 
 @Composable
+private fun AssistTag(name: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(rDP(10.dp)))
+            .background(Color(0x1A3B82F6))
+            .padding(horizontal = rDP(8.dp), vertical = rDP(4.dp))
+    ) {
+        Text(
+            text = "via $name",
+            fontSize = rSp(12.sp),
+            color = Color(0xFF2563EB),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun ThinkingChatUI(message: Message) {
+    AnimatedVisibility(
+        visible = true,
+        enter = fadeIn(animationSpec = tween(120)) + expandVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessLow
+            )
+        ) + slideInVertically(initialOffsetY = { -it / 6 }),
+        exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioNoBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        ) + slideOutVertically(targetOffsetY = { -it / 6 })
+    ) {
+        var showThinkingText by remember { mutableStateOf(false) }
+
+        Spacer(Modifier.height(rDP(6.dp)))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showThinkingText = !showThinkingText }
+                .clip(RoundedCornerShape(rDP(8.dp)))
+                .background(Color(0xFF0F172A))
+                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+                .padding(rDP(10.dp))
+                .animateContentSize(animationSpec = tween(120))
+        ) {
+            Text(
+                text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",
+                color = Color(0xFFCBD5E1),
+                fontSize = rSp(12.sp),
+                lineHeight = rSp(18.sp),
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+@Composable
 fun ToolOutputToggle(toolOutput: ToolOutput) {
     var expanded by remember { mutableStateOf(false) }
 
     val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
-            tween(1200, easing = LinearEasing), RepeatMode.Restart
-        ), label = "shimmerFloat"
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            tween(1200, easing = LinearEasing),
+            RepeatMode.Restart
+        ),
+        label = "shimmerFloat"
     )
 
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
-        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
+            Coral.copy(alpha = 0.25f),
+            Coral,
+            Coral.copy(alpha = 0.25f)
+        ),
+        start = Offset.Zero,
+        end = Offset(1000f * shimmerX + 1f, 0f)
     )
 
     Column(
@@ -912,20 +1216,24 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
     ) {
         // Toggle Button
         Box(
-            Modifier
+            modifier = Modifier
                 .clip(RoundedCornerShape(rDP(5.dp)))
                 .border(
-                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(rDP(5.dp))
                 )
                 .drawWithContent {
                     drawContent()
-                    // shimmer overlay
                     drawRect(
-                        brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
+                        brush = shimmerBrush,
+                        alpha = 0.25f,
+                        blendMode = BlendMode.SrcOver
                     )
                 }
-                .clickable { expanded = !expanded } // toggle expand/collapse
-            .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                .clickable { expanded = !expanded }
+                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+        ) {
             Text(
                 text = "Show Tool Output",
                 style = MaterialTheme.typography.titleMedium,
@@ -939,159 +1247,20 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            ToolCalledUi(toolOutput = toolOutput)
-        }
-    }
-}
-
-
-@Composable
-private fun RegularChatUI(message: Message, isDecoding: Boolean, viewModel: ChatScreenViewModel) {
-    val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
-
-    Crossfade(isDecoding, label = "assistant-waiting") {
-        when (it) {
-            true -> {
-                RobotDecodePlaceholder(active = true, modifier = Modifier.fillMaxWidth())
-            }
-
-            false -> {
-                //Copy, Select Text, Regenerate, Share
-                var showPicker by remember { mutableStateOf(false) }
-                val actionIconSize = rDP(16.dp)
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = rDP(14.dp))
-                ) {
-                    MarkdownText(
-                        message.text,
-                        color = MaterialTheme.colorScheme.primary,
-                        style = TextStyle.Default.copy(
-                            fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
-                        )
-                    )
-                    Spacer(Modifier.height(rDP(10.dp)))
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
-                        Icon(
-                            painterResource(R.drawable.copy),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable {
-                                    // Copy the text
-                                    clipboardManager.setText(AnnotatedString(message.text))
-
-                                    // Show a toast confirmation
-                                    Toast.makeText(
-                                        context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                                    ).show()
-                                })
-                        Icon(
-                            painterResource(R.drawable.regen),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier
-                                .size(actionIconSize)
-                                .clickable { showPicker = true })
-                        Icon(
-                            Icons.Rounded.Share,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                            modifier = Modifier.size(actionIconSize)
-                        )
-                    }
-                }
-                if (showPicker) {
-                    RegenerateModelPickerDialog(
-                        viewModel = viewModel, messageId = message.id
-                    ) { showPicker = false }
-                }
-            }
-        }
-    }
-}
-
-
-@Composable
-private fun UserChatUI(message: Message) {
-    val radius = with(LocalDensity.current) { rDP(12.dp) }
-
-    // shape
-    val corner = RoundedCornerShape(radius)
-
-    Box(
-        modifier = Modifier
-            .widthIn(min = rDP(50.dp), max = rDP(240.dp))
-            .clip(corner)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
-        contentAlignment = Alignment.CenterEnd
-    ) {
-        Text(
-            message.text,
-            color = MaterialTheme.colorScheme.primary,
-            style = MaterialTheme.typography.bodyLarge
-        )
-    }
-}
-
-
-@Composable
-private fun ThinkingChatUI(message: Message) {
-    AnimatedVisibility(
-        visible = true,
-        enter = fadeIn(animationSpec = tween(120)) + expandVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
-            )
-        ) + slideInVertically(initialOffsetY = { -it / 6 }),
-        exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
-            )
-        ) + slideOutVertically(targetOffsetY = { -it / 6 })
-    ) {
-        var showThinkingText by remember { mutableStateOf(true) }
-
-        Spacer(Modifier.height(rDP(6.dp)))
-        Box(Modifier
-            .fillMaxWidth()
-            .clickable { showThinkingText = !showThinkingText }
-            .clip(RoundedCornerShape(rDP(8.dp)))
-            .background(Color(0xFF0F172A)) // slate-ish
-            .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-            .padding(rDP(10.dp))
-            .animateContentSize(animationSpec = tween(120))) {
-
-            Text(
-                text = if (showThinkingText) "Thinking..." else "Thought: \n${message.thought}",
-                color = Color(0xFFCBD5E1),
-                fontSize = rSp(12.sp),
-                lineHeight = rSp(18.sp),
-                fontFamily = FontFamily.Monospace
-            )
+            ToolOutputContent(toolOutput = toolOutput)
         }
     }
 }
 
 @Composable
-fun ToolCalledUi(
-    modifier: Modifier = Modifier, toolOutput: ToolOutput
+fun ToolOutputContent(
+    modifier: Modifier = Modifier,
+    toolOutput: ToolOutput
 ) {
+    val context = LocalContext.current
+    val runningPlugin = PluginManager.runPlugin(context, toolOutput.toolName, toolOutput.output)
 
-
-    val ctx = LocalContext.current
-
-    val runningPlugin = PluginManager.runPlugin(ctx, toolOutput.toolName, toolOutput.output)
-
-
-
-    Card {
+    Card(modifier = modifier) {
         runningPlugin.api?.ToolPreviewContent(toolOutput.output)
     }
-
-
 }

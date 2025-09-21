@@ -1,5 +1,6 @@
 package com.dark.userdata.ntds.neuron_tree
 
+import android.util.Log
 import kotlinx.serialization.Serializable
 
 /**
@@ -111,27 +112,50 @@ class NeuronTree(val root: NeuronNode) {
     }
 
     fun deleteNodeById(id: String) {
-        if (id == "root") return // Never delete root
+        if (id == "root") {
+            Log.d("NeuronTree", "Attempted to delete root, operation ignored.")
+            return // Never delete root
+        }
 
-        val nodeToDelete = nodeMap[id] ?: return
-        val path = nodeIndex[id] ?: return
+        val nodeToDelete = nodeMap[id]
+        if (nodeToDelete == null) {
+            Log.w("NeuronTree", "No node found with id=$id, nothing to delete.")
+            return
+        }
+
+        val path = nodeIndex[id]
+        if (path == null) {
+            Log.w("NeuronTree", "No path found for node id=$id, inconsistent state.")
+            return
+        }
+
+        Log.d("NeuronTree", "Deleting node id=$id at path=$path")
 
         // Step 1: Find parent path (e.g., from "root/0/2" → "root/0")
         val parentPath = path.substringBeforeLast("/", missingDelimiterValue = "")
-        val parentNode = nodeIndex.entries.find { it.value == parentPath }?.key?.let { nodeMap[it] }
+        val parentEntry = nodeIndex.entries.find { it.value == parentPath }
+        val parentNode = parentEntry?.key?.let { nodeMap[it] }
 
-        // Step 2: Remove from parent's children
-        parentNode?.children?.removeIf { it.id == id }
+        if (parentNode == null) {
+            Log.w("NeuronTree", "Parent not found for node id=$id, parentPath=$parentPath")
+        } else {
+            // Step 2: Remove from parent's children
+            val removed = parentNode.children.removeIf { it.id == id }
+            Log.d("NeuronTree", "Removed node id=$id from parent id=${parentNode.id}, success=$removed")
+        }
 
         // Step 3: Remove this node and all descendants from maps
         fun removeRecursively(node: NeuronNode) {
+            Log.d("NeuronTree", "Removing node id=${node.id}, childrenCount=${node.children.size}")
             nodeMap.remove(node.id)
             nodeIndex.remove(node.id)
             node.children.forEach { removeRecursively(it) }
         }
 
         removeRecursively(nodeToDelete)
+        Log.d("NeuronTree", "Finished deleting node id=$id and its descendants")
     }
+
 
 
     /**
