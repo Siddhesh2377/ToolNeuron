@@ -160,18 +160,15 @@ fun HomeScreen(
     }
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
-
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
-                onPluginClick = { scope.launch { drawerState.close() } },
+                onChatSelected = { scope.launch { drawerState.close() } },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
                 })
-
-
         }) {
         Scaffold(modifier = Modifier
             .fillMaxSize()

@@ -64,9 +64,9 @@ class MainActivity : ComponentActivity() {
             LaunchedEffect(Unit) {
                 // Navigate to the intro screen
                 if (isDirectChatScreen) {
-                    navController.navigate(Screen.Intro.route)
-                }else{
                     navController.navigate(Screen.Home.route)
+                }else{
+                    navController.navigate(Screen.Intro.route)
                 }
 
                 // Wait for 3 seconds

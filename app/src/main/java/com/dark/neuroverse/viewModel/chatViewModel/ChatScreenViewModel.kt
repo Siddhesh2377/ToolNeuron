@@ -307,6 +307,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 rootNode.value.deleteNodeById(id)
                 saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
+                rootNode.value = readBrainFile(key.value, appContext)
                 updateChatList()
 
                 if (chatId.value == id) {

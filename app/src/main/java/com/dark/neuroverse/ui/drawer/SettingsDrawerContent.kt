@@ -24,7 +24,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,10 +38,9 @@ fun SettingsDrawerContent(
     viewModel: ChatScreenViewModel,
     onSettingsClick: () -> Unit,
     onModelsClick: () -> Unit,
-    onPluginClick: () -> Unit,
+    onChatSelected: () -> Unit,
     onPluginStoreClick: () -> Unit,
 ) {
-    val context = LocalContext.current
     val chatList = viewModel.chatList.collectAsStateWithLifecycle()
 
     Column(
@@ -75,7 +73,7 @@ fun SettingsDrawerContent(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier
                     .clickable {
                         viewModel.loadChatById(chats.id)
-                        onPluginClick()
+                        onChatSelected()
                     }
                     .background(
                         MaterialTheme.colorScheme.surface, shape = MaterialTheme.shapes.small
