@@ -1,6 +1,9 @@
 import org.gradle.kotlin.dsl.withType
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+import java.io.FileInputStream
+import java.util.Properties
+import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.library)
@@ -8,14 +11,14 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     kotlin("plugin.serialization") version "2.1.21"
 }
-
+val localPropertiesFile = rootProject.file("local.properties")
 android {
     namespace = "com.mp.data_hub_lib"
     compileSdk = 36
 
     defaultConfig {
         minSdk = 30
-
+        buildConfigField("String", "ALIAS", getProperty("ALIAS"))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
         externalNativeBuild {
@@ -82,4 +85,15 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+fun getProperty(value: String): String {
+    return if (localPropertiesFile.exists()) {
+        val localProps = Properties().apply {
+            load(FileInputStream(localPropertiesFile))
+        }
+        localProps.getProperty(value) ?: "\"sample_val\""
+    } else {
+        System.getenv(value) ?: "\"sample_val\""
+    }
 }

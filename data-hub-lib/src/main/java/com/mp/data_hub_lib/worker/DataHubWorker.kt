@@ -5,16 +5,20 @@ import com.mp.data_hub_lib.DataNativeLib
 import com.mp.data_hub_lib.db.DataHubDAO
 import com.mp.data_hub_lib.db.DataHubDatabase
 import com.mp.data_hub_lib.db.DataHubDatabaseProvider
-import com.mp.data_hub_lib.model.DataHubModel
-import com.mp.data_hub_lib.model.DataSetManifest
+import com.mp.data_hub_lib.extentions.copyFile
+import com.mp.data_hub_lib.model.DataSetModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 import java.io.File
+import kotlin.math.sqrt
 
 class DataHubWorker(
     private val context: Context,
@@ -23,72 +27,68 @@ class DataHubWorker(
 ) {
     private val dataHubDAO: DataHubDAO = database.dataHubDAO()
 
+    private var coroutineScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+
     // Document data class
     data class Document(
-        val id: String,
-        val text: String,
-        val category: String,
-        val embedding: List<Float>
+        val id: String, val text: String, val category: String, val embedding: List<Float>
     )
 
     // Load a data pack
-    fun loadPack(packPath: String, password: String, onResult: (Boolean, String?) -> Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
+    fun loadPack(dfvdsafds: String, sfbsdkbc: String, onResult: (Boolean, String?) -> Unit) {
+        coroutineScope.launch {
+            val success = dataNativeLib.loadVecx(dfvdsafds, sfbsdkbc)
+            onResult(success, if (success) null else "Failed to load pack")
+            coroutineScope.cancel()
+        }
+    }
+
+    fun installDataPack(srcFile: File, key: String, onResult: (Boolean) -> Unit = {}) {
+        coroutineScope.launch {
             try {
-                // Use DataNativeLib to extract and load the pack
-                val extractedFiles = dataNativeLib.loadPack(packPath, password, context)
+                // Ensure base folder exists
+                val baseDir = File(context.filesDir, "dataHub").apply { mkdirs() }
 
-                if (extractedFiles != null) {
-                    val (_, manifestPath) = extractedFiles
-                    val manifest = dataNativeLib.loadManifest(manifestPath)
+                // Target path for this data pack
+                val root = File(baseDir, srcFile.name)
 
-                    if (manifest != null) {
-                        // Create dataset directory in app's files dir
-                        val root = File(context.filesDir, "dataHub")
-                        if (!root.exists()) root.mkdirs()
+                // Copy (overwrite if exists)
+                srcFile.copyTo(root, overwrite = true)
 
-                        val datasetDir = File(root, manifest.name.trim())
-                        if (!datasetDir.exists()) datasetDir.mkdirs()
-
-                        // Save to database
-                        val model = DataHubModel(
-                            modelName = manifest.name,
-                            modelDescription = manifest.description,
-                            modelPath = datasetDir.absolutePath,
-                            modelAuthor = manifest.author,
-                            modelCreated = manifest.created,
-                            isLoaded = true,
-                            documentCount = getDocumentCount()
-                        )
-
-                        try {
-                            dataHubDAO.insertModel(model)
-                        } catch (e: Exception) {
-                            println("Failed to insert model: ${e.message}")
-                        }
-
-
-                        withContext(Dispatchers.Main) {
-                            onResult(true, manifest.name)
-                        }
-                    } else {
-                        withContext(Dispatchers.Main) {
-                            onResult(false, null)
-                        }
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        onResult(false, null)
-                    }
+                // Load encrypted vecx
+                val ok = dataNativeLib.loadVecx(root.absolutePath, key)
+                if (!ok) {
+                    onResult(false)
+                    return@launch
                 }
+
+                // Load manifest
+                val manifest = dataNativeLib.loadManifest() ?: run {
+                    onResult(false)
+                    return@launch
+                }
+
+                // Build model
+                val model = DataSetModel(
+                    modelName = manifest.name,
+                    modelDescription = manifest.description,
+                    modelPath = root.absolutePath,
+                    modelAuthor = manifest.author,
+                    modelCreated = manifest.issued,
+                    documentCount = getDocumentCount()
+                )
+
+                // Insert or overwrite
+                dataHubDAO.insertModel(model)
+                onResult(true)
+
             } catch (e: Exception) {
-                println("Failed to load pack: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    onResult(false, null)
-                }
+                println("Failed to install model: ${e.message}")
+                onResult(false)
             }
         }
     }
+
 
     // Get document count from "m" entity
     private fun getDocumentCount(): Int {
@@ -118,12 +118,14 @@ class DataHubWorker(
                         embedding.add(embeddingArr.getDouble(j).toFloat())
                     }
 
-                    documents.add(Document(
-                        id = docObj.getString("id"),
-                        text = docObj.getString("text"),
-                        category = docObj.optString("category", "Unknown"),
-                        embedding = embedding
-                    ))
+                    documents.add(
+                        Document(
+                            id = docObj.getString("id"),
+                            text = docObj.getString("text"),
+                            category = docObj.optString("category", "Unknown"),
+                            embedding = embedding
+                        )
+                    )
                 }
 
                 withContext(Dispatchers.Main) {
@@ -139,7 +141,11 @@ class DataHubWorker(
     }
 
     // Search documents using cosine similarity
-    fun searchDocuments(queryEmbedding: FloatArray, topK: Int = 5, onResult: (List<Document>?) -> Unit) {
+    fun searchDataSets(
+        queryEmbedding: FloatArray,
+        topK: Int = 5,
+        onResult: (List<Document>?) -> Unit
+    ) {
         getDocumentsForModel { documents ->
             if (documents == null) {
                 onResult(null)
@@ -150,9 +156,7 @@ class DataHubWorker(
                 val results = documents.map { doc ->
                     val similarity = cosineSimilarity(doc.embedding.toFloatArray(), queryEmbedding)
                     doc to similarity
-                }.sortedByDescending { it.second }
-                    .take(topK)
-                    .map { it.first }
+                }.sortedByDescending { it.second }.take(topK).map { it.first }
 
                 withContext(Dispatchers.Main) {
                     onResult(results)
@@ -165,17 +169,23 @@ class DataHubWorker(
     private fun cosineSimilarity(a: FloatArray, b: FloatArray): Double {
         if (a.size != b.size) return 0.0
         val dot = a.zip(b).sumOf { (x, y) -> (x * y).toDouble() }
-        val normA = kotlin.math.sqrt(a.sumOf { (it * it).toDouble() })
-        val normB = kotlin.math.sqrt(b.sumOf { (it * it).toDouble() })
+        val normA = sqrt(a.sumOf { (it * it).toDouble() })
+        val normB = sqrt(b.sumOf { (it * it).toDouble() })
         return if (normA != 0.0 && normB != 0.0) dot / (normA * normB) else 0.0
     }
 
     // Database operations
-    fun getAllModels(): Flow<List<DataHubModel>> = dataHubDAO.getAllModels()
+    fun getAllModels(): StateFlow<List<DataSetModel>> {
+        return dataHubDAO.getAllModels().stateIn(
+            CoroutineScope(Dispatchers.IO), SharingStarted.Lazily, emptyList()
+        )
+    }
 
-    suspend fun getModelByName(modelName: String): DataHubModel? = dataHubDAO.getModelByName(modelName)
 
-    fun deleteModel(modelName: String, onResult: (Boolean) -> Unit) {
+    suspend fun getModelByName(modelName: String): DataSetModel? =
+        dataHubDAO.getModelByName(modelName)
+
+    fun deleteModel(modelName: String, onResult: (Boolean) -> Unit = {}) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
                 val model = dataHubDAO.getModelByName(modelName)
@@ -195,29 +205,6 @@ class DataHubWorker(
                 }
             } catch (e: Exception) {
                 println("Failed to delete model: ${e.message}")
-                withContext(Dispatchers.Main) {
-                    onResult(false)
-                }
-            }
-        }
-    }
-
-    fun updateModelLoadedStatus(modelName: String, isLoaded: Boolean, onResult: (Boolean) -> Unit) {
-        CoroutineScope(Dispatchers.IO).launch {
-            try {
-                val model = dataHubDAO.getModelByName(modelName)
-                if (model != null) {
-                    dataHubDAO.updateModel(model.copy(isLoaded = isLoaded))
-                    withContext(Dispatchers.Main) {
-                        onResult(true)
-                    }
-                } else {
-                    withContext(Dispatchers.Main) {
-                        onResult(false)
-                    }
-                }
-            } catch (e: Exception) {
-                println("Failed to update model status: ${e.message}")
                 withContext(Dispatchers.Main) {
                     onResult(false)
                 }

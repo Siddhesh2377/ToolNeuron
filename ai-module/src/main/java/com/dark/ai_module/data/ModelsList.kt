@@ -13,9 +13,6 @@ object ModelsList {
     {# === Behavior controls (sliders) === #}
     {%- if professional is defined or emotional is defined -%}
     <|im_start|>system
-    Tone controls (0–10 scale; higher = more):
-    - professional: {{ professional|default(3.5) }}
-    - emotional: {{ emotional|default(7.6) }}
     The assistant should modulate style accordingly while staying accurate.
     <|im_end|>
     {%- endif -%}

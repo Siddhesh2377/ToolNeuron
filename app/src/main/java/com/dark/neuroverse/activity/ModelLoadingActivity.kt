@@ -137,7 +137,7 @@ fun ModelLoadingScreen(
         loadError = null
         infoJson = null
         withContext(Dispatchers.IO) {
-            val native = NativeLib()
+            val native = NativeLib.getGenerationInstance()
             val ok = native.initModel(
                 path = f.absolutePath,
                 threads = maxOf(1, Runtime.getRuntime().availableProcessors() / 2),

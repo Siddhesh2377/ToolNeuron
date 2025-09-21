@@ -25,7 +25,12 @@ import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
+import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.DataNativeLib
+import com.mp.data_hub_lib.manager.DataHubManager
+import com.mp.data_hub_lib.model.DataSetModel
+import com.mp.data_hub_lib.model.RagResult
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -42,6 +47,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
+
+
 
 /**
  * Factory
@@ -125,6 +132,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private var currentID = MutableStateFlow("")
 
+    private val _isRag = MutableStateFlow(false)
+
 
     // Exposed immutable state
     val messages: StateFlow<List<Message>> = _messages.asStateFlow()
@@ -141,6 +150,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow("" to Tools())
     val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
+
     val chatId = MutableStateFlow("")
     val currentRunningToolName = MutableStateFlow("")
 
@@ -215,6 +225,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 selectedModel.value = model
             }
         }
+    }
+
+    fun setRag(rag: Boolean) {
+        _isRag.value = rag
+        Log.d(TAG, "RAG set to: ${_isRag.value}")
     }
 
     fun selectTool(tool: Pair<String, Tools>) {
@@ -309,18 +324,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     //region Sending & Streaming
     fun sendMessage(input: String) {
+        if (_isGenerating.value) {
+            Log.w(TAG, "Generation already in progress")
+            return
+        }
+
         _messages.update { it + Message(role = Role.User, text = input) }
         _isGenerating.value = true
         _isDecoding.value = true
         _decodingMessageId.value = "-1"
-
         _generationState.value = GenerationState.GENERATING
 
-        // Create streaming placeholder on Main
         viewModelScope.launch(Dispatchers.Main) {
             val list = _messages.value.toMutableList()
             streamingMsgIndex = list.size
-            val isTool = selectedTools.value.first.isNotBlank()
+            val isTool = selectedTools.value.second.toolName.isNotEmpty()
             list += Message(
                 role = if (isTool) Role.Tool else Role.Assistant,
                 text = "",
@@ -333,10 +351,163 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             )
             _messages.value = list
 
-            // Heavy work off main
-            viewModelScope.launch(cpu) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    if (_isRag.value) {
+                        handleRAGRequest(input, isTool)
+                    } else {
+                        streamAndRender(prompt = input, enableTools = isTool)
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error in sendMessage", e)
+                    handleGenerationError("Failed to process message: ${e.message}")
+                }
+            }
+        }
+    }
+
+    private suspend fun handleRAGRequest(input: String, isTool: Boolean) {
+        val currentDataset = DataHubManager.currentDataSet.value
+        if (currentDataset == null) {
+            Log.d(TAG, "No dataset loaded, fallback to normal input")
+            streamAndRender(prompt = input, enableTools = isTool)
+            return
+        }
+
+        Log.d(TAG, "RAG enabled with dataset: ${currentDataset.modelName}")
+
+        try {
+            // Step 1: Get RAG context using embedding instance
+            val ragResult = withContext(Dispatchers.IO) {
+                val deferred = CompletableDeferred<Pair<Any?, String?>>()
+
+                DataHubManager.runRAG(
+                    query = input,
+                    topK = 5
+                ) { ragResult, error ->
+                    deferred.complete(ragResult to error)
+                }
+
+                deferred.await()
+            }
+
+            val (ragData, error) = ragResult
+
+            if (ragData != null && error == null) {
+                // Step 2: Extract context
+                val ragContext = extractRAGContext(ragData)
+
+                if (ragContext.isBlank()) {
+                    Log.w(TAG, "Empty RAG context, falling back to normal generation")
+                    streamAndRender(prompt = input, enableTools = isTool)
+                    return
+                }
+
+                Log.i(TAG, "RAG context extracted: ${ragContext.take(100)}...")
+
+                val finalPrompt = buildString {
+                    append("Use the following context to answer the question:\n\n")
+                    append("Context:\n")
+                    append(ragContext)
+                    append("\n\nQuestion: ")
+                    append(input)
+                    append("\n\nPlease provide a comprehensive answer based on the context provided.")
+                }
+
+                // Step 3: Ensure generation model is ready (separate from embedding model)
+                ensureGenerationModelReady {
+                    viewModelScope.launch(Dispatchers.IO) {
+                        ModelManager.setSystemPrompt("You are a helpful assistant. Use the provided context to answer questions accurately and comprehensively.")
+                        streamAndRender(prompt = finalPrompt, enableTools = isTool)
+                    }
+                }
+            } else {
+                Log.e(TAG, "RAG failed with error: $error")
+                NativeLib.getGenerationInstance().nativeSetChatTemplate(ModelsList.chatTemplate)
                 streamAndRender(prompt = input, enableTools = isTool)
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "RAG processing failed", e)
+            NativeLib.getGenerationInstance().nativeSetChatTemplate(ModelsList.chatTemplate)
+            streamAndRender(prompt = input, enableTools = isTool)
+        }
+    }
+
+    private fun extractRAGContext(ragData: Any): String {
+        return try {
+            val docs = ragData.javaClass.getField("docs").get(ragData) as? List<*>
+            docs?.mapNotNull { doc ->
+                doc?.javaClass?.getField("text")?.get(doc) as? String
+            }?.joinToString("\n") ?: ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to extract RAG context", e)
+            ""
+        }
+    }
+
+    private fun handleGenerationError(message: String) {
+        viewModelScope.launch(Dispatchers.Main) {
+            _isGenerating.value = false
+            _isDecoding.value = false
+            _decodingMessageId.value = null
+            _generationState.value = GenerationState.IDLE
+
+            val errorMessage = Message(
+                role = Role.Assistant,
+                text = "I encountered an error: $message. Please try again.",
+                id = System.currentTimeMillis().toString()
+            )
+            _messages.update { it + errorMessage }
+
+            Log.e(TAG, "Generation error handled: $message")
+        }
+    }
+
+    private suspend fun ensureGenerationModelReady(onReady: () -> Unit) {
+        try {
+            val currentModel = selectedModel.value
+
+            // Check if generation model is ready
+            val generationLib = NativeLib.getGenerationInstance()
+            val modelInfo = try {
+                generationLib.nativeGetModelInfo()
+            } catch (e: Exception) {
+                ""
+            }
+
+            generationLib.nativeSetChatTemplate("")
+
+            if (modelInfo.isBlank() || !generationLib.isGenerationReady()) {
+                Log.d(TAG, "Generation model needs loading/reloading")
+
+                ModelManager.loadModelAwait(
+                    currentModel,
+                    onLoaded = { loadState ->
+                        when (loadState) {
+                            is ModelManager.LoadState.OnLoaded -> {
+                                Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
+                                onReady()
+                            }
+                            is ModelManager.LoadState.Error -> {
+                                Log.e(TAG, "Generation model load failed: ${loadState.message}")
+                                handleGenerationError("Generation model load failed: ${loadState.message}")
+                            }
+                            else -> {
+                                Log.d(TAG, "Generation model loading: $loadState")
+                            }
+                        }
+                    }
+                ).onFailure { error ->
+                    Log.e(TAG, "Generation model load failed", error)
+                    handleGenerationError("Generation model load failed: ${error.message}")
+                }
+            } else {
+                Log.d(TAG, "Generation model already ready")
+                onReady()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error ensuring generation model ready", e)
+            handleGenerationError("Generation model preparation error: ${e.message}")
         }
     }
 

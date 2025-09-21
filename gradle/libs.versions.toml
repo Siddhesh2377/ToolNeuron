@@ -13,39 +13,39 @@
 
 # ▶ Toolchain / Plugins
 agp = "8.13.0"                       # Android Gradle Plugin
-kotlin = "2.2.10"                    # Kotlin language version
-ksp = "2.2.0-2.0.2"                  # Kotlin Symbol Processing plugin
+kotlin = "2.2.20"                    # Kotlin language version
+ksp = "2.2.20-2.0.3"                  # Kotlin Symbol Processing plugin
 
 # ▶ AndroidX Core / AppCompat
 coreKtx = "1.17.0"                   # androidx.core:core-ktx
 appcompat = "1.7.1"                  # androidx.appcompat:appcompat
 
 # ▶ Compose / UI
-composeBom = "2025.08.01"            # Compose BOM (controls Compose artifacts without explicit versions)
-material3 = "1.5.0-alpha03"           # androidx.compose.material3:material3
+composeBom = "2025.09.00"            # Compose BOM (controls Compose artifacts without explicit versions)
+material3 = "1.5.0-alpha04"           # androidx.compose.material3:material3
 material = "1.13.0"                   # androidx.compose.material:material
 materialIconsExtended = "1.7.8"      # androidx.compose.material:material-icons-extended
-activityCompose = "1.10.1"           # androidx.activity:activity-compose
-animation = "1.9.0"                  # androidx.compose.animation:animation
-runtimeAndroid = "1.9.0"             # androidx.compose.runtime:runtime-android
+activityCompose = "1.11.0"           # androidx.activity:activity-compose
+animation = "1.9.1"                  # androidx.compose.animation:animation
+runtimeAndroid = "1.9.1"             # androidx.compose.runtime:runtime-android
 
 # ▶ Lifecycle
-lifecycleRuntimeKtx = "2.9.3"
-lifecycleViewmodelKtx = "2.9.3"
-lifecycleRuntimeCompose = "2.9.3"
-lifecycleViewmodelCompose = "2.9.3"
+lifecycleRuntimeKtx = "2.9.4"
+lifecycleViewmodelKtx = "2.9.4"
+lifecycleRuntimeCompose = "2.9.4"
+lifecycleViewmodelCompose = "2.9.4"
 
 # ▶ Navigation
-navigationCompose = "2.9.3"
+navigationCompose = "2.9.4"
 accompanistInsets = "0.30.1"         # Insets (legacy)
 accompanistInsetsUi = "0.36.0"       # Insets/UI + nav-animation version
 
 # ▶ Data & Persistence
-roomRuntime = "2.7.2"                # Room (runtime/ktx/compiler share this)
+roomRuntime = "2.8.0"                # Room (runtime/ktx/compiler share this)
 datastorePreferences = "1.1.7"       # DataStore Preferences
 
 # ▶ Background Work
-workRuntimeKtx = "2.10.3"            # WorkManager
+workRuntimeKtx = "2.10.4"            # WorkManager
 
 # ▶ Auth / Biometrics
 biometric = "1.2.0-alpha05"
@@ -54,7 +54,7 @@ biometric = "1.2.0-alpha05"
 kotlinxSerializationJson = "1.9.0"   # kotlinx-serialization-json
 moshi = "1.15.2"
 moshiKotlin = "1.15.2"
-gson = "2.13.1"
+gson = "2.13.2"
 
 # ▶ Networking / Parsing
 okhttp = "5.1.0"
@@ -152,7 +152,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 # ▶ Kotlin
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version = "2.2.10" }   # matches Kotlin
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }   # matches Kotlin
 
 # ▶ KSP
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

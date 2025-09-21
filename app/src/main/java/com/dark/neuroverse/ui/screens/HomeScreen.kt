@@ -6,7 +6,6 @@ import android.content.Intent
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
@@ -41,6 +40,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -53,8 +53,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
-import androidx.compose.material.icons.outlined.AttachFile
-import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
@@ -116,12 +115,14 @@ import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
+import com.dark.neuroverse.ui.components.DataSetSelectorDialog
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
 import com.dark.neuroverse.ui.components.RobotDecodePlaceholder
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.Coral
+import com.dark.neuroverse.ui.theme.CyberViolet
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
@@ -216,34 +217,57 @@ fun TopBar(
         }
     }, actions = {
         // circular spark button
-        Box(
-            modifier = Modifier
-                .padding(end = rDP(8.dp))
-                .size(rDP(32.dp))
-                .clip(CircleShape)
-                .background(
-                    Brush.linearGradient(
-                        listOf(
-                            MaterialTheme.colorScheme.onPrimary, Color(0xFF0089FF)
-                        ) // SkyBlue
-                    )
-                )
-                .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
+        var showDialog by remember { mutableStateOf(false) }
+
+        AnimatedVisibility(showDialog) {
+            if (showDialog) {
+                DataSetSelectorDialog {
+                    showDialog = false
+                }
+            }
+        }
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
         ) {
+            Button(
+                onClick = {
+                    showDialog = true
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Text(
+                    "Data Set",
+                    style = MaterialTheme.typography.titleMedium.copy(color = MaterialTheme.colorScheme.onPrimary)
+                )
+                Spacer(Modifier.width(rDP(8.dp)))
+                Box(
+                    modifier = Modifier
+                        .size(rDP(7.dp))
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.onPrimary)
+                )
+            }
             Box(
                 modifier = Modifier
-                    .size(6.dp)
+                    .padding(end = rDP(2.dp))
+                    .size(ButtonDefaults.MinHeight)
                     .clip(CircleShape)
-                    .background(Color.White)
-            )
+                    .background(
+                        MaterialTheme.colorScheme.primary
+                    )
+                    .clickable { onLeftMenu() }, contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Add,
+                    contentDescription = "More",
+                    tint = MaterialTheme.colorScheme.onPrimary
+                )
+
+            }
         }
-        IconButton(onClick = onLeftMenu) {
-            Icon(
-                imageVector = Icons.Outlined.MoreVert,
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.primary
-            )
-        }
+
     }, colors = TopAppBarDefaults.topAppBarColors(
         containerColor = MaterialTheme.colorScheme.background
     )
@@ -351,7 +375,7 @@ private fun BottomBar(
     viewModel: ChatScreenViewModel
 ) {
     LocalContext.current
-    var input by remember { mutableStateOf("Hi Bro Search For Hats") }
+    var input by remember { mutableStateOf("What Happened To Ray ??") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
@@ -366,7 +390,9 @@ private fun BottomBar(
         tools = tools,
         isGenerating = isGenerating,
         modelList = modelList,
-        onAttach = {},
+        onRag = {
+            viewModel.setRag(it)
+        },
         onToolSelected = {
             viewModel.selectTool(it)
         },
@@ -556,7 +582,7 @@ private fun ChatInputBar(
     onToolSelected: (Pair<String, Tools>) -> Unit,
     onModelSelected: (ModelsData) -> Unit,
     onValueChange: (String) -> Unit,
-    onAttach: () -> Unit,
+    onRag: (Boolean) -> Unit,
     onSend: () -> Unit,
     onToolRemoved: (Tools) -> Unit,
     selectedModel: ModelsData,
@@ -564,6 +590,7 @@ private fun ChatInputBar(
 ) {
     var showToolsList by remember { mutableStateOf(false) }
     var showModelList by remember { mutableStateOf(false) }
+    var isRag by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -670,13 +697,22 @@ private fun ChatInputBar(
                 )
             )
 
-            IconButton(onClick = onAttach) {
-                Icon(
-                    Icons.Outlined.AttachFile,
-                    contentDescription = "Attach",
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            IconButton(
+                onClick = {
+                    isRag = !isRag
+                    onRag(isRag)
+                },
+                modifier = Modifier.size(rDP(36.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
+                ),
+                shape = RoundedCornerShape(rDP(8.dp))
+            ) {
+                Icon(painterResource(R.drawable.database_zap), contentDescription = "Add")
             }
+
+            Spacer(Modifier.width(rDP(8.dp)))
 
             // Send button with gradient pill
             Box(

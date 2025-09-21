@@ -101,6 +101,7 @@ object ModelManager {
 
     private val initGuard = AtomicBoolean(false)
     private lateinit var dao: ModelDAO
+    private val generationLib = NativeLib.getGenerationInstance()
 
     fun init(context: Context) {
         if (initGuard.compareAndSet(false, true)) {
@@ -125,13 +126,10 @@ object ModelManager {
                 onLoaded(LoadState.Error(err.message ?: "Load failed"))
                 return@withContext Result.failure(err)
             }
-
             val parentJob: Job? = coroutineContext.job
             val done = CompletableDeferred<Unit>(parentJob)
-
             var progress = 0f
             val capBeforeComplete = 0.92f
-
             val progressJob = launch {
                 while (isActive && !done.isCompleted) {
                     val step = ((capBeforeComplete - progress) * 0.12f).coerceAtLeast(0.0025f)
@@ -140,21 +138,28 @@ object ModelManager {
                     delay(50.milliseconds)
                 }
             }
-
+            val id = f.absolutePath
+            if (!forceReload && models.containsKey(id)) {
+                Log.d(TAG, "Reusing existing model instance for ${f.name}")
+                activeModelId = id
+                onLoaded(LoadState.Loading(1f))
+                onLoaded(LoadState.OnLoaded(modelData))
+                progressJob.cancelAndJoin()
+                return@withContext Result.success(Unit)
+            }
+            // Otherwise, proceed with loading the model
             val init = ModelInitParams(
                 ctxSize = defaults.contextLength,
                 systemPrompt = defaults.systemPrompt,
                 chatTemplate = chatTemplate,
                 useMLOCK = keepInMemory,
             )
-
+            Log.d(TAG, "Loading model ${f.name} with forceReload=$forceReload")
             internalLoadModel(f, init, forceReload) {
                 done.complete(Unit)
                 _currentModel.value = modelData
             }
-
             done.await()
-
             var p = progress
             repeat(12) {
                 p += ((1f - p) * 0.45f)
@@ -309,12 +314,19 @@ object ModelManager {
 
     private fun internalLoadModel(path: File, init: ModelInitParams, forceReload: Boolean, onLoaded: (() -> Unit)? = null) {
         val id = path.absolutePath
-        if (!forceReload && models.containsKey(id)) { activeModelId = id; onLoaded?.invoke(); return }
+        if (!forceReload && models.containsKey(id)) {
+            Log.d(TAG, "Reusing existing model instance for ${path.name}")
+            activeModelId = id
+            onLoaded?.invoke()
+            return
+        }
+
+        Log.d(TAG, "Loading generation model: ${path.name}")
         unloadAllModels()
-        val lib = NativeLib()
+
         val job = scope.launch {
             runCatching {
-                val ok = lib.initModel(
+                val ok = generationLib.initModel(
                     path = path.path,
                     threads = init.threads,
                     gpuLayers = init.gpuLayers,
@@ -326,22 +338,44 @@ object ModelManager {
                     topP = init.topP,
                     minP = init.minP,
                 )
-                if (!ok) error("native init failed for ${path.name}")
-                lib.setSystemPrompt(init.systemPrompt)
-                init.chatTemplate?.let { lib.nativeSetChatTemplate(it) }
+                if (!ok) {
+                    error("Generation model init failed for ${path.name}")
+                }
+                generationLib.setSystemPrompt(init.systemPrompt)
+                init.chatTemplate?.let { generationLib.nativeSetChatTemplate(it) }
                 withContext(Dispatchers.Main.immediate) { onLoaded?.invoke() }
-            }.onFailure { Log.e(TAG, "Model load failed", it); lib.nativeRelease() }
+            }.onFailure { e ->
+                Log.e(TAG, "Model load failed", e)
+                throw e
+            }
         }
-        models[id] = Variant(path, lib, init, job)
+        models[id] = Variant(path, generationLib, init, job)
         activeModelId = id
-        Log.d(TAG, "Loaded model ${path.name} (${path.length()} bytes)")
+        Log.d(TAG, "Generation model loaded: ${path.name}")
     }
+
 
     private fun activeModelVariant(): Variant? = activeModelId?.let { models[it] }
     private fun activeModelOrThrow(): Variant = activeModelVariant() ?: error("No active model selected. Call loadModel() first.")
 
-    private fun unloadActiveModel() { activeModelId?.let { id -> models.remove(id)?.lib?.nativeRelease() }; activeModelId = null; isGenerating.value = false }
-    private fun unloadAllModels() { models.values.forEach { it.lib.nativeRelease() }; models.clear(); activeModelId = null; isGenerating.value = false }
+    private fun unloadActiveModel() {
+        activeModelId?.let { id ->
+            Log.d(TAG, "Releasing NativeLib instance for model $id")
+            models.remove(id)?.lib?.nativeRelease()
+        }
+        activeModelId = null
+        isGenerating.value = false
+    }
+
+    private fun unloadAllModels() {
+        models.values.forEach { model ->
+            Log.d(TAG, "Releasing NativeLib instance for model ${model.path.name}")
+            model.lib.nativeRelease()
+        }
+        models.clear()
+        activeModelId = null
+        isGenerating.value = false
+    }
 
     private fun startProcessor() {
         processorJob?.cancel()
@@ -393,10 +427,6 @@ object ModelManager {
         val done = CompletableDeferred<Unit>()
         currentGenJob = lib.generateStreaming(
             prompt = """
-                Tone controls values :
-                - professional: {{ ${getModelParams().value.professional} }}
-                - emotional: {{ ${getModelParams().value.emotional} }}
-                Prompt:
                 ${r.prompt}
             """.trimIndent(),
             maxTokens = r.gen.maxTokens,

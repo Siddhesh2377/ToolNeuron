@@ -46,7 +46,7 @@ import org.json.JSONObject
  */
 class AiSampleToolActivity : ComponentActivity() {
 
-    private val native = NativeLib()
+    private val native = NativeLib.getGenerationInstance()
     private var streamJob: Job? = null
 
     @OptIn(ExperimentalMaterial3Api::class)

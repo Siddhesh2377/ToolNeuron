@@ -6,7 +6,6 @@ import kotlinx.serialization.Serializable
 data class DataSetManifest(
     val name: String,
     val description: String,
-    val vecxPasswordHint: String,
-    val created: String,
-    val author: String
+    val author: String,
+    val issued: String
 )
