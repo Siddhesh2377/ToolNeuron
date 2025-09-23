@@ -153,6 +153,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private val _lastDecodingMs = MutableStateFlow<Long?>(null)
     val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
+
+    private val _currentMsgId = MutableStateFlow<String?>(null)
+    val currentMsgId: StateFlow<String?> = _currentMsgId.asStateFlow()
     //endregion
 
     //region Configuration State
@@ -660,6 +663,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     ) {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
+        _currentMsgId.value = messageId
 
         _uiState.value = ChatUiState.DecodingStream(messageId, startTimeNs)
 

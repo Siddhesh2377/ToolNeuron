@@ -9,6 +9,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -923,7 +924,7 @@ private fun UserChatUI(message: Message) {
 
     Box(
         modifier = Modifier
-            .widthIn(min = rDP(50.dp), max = rDP(240.dp))
+            .widthIn(max = rDP(240.dp))
             .clip(corner)
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
             .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
@@ -944,6 +945,26 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
+
+    var generatedMessage by remember { mutableStateOf("") }
+
+
+    LaunchedEffect(message.id, message.text, currentMsgId) {
+        if (currentMsgId == message.id) {
+            val oldLength = generatedMessage.length
+            val newContent = message.text.drop(oldLength)
+
+            newContent.forEach { char ->
+                generatedMessage += char
+                delay(15) // typing speed per token
+            }
+        } else {
+            // For already completed messages, just show full text
+            generatedMessage = message.text
+        }
+    }
+
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
         when (empty) {
@@ -963,7 +984,7 @@ private fun RegularChatUI(
                         .padding(vertical = rDP(14.dp))
                 ) {
                     MarkdownText(
-                        text = message.text,
+                        text = generatedMessage,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
                             fontSize = rSp(13.sp),
@@ -1151,11 +1172,11 @@ private fun ThinkingChatUI(message: Message) {
                 .clip(RoundedCornerShape(rDP(8.dp)))
                 .background(Color(0xFF0F172A))
                 .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-                .padding(rDP(10.dp))
-                .animateContentSize(animationSpec = tween(120))
+                .animateContentSize(animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing))
         ) {
             Text(
                 text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",
+                modifier = Modifier.padding(rDP(8.dp)),
                 color = Color(0xFFCBD5E1),
                 fontSize = rSp(12.sp),
                 lineHeight = rSp(18.sp),
