@@ -135,6 +135,7 @@ import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -387,14 +388,6 @@ fun BodyContent(
                         message = message,
                         viewModel = viewModel,
                         uiState = uiState,
-                        onToolCapture = { toolJson ->
-                            val preview = writeToolOutputJson(toolJson)
-                            if (preview != null) {
-                                // Note: This function needs to be added to the refactored ViewModel
-                                // or replaced with the appropriate state update method
-                                // viewModel.updateToolPreview(message.id, preview)
-                            }
-                        }
                     )
                     Spacer(Modifier.height(rDP(18.dp)))
                 }
@@ -887,7 +880,6 @@ private fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
     uiState: ChatUiState,
-    onToolCapture: (String) -> Unit
 ) {
     val isUser = message.role == Role.User
 
@@ -897,13 +889,6 @@ private fun ChatBubble(
         is ChatUiState.Generating -> uiState.messageId == message.id && uiState.isFirstToken
         is ChatUiState.ExecutingTool -> uiState.messageId == message.id
         else -> false
-    }
-
-    // Handle tool capture trigger
-    var shouldCaptureTool by remember { mutableStateOf(false) }
-    LaunchedEffect(uiState) {
-        shouldCaptureTool = uiState is ChatUiState.ExecutingTool &&
-                uiState.messageId == message.id
     }
 
     Row(
@@ -925,11 +910,6 @@ private fun ChatBubble(
                 Role.Tool -> ToolChatUI(
                     message = message,
                     isDecoding = isThisMessageDecoding,
-                    shouldCapture = shouldCaptureTool,
-                    onCapture = {
-                        shouldCaptureTool = false
-                        onToolCapture(it)
-                    }
                 )
             }
         }
@@ -965,6 +945,21 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    var displayedText by remember { mutableStateOf("") }
+
+    LaunchedEffect(message.id, isDecoding) {
+        if (isDecoding) { // only animate if message is currently being decoded
+            displayedText = ""
+            val newTokens = message.text
+            newTokens.forEach { token ->
+                displayedText += token
+                delay(20)
+            }
+        } else {
+            // just show full text immediately
+            displayedText = message.text
+        }
+    }
 
     Crossfade(targetState = isDecoding, label = "assistant-content") { decoding ->
         when (decoding) {
@@ -984,7 +979,7 @@ private fun RegularChatUI(
                         .padding(vertical = rDP(14.dp))
                 ) {
                     MarkdownText(
-                        text = message.text,
+                        text = displayedText,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
                             fontSize = rSp(13.sp),
@@ -1056,8 +1051,6 @@ private fun RegularChatUI(
 private fun ToolChatUI(
     message: Message,
     isDecoding: Boolean,
-    shouldCapture: Boolean,
-    onCapture: (String) -> Unit
 ) {
     Crossfade(targetState = isDecoding, label = "tool-content") { decoding ->
         when (decoding) {

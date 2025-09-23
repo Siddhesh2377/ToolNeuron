@@ -39,6 +39,15 @@ import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
+data class StreamingState(
+    val messageId: String,
+    val visibleBuffer: StringBuilder = StringBuilder(),
+    val thoughtBuffer: StringBuilder = StringBuilder(),
+    val rawBuffer: StringBuilder = StringBuilder(),
+    var inThinkTag: Boolean = false,
+    val lastBatchTime: Long = System.currentTimeMillis()
+)
+
 /**
  * Unified UI State - Single source of truth
  */
@@ -108,14 +117,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         private const val MAX_THOUGHT_SAVE_CHARS = 6_000
         private const val SAVE_DEBOUNCE_MS = 1000L
         private const val MAX_CONCURRENT_OPERATIONS = 3
+        private const val BATCH_INTERVAL_MS = 300L // 300ms batch interval
     }
-
-    // Core Dependencies
-    private val dataLib = DataNativeLib()
 
     // Coroutine Management
     private val operationSemaphore = Semaphore(MAX_CONCURRENT_OPERATIONS)
     private var currentGenerationJob: Job? = null
+    private var currentStreamingState: StreamingState? = null
+    private var batchingJob: Job? = null
 
     // Debounced save channel
     private val saveChannel = Channel<Unit>(Channel.CONFLATED)
@@ -651,44 +660,25 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         _uiState.value = ChatUiState.DecodingStream(messageId, startTimeNs)
 
-        // Streaming buffers
-        val visibleBuffer = StringBuilder()
-        val thoughtBuffer = StringBuilder()
-        val rawBuffer = StringBuilder()
-        var inThinkTag = false
+        // Initialize streaming state
+        currentStreamingState = StreamingState(messageId = messageId)
 
-        // Throttling state
-        var lastPostedVisibleLen = 0
-        var lastPostedThoughtLen = 0
+        // Start batching coroutine
+        startBatchedUIUpdates(messageId)
 
-        fun throttledUIUpdate() {
-            val now = System.nanoTime() / 1_000_000
-            if (!shouldUpdateUi(now)) return
+        fun finalizeMessage(text: String, thought: String?) {
+            // Cancel batching and do final update
+            batchingJob?.cancel()
 
-            val visibleText = visibleBuffer.toString()
-            val thinkingText = if (thoughtBuffer.isNotEmpty()) {
-                thoughtBuffer.toString().takeLast(MAX_THINK_DISPLAY_CHARS)
-            } else null
-
-            val vLen = visibleText.length
-            val tLen = thinkingText?.length ?: 0
-
-            if (vLen == lastPostedVisibleLen && tLen == lastPostedThoughtLen) return
-
-            lastPostedVisibleLen = vLen
-            lastPostedThoughtLen = tLen
-            lastUiUpdateMs = now
-
-            updateStreamingMessage(messageId, visibleText, thinkingText)
-        }
-
-        suspend fun finalizeMessage(text: String, thought: String?) {
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
             updateStreamingMessage(messageId, text, finalThought, isFinal = true)
 
             generateTitleIfNeeded()
             requestSave()
             updateChatList()
+
+            // Clear streaming state
+            currentStreamingState = null
         }
 
         try {
@@ -708,37 +698,96 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         _uiState.value = ChatUiState.Generating(messageId, isFirstToken = true)
                     }
 
-                    rawBuffer.append(token)
-                    processStreamingToken(token, visibleBuffer, thoughtBuffer, inThinkTag) { newInThink ->
-                        inThinkTag = newInThink
+                    // Add token to streaming state (no immediate UI update)
+                    currentStreamingState?.let { state ->
+                        addTokenToBatch(token, state)
                     }
-                    throttledUIUpdate()
                 },
                 onToolCalled = { toolName, argsJson ->
                     handleToolExecution(toolName, argsJson, messageId)
                 }
             )
 
-            // Post-process for any missed reasoning patterns
-            val (finalText, finalThought) = processReasoningPatterns(
-                rawBuffer.toString(),
-                visibleBuffer.toString(),
-                thoughtBuffer.toString()
-            )
-
-            finalizeMessage(finalText, finalThought)
+            val finalState = currentStreamingState
+            if (finalState != null) {
+                // Post-process for any missed reasoning patterns
+                val (finalText, finalThought) = processReasoningPatterns(
+                    finalState.rawBuffer.toString(),
+                    finalState.visibleBuffer.toString(),
+                    finalState.thoughtBuffer.toString()
+                )
+                finalizeMessage(finalText, finalThought)
+            }
 
         } catch (e: CancellationException) {
             Log.d(TAG, "Streaming cancelled")
-            finalizeMessage(visibleBuffer.toString(), thoughtBuffer.toString().ifBlank { null })
+            batchingJob?.cancel()
+            currentStreamingState?.let { state ->
+                finalizeMessage(
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
+            }
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Streaming failed", e)
+            batchingJob?.cancel()
             _uiState.value = ChatUiState.Error("Generation failed: ${e.message}", cause = e)
-            finalizeMessage(visibleBuffer.toString(), thoughtBuffer.toString().ifBlank { null })
+            currentStreamingState?.let { state ->
+                finalizeMessage(
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
+            }
         } finally {
             if (_uiState.value !is ChatUiState.ExecutingTool) {
                 _uiState.value = ChatUiState.Idle
+            }
+        }
+    }
+
+    private fun addTokenToBatch(token: String, state: StreamingState) {
+        // Add to raw buffer
+        state.rawBuffer.append(token)
+
+        // Process token for thinking tags
+        val lowerToken = token.lowercase()
+        when {
+            state.inThinkTag && lowerToken.contains("</think>") -> {
+                val beforeEnd = token.substringBefore("</think>")
+                val afterEnd = token.substringAfter("</think>")
+                state.thoughtBuffer.append(beforeEnd)
+                state.inThinkTag = false
+                state.visibleBuffer.append(afterEnd)
+            }
+            state.inThinkTag -> state.thoughtBuffer.append(token)
+            lowerToken.contains("<think>") -> {
+                val beforeStart = token.substringBefore("<think>")
+                val afterStart = token.substringAfter("<think>")
+                state.visibleBuffer.append(beforeStart)
+                state.inThinkTag = true
+                state.thoughtBuffer.append(afterStart)
+            }
+            else -> state.visibleBuffer.append(token)
+        }
+    }
+
+    private fun startBatchedUIUpdates(messageId: String) {
+        batchingJob = viewModelScope.launch {
+            while (currentCoroutineContext().isActive) {
+                delay(BATCH_INTERVAL_MS)
+
+                currentStreamingState?.let { state ->
+                    val visibleText = state.visibleBuffer.toString()
+                    val thinkingText = if (state.thoughtBuffer.isNotEmpty()) {
+                        state.thoughtBuffer.toString().takeLast(MAX_THINK_DISPLAY_CHARS)
+                    } else null
+
+                    // Only update if there's new content
+                    if (visibleText.isNotEmpty() || !thinkingText.isNullOrEmpty()) {
+                        updateStreamingMessage(messageId, visibleText, thinkingText)
+                    }
+                }
             }
         }
     }
@@ -813,23 +862,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         thought: String?,
         isFinal: Boolean = false
     ) {
-        viewModelScope.launch {
-            _messages.update { messages ->
-                messages.mapIndexed { index, message ->
-                    if (message.id == messageId || index == streamingMessageIndex) {
-                        val finalId = if (isFinal && messageId == "-1") {
-                            UUID.randomUUID().toString()
-                        } else {
-                            message.id
-                        }
-                        message.copy(
-                            id = finalId,
-                            text = text,
-                            thought = thought
-                        )
+        _messages.update { messages ->
+            messages.mapIndexed { index, message ->
+                if (message.id == messageId || index == streamingMessageIndex) {
+                    val finalId = if (isFinal && messageId == "-1") {
+                        UUID.randomUUID().toString()
                     } else {
-                        message
+                        message.id
                     }
+                    message.copy(
+                        id = finalId,
+                        text = text,
+                        thought = thought
+                    )
+                } else {
+                    message
                 }
             }
         }
@@ -963,7 +1010,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
     }
 
-    private suspend fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
+    suspend fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
         val selectedToolName = selectedTools.value.second.toolName
 
         _messages.update { messages ->
@@ -989,7 +1036,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //region Utility Functions
     fun stopGenerating() {
         currentGenerationJob?.cancel()
+        batchingJob?.cancel()
         ModelManager.stopGeneration()
+        currentStreamingState = null
         _uiState.value = ChatUiState.Idle
     }
 
@@ -1125,10 +1174,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //endregion
 
     //region Cleanup
+    // Update cleanup to cancel batching job
     override fun onCleared() {
         super.onCleared()
         currentGenerationJob?.cancel()
+        batchingJob?.cancel()
         saveChannel.close()
+        currentStreamingState = null
     }
     //endregion
 }
