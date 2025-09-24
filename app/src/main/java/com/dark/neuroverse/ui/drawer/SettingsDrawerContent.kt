@@ -36,11 +36,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
@@ -55,6 +59,7 @@ fun SettingsDrawerContent(
     onModelsClick: () -> Unit,
     onChatSelected: () -> Unit,
     onPluginStoreClick: () -> Unit,
+    onDataHubClick: () -> Unit,
 ) {
     val chatList by viewModel.chatList.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -167,6 +172,16 @@ fun SettingsDrawerContent(
 
         // Action Buttons
         ActionButton(
+            text = "Data Hub",
+            icon = R.drawable.database_zap,
+            onClick = onDataHubClick,
+            enabled = uiState !is ChatUiState.Loading
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // Action Buttons
+        ActionButton(
             text = "Plugin Store",
             icon = Icons.Outlined.GridView,
             onClick = onPluginStoreClick,
@@ -262,7 +277,7 @@ private fun ChatHistoryItem(
 @Composable
 private fun ActionButton(
     text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     onClick: () -> Unit,
     enabled: Boolean = true
 ) {
@@ -293,6 +308,50 @@ private fun ActionButton(
         )
         Icon(
             imageVector = icon,
+            contentDescription = text,
+            tint = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+    }
+}
+
+@Composable
+private fun ActionButton(
+    text: String,
+    icon: Int,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    Row(
+        modifier = Modifier
+            .clickable(enabled = enabled) { onClick() }
+            .fillMaxWidth()
+            .background(
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.surface
+                } else {
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
+                },
+                shape = MaterialTheme.shapes.medium
+            )
+            .padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
+            color = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            }
+        )
+        Icon(
+            painter = painterResource(icon),
             contentDescription = text,
             tint = if (enabled) {
                 MaterialTheme.colorScheme.primary

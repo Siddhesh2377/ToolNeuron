@@ -7,7 +7,7 @@ import java.util.UUID
 open class NeuronNode(
     val id: String = UUID.randomUUID().toString(),
     val data: NodeData = NodeData("", NodeType.LEAF),
-    internal val children: MutableList<NeuronNode> = mutableListOf()
+    val children: MutableList<NeuronNode> = mutableListOf()
 ) {
 
     fun getChildNodes(): List<NeuronNode> = children

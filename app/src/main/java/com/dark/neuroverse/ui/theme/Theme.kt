@@ -106,20 +106,13 @@ fun TextStyle.scaled(designWidth: Float = 360f): TextStyle =
     if (fontSize.isUnspecified) this else copy(fontSize = rSp(fontSize, designWidth))
 
 
-@RequiresApi(Build.VERSION_CODES.S)
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun NeuroVerseTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false, // override system colors for custom black/white theme
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
-        dynamicColor -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }

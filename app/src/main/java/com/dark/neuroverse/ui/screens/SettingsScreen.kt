@@ -4,14 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,7 +41,6 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -65,12 +59,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
-import com.dark.neuroverse.activity.ScrapActivity
+import com.dark.neuroverse.activity.UserDataActivity
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.viewModel.UpdateStatus
 import com.dark.neuroverse.viewModel.UpdateViewModel
 import com.dark.userdata.getDefaultChatHistory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
@@ -214,7 +207,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                             }
                         },
                         onOpenDataHub = {
-                            context.startActivity(Intent(context, ScrapActivity::class.java))
+                            context.startActivity(Intent(context, UserDataActivity::class.java))
                         }
                     )
                 }

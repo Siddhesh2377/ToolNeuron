@@ -113,6 +113,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.R
+import com.dark.neuroverse.activity.DatahubActivity
 import com.dark.neuroverse.activity.PluginStoreActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
@@ -185,6 +186,9 @@ fun HomeScreen(
                 onSettingsClick = onRequestSettingsChange,
                 onModelsClick = onRequestModelChange,
                 onChatSelected = { scope.launch { drawerState.close() } },
+                onDataHubClick = {
+                    context.startActivity(Intent(context, DatahubActivity::class.java))
+                },
                 onPluginStoreClick = {
                     context.startActivity(Intent(context, PluginStoreActivity::class.java))
                 }

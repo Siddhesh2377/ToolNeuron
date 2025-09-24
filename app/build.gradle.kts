@@ -1,16 +1,14 @@
-import org.gradle.kotlin.dsl.invoke
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
 import java.io.FileInputStream
 import java.util.Properties
-import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
-
+    alias(libs.plugins.gms.services)
     kotlin("plugin.serialization") version "2.1.21"
 }
 val localPropertiesFile = rootProject.file("local.properties")
@@ -65,6 +63,11 @@ android {
     }
 
     dependencies {
+
+        //FIREBASE
+        implementation(platform(libs.firebase.bom))
+        implementation(libs.firebase.firestore.ktx)
+        implementation(libs.firebase.database)
 
         //NET
         implementation(libs.jsoup)

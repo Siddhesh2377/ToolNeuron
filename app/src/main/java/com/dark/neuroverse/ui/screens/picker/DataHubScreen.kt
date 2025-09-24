@@ -75,8 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
-import com.dark.neuroverse.activity.ScrapActivity
-import com.dark.neuroverse.activity.TempActivity
+import com.dark.neuroverse.activity.UserDataActivity
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.ui.theme.rDP
 import kotlinx.coroutines.Dispatchers
@@ -108,7 +107,7 @@ class DataHubPickerActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     DataHubPickerScreen(finishWithPath = { absPath ->
                         startActivity(
-                            Intent(this, ScrapActivity::class.java).apply {
+                            Intent(this, UserDataActivity::class.java).apply {
                                 putExtra(EXTRA_RESULT_FILE_PATH, absPath)
                             }
                         )

@@ -280,6 +280,45 @@ object DataHubManager {
             emptyList()
         }
     }
+    /**
+     * Uninstall a dataset by name
+     */
+    fun uninstallPack(modelName: String, onResult: (Boolean) -> Unit = {}) {
+        val worker = dataHubWorker
+        if (worker == null) {
+            Log.e(TAG, "DataHubWorker not initialized")
+            onResult(false)
+            return
+        }
+
+        scope.launch {
+            try {
+                worker.deleteModel(modelName) { success ->
+                    if (success) {
+                        // Refresh dataset list from DB
+                        scope.launch { loadInstalledDatasets() }
+
+                        // Clear current dataset if it matches
+                        _currentDataSet.value?.let { current ->
+                            if (current.modelName == modelName) {
+                                clearCurrentDataSet()
+                            }
+                        }
+
+                        Log.i(TAG, "Uninstalled dataset: $modelName")
+                    } else {
+                        Log.w(TAG, "No dataset found to uninstall: $modelName")
+                    }
+                    onResult(success)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to uninstall pack $modelName", e)
+                onResult(false)
+            }
+        }
+    }
+
+
 
     /**
      * Main RAG execution with proper error handling and thread safety

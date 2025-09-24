@@ -33,18 +33,6 @@ class NVApplication : Application() {
         DataHubManager.init(applicationContext)
         // Lightweight background bootstrap
         appScope.launch {
-
-            val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-            val zipFile = File(downloadsDir, "ai/embeddings.vecx")
-
-            DataHubManager.installPack(zipFile, BuildConfig.ALIAS, onResult = { success ->{
-                if (success) {
-                    Log.d(TAG, "Pack installed successfully")
-                } else {
-                    Log.e(TAG, "Pack installation failed")
-                }
-            }})
-
             // 1) Apply user-tuned decoding params (with safe fallbacks)
             val professional = UserPrefs.getModelPParams(applicationContext).firstOrNull() ?: 2.5f
             val emotional = UserPrefs.getModelEParams(applicationContext).firstOrNull() ?: 7.3f
