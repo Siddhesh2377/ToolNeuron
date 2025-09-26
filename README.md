@@ -2,9 +2,7 @@
 
 **Offline Android AI chat with a modular plugin framework**
 
-ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It lets users run private AI
-models and dynamic plugins **fully offline**, with **hardware‑grade encryption** for maximum
-privacy.
+ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It allows users to run private AI models and dynamic plugins **fully offline**, with **hardware‑grade encryption** ensuring maximum privacy.
 
 ---
 
@@ -17,19 +15,17 @@ privacy.
 
 ---
 
-### Note ..!
+### Note
 
-- This Repo's C++ code has be Transfered to a Different Repo For Optimization link can be found
-  here :: https://github.com/Siddhesh2377/Ai-Core
+* This repository's C++ code has been **transferred to a separate repo** for optimization: [AI Core](https://github.com/Siddhesh2377/Ai-Core)
 
 ---
 
-## Try it now
+## Try it Now
 
 * **Download APK:** [Latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 
-> Install the APK, grant permissions, open **AI Chat**, and start chatting. **No cloud account
-required.**
+> Install the APK, grant permissions, open **AI Chat**, and start chatting. **No cloud account required.**
 
 ---
 
@@ -46,34 +42,35 @@ required.**
 
 * **Available now:**
 
-    * Local AI chat (on‑device)
-    * **Web Search plugin** (tool‑calling from chat)
-    * **Switch models at runtime**
-    * **In‑app updates** (check & install)
-    * **Import models from device** and **tweak parameters**
-    * **Model Store downloads**
-    * **Plugin manager** (enable/disable, inspect metadata like author/role)
+  * Local AI chat (on‑device)
+  * **Web Search plugin** (tool‑calling from chat)
+  * Runtime model switching
+  * In‑app updates (check & install)
+  * Import models from device & tweak parameters
+  * Model Store downloads
+  * Plugin manager (enable/disable, inspect metadata like author/role)
+
 * **Coming soon:** Full automation, plugin gallery, advanced on‑device tools
 
 ---
 
 ## Key Features
 
-* Run **local AI chat** with no internet connection
-* **Import your own models** (GGUF) and tune settings
+* Run **local AI chat** without internet
+* **Import custom GGUF models** and tune parameters
 * **Dynamic plugin ecosystem** with validation & sandboxing
-* **Web Search plugin** to pull fresh context into chat when you’re online
-* **Runtime model switching** without restarting the app
-* **In‑app updater** to ship fixes/features instantly
-* Hardware‑level data protection via **Android KeyStore**
+* **Web Search plugin** for optional online context
+* **Switch models at runtime** without restarting
+* **In-app updater** for instant fixes/features
+* Hardware‑backed security with Android KeyStore
 
 ---
 
 ## Why ToolNeuron?
 
-Most mobile AI apps phone home. ToolNeuron flips it:
+Most mobile AI apps rely on the cloud. ToolNeuron flips the paradigm:
 
-* **Offline‑first** — your data stays on your device
+* **Offline-first** — data stays on your device
 * **Pluggable tools** — add capabilities without app updates
 * **Secure by design** — strict plugin validation + sandboxing
 
@@ -85,18 +82,18 @@ Join the community: **[Discord](https://discord.gg/vjGEyQev)**
 
 ## Official Plugins
 
-First‑party plugins live here: **ToolNeuron System Plugins** — *link placeholder*
+First-party plugins: **ToolNeuron System Plugins** — *link placeholder*
 
 * **Web Search** — ✅ Available
 
-> Packaging: `.zip` containing `plugin.aar` and `Manifest.json`.
+> Packaging: `.zip` containing `plugin.aar` and `Manifest.json`
 
 ---
 
 ## Models & Engine
 
 * **Backend:** `llama.cpp` via **JNI**
-* **Model format:** **GGUF** (import your own)
+* **Model format:** GGUF (user-importable)
 * **Controls:** temperature, top‑p, max tokens, etc.
 * **Switcher:** change models at runtime from Settings
 
@@ -104,19 +101,19 @@ First‑party plugins live here: **ToolNeuron System Plugins** — *link placeho
 
 ## Security & Privacy
 
-* No cloud storage — **fully offline experience** by default
-* Zero analytics/telemetry in the core app
-* Hardware‑backed encryption with Android KeyStore
-* Strong validation before loading any plugin
+* Fully offline experience
+* Zero telemetry/analytics
+* Hardware-backed encryption via Android KeyStore
+* Strict plugin validation before loading
 
 ---
 
 ## Get Involved
 
-* **Contribute code** via pull requests
-* Drop feedback & feature requests on **[Discord](https://discord.gg/vjGEyQev)**
+* Contribute code via pull requests
+* Submit feedback & feature requests on **[Discord](https://discord.gg/vjGEyQev)**
 
-Every contribution helps keep ToolNeuron free and open‑source.
+Every contribution helps keep ToolNeuron free and open-source.
 
 ---
 
@@ -126,9 +123,9 @@ Every contribution helps keep ToolNeuron free and open‑source.
 * ✅ Web Search plugin
 * ✅ In‑app updates
 * 🚀 Plugin gallery for community sharing
-* 🔒 End‑to‑end encryption for chat & storage
+* 🔒 End-to-end encryption for chat & storage
 * ⚡ Automation tools for advanced workflows
-* 🧩 Expand first‑party plugin set
+* 🧩 Expand first-party plugin set
 
 ---
 
@@ -149,5 +146,5 @@ GitHub: [@Siddhesh2377](https://github.com/Siddhesh2377)
 ## Acknowledgements
 
 * `llama.cpp` and the GGUF community
-* Jetpack Compose & the Android Open Source Project
-* All early users and open‑source contributors 🙌
+* Jetpack Compose & Android Open Source Project
+* Early users and open-source contributors 🙌
