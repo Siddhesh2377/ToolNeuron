@@ -1,5 +1,6 @@
 package com.mp.data_hub_lib.manager
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
 import com.mp.ai_core.EmbeddingManager
@@ -22,16 +23,18 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * DataHubManager with proper model instance separation and thread safety
  */
+@SuppressLint("StaticFieldLeak")
 object DataHubManager {
     private const val TAG = "DataHubManager"
 
     // Configuration
-    val embeddingModelPath = "/storage/emulated/0/Download/ai/all-MiniLM-L6-v2-Q8_0.gguf"
+    var embeddingModelPath = ""
 
     // Core components - properly separated
     private var dataHubWorker: DataHubWorker? = null
@@ -65,6 +68,13 @@ object DataHubManager {
      * Initialize DataHubManager with proper resource management
      */
     fun init(context: Context) {
+        val file = File(context.filesDir, "embedding.gguf")
+        embeddingModelPath = file.absolutePath
+
+        if (!file.exists()) {
+            installEmbeddingModelFromAssets(context, "embedding.gguf", file)
+        }
+
         if (isInitialized.getAndSet(true)) {
             Log.d(TAG, "Already initialized")
             return
@@ -503,6 +513,21 @@ object DataHubManager {
             Log.d(TAG, "DataHubManager shutdown completed")
         } catch (e: Exception) {
             Log.e(TAG, "Error during shutdown", e)
+        }
+    }
+
+    private fun installEmbeddingModelFromAssets(ctx: Context, assetName: String, out: File): File {
+        return try {
+            ctx.assets.open(assetName).use { input ->
+                out.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            out
+        } catch (t: Throwable) {
+            // Clean partial files
+            runCatching { out.delete() }
+            throw IOException("Failed to copy asset $assetName", t)
         }
     }
 }

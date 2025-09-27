@@ -776,6 +776,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 )
             }
         } finally {
+            _currentMsgId.value = ""
             if (_uiState.value !is ChatUiState.ExecutingTool) {
                 _uiState.value = ChatUiState.Idle
             }
