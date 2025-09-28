@@ -30,8 +30,10 @@ import com.dark.neuroverse.ui.screens.SettingsScreen
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.util.makeToast
 import com.dark.userdata.getDefaultBrainStructure
+import com.dark.userdata.migrateBrainStructure
 import com.dark.userdata.ntds.getBrainFilePath
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.userdata.ntds.loadEncryptedTree
 import com.dark.userdata.ntds.saveEncryptedTree
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -238,16 +240,20 @@ class MainActivity : ComponentActivity() {
                 saveEncryptedTree(brain, brainFile, key)
                 Log.d("MainActivity", "Default brain structure created successfully")
             } else {
-                Log.d("MainActivity", "Brain file exists, size: ${brainFile.length()} bytes")
+                // Load and migrate
+                val brain = loadEncryptedTree(brainFile, key) ?: getDefaultBrainStructure()
+                migrateBrainStructure(brain.root)
+                saveEncryptedTree(brain, brainFile, key)
+                Log.d("MainActivity", "Brain file migrated to latest schema")
             }
         }.onFailure { err ->
             Log.e("MainActivity", "Failed to initialize brain file", err)
-            // Consider showing error to user or providing recovery options
             runOnUiThread {
                 "Failed to initialize app data. Please restart the app.".makeToast(this@MainActivity)
             }
         }
     }
+
 
     override fun onResume() {
         super.onResume()

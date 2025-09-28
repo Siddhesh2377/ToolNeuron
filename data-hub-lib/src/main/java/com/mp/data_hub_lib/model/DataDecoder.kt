@@ -12,6 +12,7 @@ data class BrainDoc(
     val embedding: List<Float>
 )
 
+@Serializable
 data class Doc(
     val text: String,
     val similarity: Double

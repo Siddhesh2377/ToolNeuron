@@ -88,6 +88,7 @@ import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModel
 import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModelFactory
+import com.dark.userdata.helpers.MemoryDataTags
 import com.dark.userdata.ntds.neuron_tree.NeuronNode
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.ntds.neuron_tree.NodeType
@@ -1370,6 +1371,17 @@ fun getNodeDisplayName(node: NeuronNode): String {
     return when {
         node.id == "root" -> "Brain Root"
         node.id == "chatHistory" -> "Chat History"
+        node.id == "memoryHistory" -> "Memory"
+        node.id == MemoryDataTags.Family.toString().lowercase() -> "Family"
+        node.id == MemoryDataTags.Friends.toString().lowercase() -> "Friends"
+        node.id == MemoryDataTags.Work.toString().lowercase() -> "Work"
+
+        node.id == MemoryDataTags.Health.toString().lowercase() -> "Health"
+        node.id == MemoryDataTags.Entertainment.toString().lowercase() -> "Entertainment"
+        node.id == MemoryDataTags.Education.toString().lowercase() -> "Education"
+
+        node.id == MemoryDataTags.Other.toString().lowercase() -> "Other"
+
         node.data.content.isNotBlank() -> {
             val data = JSONObject(node.data.content).optString("title", "Unknown")
             "Title: $data"

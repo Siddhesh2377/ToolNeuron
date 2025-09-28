@@ -77,6 +77,8 @@ class NeuronTree(val root: NeuronNode) {
      */
     fun getNodeDirect(id: String): NeuronNode = nodeMap[id] ?: NeuronNode()
 
+    fun getNodeDirectOrNull(id: String): NeuronNode? = nodeMap[id]
+
     /**
      * Adds one or more child nodes to the specified parent in the tree.
      * Automatically re-indexes the added nodes.

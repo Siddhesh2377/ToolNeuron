@@ -1,6 +1,7 @@
 package com.dark.neuroverse.viewModel.chatViewModel
 
 import android.content.Context
+import android.os.SharedMemory
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,12 +27,17 @@ import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
 import com.dark.userdata.addNewChat
 import com.dark.userdata.getDefaultChatHistory
+import com.dark.userdata.helpers.MemoryDataTags
+import com.dark.userdata.helpers.getMemoryByTags
+import com.dark.userdata.helpers.updateMemory
 import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.userdata.readBrainFile
 import com.dark.userdata.saveTree
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
+import com.mp.data_hub_lib.model.BrainDoc
+import com.mp.data_hub_lib.model.Doc
 import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -399,6 +405,41 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         chatId.value = ""
         _uiState.value = ChatUiState.Idle
     }
+
+    fun addMessageInMemory(memory: List<BrainDoc>, tag: MemoryDataTags) {
+        viewModelScope.launch {
+            try {
+                // Load existing memory
+                val tempRawMemoryData = getMemoryByTags(rootNode.value.root, tag)?.data?.content
+                val oldMemory: MutableList<BrainDoc> = mutableListOf()
+
+                if (tempRawMemoryData != null && tempRawMemoryData.isNotBlank()) {
+                    val jsonObj = JSONObject(tempRawMemoryData)
+                    if (jsonObj.has("messages")) {
+                        val arr = jsonObj.getJSONArray("messages").toString()
+                        oldMemory.addAll(Json.decodeFromString(arr))
+                    }
+                }
+
+                // Add new memory
+                oldMemory.addAll(memory)
+
+                // Serialize back into {"messages": [ ... ]}
+                val outData = Json.encodeToString(oldMemory)
+                val json = JSONObject().apply {
+                    put("messages", JSONArray(outData))
+                }
+
+                updateMemory(rootNode.value.root, tag, json)
+                performTreeSave()
+
+                Log.d(TAG, "Memory updated: $json")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to add message in memory", e)
+            }
+        }
+    }
+
 
     fun deleteChatById(id: String) {
         viewModelScope.launch {
@@ -1243,7 +1284,7 @@ fun ChatScreenViewModel.getTokenFlow(messageId: String): Flow<String> = flow {
                 state.lastEmittedIndex += newTokens.length
             }
         }
-        kotlinx.coroutines.delay(20) // small delay to avoid tight loop
+        delay(20) // small delay to avoid tight loop
     }
 }
 

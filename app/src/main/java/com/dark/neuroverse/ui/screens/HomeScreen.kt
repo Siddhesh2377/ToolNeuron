@@ -136,8 +136,15 @@ import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
+import com.dark.userdata.helpers.MemoryDataTags
+import com.mp.data_hub_lib.manager.DataHubManager
+import com.mp.data_hub_lib.model.BrainDoc
+import com.mp.data_hub_lib.model.Doc
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1055,6 +1062,27 @@ private fun RegularChatUI(
                                             "Share message"
                                         )
                                     )
+                                }
+                        )
+
+                        // Save Memory button
+                        Icon(
+                            painter = painterResource(R.drawable.memory_stick),
+                            contentDescription = "Save To Memory",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        Log.d("HomeScreen", "SaveMemory")
+                                        DataHubManager.reinitializeEmbeddingModel()
+                                        val data = DataHubManager.getEmbeddingManager().getEmbedding(message.text)
+                                        Log.d("HomeScreen", "SaveMemory: $data")
+                                        val memory = listOf(BrainDoc(id = UUID.randomUUID().toString(), text = message.text, embedding = data.getOrNull()?.toList() ?: emptyList()))
+                                        Log.d("HomeScreen", "SaveMemory: $memory")
+                                        viewModel.addMessageInMemory(memory, MemoryDataTags.Other)
+                                        Log.d("HomeScreen", "SaveMemory done")
+                                    }
                                 }
                         )
                     }

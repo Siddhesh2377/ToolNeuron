@@ -13,9 +13,7 @@ enum class Role { User, Assistant, Tool }
 
 @Serializable
 data class RunningTool(
-    val toolName: String,
-    val toolPreview: String,
-    val toolOutput: ToolOutput
+    val toolName: String, val toolPreview: String, val toolOutput: ToolOutput
 )
 
 @Serializable
