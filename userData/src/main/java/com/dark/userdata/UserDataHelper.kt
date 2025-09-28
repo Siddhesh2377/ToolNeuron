@@ -33,6 +33,30 @@ fun getDefaultBrainStructure(): NeuronTree {
     return tree
 }
 
+fun migrateBrainStructure(root: NeuronNode) {
+    val tree = NeuronTree(root)
+
+    // Ensure chat + memory operators exist
+    val chatHistory = tree.getNodeDirectOrNull("chatHistory")
+        ?: NeuronNode("chatHistory", NodeData("", NodeType.OPERATOR)).also {
+            tree.addChild(root.id, it)
+        }
+
+    val memoryHistory = tree.getNodeDirectOrNull("memoryHistory")
+        ?: NeuronNode("memoryHistory", NodeData("", NodeType.OPERATOR)).also {
+            tree.addChild(root.id, it)
+        }
+
+    // Ensure all memory categories exist
+    for (tag in MemoryDataTags.entries) {
+        val nodeId = tag.toString().lowercase()
+        if (tree.getNodeDirectOrNull(nodeId) == null) {
+            createNewMemory(root, tag, JSONObject("""{"messages": []}"""))
+        }
+    }
+}
+
+
 fun readBrainFile(key: SecretKey, context: Context): NeuronTree {
     val brainFile = getBrainFilePath(context)
     return loadEncryptedTree(brainFile, key) ?: getDefaultBrainStructure()
