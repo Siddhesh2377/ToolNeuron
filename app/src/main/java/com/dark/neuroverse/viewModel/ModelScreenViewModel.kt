@@ -109,7 +109,10 @@ class ModelScreenViewModel() : ViewModel() {
     fun removeModel(modelName: String) {
         viewModelScope.launch {
             ModelManager.getModel(modelName)?.let { model ->
-                File(model.modelPath).delete()
+                val isLocalImport = model.modelLink.isBlank() && model.modelPageLink.isBlank()
+                if (!isLocalImport) {
+                    File(model.modelPath).delete()
+                }
             }
             ModelManager.removeModel(modelName)
         }

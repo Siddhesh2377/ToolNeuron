@@ -1,12 +1,48 @@
 package com.dark.ai_module.model
 
+import androidx.room.Embedded
 import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.ForeignKey.Companion.CASCADE
+import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 
 
 fun getDefaultModelData() = ModelsData(
     0, "", "", 0, "", "", "", "", "", 0
 )
+
+@Entity(
+    tableName = "model_props",
+    foreignKeys = [ForeignKey(
+        entity = ModelsData::class,
+        parentColumns = ["id"],
+        childColumns = ["modelId"],
+        onDelete = CASCADE
+    )],
+    indices = [Index("modelId")]
+)
+data class ModelProps(
+    @PrimaryKey(autoGenerate = true) val id: Int = 0,
+    val modelId: Int,
+    val chatTemplate: String,
+    val systemPrompt: String,
+    val temperature: Float = 1.0f,
+    val topK: Int = 40,
+    val topP: Float = 0.9f,
+    val minP: Int = 2048
+)
+
+data class ModelWithProps(
+    @Embedded val model: ModelsData,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "modelId"
+    )
+    val props: ModelProps?
+)
+
 
 
 @Entity(tableName = "local_models")

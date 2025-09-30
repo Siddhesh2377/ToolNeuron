@@ -39,6 +39,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
@@ -141,7 +142,7 @@ fun ModelsScreen(onNext: () -> Unit) {
             }
 
             // Tabs
-            TabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
+            SecondaryTabRow(selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()) {
                 tabs.forEachIndexed { index, label ->
                     Tab(
                         selected = selectedTab == index,

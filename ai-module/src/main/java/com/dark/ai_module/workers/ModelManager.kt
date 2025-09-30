@@ -49,15 +49,6 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 object ModelManager {
 
-    /* ------------------------------------------------------------- */
-    /*  Public types                                                 */
-    /* ------------------------------------------------------------- */
-
-
-    /* ------------------------------------------------------------- */
-    /*  Public state (Flows)                                         */
-    /* ------------------------------------------------------------- */
-
     private const val TAG = "ModelManager"
 
     private val _currentModel = MutableStateFlow(getDefaultModelData())
@@ -144,20 +135,6 @@ object ModelManager {
 
     fun unLoadModel() = unloadActiveModel()
 
-    suspend fun enqueuePrompt(prompt: String, gen: GenerationParams = GenerationParams()) {
-        val def = CompletableDeferred<String>()
-        queue.send(Request.Blocking(prompt, gen, def))
-    }
-
-    suspend fun generateAndWait(
-        prompt: String,
-        gen: GenerationParams = GenerationParams()
-    ): String {
-        val def = CompletableDeferred<String>()
-        queue.send(Request.Blocking(prompt, gen, def))
-        return def.await()
-    }
-
     /** Streaming with hardened toolJson. */
     suspend fun generateStreaming(
         prompt: String,
@@ -195,9 +172,6 @@ object ModelManager {
         activeModelVariant()?.lib?.nativeStopGeneration()
         isGenerating.value = false
     }
-
-    fun listLoadedModels(): List<String> = models.keys.toList()
-
     fun setSystemPrompt(systemPrompt: String) {
         activeModelVariant()?.lib?.setSystemPrompt(systemPrompt)
     }
