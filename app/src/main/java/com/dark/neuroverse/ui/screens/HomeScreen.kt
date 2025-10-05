@@ -50,10 +50,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.SmartToy
@@ -109,9 +107,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelsData
@@ -159,7 +157,6 @@ fun HomeScreen(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -203,7 +200,7 @@ fun HomeScreen(
             .imePadding(), topBar = {
             Column {
                 TopBar(
-                    title = chatTitle,
+                    viewModel,
                     onMenu = { scope.launch { drawerState.open() } },
                     onLeftMenu = { viewModel.newChat() })
                 ModelLoadProgressBar(loadState = modelState)
@@ -239,11 +236,31 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    title: String = "NeuroV Chat", onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+    viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
     CenterAlignedTopAppBar(
         title = {
-        ModelSelection()
+        Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
+            if (it) {
+                ModelSelection(viewModel, false)
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Chat",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    ModelSelection(viewModel, true)
+                }
+            }
+        }
+
     }, navigationIcon = {
         IconButton(
             onClick = onMenu,
@@ -256,51 +273,18 @@ fun TopBar(
             Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
         }
     }, actions = {
-//        var showDialog by remember { mutableStateOf(false) }
-//
-//        AnimatedVisibility(showDialog) {
-//            if (showDialog) {
-//                DataPackSelectorDialog {
-//                    showDialog = false
-//                }
-//            }
-//        }
-//
-//        Row(
-//            verticalAlignment = Alignment.CenterVertically,
-//            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-//        ) {
-//            Button(
-//                onClick = { showDialog = true }, colors = ButtonDefaults.buttonColors(
-//                    containerColor = MaterialTheme.colorScheme.primary
-//                )
-//            ) {
-//                Text(
-//                    "Data Set", style = MaterialTheme.typography.titleMedium.copy(
-//                        color = MaterialTheme.colorScheme.onPrimary
-//                    )
-//                )
-//                Spacer(Modifier.width(rDP(8.dp)))
-//                Box(
-//                    modifier = Modifier
-//                        .size(rDP(7.dp))
-//                        .clip(CircleShape)
-//                        .background(MaterialTheme.colorScheme.onPrimary)
-//                )
-//            }
-//
-
-            IconButton(
-                onClick = onLeftMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
-                )
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "New Chat")
-            }
-//        }
+        IconButton(
+            onClick = onLeftMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary
+            )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+            )
+        }
     }, colors = TopAppBarDefaults.topAppBarColors(
         containerColor = MaterialTheme.colorScheme.background
     )
@@ -469,8 +453,6 @@ private fun BottomBar(
     var input by remember { mutableStateOf("") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
-    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
-    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
@@ -493,12 +475,9 @@ private fun BottomBar(
         tools = tools,
         isGenerating = isGenerating,
         inputEnabled = inputEnabled,
-        modelList = modelList,
         onRag = viewModel::setRag,
         onToolSelected = viewModel::selectTool,
         selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
-        onModelSelected = viewModel::selectModel,
-        selectedModel = selectedModel,
         onToolRemoved = { viewModel.unSelectTool() },
         onSend = {
             when {
@@ -516,20 +495,16 @@ private fun BottomBar(
 private fun ChatInputBar(
     value: String,
     tools: List<Pair<String, List<Tools>>>,
-    modelList: List<ModelsData>,
     selectedTools: List<Tools>,
     onToolSelected: (Pair<String, Tools>) -> Unit,
-    onModelSelected: (ModelsData) -> Unit,
     onValueChange: (String) -> Unit,
     onRag: (Boolean) -> Unit,
     onSend: () -> Unit,
     onToolRemoved: (Tools) -> Unit,
-    selectedModel: ModelsData,
     isGenerating: Boolean,
     inputEnabled: Boolean
 ) {
     var showToolsList by remember { mutableStateOf(false) }
-    var showModelList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
 
     Column(
@@ -541,20 +516,11 @@ private fun ChatInputBar(
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         // Tools list
-        AnimatedVisibility(showToolsList) {
+        AnimatedVisibility(visible = showToolsList) {
             ToolsList(
                 tools = tools, onToolSelected = {
                     onToolSelected(it)
                     showToolsList = false
-                })
-        }
-
-        // Model list
-        AnimatedVisibility(showModelList) {
-            ModelList(
-                selectedModel = selectedModel, modelList = modelList, onModelSelected = {
-                    onModelSelected(it)
-                    showModelList = false
                 })
         }
 
@@ -571,9 +537,8 @@ private fun ChatInputBar(
                 onClick = {
                     if (inputEnabled) {
                         showToolsList = !showToolsList
-                        showModelList = false
                     }
-                }, enabled = inputEnabled, colors = ButtonDefaults.textButtonColors(
+                }, enabled = inputEnabled, colors = ButtonDefaults.buttonColors(
                     containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                     contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
                 ), shape = RoundedCornerShape(rDP(8.dp))
@@ -601,22 +566,23 @@ private fun ChatInputBar(
                 }
             }
 
-            // Model selector button
+            // RAG toggle button
             IconButton(
                 onClick = {
                     if (inputEnabled) {
-                        showModelList = !showModelList
-                        showToolsList = false
+                        isRag = !isRag
+                        onRag(isRag)
                     }
                 },
                 enabled = inputEnabled,
+                modifier = Modifier.size(rDP(36.dp)),
                 shape = RoundedCornerShape(rDP(8.dp)),
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
-                    contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
                 )
             ) {
-                Icon(Icons.Default.SmartToy, contentDescription = "Select Model")
+                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
             }
         }
 
@@ -655,25 +621,6 @@ private fun ChatInputBar(
                     color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
                 )
             )
-
-            // RAG toggle button
-            IconButton(
-                onClick = {
-                    if (inputEnabled) {
-                        isRag = !isRag
-                        onRag(isRag)
-                    }
-                },
-                enabled = inputEnabled,
-                modifier = Modifier.size(rDP(36.dp)),
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
-                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
-                )
-            ) {
-                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
-            }
 
             Spacer(Modifier.width(rDP(8.dp)))
 
@@ -1246,26 +1193,151 @@ fun ToolOutputContent(
     }
 }
 
-@Preview
 @Composable
-fun ModelSelection() {
-    Button(
-        onClick = { /*TODO*/ },
-        colors = ButtonDefaults.buttonColors(),
-        shape = RoundedCornerShape(rDP(8.dp)),
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                Icons.Outlined.SmartToy, "Expand"
-            )
-            Spacer(modifier = Modifier.width(rDP(8.dp)))
-            Text(text = "Model Selection", maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Spacer(modifier = Modifier.width(rDP(8.dp)))
-            Icon(
-                Icons.Default.KeyboardArrowDown, "Expand"
-            )
+fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
+    var showDialog by remember { mutableStateOf(false) }
+    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
+    var selectedModelName by remember { mutableStateOf("") }
+
+    LaunchedEffect(selectedModel) {
+        selectedModelName = if (selectedModel.modeName == "") "Select Model"
+        else selectedModel.modeName
+    }
+
+    Column {
+        Crossfade(isCompact) {
+            when (it) {
+                true -> {
+                    IconButton(
+                        onClick = { showDialog = true },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary,
+                            contentColor = MaterialTheme.colorScheme.onPrimary
+                        ),
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                    ) {
+                        Icon(Icons.Outlined.SmartToy, "Model")
+                    }
+                }
+
+                false -> {
+                    Button(
+                        onClick = { showDialog = true },
+                        colors = ButtonDefaults.buttonColors(),
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.SmartToy, "Model")
+                            Spacer(modifier = Modifier.width(rDP(8.dp)))
+                            Crossfade(selectedModelName) { modelName ->
+                                Text(
+                                    text = modelName, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(rDP(8.dp)))
+                            Icon(Icons.Default.KeyboardArrowDown, "Expand")
+                        }
+                    }
+                }
+            }
+        }
+
+
+        if (showDialog) {
+            Dialog(onDismissRequest = { showDialog = false }) {
+                Card(
+                    shape = RoundedCornerShape(rDP(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(rDP(16.dp))
+                            .fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Select Model",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(bottom = rDP(12.dp))
+                        )
+
+                        LazyColumn(
+                            modifier = Modifier.heightIn(min = rDP(150.dp), max = rDP(320.dp)),
+                            contentPadding = PaddingValues(vertical = rDP(8.dp))
+                        ) {
+                            items(modelList) { model ->
+                                val isSelected = model.modeName == selectedModel.modeName
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = rDP(6.dp))
+                                        .clickable(enabled = !isLoading) {
+                                            viewModel.selectModel(model)
+                                        }, colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) Mint.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.background
+                                    ), elevation = CardDefaults.cardElevation(rDP(0.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(rDP(14.dp))
+                                            .fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = model.modeName,
+                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                    fontSize = rSp(16.sp)
+                                                )
+                                            )
+                                            Text(
+                                                text = if (isSelected) "Currently Loaded" else "Tap to Load",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = if (isSelected) Mint else Color.Gray
+                                                )
+                                            )
+                                        }
+                                        Spacer(Modifier.weight(1f))
+                                        when {
+                                            isLoading && model.modeName == modelList.find { it.modeName == selectedModel.modeName }?.modeName -> {
+                                                CircularProgressIndicator(
+                                                    strokeWidth = 2.dp,
+                                                    modifier = Modifier.size(rDP(20.dp)),
+                                                    color = Mint
+                                                )
+                                            }
+
+                                            isSelected -> {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Loaded",
+                                                    tint = Mint,
+                                                    modifier = Modifier.size(rDP(20.dp))
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(rDP(12.dp)))
+                        Button(
+                            onClick = { showDialog = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(rDP(8.dp))
+                        ) {
+                            Text("Close")
+                        }
+                    }
+                }
+            }
         }
     }
 }
+
+
+

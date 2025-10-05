@@ -156,6 +156,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     // Debounced save channel
     private val saveChannel = Channel<Unit>(Channel.CONFLATED)
+    val isModelLoading = MutableStateFlow(false)
 
     //region Core State
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Idle)
@@ -241,9 +242,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 loadInitialChat()
                 updateChatList()
 
-                // Load first model
-                loadInitialModel()
-
                 // Load tools and models
                 toolList.value = PluginManager.toolsList.value
                 modelList.value = ModelManager.getAllModels()
@@ -271,34 +269,27 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    private suspend fun loadInitialModel() {
-        ModelManager.getFirstModel()?.let { model ->
-            ModelManager.loadModelAwait(
-                modelData = model,
-                defaults = ManagerDefaults(
-                    systemPrompt = ModelsList.generalPurposeSystemPrompt
-                ),
-                chatTemplate = ModelsList.chatTemplate,
-                forceReload = true
-            ) { state ->
-                _modelLoadingState.value = state
-                selectedModel.value = model
-            }
-        }
-    }
-
     //region Public API - Model & Tool Selection
     fun selectModel(model: ModelsData) {
         viewModelScope.launch {
+            isModelLoading.value = true
             if (_uiState.value is ChatUiState.Generating) {
                 Log.w(TAG, "Cannot change model during generation")
+                isModelLoading.value = false
+                return@launch
+            }
+
+            if (selectedModel.value.id == model.id) {
+                Log.w(TAG, "UnSelecting model")
+                ModelManager.unLoadModel()
+                isModelLoading.value = false
+                selectedModel.value = ModelsData()
                 return@launch
             }
 
             try {
                 _uiState.value = ChatUiState.Loading("Loading model...")
                 ModelManager.unLoadModel()
-
                 val systemPrompt = if (selectedTools.value.first.isBlank()) {
                     ModelsList.generalPurposeSystemPrompt
                 } else {
@@ -313,12 +304,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
+                    isModelLoading.value = false
                 }
 
                 _uiState.value = ChatUiState.Idle
             } catch (e: Exception) {
                 Log.e(TAG, "Model selection failed", e)
                 _uiState.value = ChatUiState.Error("Failed to load model: ${e.message}")
+                isModelLoading.value = false
             }
         }
     }
