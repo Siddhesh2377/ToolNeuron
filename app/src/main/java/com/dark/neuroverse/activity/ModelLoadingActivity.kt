@@ -60,7 +60,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.model.ModelData
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
 import com.mp.ai_core.NativeLib
@@ -115,9 +115,9 @@ fun ModelLoadingScreen(
 
     // Duplicate handling
     var showDupDialog by remember { mutableStateOf(false) }
-    var pendingModel by remember { mutableStateOf<ModelsData?>(null) }
+    var pendingModel by remember { mutableStateOf<ModelData?>(null) }
 
-    fun saveAndExit(model: ModelsData) {
+    fun saveAndExit(model: ModelData) {
         viewModel.addModel(model)
         Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
         context.startActivity(Intent(context, MainActivity::class.java))
@@ -166,6 +166,8 @@ fun ModelLoadingScreen(
         }
     }
 
+    val core = infoJson?.getJSONObject("core")
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -202,30 +204,15 @@ fun ModelLoadingScreen(
                             onCtx = { ctxSize = it },
                             toolCalling = toolCalling,
                             onToolCalling = { toolCalling = it }) {
-                            val sizeMb = ((f.length() / 1024.0 / 1024.0).toInt())
-                            val candidate = ModelsData(
-                                modeName = name.text.ifBlank { deriveModelName(f) },
-                                modelDescription = buildString {
-                                    if (info != null && info.optJSONObject("core") != null) {
-                                        val core = info.getJSONObject("core")
-                                        append("embd=")
-                                        append(core.optInt("n_embd"))
-                                        append(", layers=")
-                                        append(core.optInt("n_layer"))
-                                        append(", heads=")
-                                        append(core.optInt("n_head"))
-                                    } else append("Imported local model")
-                                },
-                                modelCtxSize = ctxSize.text.toIntOrNull() ?: 2048,
-                                toolUse = if (toolCalling) "tools" else "none",
-                                modelLink = "",
-                                modelPageLink = "",
+                            val candidate = ModelData(
+                                modelName = name.text.ifBlank { deriveModelName(f) },
+                                ctxSize = ctxSize.text.toIntOrNull() ?: 2048,
+                                isToolCalling = toolCalling,
                                 modelPath = f.absolutePath,
-                                chatTemplate = "",
-                                modelSize = sizeMb
+                                chatTemplate = core?.optString("n_embd")
                             )
 
-                            viewModel.checkIfInstalled(candidate.modeName) { exists ->
+                            viewModel.checkIfInstalled(candidate.modelName) { exists ->
                                 if (exists) {
                                     pendingModel = candidate
                                     showDupDialog = true
@@ -257,7 +244,7 @@ fun ModelLoadingScreen(
                                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error),
                                     onClick = {
                                         showDupDialog = false
-                                        viewModel.removeModel(dup.modeName)
+                                        viewModel.removeModel(dup.modelName)
                                         saveAndExit(dup)
                                     }) { Text("Overwrite") }
                             },
@@ -266,7 +253,7 @@ fun ModelLoadingScreen(
                                 TextButton(onClick = { showDupDialog = false }) { Text("Cancel") }
                             },
                             title = { Text("Name already exists") },
-                            text = { Text("A model named \"${dup.modeName}\" already exists. Overwrite it, or cancel and choose a different name.") })
+                            text = { Text("A model named \"${dup.modelName}\" already exists. Overwrite it, or cancel and choose a different name.") })
                     }
                 }
             }

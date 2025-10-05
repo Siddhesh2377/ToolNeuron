@@ -112,7 +112,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.model.ModelsData
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.DatahubActivity
 import com.dark.neuroverse.activity.PluginHubActivity
@@ -735,59 +734,6 @@ fun ToolsList(
 }
 
 @Composable
-fun ModelList(
-    modifier: Modifier = Modifier,
-    modelList: List<ModelsData>,
-    onModelSelected: (ModelsData) -> Unit,
-    selectedModel: ModelsData
-) {
-    LazyColumn(
-        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
-        contentPadding = PaddingValues(vertical = rDP(8.dp))
-    ) {
-        item {
-            Text(
-                text = "Local Models",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = rSp(18.sp)),
-                modifier = Modifier.padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
-            )
-        }
-
-        items(modelList) { model ->
-            val isSelected = model.modeName == selectedModel.modeName
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = rDP(32.dp), vertical = rDP(4.dp))
-                    .clickable { onModelSelected(model) },
-                elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) Mint.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.background
-                )
-            ) {
-                Row(modifier = Modifier.padding(rDP(12.dp))) {
-                    Text(
-                        text = model.modeName,
-                        maxLines = 1,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = rSp(16.sp))
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = Mint,
-                            modifier = Modifier.size(rDP(20.dp))
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
 private fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
@@ -1202,8 +1148,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     var selectedModelName by remember { mutableStateOf("") }
 
     LaunchedEffect(selectedModel) {
-        selectedModelName = if (selectedModel.modeName == "") "Select Model"
-        else selectedModel.modeName
+        selectedModelName = if (selectedModel.modelName == "") "Select Model"
+        else selectedModel.modelName
     }
 
     Column {
@@ -1267,13 +1213,14 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                             contentPadding = PaddingValues(vertical = rDP(8.dp))
                         ) {
                             items(modelList) { model ->
-                                val isSelected = model.modeName == selectedModel.modeName
+                                val isSelected = model.modelName == selectedModel.modelName
 
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = rDP(6.dp))
                                         .clickable(enabled = !isLoading) {
+                                            Log.d("ModelSelection", "Selected model: $model")
                                             viewModel.selectModel(model)
                                         }, colors = CardDefaults.cardColors(
                                         containerColor = if (isSelected) Mint.copy(alpha = 0.15f)
@@ -1288,7 +1235,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                     ) {
                                         Column {
                                             Text(
-                                                text = model.modeName,
+                                                text = model.modelName,
                                                 style = MaterialTheme.typography.bodyLarge.copy(
                                                     fontSize = rSp(16.sp)
                                                 )
@@ -1302,7 +1249,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                         }
                                         Spacer(Modifier.weight(1f))
                                         when {
-                                            isLoading && model.modeName == modelList.find { it.modeName == selectedModel.modeName }?.modeName -> {
+                                            isLoading && model.modelName == modelList.find { it.modelName == selectedModel.modelName }?.modelName -> {
                                                 CircularProgressIndicator(
                                                     strokeWidth = 2.dp,
                                                     modifier = Modifier.size(rDP(20.dp)),

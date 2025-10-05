@@ -1,7 +1,6 @@
 package com.dark.neuroverse.viewModel.chatViewModel
 
 import android.content.Context
-import android.os.SharedMemory
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -11,8 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.model.LoadState
-import com.dark.ai_module.model.ManagerDefaults
-import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatINFO
@@ -37,7 +35,6 @@ import com.dark.userdata.saveTree
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
-import com.mp.data_hub_lib.model.Doc
 import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -187,8 +184,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //region Configuration State
     val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
     val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow("" to Tools())
-    val modelList: MutableStateFlow<List<ModelsData>> = MutableStateFlow(emptyList())
-    val selectedModel: MutableStateFlow<ModelsData> = MutableStateFlow(ModelsData())
+    val modelList: MutableStateFlow<List<ModelData>> = MutableStateFlow(emptyList())
+    val selectedModel: MutableStateFlow<ModelData> = MutableStateFlow(ModelData())
     val chatId = MutableStateFlow("")
     val currentRunningToolName = MutableStateFlow("")
     private val _isRag = MutableStateFlow(false)
@@ -270,7 +267,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     //region Public API - Model & Tool Selection
-    fun selectModel(model: ModelsData) {
+    fun selectModel(model: ModelData) {
         viewModelScope.launch {
             isModelLoading.value = true
             if (_uiState.value is ChatUiState.Generating) {
@@ -283,23 +280,22 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 Log.w(TAG, "UnSelecting model")
                 ModelManager.unloadModel()
                 isModelLoading.value = false
-                selectedModel.value = ModelsData()
+                selectedModel.value = ModelData()
                 return@launch
             }
 
             try {
                 _uiState.value = ChatUiState.Loading("Loading model...")
                 ModelManager.unloadModel()
+
                 val systemPrompt = if (selectedTools.value.first.isBlank()) {
-                    ModelsList.generalPurposeSystemPrompt
+                    ModelsList.defaultSystemPrompt
                 } else {
-                    ModelsList.toolCallSYSTEMP
+                    ModelsList.toolCallingSystemPrompt
                 }
 
                 ModelManager.loadModelAwait(
-                    modelData = model,
-                    defaults = ManagerDefaults(systemPrompt = systemPrompt),
-                    chatTemplate = ModelsList.simpleChatTemplate,
+                    modelData = model.copy(chatTemplate =  ModelsList.defaultChatTemplate, systemPrompt = systemPrompt),
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
@@ -322,12 +318,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     fun selectTool(tool: Pair<String, Tools>) {
         selectedTools.value = tool
-        ModelManager.setSystemPrompt(ModelsList.toolCallSYSTEMP)
+        ModelManager.setSystemPrompt(ModelsList.toolCallingSystemPrompt)
     }
 
     fun unSelectTool() {
         selectedTools.value = "" to Tools()
-        ModelManager.setSystemPrompt(ModelsList.generalPurposeSystemPrompt)
+        ModelManager.setSystemPrompt(ModelsList.defaultSystemPrompt)
     }
     //endregion
 
@@ -525,7 +521,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun regenerateResponse(model: ModelsData?, messageId: String) {
+    fun regenerateResponse(model: ModelData?, messageId: String) {
         if (model == null) return
 
         val messageIndex = _messages.value.indexOfFirst { it.id == messageId }
@@ -556,7 +552,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun executeRegenerate(
-        model: ModelsData,
+        model: ModelData,
         messageId: String,
         messageIndex: Int,
         targetMessage: Message
@@ -580,11 +576,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             _uiState.value = ChatUiState.Loading("Switching model...")
             ModelManager.unloadModel()
             ModelManager.loadModelAwait(
-                modelData = model,
-                defaults = ManagerDefaults(
-                    systemPrompt = "You are a helpful assistant that improves message clarity and accuracy."
-                ),
-                chatTemplate = ModelsList.chatTemplate,
+                modelData = model.copy(
+                    systemPrompt = """
+                        You are a helpful assistant that improves message clarity and accuracy.
+                    """.trimIndent(),
+                    chatTemplate = ModelsList.toolCallingChatTemplate
+                )
             ) { state ->
                 _modelLoadingState.value = state
                 selectedModel.value = model
@@ -693,7 +690,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             ModelManager.loadModelAwait(currentModel) { loadState ->
                 when (loadState) {
                     is LoadState.OnLoaded -> {
-                        Log.d(TAG, "Generation model ready: ${loadState.model.modeName}")
+                        Log.d(TAG, "Generation model ready: ${loadState.model.modelName}")
                         onReady()
                     }
 

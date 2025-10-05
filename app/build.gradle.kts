@@ -83,7 +83,6 @@ android {
         implementation(libs.androidx.lifecycle.runtime.compose)
         //CORE
         implementation(libs.kotlin.stdlib)
-        implementation("ai.koog:koog-agents:0.5.0")
         implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
         coreLibraryDesugaring(libs.desugar.jdk.libs)
