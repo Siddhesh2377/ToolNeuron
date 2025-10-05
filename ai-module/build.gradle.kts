@@ -43,7 +43,6 @@ android {
 }
 
 dependencies {
-
     //PROJECTS
     implementation(files("libs/ai-core-release.aar"))
 

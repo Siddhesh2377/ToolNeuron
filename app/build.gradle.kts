@@ -42,12 +42,12 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
     buildFeatures {
@@ -60,10 +60,15 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += arrayOf(
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties"
+            )
+        }
     }
 
     dependencies {
-
         //FIREBASE
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.firestore.ktx)
@@ -78,6 +83,7 @@ android {
         implementation(libs.androidx.lifecycle.runtime.compose)
         //CORE
         implementation(libs.kotlin.stdlib)
+        implementation("ai.koog:koog-agents:0.5.0")
         implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
         coreLibraryDesugaring(libs.desugar.jdk.libs)
