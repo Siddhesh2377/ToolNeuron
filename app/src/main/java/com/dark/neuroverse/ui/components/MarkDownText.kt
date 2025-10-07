@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -32,6 +33,7 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -162,31 +164,30 @@ fun CodeCanvas(
     // ---------- UI ---------------------------------------------------------
     Column(
         modifier = modifier
-            .clip(RoundedCornerShape(rDP(12.dp)))
+            .clip(RoundedCornerShape(rDP(8.dp)))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.05f))
             .padding(horizontal = rDP(10.dp))
-            .padding(bottom = rDP(10.dp))
+            .widthIn(max = rDP(100.dp))
     ) {
         // ---------- Collapsed card (title + actions) ----------
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(vertical = 12.dp)
+                .padding(end = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
             // Title – first line of the code (or the whole string if it’s a single line)
             Text(
-                text = text.lines().firstOrNull() ?: "",
+                text = language?.trim() ?: "Text",
                 color = MaterialTheme.colorScheme.onSurface,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 1,
                 modifier = Modifier.weight(1f)
             )
 
-            // ----- READ -----
             Icon(
-                painterResource(R.drawable.copy),   // you can replace with any “read” icon
+                Icons.Outlined.RemoveRedEye,   // you can replace with any “read” icon
                 contentDescription = "Read",
                 modifier = Modifier
                     .size(rDP(15.dp))
@@ -201,7 +202,6 @@ fun CodeCanvas(
                         clipboard.setText(AnnotatedString(text))
                     })
 
-            // ----- EDIT / DONE -----
             Icon(
                 painterResource(if (!editing) R.drawable.edit else R.drawable.done),
                 contentDescription = "Edit",
@@ -209,6 +209,13 @@ fun CodeCanvas(
                     .size(rDP(15.dp))
                     .clickable { editing = !editing })
         }
+
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(bottom = rDP(12.dp), start = rDP(5.dp))
+        )
 
         // -----------------------------------------------------------------
         //  If the user pressed **Read**, show a simple read‑only dialog.

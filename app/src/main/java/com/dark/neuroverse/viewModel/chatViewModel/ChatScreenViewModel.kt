@@ -153,7 +153,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     // Debounced save channel
     private val saveChannel = Channel<Unit>(Channel.CONFLATED)
-    val isModelLoading = MutableStateFlow(false)
 
     //region Core State
     private val _uiState = MutableStateFlow<ChatUiState>(ChatUiState.Idle)
@@ -170,6 +169,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private val _modelLoadingState = MutableStateFlow<LoadState>(LoadState.Idle)
     val modelLoadingState: StateFlow<LoadState> = _modelLoadingState.asStateFlow()
+
+    private val _isModelLoading = MutableStateFlow(false)
+    val isModelLoading: StateFlow<Boolean> = _isModelLoading.asStateFlow()
 
     private val _decodingMetrics = MutableSharedFlow<DecodingMetrics>(extraBufferCapacity = 8)
     val decodingMetrics: SharedFlow<DecodingMetrics> = _decodingMetrics.asSharedFlow()
@@ -216,11 +218,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             saveChannel.consumeAsFlow()
                 .debounce(SAVE_DEBOUNCE_MS)
                 .collect {
-                    try {
-                        performSave()
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Debounced save failed", e)
-                    }
+                    performSave()
                 }
         }
     }
@@ -233,7 +231,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 // Initialize crypto and brain
                 encryptionKey.value = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
                 rootNode.value = readBrainFile(encryptionKey.value, appContext)
-                rootNode.value.printTree()
 
                 // Load chat history
                 loadInitialChat()
@@ -245,12 +242,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 _uiState.value = ChatUiState.Idle
             } catch (e: Exception) {
-                Log.e(TAG, "Initialization failed", e)
-                _uiState.value = ChatUiState.Error(
-                    "Failed to initialize: ${e.message}",
-                    isRetryable = true,
-                    cause = e
-                )
+                handleError("Initialization failed", e)
             }
         }
     }
@@ -269,23 +261,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //region Public API - Model & Tool Selection
     fun selectModel(model: ModelData) {
         viewModelScope.launch {
-            isModelLoading.value = true
             if (_uiState.value is ChatUiState.Generating) {
                 Log.w(TAG, "Cannot change model during generation")
-                isModelLoading.value = false
                 return@launch
             }
 
             if (selectedModel.value.id == model.id) {
-                Log.w(TAG, "UnSelecting model")
+                Log.w(TAG, "Unselecting model")
                 ModelManager.unloadModel()
-                isModelLoading.value = false
                 selectedModel.value = ModelData()
                 return@launch
             }
 
+            toggleModelLoading(true)
             try {
-                _uiState.value = ChatUiState.Loading("Loading model...")
                 ModelManager.unloadModel()
 
                 val systemPrompt = if (selectedTools.value.first.isBlank()) {
@@ -295,19 +284,26 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 }
 
                 ModelManager.loadModelAwait(
-                    modelData = model.copy(chatTemplate =  ModelsList.defaultChatTemplate, systemPrompt = systemPrompt),
+                    modelData = model.copy(chatTemplate = ModelsList.defaultChatTemplate, systemPrompt = systemPrompt),
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
-                    isModelLoading.value = false
                 }
 
-                _uiState.value = ChatUiState.Idle
+                toggleModelLoading(false)
             } catch (e: Exception) {
-                Log.e(TAG, "Model selection failed", e)
-                _uiState.value = ChatUiState.Error("Failed to load model: ${e.message}")
-                isModelLoading.value = false
+                handleError("Model selection failed", e)
+                toggleModelLoading(false)
             }
+        }
+    }
+
+    private fun toggleModelLoading(isLoading: Boolean) {
+        _isModelLoading.value = isLoading
+        if (isLoading) {
+            _uiState.value = ChatUiState.Loading("Loading model...")
+        } else {
+            _uiState.value = ChatUiState.Idle
         }
     }
 
@@ -339,7 +335,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 val node = NeuronTree(chatHistory).getNodeDirect(chatIdToLoad)
 
                 if (node.data.content.isBlank()) {
-                    _uiState.value = ChatUiState.Error("Chat not found or empty")
+                    handleError("Chat not found or empty")
                     return@launch
                 }
 
@@ -355,18 +351,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 _uiState.value = ChatUiState.Idle
             } catch (e: Exception) {
-                Log.e(TAG, "Failed loading chat $chatIdToLoad", e)
-                _uiState.value = ChatUiState.Error("Failed to load chat: ${e.message}")
+                handleError("Failed loading chat $chatIdToLoad", e)
             }
         }
     }
 
     private fun refreshChatListFromDisk() {
         try {
-            // Re‑load the whole brain tree from the encrypted file
             val tree = readBrainFile(encryptionKey.value, appContext)
-
-            // Build a fresh list of chats
             val history = getDefaultChatHistory(tree.root)
             val freshList =
                 NeuronTree(history).getAllChildrenRecursive()
@@ -377,10 +369,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         ChatINFO(node.id, title)
                     }
 
-            // Emit once—UI will recompute automatically
             _chatList.value = freshList
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to refresh chat list", e)
+            handleError("Failed to refresh chat list", e)
         }
     }
 
@@ -398,22 +389,19 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     fun addMessageInMemory(memory: List<BrainDoc>, tag: MemoryDataTags) {
         viewModelScope.launch {
             try {
-                // Load existing memory
                 val tempRawMemoryData = getMemoryByTags(rootNode.value.root, tag)?.data?.content
                 val oldMemory: MutableList<BrainDoc> = mutableListOf()
 
-                if (tempRawMemoryData != null && tempRawMemoryData.isNotBlank()) {
-                    val jsonObj = JSONObject(tempRawMemoryData)
+                tempRawMemoryData?.let { content ->
+                    val jsonObj = JSONObject(content)
                     if (jsonObj.has("messages")) {
                         val arr = jsonObj.getJSONArray("messages").toString()
                         oldMemory.addAll(Json.decodeFromString(arr))
                     }
                 }
 
-                // Add new memory
                 oldMemory.addAll(memory)
 
-                // Serialize back into {"messages": [ ... ]}
                 val outData = Json.encodeToString(oldMemory)
                 val json = JSONObject().apply {
                     put("messages", JSONArray(outData))
@@ -421,44 +409,29 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 updateMemory(rootNode.value.root, tag, json)
                 performTreeSave()
-
                 Log.d(TAG, "Memory updated: $json")
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to add message in memory", e)
+                handleError("Failed to add message in memory", e)
             }
         }
     }
-
 
     fun deleteChatById(id: String) {
         viewModelScope.launch {
             try {
                 Log.d(TAG, "Deleting chat $id")
-
-                // Delete from tree
                 rootNode.value.deleteNodeById(id)
-
-                // Save tree immediately (don't use debounced save)
                 performTreeSave()
-
-                // Reload tree from disk to ensure consistency
                 rootNode.value = readBrainFile(encryptionKey.value, appContext)
-
-                // Update chat list
                 refreshChatListFromDisk()
 
-                // Clear current chat if it was deleted
                 if (chatId.value == id) {
-                    withContext(Dispatchers.Main) {
-                        newChat()
-                    }
+                    newChat()
                 }
 
                 Log.d(TAG, "Chat $id deleted successfully")
-
             } catch (e: Exception) {
-                Log.e(TAG, "Failed to delete chat $id", e)
-                _uiState.value = ChatUiState.Error("Failed to delete chat: ${e.message}")
+                handleError("Failed to delete chat $id", e)
             }
         }
     }
@@ -477,29 +450,23 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         currentGenerationJob = viewModelScope.launch {
             operationSemaphore.withPermit {
                 try {
-                    executeSendMessage(input)
+                    executeSendMessage(input, _messages.value)
                 } catch (e: CancellationException) {
                     Log.d(TAG, "Message sending cancelled")
                     _uiState.value = ChatUiState.Idle
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in sendMessage", e)
-                    _uiState.value = ChatUiState.Error(
-                        "Failed to send message: ${e.message}",
-                        cause = e
-                    )
+                    handleError("Error in sendMessage", e)
                 }
             }
         }
     }
 
-    private suspend fun executeSendMessage(input: String) {
-        // Add user message immediately
+    private suspend fun executeSendMessage(input: String, currentMessages: List<Message>) {
         _messages.update { it + Message(role = Role.User, text = input) }
 
         val messageId = UUID.randomUUID().toString()
         _uiState.value = ChatUiState.Generating(messageId)
 
-        // Prepare assistant message for streaming
         val isTool = selectedTools.value.second.toolName.isNotEmpty()
         val assistantMessage = Message(
             role = if (isTool) Role.Tool else Role.Assistant,
@@ -516,9 +483,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         streamingMessageIndex = _messages.value.size - 1
 
         if (_isRag.value) {
-            handleRAGRequest(input, isTool, messageId)
+            handleRAGRequest(input, isTool, messageId, currentMessages)
         } else {
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
         }
     }
 
@@ -531,22 +498,17 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val targetMessage = _messages.value[messageIndex]
         if (targetMessage.role != Role.Assistant && targetMessage.role != Role.Tool) return
 
-        // Cancel any existing generation
         currentGenerationJob?.cancel()
 
         currentGenerationJob = viewModelScope.launch {
             operationSemaphore.withPermit {
                 try {
-                    executeRegenerate(model, messageId, messageIndex, targetMessage)
+                    executeRegenerate(model, messageId, messageIndex, targetMessage, _messages.value)
                 } catch (e: CancellationException) {
                     Log.d(TAG, "Regeneration cancelled")
                     _uiState.value = ChatUiState.Idle
                 } catch (e: Exception) {
-                    Log.e(TAG, "Regeneration failed", e)
-                    _uiState.value = ChatUiState.Error(
-                        "Failed to regenerate: ${e.message}",
-                        cause = e
-                    )
+                    handleError("Regeneration failed", e)
                 }
             }
         }
@@ -556,15 +518,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         model: ModelData,
         messageId: String,
         messageIndex: Int,
-        targetMessage: Message
+        targetMessage: Message,
+        currentMessages: List<Message>
     ) {
         _uiState.value = ChatUiState.Generating(messageId)
 
-        // Get context from previous user message
-        val userContext = _messages.value.take(messageIndex)
+        val userContext = currentMessages.take(messageIndex)
             .lastOrNull { it.role == Role.User }?.text.orEmpty()
 
-        // Clear the message for streaming
         _messages.update { messages ->
             messages.toMutableList().apply {
                 set(messageIndex, targetMessage.copy(text = "", thought = null))
@@ -572,7 +533,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
         streamingMessageIndex = messageIndex
 
-        // Switch model if needed
         if (selectedModel.value.id != model.id) {
             _uiState.value = ChatUiState.Loading("Switching model...")
             ModelManager.unloadModel()
@@ -594,33 +554,33 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             prompt = optimizePrompt,
             enableTools = false,
             messageId = messageId,
-            isRegeneration = true
+            isRegeneration = true,
+            existingMessages = currentMessages
         )
     }
 
-    private fun buildOptimizePrompt(userContext: String, originalText: String): String =
-        buildString {
-            appendLine("Improve the following assistant reply for better clarity and accuracy.")
-            appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
-            appendLine("- Make it more concise and well-structured.")
-            appendLine("- Do not add meta commentary.")
+    private fun buildOptimizePrompt(userContext: String, originalText: String): String = buildString {
+        appendLine("Improve the following assistant reply for better clarity and accuracy.")
+        appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
+        appendLine("- Make it more concise and well-structured.")
+        appendLine("- Do not add meta commentary.")
+        appendLine()
+        if (userContext.isNotBlank()) {
+            appendLine("[User context]")
+            appendLine(userContext)
             appendLine()
-            if (userContext.isNotBlank()) {
-                appendLine("[User context]")
-                appendLine(userContext)
-                appendLine()
-            }
-            appendLine("[Original reply to improve]")
-            append(originalText)
         }
+        appendLine("[Original reply to improve]")
+        append(originalText)
+    }
     //endregion
 
     //region RAG Processing
-    private suspend fun handleRAGRequest(input: String, isTool: Boolean, messageId: String) {
+    private suspend fun handleRAGRequest(input: String, isTool: Boolean, messageId: String, currentMessages: List<Message>) {
         val currentDataset = DataHubManager.currentDataSet.value
         if (currentDataset == null) {
             Log.d(TAG, "No dataset loaded, fallback to normal generation")
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
             return
         }
 
@@ -647,19 +607,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                             streamAndRender(
                                 prompt = finalPrompt,
                                 enableTools = isTool,
-                                messageId = messageId
+                                messageId = messageId,
+                                existingMessages = currentMessages
                             )
                         }
                     }
                 } else {
-                    streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
+                    streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
                 }
             } else {
                 throw Exception("RAG failed: $error")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "RAG processing failed", e)
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId)
+            handleError("RAG processing failed", e)
+            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
         }
     }
 
@@ -675,7 +636,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         return try {
             ragData.docs.joinToString("\n") { it.text }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to extract RAG context", e)
+            handleError("Failed to extract RAG context", e)
             ""
         }
     }
@@ -696,19 +657,16 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     }
 
                     is LoadState.Error -> {
-                        Log.e(TAG, "Generation model load failed: ${loadState.message}")
-                        _uiState.value =
-                            ChatUiState.Error("Model load failed: ${loadState.message}")
+                        handleError("Generation model load failed: ${loadState.message}")
                     }
 
                     else -> Log.d(TAG, "Generation model loading: $loadState")
                 }
             }.onFailure { error ->
-                _uiState.value = ChatUiState.Error("Model preparation failed: ${error.message}")
+                handleError("Model preparation failed: ${error.message}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Error ensuring generation model ready", e)
-            _uiState.value = ChatUiState.Error("Model preparation error: ${e.message}")
+            handleError("Error ensuring generation model ready", e)
         }
     }
     //endregion
@@ -718,7 +676,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         prompt: String,
         enableTools: Boolean,
         messageId: String,
-        isRegeneration: Boolean = false
+        isRegeneration: Boolean = false,
+        existingMessages: List<Message>
     ) {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
@@ -726,14 +685,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         _uiState.value = ChatUiState.DecodingStream(messageId, startTimeNs)
 
-        // Initialize streaming state
         currentStreamingState = StreamingState(messageId = messageId)
 
-        // Start batching coroutine
         startBatchedUIUpdates(messageId)
 
         fun finalizeMessage(text: String, thought: String?) {
-            // Cancel batching and do final update
             batchingJob?.cancel()
 
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
@@ -743,13 +699,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             requestSave()
             refreshChatListFromDisk()
 
-            // Clear streaming state
             currentStreamingState = null
         }
 
         try {
+            val fullPrompt = buildFullPrompt(prompt, existingMessages)
             ModelManager.generateStreaming(
-                prompt = prompt,
+                prompt = fullPrompt,
                 toolJson = if (enableTools) convertToolsToJson(selectedTools.value.second).toString() else null,
                 onToken = { token ->
                     if (!firstTokenReceived) {
@@ -764,7 +720,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         _uiState.value = ChatUiState.Generating(messageId, isFirstToken = true)
                     }
 
-                    // Add token to streaming state (no immediate UI update)
                     currentStreamingState?.let { state ->
                         addTokenToBatch(token, state)
                     }
@@ -774,13 +729,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 }
             )
 
-            val finalState = currentStreamingState
-            if (finalState != null) {
-                // Post-process for any missed reasoning patterns
+            currentStreamingState?.let { state ->
                 val (finalText, finalThought) = processReasoningPatterns(
-                    finalState.rawBuffer.toString(),
-                    finalState.visibleBuffer.toString(),
-                    finalState.thoughtBuffer.toString()
+                    state.rawBuffer.toString(),
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString()
                 )
                 finalizeMessage(finalText, finalThought)
             }
@@ -796,9 +749,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             }
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "Streaming failed", e)
+            handleError("Streaming failed", e)
             batchingJob?.cancel()
-            _uiState.value = ChatUiState.Error("Generation failed: ${e.message}", cause = e)
             currentStreamingState?.let { state ->
                 finalizeMessage(
                     state.visibleBuffer.toString(),
@@ -814,11 +766,22 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
+    private fun buildFullPrompt(prompt: String, existingMessages: List<Message>): String {
+        val conversationHistory = existingMessages
+            .filter { it.role == Role.User || it.role == Role.Assistant }
+            .map { "${it.role.name}: ${it.text}" }
+            .joinToString("\n")
+
+        return buildString {
+            appendLine("Conversation History:")
+            appendLine(conversationHistory)
+            appendLine("\nUser: $prompt")
+        }
+    }
+
     private fun addTokenToBatch(token: String, state: StreamingState) {
-        // Add to raw buffer
         state.rawBuffer.append(token)
 
-        // Process token for thinking tags
         val lowerToken = token.lowercase()
         when {
             state.inThinkTag && lowerToken.contains("</think>") -> {
@@ -853,7 +816,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         state.thoughtBuffer.toString().takeLast(MAX_THINK_DISPLAY_CHARS)
                     } else null
 
-                    // Only update if there's new content
                     if (visibleText.isNotEmpty() || !thinkingText.isNullOrEmpty()) {
                         updateStreamingMessage(messageId, visibleText, thinkingText)
                     }
@@ -862,42 +824,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    private fun processStreamingToken(
-        token: String,
-        visibleBuffer: StringBuilder,
-        thoughtBuffer: StringBuilder,
-        inThink: Boolean,
-        updateInThink: (Boolean) -> Unit
-    ) {
-        val lowerToken = token.lowercase()
-        when {
-            inThink && lowerToken.contains("</think>") -> {
-                val beforeEnd = token.substringBefore("</think>")
-                val afterEnd = token.substringAfter("</think>")
-                thoughtBuffer.append(beforeEnd)
-                updateInThink(false)
-                visibleBuffer.append(afterEnd)
-            }
-
-            inThink -> thoughtBuffer.append(token)
-            lowerToken.contains("<think>") -> {
-                val beforeStart = token.substringBefore("<think>")
-                val afterStart = token.substringAfter("<think>")
-                visibleBuffer.append(beforeStart)
-                updateInThink(true)
-                thoughtBuffer.append(afterStart)
-            }
-
-            else -> visibleBuffer.append(token)
-        }
-    }
-
     private fun processReasoningPatterns(
         rawText: String,
         visibleText: String,
         thoughtText: String
     ): Pair<String, String?> {
-        // Try JSON pattern first
         runCatching {
             val json = extractPureJson(rawText)
             val obj = JSONObject(json)
@@ -908,7 +839,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             }
         }
 
-        // Try think tags
         val thinkRegex = Regex("(?is)<think>(.*?)</think>")
         val thinkMatch = thinkRegex.find(rawText)
         if (thinkMatch != null) {
@@ -917,7 +847,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             return cleanedVisible to extractedThought
         }
 
-        // Try reasoning/answer pattern
         val reasoningRegex =
             Regex("(?is)(?:reasoning|thoughts?)\\s*:\\s*(.+?)\\s*(?:final|answer)\\s*:\\s*(.+)")
         reasoningRegex.find(rawText)?.let { match ->
@@ -1000,22 +929,18 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                             updateToolPreview(messageId, toolOutput)
 
                             if (result.toString().isNotBlank()) {
-                                // Generate summary of tool output
                                 val summaryPrompt = buildSummaryPrompt(result.toString())
                                 executeInternalReasoning(summaryPrompt)
                             }
 
                             _uiState.value = ChatUiState.Idle
                         } catch (e: Exception) {
-                            Log.e(TAG, "Tool result processing failed", e)
-                            _uiState.value =
-                                ChatUiState.Error("Tool execution failed: ${e.message}")
+                            handleError("Tool result processing failed", e)
                         }
                     }
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "Tool execution failed", e)
-                _uiState.value = ChatUiState.Error("Tool execution failed: ${e.message}")
+                handleError("Tool execution failed", e)
             }
         }
     }
@@ -1033,7 +958,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             val extractedToolName = firstCall?.optString("name").orEmpty().ifBlank { fallbackTool }
             val argObj = firstCall?.optJSONObject("arguments")
 
-            // Check if it's a schema echo (contains schema properties instead of actual args)
             val isSchemaEcho = argObj?.let { obj ->
                 obj.has("type") || obj.has("properties") || obj.has("required")
             } ?: true
@@ -1050,7 +974,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 }
             }
         } catch (e: Exception) {
-            // Fallback for malformed JSON
             JSONObject().apply {
                 put("tool", fallbackTool)
                 put("args", JSONObject().put("query", lastUserQuery))
@@ -1081,11 +1004,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         streamAndRender(
             prompt = prompt,
             enableTools = false,
-            messageId = reasoningMessageId
+            messageId = reasoningMessageId,
+            existingMessages = _messages.value
         )
     }
 
-    suspend fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
+    fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
         val selectedToolName = selectedTools.value.second.toolName
 
         _messages.update { messages ->
@@ -1118,12 +1042,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun generateTitleIfNeeded() {
-        // Skip if title already exists
         if (_chatTitle.value.isNotBlank()) return
 
-        // Only generate after first assistant response
         val messages = _messages.value
-        if (messages.size < 2) return // Need at least user + assistant message
+        if (messages.size < 2) return
 
         val firstUserMessage = messages
             .firstOrNull { it.role == Role.User }
@@ -1145,11 +1067,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         firstAssistantMessage
                     )
                     _chatTitle.value = generatedTitle
-                    Log.d(TAG, "Auto-generated title: $generatedTitle")
                     requestSave()
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to generate title", e)
-                    // Fallback to simple title
                     _chatTitle.value = firstUserMessage.take(48)
                 }
             }
@@ -1161,10 +1080,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         assistantMessage: String
     ): String = withContext(Dispatchers.IO) {
         try {
-            // Save current system prompt
             val originalSystemPrompt = selectedModel.value.systemPrompt
 
-            // Set title generation system prompt
             val titlePrompt = """
             Generate a concise, descriptive title (3-6 words) for this conversation.
             Rules:
@@ -1185,12 +1102,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             val titleBuilder = StringBuilder()
             var tokenCount = 0
 
-            // Generate title with streaming
             ModelManager.generateStreaming(
                 prompt = titlePrompt,
                 toolJson = null,
                 onToken = { token ->
-                    if (tokenCount < 15) { // Limit to ~15 tokens for title
+                    if (tokenCount < 15) {
                         titleBuilder.append(token)
                         tokenCount++
                     }
@@ -1198,19 +1114,16 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 onToolCalled = { _, _ -> }
             )
 
-            // Restore original system prompt
             ModelManager.setSystemPrompt(originalSystemPrompt)
 
-            // Clean up the generated title
             val rawTitle = titleBuilder.toString().trim()
             val cleanTitle = rawTitle
-                .replace(Regex("^[\"']|[\"']$"), "") // Remove quotes
-                .replace(Regex("[.!?]+$"), "") // Remove trailing punctuation
-                .replace(Regex("\\s+"), " ") // Normalize whitespace
-                .take(50) // Limit length
+                .replace(Regex("^[\"']|[\"']$"), "")
+                .replace(Regex("[.!?]+$"), "")
+                .replace(Regex("\\s+"), " ")
+                .take(50)
                 .trim()
 
-            // Fallback if generation failed or produced garbage
             if (cleanTitle.isBlank() || cleanTitle.length < 3) {
                 throw Exception("Generated title too short")
             }
@@ -1218,8 +1131,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             cleanTitle
 
         } catch (e: Exception) {
-            Log.e(TAG, "Title generation failed, using fallback", e)
-            // Fallback: use first few words of user message
             userMessage
                 .split(" ")
                 .take(6)
@@ -1228,18 +1139,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    // Replace your existing performSave() method with this:
-
     private fun performSave() {
         try {
             Log.d(TAG, "=== Starting performSave ===")
 
-            // Only save if we have actual content to save
             val currentMessages = _messages.value
             val currentTitle = _chatTitle.value
             val currentChatId = chatId.value
 
-            // Don't create empty chats
             if (currentMessages.isEmpty() && currentTitle.isBlank()) {
                 Log.d(TAG, "No content to save, skipping")
                 return
@@ -1263,7 +1170,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 runCatching {
                     tree.getNodeDirect(currentChatId)
                 }.getOrNull()?.takeIf {
-                    it.id.isNotBlank() // Ensure it's a valid node
+                    it.id.isNotBlank()
                 }
             } else null
 
@@ -1271,40 +1178,35 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 Log.d(TAG, "Updating existing chat node: ${existingNode.id}")
                 existingNode.data.content = jsonData.toString()
             } else if (currentMessages.isNotEmpty()) {
-                // Only create new chat if we have actual messages
                 Log.d(TAG, "Creating new chat node")
                 val newNode = addNewChat(history, jsonData)
                 chatId.value = newNode.id
                 Log.d(TAG, "Created new chat with id: ${newNode.id}")
             }
 
-            // Save the tree to disk
             saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
             Log.d(TAG, "Chat saved successfully")
 
         } catch (e: Exception) {
-            Log.e(TAG, "Save operation failed", e)
+            handleError("Save operation failed", e)
         } finally {
             refreshChatListFromDisk()
         }
     }
 
-    // Add this new method specifically for deletion saves
     private fun performTreeSave() {
         try {
             Log.d(TAG, "=== Saving tree structure to disk ===")
             saveTree(rootNode.value, appContext, BuildConfig.ALIAS)
             Log.d(TAG, "Tree structure saved successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Tree save failed", e)
+            handleError("Tree save failed", e)
         } finally {
             refreshChatListFromDisk()
         }
     }
 
-    // Update requestSave to only handle conversation saves
     private fun requestSave() {
-        // Only send save request if we have content worth saving
         if (_messages.value.isNotEmpty() || _chatTitle.value.isNotBlank()) {
             saveChannel.trySend(Unit)
         }
@@ -1341,7 +1243,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
     }
 
-    // Extension function to provide permits for semaphore
     private suspend fun <T> Semaphore.withPermit(action: suspend () -> T): T {
         acquire()
         try {
@@ -1353,7 +1254,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //endregion
 
     //region Cleanup
-    // Update cleanup to cancel batching job
     override fun onCleared() {
         super.onCleared()
         currentGenerationJob?.cancel()
@@ -1362,4 +1262,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         currentStreamingState = null
     }
     //endregion
+
+    private fun handleError(message: String, cause: Throwable? = null) {
+        cause?.let { Log.e(TAG, message, cause) } ?: Log.e(TAG, message)
+        _uiState.value = ChatUiState.Error(message, cause = cause)
+    }
 }

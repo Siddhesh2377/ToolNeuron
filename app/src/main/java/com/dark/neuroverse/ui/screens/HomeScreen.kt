@@ -141,6 +141,7 @@ import com.mp.data_hub_lib.model.BrainDoc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -158,7 +159,11 @@ fun HomeScreen(
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Handle error states with user feedback
+    // Token tracking
+    val tokenCount: MutableStateFlow<Int> = MutableStateFlow(0)
+    val lastTokenUpdate: MutableStateFlow<Long> = MutableStateFlow(System.currentTimeMillis())
+    val tkPerSecond by remember { mutableStateOf(MutableStateFlow(0)) }
+
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is ChatUiState.Error -> {
@@ -167,7 +172,23 @@ fun HomeScreen(
                 ).show()
             }
 
-            else -> {}
+            is ChatUiState.DecodingStream -> {
+                tokenCount.value++
+                lastTokenUpdate.value = System.currentTimeMillis()
+            }
+
+            else -> {
+                if (lastTokenUpdate.value > 0) {
+                    val currentTime = System.currentTimeMillis()
+                    val elapsedTime = currentTime - lastTokenUpdate.value
+
+                    if (elapsedTime > 0) { // Ensure elapsedTime is greater than zero to avoid division by zero
+                        tkPerSecond.value = (tokenCount.value / (elapsedTime / 1000.0)).toInt()
+                        tokenCount.value = 0
+                        lastTokenUpdate.value = currentTime
+                    }
+                }
+            }
         }
     }
 
@@ -228,6 +249,22 @@ fun HomeScreen(
                         }
                     }
                 }
+
+                // Token rate display
+                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Tokens/s: ${tkPerSecond.collectAsState().value}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
         }, bottomBar = {
             BottomBar(viewModel = viewModel, uiState = uiState)
@@ -244,58 +281,59 @@ fun TopBar(
 ) {
     val title by viewModel.chatTitle.collectAsStateWithLifecycle()
 
-
     CenterAlignedTopAppBar(
         title = {
-        Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
-            if (it) {
-                ModelSelection(viewModel, false)
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
+                if (it) {
+                    ModelSelection(viewModel, false)
+                } else {
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = title,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
 
-                    ModelSelection(viewModel, true)
+                        ModelSelection(viewModel, true)
+                    }
                 }
             }
-        }
-
-    }, navigationIcon = {
-        IconButton(
-            onClick = onMenu,
-            shape = RoundedCornerShape(rDP(8.dp)),
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                contentColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-        }
-    }, actions = {
-        IconButton(
-            onClick = onLeftMenu,
-            shape = RoundedCornerShape(rDP(8.dp)),
-            colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                contentColor = MaterialTheme.colorScheme.primary
-            )
-        ) {
-            Icon(
-                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
-            )
-        }
-    }, colors = TopAppBarDefaults.topAppBarColors(
-        containerColor = MaterialTheme.colorScheme.background
-    )
+        },
+        navigationIcon = {
+            IconButton(
+                onClick = onMenu,
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+            }
+        },
+        actions = {
+            IconButton(
+                onClick = onLeftMenu,
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background
+        )
     )
 }
 
@@ -465,14 +503,12 @@ private fun BottomBar(
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
         is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> true
-
         else -> false
     }
 
     // Determine if input should be disabled
     val inputEnabled = when (uiState) {
         is ChatUiState.Loading, is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> false
-
         is ChatUiState.Error -> uiState.isRetryable
         else -> true
     }
@@ -495,7 +531,8 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        })
+        }
+    )
 }
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -813,23 +850,6 @@ private fun RegularChatUI(
     val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
 
     var generatedMessage by remember { mutableStateOf("") }
-
-
-//    LaunchedEffect(message.id, message.text, currentMsgId) {
-//        if (currentMsgId == message.id) {
-//            val oldLength = generatedMessage.length
-//            val newContent = message.text.drop(oldLength)
-//
-//            newContent.forEach { char ->
-//                generatedMessage += char
-//                delay(15) // typing speed per token
-//            }
-//        } else {
-//            // For already completed messages, just show full text
-//            generatedMessage = message.text
-//        }
-//    }
-
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
         when (empty) {
@@ -1202,7 +1222,6 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             }
         }
 
-
         if (showDialog) {
             Dialog(onDismissRequest = { showDialog = false }) {
                 Card(
@@ -1297,6 +1316,3 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
         }
     }
 }
-
-
-
