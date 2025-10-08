@@ -10,10 +10,9 @@ object DatabaseProvider {
     fun getDatabase(context: Context): AppDatabase {
         return INSTANCE ?: synchronized(this) {
             Room.databaseBuilder(
-                context.applicationContext,
-                AppDatabase::class.java,
-                "mode_db"
-            ).build().also { INSTANCE = it }
+                context.applicationContext, AppDatabase::class.java, "mode_db"
+            ).fallbackToDestructiveMigration(false) // Add this line
+                .build().also { INSTANCE = it }
         }
     }
 }

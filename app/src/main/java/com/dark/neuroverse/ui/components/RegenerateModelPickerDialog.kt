@@ -58,11 +58,11 @@ fun RegenerateModelPickerDialog(
                 ) {
                     // Current model first
                     val sorted =
-                        listOf(selected) + models.filter { it.modeName != selected.modeName }
-                    items(sorted, key = { it.modeName }) { model ->
+                        listOf(selected) + models.filter { it.modelName != selected.modelName }
+                    items(sorted, key = { it.modelName }) { model ->
                         ModelRow(
-                            name = shortModelLabel(model.modeName),
-                            isCurrent = model.modeName == selected.modeName,
+                            name = shortModelLabel(model.modelName),
+                            isCurrent = model.modelName == selected.modelName,
                             onClick = {
                                 // Fire & close
                                 viewModel.regenerateResponse(model, messageId)

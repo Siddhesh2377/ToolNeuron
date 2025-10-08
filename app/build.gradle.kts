@@ -42,12 +42,12 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
     tasks.withType<KotlinJvmCompile>().configureEach {
         compilerOptions {
-            jvmTarget.set(JvmTarget.JVM_11)
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
     buildFeatures {
@@ -60,10 +60,15 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += arrayOf(
+                "META-INF/INDEX.LIST",
+                "META-INF/io.netty.versions.properties"
+            )
+        }
     }
 
     dependencies {
-
         //FIREBASE
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.firestore.ktx)
@@ -102,6 +107,10 @@ android {
         implementation(libs.androidx.lifecycle.viewmodel.compose)
 
         //CORE-UI-LIBS
+        implementation(platform("io.github.rosemoe:editor-bom:0.23.7"))
+        implementation("io.github.rosemoe:editor")
+        implementation("io.github.rosemoe:editor-lsp")
+        implementation("io.github.rosemoe:language-java")
         implementation(libs.accompanist.insets)
         implementation(libs.accompanist.insets.ui)
         implementation(libs.androidx.navigation.compose)

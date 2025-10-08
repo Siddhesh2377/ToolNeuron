@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -40,7 +40,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +54,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dark.ai_module.model.ModelsData
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.activity.UserDataActivity
@@ -89,7 +89,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val currentModel by ModelManager.getModel().collectAsState()
+    val currentModel by ModelManager.currentModel.collectAsStateWithLifecycle()
 
     // Load initial data
     LaunchedEffect(Unit) {
@@ -122,20 +122,21 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Settings", style = MaterialTheme.typography.headlineMedium.copy(
-                            fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
-                        )
+                Text(
+                    "Settings", style = MaterialTheme.typography.headlineMedium.copy(
+                        fontFamily = FontFamily.Serif, fontWeight = FontWeight.Bold
                     )
-                }, navigationIcon = {
-                    IconButton(onClick = onBackClick) {
-                        Icon(
-                            imageVector = Icons.Default.ArrowBack, contentDescription = "Back"
-                        )
-                    }
-                }, colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
                 )
+            }, navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            }, colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
+            )
             )
         }) { innerPadding ->
         if (isLoading) {
@@ -185,9 +186,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                                     clearChatHistory(context, chatList)
                                     chatList = emptyList()
                                     Toast.makeText(
-                                        context,
-                                        "Chat history cleared",
-                                        Toast.LENGTH_SHORT
+                                        context, "Chat history cleared", Toast.LENGTH_SHORT
                                     ).show()
                                 } catch (e: Exception) {
                                     Log.e("SettingsScreen", "Failed to clear data", e)
@@ -202,14 +201,7 @@ fun SettingsScreen(onBackClick: () -> Unit = {}) {
                         })
                 }
 
-                // App Settings Section (commented out as in original)
-                // item {
-                //     AppSettingsSection(
-                //         updateInfo = updateInfo,
-                //         updateViewModel = updateViewModel,
-                //         context = context
-                //     )
-                // }
+
             }
         }
     }
@@ -262,7 +254,7 @@ private fun ErrorCard(
 
 @Composable
 private fun ModelSettingsSection(
-    currentModel: ModelsData,
+    currentModel: ModelData,
     professionalism: Float,
     emotionalTone: Float,
     onProfessionalismChange: (Float) -> Unit,
@@ -284,10 +276,9 @@ private fun ModelSettingsSection(
             modifier = Modifier.padding(rDP(16.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
         ) {
-            ModelInfoRow("Name", currentModel.modeName)
-            ModelInfoRow("Context Size", "${currentModel.modelCtxSize}")
-            ModelInfoRow("Model Size", "${currentModel.modelSize} MB")
-            ModelInfoRow("Tool Support", currentModel.toolUse)
+            ModelInfoRow("Name", currentModel.modelName)
+            ModelInfoRow("Context Size", "${currentModel.ctxSize}")
+            ModelInfoRow("Tool Support", currentModel.isToolCalling.toString())
         }
     }
 

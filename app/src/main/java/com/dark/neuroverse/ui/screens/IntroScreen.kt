@@ -11,9 +11,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
-import com.dark.neuroverse.ui.components.IntroComposable
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.tooling.preview.Preview
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Preview
 @Composable
 fun IntroScreen() {
     Column(
@@ -23,12 +25,18 @@ fun IntroScreen() {
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        IntroComposable()
         Text(
-            text = "Welcome to\nTool-Neuron..!",
-            style = MaterialTheme.typography.headlineMedium.copy(
+            text = "Tool-Neuron", style = MaterialTheme.typography.headlineMedium.copy(
                 fontFamily = FontFamily.Serif,
-                color = MaterialTheme.colorScheme.primary
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
+            )
+        )
+        Text(
+            text = "Where Your Privacy Matters", style = MaterialTheme.typography.titleMedium.copy(
+                fontFamily = FontFamily.Monospace,
+                color = MaterialTheme.colorScheme.primary,
+                textAlign = TextAlign.Center
             )
         )
     }

@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.drawer
 
+import android.util.Log
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -18,9 +19,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.rounded.AddCircleOutline
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +41,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.R
-import com.dark.neuroverse.ui.theme.SkyBlue
+import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
@@ -53,92 +59,128 @@ fun SettingsDrawerContent(
     modifier: Modifier = Modifier,
     viewModel: ChatScreenViewModel,
     onSettingsClick: () -> Unit,
-    onModelsClick: () -> Unit,
     onChatSelected: () -> Unit,
-    onPluginStoreClick: () -> Unit,
+    onNewChatClick: () -> Unit,
     onDataHubClick: () -> Unit,
+    onPluginStoreClick: () -> Unit,
+    onModelsClick: () -> Unit
 ) {
     val chatList by viewModel.chatList.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentChatId by viewModel.chatId.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
-    // Track deletion states to prevent UI issues
     var deletingChatIds by remember { mutableStateOf(setOf<String>()) }
+    var showSettingsMenu by remember { mutableStateOf(false) }
 
-    // Clear deletion tracking when UI state changes
     LaunchedEffect(uiState) {
         if (uiState !is ChatUiState.Loading) {
             deletingChatIds = emptySet()
         }
     }
 
+    LaunchedEffect(chatList) {
+        Log.d("SettingsDrawerContent", "Chat list updated: $chatList")
+    }
+
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(280.dp) // Slightly wider for better UX
+            .width(rDP(300.dp))
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
-            .padding(vertical = 24.dp)
+            .padding(top = rDP(12.dp))
+            .padding(rDP(16.dp))
     ) {
-        // Header
-        Text(
-            text = "Chat Management", style = MaterialTheme.typography.headlineMedium.copy(
-                fontFamily = FontFamily.Serif,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            ), modifier = Modifier.padding(top = 24.dp, bottom = 24.dp)
-        )
-
-        // Chat History Section
-        LazyColumn(
-            modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)
+        // Compact Header with Settings Menu Button
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = rDP(16.dp), bottom = rDP(12.dp)),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Chat History", style = MaterialTheme.typography.headlineSmall.copy(
-                            fontFamily = FontFamily.Serif,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        ), modifier = Modifier.padding(top = 12.dp, bottom = 8.dp)
-                    )
+            Text(
+                text = "Tool-Neuron", style = MaterialTheme.typography.headlineSmall.copy(
+                    fontFamily = FontFamily.Serif,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                ), modifier = Modifier.weight(1f)
+            )
 
-                    // Show loading indicator if any chat operations are in progress
-                    if (uiState is ChatUiState.Loading && (uiState as ChatUiState.Loading).operation.contains(
-                            "chat",
-                            ignoreCase = true
-                        )
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp), strokeWidth = 2.dp
-                        )
-                    }
-                }
+            IconButton(onClick = {
+                onNewChatClick()
+            }) {
+                Icon(
+                    Icons.Rounded.AddCircleOutline,
+                    contentDescription = "New Chat",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
 
+            Box {
+                IconButton(onClick = {
+                    showSettingsMenu = true
+                }) {
+                    Icon(
+                        Icons.Rounded.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                SettingsDropdownMenu(
+                    expanded = showSettingsMenu,
+                    onDismiss = { showSettingsMenu = false },
+                    onDataHubClick = {
+                        showSettingsMenu = false
+                        onDataHubClick()
+                    },
+                    onPluginStoreClick = {
+                        showSettingsMenu = false
+                        onPluginStoreClick()
+                    },
+                    onModelsClick = {
+                        showSettingsMenu = false
+                        onModelsClick()
+                    },
+                    onSettingsClick = {
+                        showSettingsMenu = false
+                        onSettingsClick()
+                    },
+                    enabled = uiState !is ChatUiState.Loading
+                )
+            }
+        }
+
+        Spacer(Modifier.height(rDP(12.dp)))
+
+        // Chat History Header
+        Text(
+            text = "Recent Chats", style = MaterialTheme.typography.titleMedium.copy(
+                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant
+            ), modifier = Modifier.padding(bottom = rDP(8.dp))
+        )
+
+        // Chat History List
+        LazyColumn(
+            modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+        ) {
             if (chatList.isEmpty()) {
                 item {
                     Text(
-                        text = "No chat history yet",
+                        text = "No chats yet\nStart a new conversation!",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 16.dp)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        modifier = Modifier.padding(vertical = rDP(24.dp), horizontal = rDP(8.dp))
                     )
                 }
             } else {
                 items(
                     items = chatList, key = { it.id }) { chat ->
-                    ChatHistoryItem(
+                    CompactChatHistoryItem(
                         chat = chat,
                         isCurrentChat = chat.id == currentChatId,
                         isDeleting = chat.id in deletingChatIds,
                         onChatClick = {
-                            // Prevent loading same chat
                             if (chat.id != currentChatId && uiState !is ChatUiState.Loading) {
                                 scope.launch {
                                     viewModel.loadChatById(chat.id)
@@ -147,62 +189,150 @@ fun SettingsDrawerContent(
                             }
                         },
                         onDeleteClick = {
-                            // Prevent multiple deletion attempts
                             if (chat.id !in deletingChatIds && uiState !is ChatUiState.Loading) {
                                 deletingChatIds = deletingChatIds + chat.id
                                 scope.launch {
                                     viewModel.deleteChatById(chat.id)
-                                    // Note: Don't call onChatSelected() here as it might interfere with deletion
                                 }
                             }
                         })
                 }
             }
         }
+    }
+}
 
-        Spacer(Modifier.height(24.dp))
-
-        // Action Buttons
-        ActionButton(
-            text = "Data Hub",
-            icon = R.drawable.database_zap,
+@Composable
+private fun SettingsDropdownMenu(
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onDataHubClick: () -> Unit,
+    onPluginStoreClick: () -> Unit,
+    onModelsClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    enabled: Boolean
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+    ) {
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                ) {
+                    Icon(
+                        painter = painterResource(id = R.drawable.database_zap),
+                        contentDescription = "Data Hub",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                    Text(
+                        text = "Data Hub", style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            },
             onClick = onDataHubClick,
-            enabled = uiState !is ChatUiState.Loading
+            enabled = enabled,
         )
 
-        Spacer(Modifier.height(16.dp))
-
-        // Action Buttons
-        ActionButton(
-            text = "Plugin Store",
-            icon = Icons.Outlined.GridView,
-            onClick = onPluginStoreClick,
-            enabled = uiState !is ChatUiState.Loading
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.GridView,
+                        contentDescription = "Plugins",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                    Text(
+                        text = "Plugin Store", style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }, onClick = onPluginStoreClick, enabled = enabled
         )
 
-        Spacer(Modifier.height(16.dp))
-
-        ActionButton(
-            text = "Models",
-            icon = Icons.Outlined.ArrowCircleDown,
-            onClick = onModelsClick,
-            enabled = uiState !is ChatUiState.Loading
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.ArrowCircleDown,
+                        contentDescription = "Models",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                    Text(
+                        text = "Models", style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }, onClick = onModelsClick, enabled = enabled
         )
 
-        Spacer(Modifier.height(16.dp))
+        HorizontalDivider(
+            modifier = Modifier.padding(vertical = rDP(4.dp)),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
 
-        ActionButton(
-            text = "Settings",
-            icon = Icons.Outlined.Settings,
-            onClick = onSettingsClick,
-            enabled = uiState !is ChatUiState.Loading
+        DropdownMenuItem(
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Settings,
+                        contentDescription = "Settings",
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                    Text(
+                        text = "Settings", style = MaterialTheme.typography.bodyLarge
+                    )
+                }
+            }, onClick = onSettingsClick, enabled = enabled
         )
     }
 }
 
 @Composable
-private fun ChatHistoryItem(
-    chat: com.dark.neuroverse.model.ChatINFO,
+private fun CompactSearchBox(
+    onClick: () -> Unit, enabled: Boolean
+) {
+    Row(modifier = Modifier
+        .fillMaxWidth()
+        .clickable(enabled = enabled) { onClick() }
+        .background(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            shape = MaterialTheme.shapes.medium
+        )
+        .padding(horizontal = rDP(12.dp), vertical = rDP(10.dp)),
+        verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = Icons.Outlined.Search,
+            contentDescription = "Search",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(rDP(18.dp))
+        )
+        Spacer(Modifier.width(rDP(8.dp)))
+        Text(
+            text = "Search chats...",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+        )
+    }
+}
+
+@Composable
+private fun CompactChatHistoryItem(
+    chat: ChatINFO,
     isCurrentChat: Boolean,
     isDeleting: Boolean,
     onChatClick: () -> Unit,
@@ -215,18 +345,17 @@ private fun ChatHistoryItem(
             .clickable(enabled = !isDeleting) { onChatClick() }
             .background(
                 color = if (isCurrentChat) {
-                    SkyBlue.copy(0.1f)
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 } else {
-                    MaterialTheme.colorScheme.surface
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                 }, shape = MaterialTheme.shapes.small
             )
-            .padding(horizontal = rDP(12.dp), vertical = rDP(8.dp))) {
-        // Chat name
+            .padding(horizontal = rDP(12.dp), vertical = rDP(4.dp))) {
         Text(
             text = chat.name.ifBlank { "Untitled Chat" },
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyLarge.copy(
+            style = MaterialTheme.typography.titleMedium.copy(
                 fontWeight = if (isCurrentChat) FontWeight.Medium else FontWeight.Normal
             ),
             color = if (isCurrentChat) {
@@ -234,105 +363,30 @@ private fun ChatHistoryItem(
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .weight(1f)
+                .padding(start = rDP(4.dp))
         )
 
-        // Delete button with loading state
-        Box(
-            modifier = Modifier.padding(start = 8.dp)
-        ) {
-            if (isDeleting) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(20.dp),
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.error
+        if (isDeleting) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(start = rDP(8.dp))
+                    .size(rDP(16.dp)),
+                strokeWidth = rDP(2.dp),
+                color = MaterialTheme.colorScheme.error
+            )
+        } else {
+            IconButton(
+                onClick = onDeleteClick, modifier = Modifier.padding(start = rDP(4.dp))
+            ) {
+                Icon(
+                    imageVector = Icons.TwoTone.Delete,
+                    contentDescription = "Delete chat",
+                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    modifier = Modifier.size(rDP(16.dp))
                 )
-            } else {
-                IconButton(
-                    onClick = onDeleteClick, modifier = Modifier.size(32.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.TwoTone.Delete,
-                        contentDescription = "Delete chat",
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
             }
         }
-    }
-}
-
-@Composable
-private fun ActionButton(
-    text: String, icon: ImageVector, onClick: () -> Unit, enabled: Boolean = true
-) {
-    Row(
-        modifier = Modifier
-            .clickable(enabled = enabled) { onClick() }
-            .fillMaxWidth()
-            .background(
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.surface
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                }, shape = MaterialTheme.shapes.medium
-            )
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
-            color = if (enabled) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            }
-        )
-        Icon(
-            imageVector = icon, contentDescription = text, tint = if (enabled) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            }
-        )
-    }
-}
-
-@Composable
-private fun ActionButton(
-    text: String, icon: Int, onClick: () -> Unit, enabled: Boolean = true
-) {
-    Row(
-        modifier = Modifier
-            .clickable(enabled = enabled) { onClick() }
-            .fillMaxWidth()
-            .background(
-                color = if (enabled) {
-                    MaterialTheme.colorScheme.surface
-                } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)
-                }, shape = MaterialTheme.shapes.medium
-            )
-            .padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif),
-            color = if (enabled) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            }
-        )
-        Icon(
-            painter = painterResource(icon), contentDescription = text, tint = if (enabled) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-            }
-        )
     }
 }

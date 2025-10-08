@@ -2,6 +2,7 @@ package com.dark.neuroverse.activity
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -46,7 +47,7 @@ class MainActivity : ComponentActivity() {
         private const val PREF_NAME = "app_preferences"
         private const val KEY_INTRO_SHOWN = "intro_shown"
         private const val KEY_FIRST_LAUNCH = "first_launch"
-        private const val INTRO_DURATION_MS = 2000L // Reduced from 3 seconds
+        private const val INTRO_DURATION_MS = 1500L // Reduced from 3 seconds
     }
 
     private val permission = Manifest.permission.POST_NOTIFICATIONS
@@ -87,8 +88,7 @@ class MainActivity : ComponentActivity() {
 
                     // Determine the appropriate start screen
                     startDestination = determineStartDestination(
-                        isDirectNavigation = isDirectChatScreen,
-                        context = this@MainActivity
+                        isDirectNavigation = isDirectChatScreen, context = this@MainActivity
                     )
 
                     Log.d("MainActivity", "Start destination determined: $startDestination")
@@ -105,8 +105,7 @@ class MainActivity : ComponentActivity() {
             NeuroVerseTheme {
                 if (initializationComplete) {
                     NavHost(
-                        navController = navController,
-                        startDestination = startDestination
+                        navController = navController, startDestination = startDestination
                     ) {
                         composable(Screen.Intro.route) {
                             IntroScreen()
@@ -139,21 +138,31 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Home.route) {
-                            HomeScreen(
-                                onRequestModelChange = {
-                                    navController.navigate(Screen.Model.route)
-                                },
-                                onRequestSettingsChange = {
-                                    navController.navigate(Screen.Settings.route)
-                                }
-                            )
+                            HomeScreen(onRequestSettingsChange = {
+                                navController.navigate(Screen.Settings.route)
+                            }, onDataHubClick = {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, DatahubActivity::class.java
+                                    )
+                                )
+                            }, onPluginStoreClick = {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, PluginHubActivity::class.java
+                                    )
+                                )
+                            }, onModelsClick = {
+                                navController.navigate(Screen.Model.route)
+                            })
                         }
 
                         composable(Screen.Settings.route) {
-                            SettingsScreen() {
-                                // Handle back navigation from settings
-                                navController.popBackStack()
-                            }
+                            SettingsScreen(
+                                onBackClick = {
+                                    navController.popBackStack()
+                                },
+                            )
                         }
                     }
                 }
@@ -167,10 +176,9 @@ class MainActivity : ComponentActivity() {
      * Determines the appropriate start destination based on app state and user preferences.
      */
     private suspend fun determineStartDestination(
-        isDirectNavigation: Boolean,
-        context: Context
+        isDirectNavigation: Boolean, context: Context
     ): String {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
 
         // Check if this is a direct navigation request (e.g., from notification)
         if (isDirectNavigation) {
@@ -207,7 +215,7 @@ class MainActivity : ComponentActivity() {
      * Marks intro as shown for this session/period.
      */
     private fun markIntroAsShown(context: Context) {
-        val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_INTRO_SHOWN, true).apply()
         Log.d("MainActivity", "Intro marked as shown")
     }
@@ -216,11 +224,8 @@ class MainActivity : ComponentActivity() {
      * Resets intro preferences - useful for testing or user preference.
      */
     fun resetIntroPreferences() {
-        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean(KEY_INTRO_SHOWN, false)
-            .putBoolean(KEY_FIRST_LAUNCH, true)
-            .apply()
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).putBoolean(KEY_FIRST_LAUNCH, true).apply()
         Log.d("MainActivity", "Intro preferences reset")
     }
 
@@ -275,7 +280,7 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Reset intro shown flag when app goes to background
         // This ensures intro shows again after app has been backgrounded for a while
-        val prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).apply()
         Log.d("MainActivity", "App stopped - intro flag reset")
     }

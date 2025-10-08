@@ -9,6 +9,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -29,6 +30,16 @@ private val DarkColorScheme = darkColorScheme(
     surface = LightBlack,
     onSurface = White,
     primaryContainer = PrimaryContainer
+)
+private val BoldColorScheme = lightColorScheme(
+    primary = Color(0xFF1258CE),         // Bright blue
+    onPrimary = Color(0xFFFFFFFF),       // White
+    secondary = Color(0xFF8B5CF6),       // Purple accent
+    background = Color(0xFFF8FAFC),      // Very light blue
+    onBackground = Color(0xFF0F172A),    // Almost black
+    surface = Color(0xFFFFFFFF),         // White
+    onSurface = Color(0xFF1E293B),       // Dark slate
+    primaryContainer = Color(0xFF2563EB) // Medium blue
 )
 
 private val LightColorScheme = lightColorScheme(

@@ -51,16 +51,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
-import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -76,7 +77,6 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
@@ -109,16 +109,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.model.ModelsData
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
-import com.dark.neuroverse.activity.DatahubActivity
-import com.dark.neuroverse.activity.PluginHubActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
-import com.dark.neuroverse.ui.components.DataPackSelectorDialog
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
@@ -139,41 +137,55 @@ import com.dark.plugins.model.Tools
 import com.dark.userdata.helpers.MemoryDataTags
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
-import com.mp.data_hub_lib.model.Doc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestModelChange: () -> Unit,
-    onRequestSettingsChange: () -> Unit,
-    viewModel: ChatScreenViewModel = viewModel(
+    onRequestSettingsChange: () -> Unit, viewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
-    ),
+    ), onDataHubClick: () -> Unit, onPluginStoreClick: () -> Unit, onModelsClick: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val chatTitle by viewModel.chatTitle.collectAsStateWithLifecycle()
     val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
-    // Handle error states with user feedback
+    // Token tracking
+    val tokenCount: MutableStateFlow<Int> = MutableStateFlow(0)
+    val lastTokenUpdate: MutableStateFlow<Long> = MutableStateFlow(System.currentTimeMillis())
+    val tkPerSecond by remember { mutableStateOf(MutableStateFlow(0)) }
+
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is ChatUiState.Error -> {
                 Toast.makeText(
-                    context,
-                    "Error: ${state.message}",
-                    Toast.LENGTH_LONG
+                    context, "Error: ${state.message}", Toast.LENGTH_LONG
                 ).show()
             }
 
-            else -> {}
+            is ChatUiState.DecodingStream -> {
+                tokenCount.value++
+                lastTokenUpdate.value = System.currentTimeMillis()
+            }
+
+            else -> {
+                if (lastTokenUpdate.value > 0) {
+                    val currentTime = System.currentTimeMillis()
+                    val elapsedTime = currentTime - lastTokenUpdate.value
+
+                    if (elapsedTime > 0) { // Ensure elapsedTime is greater than zero to avoid division by zero
+                        tkPerSecond.value = (tokenCount.value / (elapsedTime / 1000.0)).toInt()
+                        tokenCount.value = 0
+                        lastTokenUpdate.value = currentTime
+                    }
+                }
+            }
         }
     }
 
@@ -185,62 +197,75 @@ fun HomeScreen(
     }
 
     ModalNavigationDrawer(
-        drawerState = drawerState,
-        drawerContent = {
+        drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
                 viewModel = viewModel,
                 onSettingsClick = onRequestSettingsChange,
-                onModelsClick = onRequestModelChange,
                 onChatSelected = { scope.launch { drawerState.close() } },
+                onNewChatClick = {
+                    viewModel.newChat()
+                },
                 onDataHubClick = {
-                    context.startActivity(Intent(context, DatahubActivity::class.java))
+                    onDataHubClick()
                 },
                 onPluginStoreClick = {
-                    context.startActivity(Intent(context, PluginHubActivity::class.java))
-                }
+                    onPluginStoreClick()
+                },
+                onModelsClick = {
+                    onModelsClick()
+                },
             )
-        }
-    ) {
-        Scaffold(
-            modifier = Modifier
-                .fillMaxSize()
-                .imePadding(),
-            topBar = {
-                Column {
-                    TopBar(
-                        title = chatTitle,
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onLeftMenu = { viewModel.newChat() }
-                    )
-                    ModelLoadProgressBar(loadState = modelState)
+        }) {
+        Scaffold(modifier = Modifier
+            .fillMaxSize()
+            .imePadding(), topBar = {
+            Column {
+                TopBar(
+                    viewModel,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = { viewModel.newChat() })
+                ModelLoadProgressBar(loadState = modelState)
 
-                    // Global loading indicator for UI state
-                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary
+                // Global loading indicator for UI state
+                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (uiState is ChatUiState.Loading) {
+                            Text(
+                                text = (uiState as ChatUiState.Loading).operation,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp, vertical = 4.dp
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
-                            if (uiState is ChatUiState.Loading) {
-                                Text(
-                                    text = (uiState as ChatUiState.Loading).operation,
-                                    modifier = Modifier.padding(
-                                        horizontal = 16.dp,
-                                        vertical = 4.dp
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
                         }
                     }
                 }
-            },
-            bottomBar = {
-                BottomBar(viewModel = viewModel, uiState = uiState)
+
+                // Token rate display
+                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Tokens/s: ${tkPerSecond.collectAsState().value}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
-        ) { innerPadding ->
+        }, bottomBar = {
+            BottomBar(viewModel = viewModel, uiState = uiState)
+        }) { innerPadding ->
             BodyContent(innerPadding, viewModel, uiState)
         }
     }
@@ -249,95 +274,66 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    title: String = "NeuroV Chat",
-    onMenu: () -> Unit = {},
-    onLeftMenu: () -> Unit = {}
+    viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
-    TopAppBar(
+    val title by viewModel.chatTitle.collectAsStateWithLifecycle()
+
+    CenterAlignedTopAppBar(
         title = {
-            val capitalizedTitle = title.replaceFirstChar {
-                if (it.isLowerCase()) it.titlecase() else it.toString()
-            }
-
-            Text(
-                text = capitalizedTitle,
-                modifier = Modifier.widthIn(max = rDP(180.dp)),
-                fontSize = rSp(22.sp),
-                color = MaterialTheme.colorScheme.primary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                fontWeight = FontWeight.SemiBold
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onMenu) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        },
-        actions = {
-            var showDialog by remember { mutableStateOf(false) }
-
-            AnimatedVisibility(showDialog) {
-                if (showDialog) {
-                    DataPackSelectorDialog {
-                        showDialog = false
-                    }
-                }
-            }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-            ) {
-                Button(
-                    onClick = { showDialog = true },
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+        Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
+            if (it) {
+                ModelSelection(viewModel, false)
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        "Data Set",
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
-                    Spacer(Modifier.width(rDP(8.dp)))
-                    Box(
-                        modifier = Modifier
-                            .size(rDP(7.dp))
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.onPrimary)
-                    )
-                }
 
-                Box(
-                    modifier = Modifier
-                        .padding(end = rDP(2.dp))
-                        .size(ButtonDefaults.MinHeight)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primary)
-                        .clickable { onLeftMenu() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Add,
-                        contentDescription = "New Chat",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
+                    ModelSelection(viewModel, true)
                 }
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        }
+    }, navigationIcon = {
+        IconButton(
+            onClick = onMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        IconButton(
+            onClick = onLeftMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
     )
 }
 
 @Composable
 fun BodyContent(
-    innerPadding: PaddingValues,
-    viewModel: ChatScreenViewModel,
-    uiState: ChatUiState
+    innerPadding: PaddingValues, viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -357,12 +353,11 @@ fun BodyContent(
 
     // Disable auto-scroll when user scrolls up manually
     LaunchedEffect(Unit) {
-        snapshotFlow { listState.isScrollInProgress to isAtBottom }
-            .collect { (scrolling, atBottom) ->
-                if (scrolling && !atBottom) {
-                    autoScrollEnabled = false
-                }
+        snapshotFlow { listState.isScrollInProgress to isAtBottom }.collect { (scrolling, atBottom) ->
+            if (scrolling && !atBottom) {
+                autoScrollEnabled = false
             }
+        }
     }
 
     // Auto-scroll to new messages when enabled
@@ -388,17 +383,13 @@ fun BodyContent(
                     .padding(horizontal = rDP(16.dp)),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp),
-                    top = rDP(8.dp),
-                    start = rDP(8.dp),
-                    end = rDP(8.dp)
+                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(8.dp), end = rDP(8.dp)
                 )
             ) {
                 items(
                     items = messages,
                     key = { it.id },
-                    contentType = { if (it.role == Role.User) "user" else "assistant" }
-                ) { message ->
+                    contentType = { if (it.role == Role.User) "user" else "assistant" }) { message ->
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
@@ -429,8 +420,7 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -498,31 +488,21 @@ private fun EmptyStateContent(uiState: ChatUiState) {
 
 @Composable
 private fun BottomBar(
-    viewModel: ChatScreenViewModel,
-    uiState: ChatUiState
+    viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
     var input by remember { mutableStateOf("") }
     val tools by viewModel.toolList.collectAsStateWithLifecycle()
     val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
-    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
-    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
-        is ChatUiState.Generating,
-        is ChatUiState.DecodingStream,
-        is ChatUiState.ExecutingTool -> true
-
+        is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> true
         else -> false
     }
 
     // Determine if input should be disabled
     val inputEnabled = when (uiState) {
-        is ChatUiState.Loading,
-        is ChatUiState.Generating,
-        is ChatUiState.DecodingStream,
-        is ChatUiState.ExecutingTool -> false
-
+        is ChatUiState.Loading, is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> false
         is ChatUiState.Error -> uiState.isRetryable
         else -> true
     }
@@ -533,12 +513,9 @@ private fun BottomBar(
         tools = tools,
         isGenerating = isGenerating,
         inputEnabled = inputEnabled,
-        modelList = modelList,
         onRag = viewModel::setRag,
         onToolSelected = viewModel::selectTool,
         selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
-        onModelSelected = viewModel::selectModel,
-        selectedModel = selectedModel,
         onToolRemoved = { viewModel.unSelectTool() },
         onSend = {
             when {
@@ -548,8 +525,7 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        }
-    )
+        })
 }
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -557,21 +533,18 @@ private fun BottomBar(
 private fun ChatInputBar(
     value: String,
     tools: List<Pair<String, List<Tools>>>,
-    modelList: List<ModelsData>,
     selectedTools: List<Tools>,
     onToolSelected: (Pair<String, Tools>) -> Unit,
-    onModelSelected: (ModelsData) -> Unit,
     onValueChange: (String) -> Unit,
     onRag: (Boolean) -> Unit,
     onSend: () -> Unit,
     onToolRemoved: (Tools) -> Unit,
-    selectedModel: ModelsData,
     isGenerating: Boolean,
     inputEnabled: Boolean
 ) {
     var showToolsList by remember { mutableStateOf(false) }
-    var showModelList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -582,26 +555,12 @@ private fun ChatInputBar(
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         // Tools list
-        AnimatedVisibility(showToolsList) {
+        AnimatedVisibility(visible = showToolsList) {
             ToolsList(
-                tools = tools,
-                onToolSelected = {
+                tools = tools, onToolSelected = {
                     onToolSelected(it)
                     showToolsList = false
-                }
-            )
-        }
-
-        // Model list
-        AnimatedVisibility(showModelList) {
-            ModelList(
-                selectedModel = selectedModel,
-                modelList = modelList,
-                onModelSelected = {
-                    onModelSelected(it)
-                    showModelList = false
-                }
-            )
+                })
         }
 
         // Tool selection and model button row
@@ -617,15 +576,11 @@ private fun ChatInputBar(
                 onClick = {
                     if (inputEnabled) {
                         showToolsList = !showToolsList
-                        showModelList = false
                     }
-                },
-                enabled = inputEnabled,
-                colors = ButtonDefaults.textButtonColors(
+                }, enabled = inputEnabled, colors = ButtonDefaults.buttonColors(
                     containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                     contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                ),
-                shape = RoundedCornerShape(rDP(8.dp))
+                ), shape = RoundedCornerShape(rDP(8.dp))
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -650,22 +605,23 @@ private fun ChatInputBar(
                 }
             }
 
-            // Model selector button
+            // RAG toggle button
             IconButton(
                 onClick = {
                     if (inputEnabled) {
-                        showModelList = !showModelList
-                        showToolsList = false
+                        isRag = !isRag
+                        onRag(isRag)
                     }
                 },
                 enabled = inputEnabled,
+                modifier = Modifier.size(rDP(36.dp)),
                 shape = RoundedCornerShape(rDP(8.dp)),
                 colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (showModelList) Mint else MaterialTheme.colorScheme.background,
-                    contentColor = if (showModelList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
                 )
             ) {
-                Icon(Icons.Default.SmartToy, contentDescription = "Select Model")
+                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
             }
         }
 
@@ -701,29 +657,9 @@ private fun ChatInputBar(
                     cursorColor = MaterialTheme.colorScheme.primary
                 ),
                 textStyle = LocalTextStyle.current.copy(
-                    color = MaterialTheme.colorScheme.primary,
-                    fontSize = rSp(15.sp)
+                    color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
                 )
             )
-
-            // RAG toggle button
-            IconButton(
-                onClick = {
-                    if (inputEnabled) {
-                        isRag = !isRag
-                        onRag(isRag)
-                    }
-                },
-                enabled = inputEnabled,
-                modifier = Modifier.size(rDP(36.dp)),
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
-                    contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
-                )
-            ) {
-                Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
-            }
 
             Spacer(Modifier.width(rDP(8.dp)))
 
@@ -736,8 +672,17 @@ private fun ChatInputBar(
                         if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
-                    .clickable(enabled = inputEnabled || isGenerating) { onSend() },
-                contentAlignment = Alignment.Center
+                    .clickable(enabled = inputEnabled || isGenerating) {
+                        if (ModelManager.isModelLoaded()) {
+                            onSend()
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Model is not loaded..! \nPlease Load Model..!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }, contentAlignment = Alignment.Center
             ) {
                 when {
                     isGenerating -> {
@@ -771,9 +716,7 @@ private fun ChatInputBar(
 
 @Composable
 private fun ToolChip(
-    tool: Tools,
-    onRemove: () -> Unit,
-    modifier: Modifier = Modifier
+    tool: Tools, onRemove: () -> Unit, modifier: Modifier = Modifier
 ) {
     val accentColor = Color(0xFF0066FF)
     val backgroundColor = accentColor.copy(alpha = 0.2f)
@@ -782,13 +725,10 @@ private fun ToolChip(
         modifier = modifier
             .size(ButtonDefaults.MinHeight)
             .background(color = backgroundColor, shape = RoundedCornerShape(rDP(8.dp)))
-            .clickable { onRemove() },
-        contentAlignment = Alignment.Center
+            .clickable { onRemove() }, contentAlignment = Alignment.Center
     ) {
         Icon(
-            Icons.Default.Web,
-            contentDescription = "Remove ${tool.toolName}",
-            tint = accentColor
+            Icons.Default.Web, contentDescription = "Remove ${tool.toolName}", tint = accentColor
         )
     }
 }
@@ -835,59 +775,6 @@ fun ToolsList(
                                 color = Color.Gray
                             )
                         }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun ModelList(
-    modifier: Modifier = Modifier,
-    modelList: List<ModelsData>,
-    onModelSelected: (ModelsData) -> Unit,
-    selectedModel: ModelsData
-) {
-    LazyColumn(
-        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
-        contentPadding = PaddingValues(vertical = rDP(8.dp))
-    ) {
-        item {
-            Text(
-                text = "Local Models",
-                style = MaterialTheme.typography.titleMedium.copy(fontSize = rSp(18.sp)),
-                modifier = Modifier.padding(horizontal = rDP(16.dp), vertical = rDP(8.dp))
-            )
-        }
-
-        items(modelList) { model ->
-            val isSelected = model.modeName == selectedModel.modeName
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = rDP(32.dp), vertical = rDP(4.dp))
-                    .clickable { onModelSelected(model) },
-                elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                colors = CardDefaults.cardColors(
-                    containerColor = if (isSelected) Mint.copy(alpha = 0.5f)
-                    else MaterialTheme.colorScheme.background
-                )
-            ) {
-                Row(modifier = Modifier.padding(rDP(12.dp))) {
-                    Text(
-                        text = model.modeName,
-                        maxLines = 1,
-                        style = MaterialTheme.typography.bodyLarge.copy(fontSize = rSp(16.sp))
-                    )
-                    Spacer(Modifier.weight(1f))
-                    if (isSelected) {
-                        Icon(
-                            imageVector = Icons.Default.Check,
-                            contentDescription = "Selected",
-                            tint = Mint,
-                            modifier = Modifier.size(rDP(20.dp))
-                        )
                     }
                 }
             }
@@ -959,38 +846,16 @@ private fun UserChatUI(message: Message) {
 
 @Composable
 private fun RegularChatUI(
-    message: Message,
-    viewModel: ChatScreenViewModel
+    message: Message, viewModel: ChatScreenViewModel
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
-
-    var generatedMessage by remember { mutableStateOf("") }
-
-
-    LaunchedEffect(message.id, message.text, currentMsgId) {
-        if (currentMsgId == message.id) {
-            val oldLength = generatedMessage.length
-            val newContent = message.text.drop(oldLength)
-
-            newContent.forEach { char ->
-                generatedMessage += char
-                delay(15) // typing speed per token
-            }
-        } else {
-            // For already completed messages, just show full text
-            generatedMessage = message.text
-        }
-    }
-
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
         when (empty) {
             true -> {
                 RobotDecodePlaceholder(
-                    active = true,
-                    modifier = Modifier.fillMaxWidth()
+                    active = true, modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -1004,11 +869,10 @@ private fun RegularChatUI(
                         .padding(vertical = rDP(14.dp))
                 ) {
                     MarkdownText(
-                        text = generatedMessage,
+                        text = message.text,
                         color = MaterialTheme.colorScheme.primary,
                         style = TextStyle.Default.copy(
-                            fontSize = rSp(13.sp),
-                            lineHeight = rSp(20.sp)
+                            fontSize = rSp(13.sp), lineHeight = rSp(20.sp)
                         )
                     )
 
@@ -1026,12 +890,9 @@ private fun RegularChatUI(
                                 .clickable {
                                     clipboardManager.setText(AnnotatedString(message.text))
                                     Toast.makeText(
-                                        context,
-                                        "Copied to clipboard!",
-                                        Toast.LENGTH_SHORT
+                                        context, "Copied to clipboard!", Toast.LENGTH_SHORT
                                     ).show()
-                                }
-                        )
+                                })
 
                         // Regenerate button
                         Icon(
@@ -1040,8 +901,7 @@ private fun RegularChatUI(
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             modifier = Modifier
                                 .size(actionIconSize)
-                                .clickable { showRegenerateDialog = true }
-                        )
+                                .clickable { showRegenerateDialog = true })
 
                         // Share button
                         Icon(
@@ -1058,12 +918,10 @@ private fun RegularChatUI(
                                     }
                                     context.startActivity(
                                         Intent.createChooser(
-                                            shareIntent,
-                                            "Share message"
+                                            shareIntent, "Share message"
                                         )
                                     )
-                                }
-                        )
+                                })
 
                         // Save Memory button
                         Icon(
@@ -1076,23 +934,29 @@ private fun RegularChatUI(
                                     CoroutineScope(Dispatchers.IO).launch {
                                         Log.d("HomeScreen", "SaveMemory")
                                         DataHubManager.reinitializeEmbeddingModel()
-                                        val data = DataHubManager.getEmbeddingManager().getEmbedding(message.text)
+                                        val data = DataHubManager.getEmbeddingManager()
+                                            .getEmbedding(message.text)
                                         Log.d("HomeScreen", "SaveMemory: $data")
-                                        val memory = listOf(BrainDoc(id = UUID.randomUUID().toString(), text = message.text, embedding = data.getOrNull()?.toList() ?: emptyList()))
+                                        val memory = listOf(
+                                            BrainDoc(
+                                                id = UUID.randomUUID().toString(),
+                                                text = message.text,
+                                                embedding = data.getOrNull()?.toList()
+                                                    ?: emptyList()
+                                            )
+                                        )
                                         Log.d("HomeScreen", "SaveMemory: $memory")
                                         viewModel.addMessageInMemory(memory, MemoryDataTags.Other)
                                         Log.d("HomeScreen", "SaveMemory done")
                                     }
-                                }
-                        )
+                                })
                     }
                 }
 
                 // Regenerate dialog
                 if (showRegenerateDialog) {
                     RegenerateModelPickerDialog(
-                        viewModel = viewModel,
-                        messageId = message.id
+                        viewModel = viewModel, messageId = message.id
                     ) {
                         showRegenerateDialog = false
                     }
@@ -1111,8 +975,7 @@ private fun ToolChatUI(
         when (decoding) {
             true -> {
                 RobotDecodePlaceholder(
-                    active = true,
-                    modifier = Modifier.fillMaxWidth()
+                    active = true, modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -1128,8 +991,7 @@ private fun ToolChatUI(
                         true -> {
                             val isLoading = pluginLoading == null
                             Crossfade(
-                                targetState = isLoading,
-                                label = "plugin-loading"
+                                targetState = isLoading, label = "plugin-loading"
                             ) { loading ->
                                 if (loading) {
                                     // Loading state for plugin
@@ -1207,34 +1069,29 @@ private fun ThinkingChatUI(message: Message) {
         visible = true,
         enter = fadeIn(animationSpec = tween(120)) + expandVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessLow
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessLow
             )
         ) + slideInVertically(initialOffsetY = { -it / 6 }),
         exit = fadeOut(animationSpec = tween(120)) + shrinkVertically(
             animationSpec = spring(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMedium
+                dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
             )
         ) + slideOutVertically(targetOffsetY = { -it / 6 })
     ) {
         var showThinkingText by remember { mutableStateOf(false) }
 
         Spacer(Modifier.height(rDP(6.dp)))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { showThinkingText = !showThinkingText }
-                .clip(RoundedCornerShape(rDP(8.dp)))
-                .background(Color(0xFF0F172A))
-                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-                .animateContentSize(
-                    animationSpec = tween(
-                        durationMillis = 180,
-                        easing = FastOutSlowInEasing
-                    )
+        Box(modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showThinkingText = !showThinkingText }
+            .clip(RoundedCornerShape(rDP(8.dp)))
+            .background(Color(0xFF0F172A))
+            .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+            .animateContentSize(
+                animationSpec = tween(
+                    durationMillis = 180, easing = FastOutSlowInEasing
                 )
-        ) {
+            )) {
             Text(
                 text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",
                 modifier = Modifier.padding(rDP(8.dp)),
@@ -1252,23 +1109,15 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
     var expanded by remember { mutableStateOf(false) }
 
     val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            tween(1200, easing = LinearEasing),
-            RepeatMode.Restart
-        ),
-        label = "shimmerFloat"
+        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
+            tween(1200, easing = LinearEasing), RepeatMode.Restart
+        ), label = "shimmerFloat"
     )
 
     val shimmerBrush = Brush.linearGradient(
         colors = listOf(
-            Coral.copy(alpha = 0.25f),
-            Coral,
-            Coral.copy(alpha = 0.25f)
-        ),
-        start = Offset.Zero,
-        end = Offset(1000f * shimmerX + 1f, 0f)
+            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
+        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
     )
 
     Column(
@@ -1279,21 +1128,16 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
             modifier = Modifier
                 .clip(RoundedCornerShape(rDP(5.dp)))
                 .border(
-                    1.dp,
-                    MaterialTheme.colorScheme.outlineVariant,
-                    RoundedCornerShape(rDP(5.dp))
+                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
                 )
                 .drawWithContent {
                     drawContent()
                     drawRect(
-                        brush = shimmerBrush,
-                        alpha = 0.25f,
-                        blendMode = BlendMode.SrcOver
+                        brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
                     )
                 }
                 .clickable { expanded = !expanded }
-                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
-        ) {
+                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
             Text(
                 text = "Show Tool Output",
                 style = MaterialTheme.typography.titleMedium,
@@ -1314,13 +1158,161 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
 
 @Composable
 fun ToolOutputContent(
-    modifier: Modifier = Modifier,
-    toolOutput: ToolOutput
+    modifier: Modifier = Modifier, toolOutput: ToolOutput
 ) {
     val context = LocalContext.current
     val runningPlugin = PluginManager.runPlugin(context, toolOutput.toolName, toolOutput.output)
 
     Card(modifier = modifier) {
         runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+    }
+}
+
+@Composable
+fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
+    var showDialog by remember { mutableStateOf(false) }
+    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
+    val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
+    var selectedModelName by remember { mutableStateOf("") }
+
+    LaunchedEffect(selectedModel) {
+        selectedModelName = if (selectedModel.modelName == "") "Select Model"
+        else selectedModel.modelName
+    }
+
+    Column {
+        Crossfade(isCompact) {
+            when (it) {
+                true -> {
+                    IconButton(
+                        onClick = { showDialog = true },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                    ) {
+                        Icon(Icons.Outlined.SmartToy, "Model")
+                    }
+                }
+
+                false -> {
+                    Button(
+                        onClick = { showDialog = true },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        ),
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.SmartToy, "Model")
+                            Spacer(modifier = Modifier.width(rDP(8.dp)))
+                            Crossfade(selectedModelName) { modelName ->
+                                Text(
+                                    text = modelName, maxLines = 1, overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(rDP(8.dp)))
+                            Icon(Icons.Default.KeyboardArrowDown, "Expand")
+                        }
+                    }
+                }
+            }
+        }
+
+        if (showDialog) {
+            Dialog(onDismissRequest = { showDialog = false }) {
+                Card(
+                    shape = RoundedCornerShape(rDP(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .padding(rDP(16.dp))
+                            .fillMaxWidth()
+                    ) {
+                        Text(
+                            text = "Select Model",
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(bottom = rDP(12.dp))
+                        )
+
+                        LazyColumn(
+                            modifier = Modifier.heightIn(min = rDP(150.dp), max = rDP(320.dp)),
+                            contentPadding = PaddingValues(vertical = rDP(8.dp))
+                        ) {
+                            items(modelList) { model ->
+                                val isSelected = model.modelName == selectedModel.modelName
+
+                                Card(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = rDP(6.dp))
+                                        .clickable(enabled = !isLoading) {
+                                            Log.d("ModelSelection", "Selected model: $model")
+                                            viewModel.selectModel(model)
+                                        }, colors = CardDefaults.cardColors(
+                                        containerColor = if (isSelected) Mint.copy(alpha = 0.15f)
+                                        else MaterialTheme.colorScheme.background
+                                    ), elevation = CardDefaults.cardElevation(rDP(0.dp))
+                                ) {
+                                    Row(
+                                        modifier = Modifier
+                                            .padding(rDP(14.dp))
+                                            .fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = model.modelName,
+                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                    fontSize = rSp(16.sp)
+                                                )
+                                            )
+                                            Text(
+                                                text = if (isSelected) "Currently Loaded" else "Tap to Load",
+                                                style = MaterialTheme.typography.bodySmall.copy(
+                                                    color = if (isSelected) Mint else Color.Gray
+                                                )
+                                            )
+                                        }
+                                        Spacer(Modifier.weight(1f))
+                                        when {
+                                            isLoading && model.modelName == modelList.find { it.modelName == selectedModel.modelName }?.modelName -> {
+                                                CircularProgressIndicator(
+                                                    strokeWidth = 2.dp,
+                                                    modifier = Modifier.size(rDP(20.dp)),
+                                                    color = Mint
+                                                )
+                                            }
+
+                                            isSelected -> {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = "Loaded",
+                                                    tint = Mint,
+                                                    modifier = Modifier.size(rDP(20.dp))
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(rDP(12.dp)))
+                        Button(
+                            onClick = { showDialog = false },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(rDP(8.dp))
+                        ) {
+                            Text("Close")
+                        }
+                    }
+                }
+            }
+        }
     }
 }

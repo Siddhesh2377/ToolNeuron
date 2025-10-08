@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-
+    <uses-permission android:name="android.permission.VIBRATE"/>
 
     <application
         android:name=".NVApplication"
@@ -19,7 +19,8 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_monochrome"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NeuroVerse">
+        android:theme="@style/Theme.NeuroVerse"
+        tools:targetApi="33">
 
 
         <activity
@@ -65,7 +66,7 @@
 
 
         <activity
-            android:name=".ui.screens.picker.DataHubPickerActivity"
+            android:name=".activity.ModelPropEditorActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NeuroVerse"
@@ -84,6 +85,15 @@
 
         <activity
             android:name=".activity.DatahubActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize">
+
+        </activity>
+
+        <activity
+            android:name=".activity.TempActivity"
             android:exported="true"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NeuroVerse"
@@ -120,6 +130,14 @@
             android:name="com.dark.plugins.sys.uiAction.CommandBridgeService"
             android:exported="true"
             tools:ignore="ExportedService" />
+
+        <service
+            android:name="com.mp.ai_core.services.GenerationService"
+            tools:replace="android:exported"
+            android:exported="true"
+            android:foregroundServiceType="dataSync"
+            android:permission="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+            android:stopWithTask="false" />
 
         <!--        <service-->
         <!--            android:name=".services.NotifListenerService"-->
