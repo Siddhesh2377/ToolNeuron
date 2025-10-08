@@ -88,8 +88,7 @@ class MainActivity : ComponentActivity() {
 
                     // Determine the appropriate start screen
                     startDestination = determineStartDestination(
-                        isDirectNavigation = isDirectChatScreen,
-                        context = this@MainActivity
+                        isDirectNavigation = isDirectChatScreen, context = this@MainActivity
                     )
 
                     Log.d("MainActivity", "Start destination determined: $startDestination")
@@ -106,8 +105,7 @@ class MainActivity : ComponentActivity() {
             NeuroVerseTheme {
                 if (initializationComplete) {
                     NavHost(
-                        navController = navController,
-                        startDestination = startDestination
+                        navController = navController, startDestination = startDestination
                     ) {
                         composable(Screen.Intro.route) {
                             IntroScreen()
@@ -140,37 +138,30 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Home.route) {
-                            HomeScreen(
-                                onRequestSettingsChange = {
-                                    navController.navigate(Screen.Settings.route)
-                                }
-                            )
+                            HomeScreen(onRequestSettingsChange = {
+                                navController.navigate(Screen.Settings.route)
+                            }, onDataHubClick = {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, DatahubActivity::class.java
+                                    )
+                                )
+                            }, onPluginStoreClick = {
+                                startActivity(
+                                    Intent(
+                                        this@MainActivity, PluginHubActivity::class.java
+                                    )
+                                )
+                            }, onModelsClick = {
+                                navController.navigate(Screen.Model.route)
+                            })
                         }
 
                         composable(Screen.Settings.route) {
                             SettingsScreen(
-                                onDataHubClick = {
-                                    startActivity(
-                                        Intent(
-                                            this@MainActivity,
-                                            DatahubActivity::class.java
-                                        )
-                                    )
-                                },
-                                onPluginStoreClick = {
-                                    startActivity(
-                                        Intent(
-                                            this@MainActivity,
-                                            PluginHubActivity::class.java
-                                        )
-                                    )
-                                },
                                 onBackClick = {
                                     navController.popBackStack()
                                 },
-                                onModelsClick = {
-                                    navController.navigate(Screen.Model.route)
-                                }
                             )
                         }
                     }
@@ -185,8 +176,7 @@ class MainActivity : ComponentActivity() {
      * Determines the appropriate start destination based on app state and user preferences.
      */
     private suspend fun determineStartDestination(
-        isDirectNavigation: Boolean,
-        context: Context
+        isDirectNavigation: Boolean, context: Context
     ): String {
         val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
 
@@ -235,10 +225,7 @@ class MainActivity : ComponentActivity() {
      */
     fun resetIntroPreferences() {
         val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
-        prefs.edit()
-            .putBoolean(KEY_INTRO_SHOWN, false)
-            .putBoolean(KEY_FIRST_LAUNCH, true)
-            .apply()
+        prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).putBoolean(KEY_FIRST_LAUNCH, true).apply()
         Log.d("MainActivity", "Intro preferences reset")
     }
 

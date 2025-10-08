@@ -112,9 +112,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
-import com.dark.neuroverse.activity.DatahubActivity
-import com.dark.neuroverse.activity.PluginHubActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
@@ -140,7 +139,6 @@ import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 import java.util.UUID
@@ -148,10 +146,9 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestSettingsChange: () -> Unit,
-    viewModel: ChatScreenViewModel = viewModel(
+    onRequestSettingsChange: () -> Unit, viewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
-    ),
+    ), onDataHubClick: () -> Unit, onPluginStoreClick: () -> Unit, onModelsClick: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -210,13 +207,13 @@ fun HomeScreen(
                     viewModel.newChat()
                 },
                 onDataHubClick = {
-
+                    onDataHubClick()
                 },
                 onPluginStoreClick = {
-
+                    onPluginStoreClick()
                 },
                 onModelsClick = {
-
+                    onModelsClick()
                 },
             )
         }) {
@@ -283,57 +280,54 @@ fun TopBar(
 
     CenterAlignedTopAppBar(
         title = {
-            Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
-                if (it) {
-                    ModelSelection(viewModel, false)
-                } else {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = title,
-                            modifier = Modifier.weight(1f),
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
+        Crossfade(viewModel.messages.collectAsStateWithLifecycle().value.isEmpty()) {
+            if (it) {
+                ModelSelection(viewModel, false)
+            } else {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = title,
+                        modifier = Modifier.weight(1f),
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
 
-                        ModelSelection(viewModel, true)
-                    }
+                    ModelSelection(viewModel, true)
                 }
             }
-        },
-        navigationIcon = {
-            IconButton(
-                onClick = onMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        },
-        actions = {
-            IconButton(
-                onClick = onLeftMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        }
+    }, navigationIcon = {
+        IconButton(
+            onClick = onMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        IconButton(
+            onClick = onLeftMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                contentColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.background
+    )
     )
 }
 
@@ -531,8 +525,7 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        }
-    )
+        })
 }
 
 @SuppressLint("StateFlowValueCalledInComposition")
@@ -551,6 +544,7 @@ private fun ChatInputBar(
 ) {
     var showToolsList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
+    val context = LocalContext.current
 
     Column(
         modifier = Modifier
@@ -678,8 +672,17 @@ private fun ChatInputBar(
                         if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
                     )
-                    .clickable(enabled = inputEnabled || isGenerating) { onSend() },
-                contentAlignment = Alignment.Center
+                    .clickable(enabled = inputEnabled || isGenerating) {
+                        if (ModelManager.isModelLoaded()) {
+                            onSend()
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Model is not loaded..! \nPlease Load Model..!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }, contentAlignment = Alignment.Center
             ) {
                 when {
                     isGenerating -> {
@@ -847,9 +850,6 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
-
-    var generatedMessage by remember { mutableStateOf("") }
 
     Crossfade(targetState = message.text.isEmpty(), label = "assistant-content") { empty ->
         when (empty) {

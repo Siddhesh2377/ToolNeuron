@@ -1,0 +1,49 @@
+{
+  "id": "google\/gemini-2.5-flash-image",
+  "canonical_slug": "google\/gemini-2.5-flash-image",
+  "hugging_face_id": "",
+  "name": "Google: Gemini 2.5 Flash Image (Nano Banana)",
+  "created": 1759870431,
+  "description": "Gemini 2.5 Flash Image, a.k.a. \"Nano Banana,\" is now generally available. It is a state of the art image generation model with contextual understanding. It is capable of image generation, edits, and multi-turn conversations. Aspect ratios can be controlled with the [image_config API Parameter](https:\/\/openrouter.ai\/docs\/features\/multimodal\/image-generation#image-aspect-ratio-configuration)",
+  "context_length": 32768,
+  "architecture": {
+    "modality": "text+image->text+image",
+    "input_modalities": [
+      "image",
+      "text"
+    ],
+    "output_modalities": [
+      "image",
+      "text"
+    ],
+    "tokenizer": "Gemini",
+    "instruct_type": null
+  },
+  "pricing": {
+    "prompt": "0.0000003",
+    "completion": "0.0000025",
+    "request": "0",
+    "image": "0.001238",
+    "web_search": "0",
+    "internal_reasoning": "0"
+  },
+  "top_provider": {
+    "context_length": 32768,
+    "max_completion_tokens": 8192,
+    "is_moderated": false
+  },
+  "per_request_limits": null,
+  "supported_parameters": [
+    "max_tokens",
+    "response_format",
+    "seed",
+    "structured_outputs",
+    "temperature",
+    "top_p"
+  ],
+  "default_parameters": {
+    "temperature": null,
+    "top_p": null,
+    "frequency_penalty": null
+  }
+}

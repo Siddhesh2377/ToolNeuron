@@ -1,307 +1,266 @@
 package com.dark.neuroverse.viewModel
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
+import com.dark.ai_module.model.*
 import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.downloadFile
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.DownloadState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import org.json.JSONObject
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
 
 class ModelScreenViewModel : ViewModel() {
-
-    // ═══════════════════════════════════════════════════════════════════════
-    // GGUF Models State
-    // ═══════════════════════════════════════════════════════════════════════
+    /* ----------------------------------------------------------- */
+    /* GGUF + OpenRouter  – everything that is/was installed       */
+    /* ----------------------------------------------------------- */
     private val _models = MutableStateFlow<List<ModelData>>(emptyList())
     val models: StateFlow<List<ModelData>> = _models
 
+    /* ----------------------------------------------------------- */
+    /* Local / Remote download state                               */
+    /* ----------------------------------------------------------- */
     private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates
 
     private val downloadJobs = mutableMapOf<String, Job>()
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // OpenRouter State
-    // ═══════════════════════════════════════════════════════════════════════
+    /* ----------------------------------------------------------- */
+    /* OpenRouter – API key & base URL                            */
+    /* ----------------------------------------------------------- */
     private val _openRouterApiKey = MutableStateFlow("")
     val openRouterApiKey: StateFlow<String> = _openRouterApiKey
 
     private val _openRouterBaseUrl = MutableStateFlow("https://openrouter.ai/api/v1")
     val openRouterBaseUrl: StateFlow<String> = _openRouterBaseUrl
 
-    private val _openRouterModels = MutableStateFlow<List<String>>(emptyList())
-    val openRouterModels: StateFlow<List<String>> = _openRouterModels
+    /* ----------------------------------------------------------- */
+    /* OpenRouter – the models that are *already stored* in DB     */
+    /* ----------------------------------------------------------- */
+    private val _openRouterInstalledModels = MutableStateFlow<List<OpenRouterModel>>(emptyList())
+    val openRouterInstalledModels: StateFlow<List<OpenRouterModel>> = _openRouterInstalledModels
 
-    private val _availableModels = MutableStateFlow<List<String>>(emptyList())
-    val availableModels: StateFlow<List<String>> = _availableModels
+    /* ----------------------------------------------------------- */
+    /* OpenRouter – models that *can* be added (fetched from API) */
+    /* ----------------------------------------------------------- */
+    private val _availableModels = MutableStateFlow<List<OpenRouterModel>>(emptyList())
+    val availableModels: StateFlow<List<OpenRouterModel>> = _availableModels
 
-    init {
-        observeModels()
-    }
+    init { observeModels() }
 
-    private fun observeModels() {
-        viewModelScope.launch {
-            ModelManager.observeModels().collectLatest { modelList ->
-                _models.value = modelList
+    /* --------------------------------------------------------------------------- */
+    /* 1️⃣  Observe the DB – keep the whole list up‑to‑date                       */
+    /* --------------------------------------------------------------------------- */
+    private fun observeModels() = viewModelScope.launch(Dispatchers.IO) {
+        ModelManager.observeModels().collectLatest { modelList ->
+            _models.value = modelList
 
-                // Sync OpenRouter models list from DB
-                val openRouterModelIds = modelList
-                    .filter { it.providerName == ModelProvider.OpenRouter.toString() }
-                    .map { it.modelUrl.toString() } // For OpenRouter, modelUrl.toString() = model ID
-
-                _openRouterModels.value = openRouterModelIds
-            }
+            // Derive the *installed* OpenRouter models from the DB
+            _openRouterInstalledModels.value =
+                modelList.filter { it.providerName == ModelProvider.OpenRouter.toString() }
+                    .map { it.toOpenRouterModel() }
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // OpenRouter Methods
-    // ═══════════════════════════════════════════════════════════════════════
-
+    /* ----------------------------------------------------------- */
+    /* OpenRouter URL config (persisted by UserPrefs)             */
+    /* ----------------------------------------------------------- */
     fun initOpenRouter(context: Context) {
-        loadOpenRouterConfig(context)
+        viewModelScope.launch { loadOpenRouterConfig(context) }
 
         viewModelScope.launch(Dispatchers.IO) {
             UserPrefs.getOpenRouterApiKey(context).collectLatest { key ->
                 _openRouterApiKey.value = key
-                if (key.isNotBlank() && _availableModels.value.isEmpty()) {
-                    fetchAvailableModels()
-                }
+                if (key.isNotBlank() && _availableModels.value.isEmpty()) fetchAvailableModels()
             }
         }
     }
 
-    private fun loadOpenRouterConfig(context: Context) {
-        viewModelScope.launch {
-            UserPrefs.getOpenRouterApiKey(context).collect { key ->
-                _openRouterApiKey.value = key
-            }
-        }
-
-        viewModelScope.launch {
-            UserPrefs.getOpenRouterBaseUrl(context).collect { url ->
-                _openRouterBaseUrl.value = url
-            }
-        }
+    private fun loadOpenRouterConfig(context: Context) = viewModelScope.launch {
+        UserPrefs.getOpenRouterApiKey(context).collectLatest { _openRouterApiKey.value = it }
+        UserPrefs.getOpenRouterBaseUrl(context).collectLatest { _openRouterBaseUrl.value = it }
     }
 
     fun saveOpenRouterApiKey(context: Context, key: String) {
         viewModelScope.launch {
             UserPrefs.setOpenRouterApiKey(context, key)
             _openRouterApiKey.value = key
+            if (key.isNotBlank()) fetchAvailableModels()
+        }
+    }
 
-            // Auto-fetch models when key is set
-            if (key.isNotBlank()) {
-                fetchAvailableModels()
+    fun saveOpenRouterBaseUrl(context: Context, url: String) =
+        viewModelScope.launch { UserPrefs.setOpenRouterBaseUrl(context, url); _openRouterBaseUrl.value = url }
+
+    /* ----------------------------------------------------------- */
+    /* 2️⃣  OpenRouter – add/remove *installed* models              */
+    /* ----------------------------------------------------------- */
+    fun addOpenRouterModel(model: OpenRouterModel) {
+        // Avoid duplicates in memory and DB
+        if (model.id in _openRouterInstalledModels.value.map { it.id }) return
+
+        _openRouterInstalledModels.update { it + model }
+
+        viewModelScope.launch {
+            try {
+                ModelManager.addModel(model.toModelData())
+            } catch (e: Exception) {
+                Log.e("OpenRouter", "Persisting $model failed: ${e.message}")
             }
-        }
-    }
-
-    fun saveOpenRouterBaseUrl(context: Context, url: String) {
-        viewModelScope.launch {
-            UserPrefs.setOpenRouterBaseUrl(context, url)
-            _openRouterBaseUrl.value = url
-        }
-    }
-
-    fun addOpenRouterModel(modelId: String) {
-        if (modelId in _openRouterModels.value) return
-
-        _openRouterModels.update { it + modelId }
-
-        // Persist to Room DB
-        viewModelScope.launch {
-            ModelManager.addModel(
-                ModelData(
-                    modelName = modelId,
-                    providerName = ModelProvider.OpenRouter.toString(),
-                    modelUrl = modelId, // For OpenRouter, path = model ID
-                    ctxSize = 0, // Context determined by API
-                    isImported = false,
-                    isToolCalling = true // Most OpenRouter models support tools
-                )
-            )
         }
     }
 
     fun removeOpenRouterModel(modelId: String) {
-        _openRouterModels.update { it - modelId }
+        _openRouterInstalledModels.update { it.filter { it.id != modelId } }
 
-        // Remove from Room DB
         viewModelScope.launch {
-            ModelManager.removeModel(modelId)
-        }
-    }
-
-    fun fetchAvailableModels() {
-        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val apiKey = _openRouterApiKey.value
-                if (apiKey.isBlank()) {
-                    println("OpenRouter: API key not set")
-                    return@launch
-                }
-
-                val url = "${_openRouterBaseUrl.value}/models"
-                val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
-
-                connection.apply {
-                    requestMethod = "GET"
-                    setRequestProperty("Authorization", "Bearer $apiKey")
-                    setRequestProperty("Content-Type", "application/json")
-                    connectTimeout = 15000
-                    readTimeout = 15000
-                }
-
-                val responseCode = connection.responseCode
-
-                if (responseCode != 200) {
-                    val errorStream = connection.errorStream
-                    val errorMsg = errorStream?.bufferedReader()?.readText() ?: "Unknown error"
-                    println("OpenRouter fetch error $responseCode: $errorMsg")
-                    return@launch
-                }
-
-                val response = connection.inputStream.bufferedReader().use { it.readText() }
-                connection.disconnect()
-
-                // Parse JSON response
-                val json = org.json.JSONObject(response)
-                val dataArray = json.getJSONArray("data")
-
-                val modelIds = (0 until dataArray.length()).mapNotNull { i ->
-                    try {
-                        dataArray.getJSONObject(i).getString("id")
-                    } catch (e: Exception) {
-                        null
-                    }
-                }.sorted() // Sort alphabetically for better UX
-
-                _availableModels.value = modelIds
-                println("OpenRouter: Fetched ${modelIds.size} models")
-
+                ModelManager.removeModel(modelId)
             } catch (e: Exception) {
-                println("OpenRouter fetch exception: ${e.message}")
-                e.printStackTrace()
+                Log.e("OpenRouter", "Removing $modelId failed: ${e.message}")
             }
         }
     }
 
-    // ═══════════════════════════════════════════════════════════════════════
-    // GGUF Download Methods
-    // ═══════════════════════════════════════════════════════════════════════
+    /* ----------------------------------------------------------- */
+    /* 3️⃣  Fetch *available* OpenRouter models from API           */
+    /* ----------------------------------------------------------- */
+    fun fetchAvailableModels() = viewModelScope.launch(Dispatchers.IO) {
+        try {
+            val apiKey = _openRouterApiKey.value
+            if (apiKey.isBlank()) {
+                Log.w("OpenRouter", "API key missing")
+                return@launch
+            }
 
+            val url = "${_openRouterBaseUrl.value}/models"
+            val conn = URL(url).openConnection() as HttpURLConnection
+            conn.apply {
+                requestMethod = "GET"
+                setRequestProperty("Authorization", "Bearer $apiKey")
+                setRequestProperty("Content-Type", "application/json")
+                connectTimeout = 15000
+                readTimeout = 15000
+            }
+
+            if (conn.responseCode != 200) {
+                val err = conn.errorStream?.bufferedReader()?.readText() ?: "Unknown error"
+                Log.e("OpenRouter", "Fetch error ${conn.responseCode}: $err")
+                return@launch
+            }
+
+            val resp = conn.inputStream.bufferedReader().use { it.readText() }
+            conn.disconnect()
+
+            val data = JSONObject(resp).getJSONArray("data")
+            val models = (0 until data.length()).mapNotNull { i ->
+                try {
+                    val m = data.getJSONObject(i)
+                    val default = m.optJSONObject("default_parameters") ?: JSONObject()
+                    OpenRouterModel(
+                        id = m.getString("id"),
+                        name = m.getString("name"),
+                        ctxSize = m.getInt("context_length"),
+                        temperature = default.optDouble("temperature", 0.7).toFloat(),
+                        topP = default.optDouble("top_p", 0.9).toFloat()
+                    )
+                } catch (e: Exception) {
+                    Log.w("OpenRouter", "Skipping bad entry $i – ${e.message}")
+                    null
+                }
+            }.distinctBy { it.id }
+
+            _availableModels.value = models
+            Log.i("OpenRouter", "Fetched ${models.size} models")
+        } catch (e: Exception) {
+            Log.e("OpenRouter", "Exception while fetching: ${e.message}")
+        }
+    }
+
+    /* ----------------------------------------------------------- */
+    /* 4️⃣  GGUF download helpers                                 */
+    /* ----------------------------------------------------------- */
     fun startDownload(modelData: ModelData, context: Context) {
         if (downloadJobs.containsKey(modelData.modelName)) return
 
-        _downloadStates.update {
-            it + (modelData.modelUrl.toString() to DownloadState(isDownloading = true))
-        }
+        _downloadStates.update { it + (modelData.modelUrl!! to DownloadState(isDownloading = true)) }
 
         val job = viewModelScope.launch(Dispatchers.IO) {
             try {
-                val modelDir = File(context.filesDir, "models")
-                if (!modelDir.exists()) {
-                    modelDir.mkdirs()
-                }
-
+                val dir = File(context.filesDir, "models").also { it.mkdirs() }
                 downloadFile(
-                    fileUrl = modelData.modelUrl.toString(), // URL from marketplace
-                    outputFile = File(modelData.modelPath),
-                    onProgress = { progress ->
-                        _downloadStates.update {
-                            val current = it[modelData.modelUrl.toString()] ?: DownloadState()
-                            it + (modelData.modelUrl.toString() to current.copy(progress = progress))
-                        }
-                    },
+                    fileUrl = modelData.modelUrl!!,
+                    outputFile = File(dir, modelData.modelName),
+                    onProgress = { p -> _downloadStates.update { it + (modelData.modelUrl!! to it.getValue(modelData.modelUrl!!).copy(progress = p)) } },
                     onComplete = {
-                        // Update model path to local file
-                        val localModel = modelData.copy(
-                            modelUrl = modelData.modelPath,
-                            isImported = false
-                        )
-                        addModel(localModel)
-
+                        val local = modelData.copy(modelUrl = dir.resolve(modelData.modelName).absolutePath, isImported = false)
+                        addModel(local)          // persist model to DB
+                        _downloadStates.update { it + (modelData.modelUrl!! to it.getValue(modelData.modelUrl!!).copy(isDownloading = false, isComplete = true)) }
                         downloadJobs.remove(modelData.modelName)
-                        _downloadStates.update {
-                            val current = it[modelData.modelUrl.toString()] ?: DownloadState()
-                            it + (modelData.modelUrl.toString() to current.copy(
-                                isDownloading = false,
-                                isComplete = true
-                            ))
-                        }
                     },
-                    onError = { error ->
+                    onError = { e ->
+                        _downloadStates.update { it + (modelData.modelUrl!! to it.getValue(modelData.modelUrl!!).copy(isDownloading = false, errorMessage = e.message)) }
                         downloadJobs.remove(modelData.modelName)
-                        _downloadStates.update {
-                            val current = it[modelData.modelUrl.toString()] ?: DownloadState()
-                            it + (modelData.modelUrl.toString() to current.copy(
-                                isDownloading = false,
-                                errorMessage = error.message
-                            ))
-                        }
                     }
                 )
             } catch (e: Exception) {
+                _downloadStates.update { it + (modelData.modelUrl!! to it.getValue(modelData.modelUrl!!).copy(isDownloading = false, errorMessage = e.message)) }
                 downloadJobs.remove(modelData.modelName)
-                _downloadStates.update {
-                    val current = it[modelData.modelUrl.toString()] ?: DownloadState()
-                    it + (modelData.modelUrl.toString() to current.copy(
-                        isDownloading = false,
-                        errorMessage = e.message
-                    ))
-                }
             }
         }
-
         downloadJobs[modelData.modelName] = job
     }
 
-    fun cancelDownload(modelName: String, modelUrl: String) {
-        downloadJobs[modelName]?.cancel()
-        downloadJobs.remove(modelName)
-
-        // Delete partial file
-        File(modelUrl.toString()).delete()
-
-        _downloadStates.update {
-            it + (modelUrl.toString() to DownloadState(isDownloading = false))
-        }
+    fun cancelDownload(name: String, url: String) {
+        downloadJobs[name]?.cancel()
+        downloadJobs.remove(name)
+        File(url).delete()
+        _downloadStates.update { it + (url to DownloadState(isDownloading = false)) }
     }
 
-    fun addModel(model: ModelData) {
-        viewModelScope.launch {
-            ModelManager.addModel(model)
+    /* ----------------------------------------------------------- */
+    /* 5️⃣  Persist a ModelData to DB (used for local GGUF)      */
+    /* ----------------------------------------------------------- */
+    fun addModel(model: ModelData) = viewModelScope.launch { ModelManager.addModel(model) }
+    fun removeModel(name: String) = viewModelScope.launch {
+        ModelManager.getModel(name)?.let { m ->
+            if (!m.isImported && m.providerName == ModelProvider.LocalGGUF.toString()) {
+                File(m.modelUrl!!).delete()
+            }
         }
+        ModelManager.removeModel(name)
     }
 
+    /* --------------------------------------------------------------------------- */
+    /* Helper – convert a ModelData that already holds an OpenRouter entry to an      */
+    /*        OpenRouterModel object that's suitable for the UI.                     */
+    /* --------------------------------------------------------------------------- */
+    private fun ModelData.toOpenRouterModel() =
+        OpenRouterModel(id, modelName, ctxSize, temp, topP)
+
+    // ---------------------------------------------------------------------------
+// 6️⃣  Helper – check if a model is persisted in the DB
+// ---------------------------------------------------------------------------
+    /**
+     * Queries the database to see whether a model with the supplied [modelName] already
+     * exists in the Room table.
+     *
+     * The result is returned asynchronously via the [onResult] callback,
+     * which the UI layer uses to update the “isInstalled” state.
+     */
     fun checkIfInstalled(modelName: String, onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
+            // `ModelManager.checkIfInstalled` performs the necessary DAO query.
             val exists = ModelManager.checkIfInstalled(modelName)
             onResult(exists)
-        }
-    }
-
-    fun removeModel(modelName: String) {
-        viewModelScope.launch {
-            ModelManager.getModel(modelName)?.let { model ->
-                // Only delete file for downloaded GGUF models (not imported or OpenRouter)
-                if (!model.isImported && model.providerName == ModelProvider.LocalGGUF.toString()) {
-                    File(model.modelUrl.toString()).delete()
-                }
-            }
-            ModelManager.removeModel(modelName)
         }
     }
 }

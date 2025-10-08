@@ -366,6 +366,10 @@ object ModelManager {
         serviceBoundContext = null
     }
 
+    fun isModelLoaded(): Boolean {
+        return _currentModel.value.modelName != ""
+    }
+
     /* ═══════════════════════════════════════════════════════════════════ */
     /*  Request Queue (GGUF only)                                           */
     /* ═══════════════════════════════════════════════════════════════════ */

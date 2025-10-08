@@ -2,6 +2,7 @@ package com.dark.ai_module.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 
@@ -27,6 +28,28 @@ data class ModelData(
     var systemPrompt: String = "You are a helpful assistant.",
     var chatTemplate: String? = null
 )
+
+@Serializable
+data class OpenRouterModel(
+    val id: String,
+    val name: String,
+    val ctxSize: Int,
+    val temperature: Float,
+    val topP: Float,
+)
+
+fun OpenRouterModel.toModelData(): ModelData {
+    return ModelData(
+        id = id,
+        modelName = name,
+        providerName = ModelProvider.OpenRouter.toString(),
+        modelUrl = id, // Assuming modelUrl should be the ID for OpenRouter models
+        ctxSize = ctxSize,
+        temp = temperature,
+        topP = topP,
+        // Set other fields as needed, or leave them with default values
+    )
+}
 
 sealed class LoadState {
     object Idle : LoadState()
