@@ -105,7 +105,6 @@ fun MarkdownText(
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  CODE CANVAS – full‑screen edit mode, auto‑follow, lazy rendering           *//* -------------------------------------------------------------------------- */
 @Composable
 fun CodeCanvas(
     modifier: Modifier = Modifier,
