@@ -527,7 +527,12 @@ private fun MarkdownTable(
                                 modifier = Modifier
                                     .width(1.dp)
                                     .fillMaxHeight()
-                                    .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.2f))
+                                    .background(when {
+                                        rowIndex == 0 -> MaterialTheme.colorScheme.primary
+                                        else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
+                                    }
+
+                                    )
                             )
                         }
                     }
@@ -544,11 +549,6 @@ private fun MarkdownTable(
                     )
                 }
             }
-
-            // Optional: a bottom divider for the whole table (makes the table feel like a box)
-            VerticalDivider(
-                thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-            )
         }
     }
 }
