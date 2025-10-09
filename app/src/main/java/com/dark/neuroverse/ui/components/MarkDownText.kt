@@ -29,8 +29,13 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.outlined.RemoveRedEye
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.ContentCopy
+import androidx.compose.material.icons.rounded.Done
+import androidx.compose.material.icons.rounded.ModeEdit
+import androidx.compose.material.icons.rounded.ModeEditOutline
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -207,7 +212,7 @@ fun CodeCanvas(
                     .clickable { showReadDialog = true })
 
             Icon(
-                painterResource(R.drawable.copy),
+                Icons.Rounded.ContentCopy,
                 contentDescription = "Copy",
                 modifier = Modifier
                     .size(rDP(15.dp))
@@ -216,7 +221,7 @@ fun CodeCanvas(
                     })
 
             Icon(
-                painterResource(if (!editing) R.drawable.edit else R.drawable.done),
+                imageVector = (if (!editing) Icons.Rounded.ModeEditOutline else Icons.Rounded.Done),
                 contentDescription = "Edit",
                 modifier = Modifier
                     .size(rDP(15.dp))
@@ -253,9 +258,10 @@ fun CodeCanvas(
             ) {
                 Box(
                     Modifier
+                        .padding(rDP(8.dp))
                         .fillMaxSize()
-                        .background(MaterialTheme.colorScheme.surface)
-                        .padding(16.dp)
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(rDP(8.dp)))
+                        .padding(rDP(16.dp))
                 ) {
                     Column {
                         // Header of the dialog – same as in the full‑screen editor
@@ -268,14 +274,14 @@ fun CodeCanvas(
                             LanguagePill(language ?: "code")
                             Spacer(Modifier.weight(1f))
                             Icon(
-                                painterResource(R.drawable.copy),
+                                Icons.Rounded.ContentCopy,
                                 contentDescription = "Copy",
                                 modifier = Modifier
                                     .size(20.dp)
                                     .clickable { clipboard.setText(AnnotatedString(text)) })
                             Spacer(Modifier.width(rDP(8.dp)))
                             Icon(
-                                painterResource(R.drawable.done),
+                                Icons.Rounded.Done,
                                 contentDescription = "Close",
                                 modifier = Modifier
                                     .size(20.dp)
@@ -413,14 +419,14 @@ private fun FullScreenCodeEditor(
                     LanguagePill(language ?: "code")
                     Spacer(Modifier.weight(1f))
                     Icon(
-                        painterResource(R.drawable.copy),
+                        Icons.Rounded.ContentCopy,
                         contentDescription = "Copy",
                         modifier = Modifier
                             .size(rDP(20.dp))
                             .clickable { clipboard.setText(AnnotatedString(source)) })
                     Spacer(Modifier.width(rDP(8.dp)))
                     Icon(
-                        painterResource(R.drawable.done),
+                        Icons.Rounded.Done,
                         contentDescription = "Done",
                         modifier = Modifier
                             .size(rDP(20.dp))
@@ -465,7 +471,6 @@ private fun FullScreenCodeEditor(
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  FIXED TABLE COMPONENT WITH PROPER CELL WIDTH                              *//* -------------------------------------------------------------------------- */
 @Composable
 private fun MarkdownTable(
     table: MdBlock.Table,
@@ -576,7 +581,6 @@ private fun MarkdownTable(
 }
 
 
-/* -------------------------------------------------------------------------- *//*  IMPROVED MARKDOWN PARSER WITH FIXED TABLE DETECTION                       *//* -------------------------------------------------------------------------- */
 private fun parseMarkdownBlocks(input: String): List<MdBlock> {
     val out = mutableListOf<MdBlock>()
     val lines = input.lines()
@@ -726,7 +730,6 @@ private sealed class MdBlock {
     data class Table(val rows: List<List<String>>, val align: List<TextAlign>) : MdBlock()
 }
 
-/* -------------------------------------------------------------------------- *//*  SYNTAX HIGHLIGHTER (unchanged apart from minor memoisation)             *//* -------------------------------------------------------------------------- */
 private fun highlight(
     code: String, language: String?, isDarkMode: Boolean
 ): AnnotatedString {

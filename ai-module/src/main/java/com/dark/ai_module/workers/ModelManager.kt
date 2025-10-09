@@ -75,6 +75,7 @@ object ModelManager {
         openRouterExecutor = if (apiKey.isNotBlank()) {
             OpenRouterExecutor(apiKey, baseUrl)
         } else {
+            Log.e("ModelManager", "OpenRouter API key is blank")
             null
         }
         Log.i(TAG, "OpenRouter configured: ${if (apiKey.isBlank()) "disabled" else "enabled"}")
@@ -572,6 +573,11 @@ object ModelManager {
         dao.insertModel(model)
     }
 
+    suspend fun updateModel(model: ModelData) = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.updateModel(model)
+    }
+
     suspend fun removeModel(modelName: String) = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
         dao.getModelByName(modelName)?.let { dao.deleteModel(it) }
@@ -581,6 +587,8 @@ object ModelManager {
         ensureDaoInitialized()
         dao.getModelByName(modelName) != null
     }
+
+
 
     suspend fun getFirstModel(): ModelData? = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
@@ -592,6 +600,11 @@ object ModelManager {
         dao.getModelByName(modelName)
     }
 
+    suspend fun getModelById(id: String): ModelData? = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getModelByName(id)
+    }
+
     suspend fun isAnyModelInstalled(): Boolean = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
         dao.getAllModels().firstOrNull()?.isNotEmpty() == true
@@ -601,4 +614,6 @@ object ModelManager {
         ensureDaoInitialized()
         dao.getAllModels().firstOrNull() ?: emptyList()
     }
+
+
 }
