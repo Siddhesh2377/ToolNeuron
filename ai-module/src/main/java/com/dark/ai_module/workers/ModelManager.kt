@@ -75,6 +75,7 @@ object ModelManager {
         openRouterExecutor = if (apiKey.isNotBlank()) {
             OpenRouterExecutor(apiKey, baseUrl)
         } else {
+            Log.e("ModelManager", "OpenRouter API key is blank")
             null
         }
         Log.i(TAG, "OpenRouter configured: ${if (apiKey.isBlank()) "disabled" else "enabled"}")
