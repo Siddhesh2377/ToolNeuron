@@ -114,6 +114,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.activity.ModelPropEditorActivity
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
@@ -224,7 +225,9 @@ fun HomeScreen(
                 TopBar(
                     viewModel,
                     onMenu = { scope.launch { drawerState.open() } },
-                    onLeftMenu = { viewModel.newChat() })
+                    onLeftMenu = {
+                        context.startActivity(Intent(context, ModelPropEditorActivity::class.java))
+                    })
                 ModelLoadProgressBar(loadState = modelState)
 
                 // Global loading indicator for UI state
