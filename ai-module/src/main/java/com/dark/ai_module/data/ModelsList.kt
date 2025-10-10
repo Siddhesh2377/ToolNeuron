@@ -26,16 +26,11 @@ object ModelsList {
     """.trimIndent()
 
     val toolCallingChatTemplate = """
-    {# ChatML-ish, llama.cpp minimal-engine safe #}
-
-    {# === Behavior controls (sliders) === #}
     {%- if professional is defined or emotional is defined -%}
     <|im_start|>system
     The assistant should modulate style accordingly while staying accurate.
     <|im_end|>
     {%- endif -%}
-
-    {# === Optional GBNF constraint (engine-level preferred; prompt is fallback) === #}
     {%- if gbnf is defined and gbnf|length > 0 -%}
     <|im_start|>system
     The assistant's NEXT message MUST conform to the following GBNF grammar.
@@ -45,14 +40,11 @@ object ModelsList {
     </GBNF>
     <|im_end|>
     {%- endif -%}
-
-    {# === Conversation === #}
     {%- for m in messages -%}
     <|im_start|>{{ m['role'] }}
     {{ m['content'] }}
     <|im_end|>
     {%- endfor -%}
-
     {%- if add_generation_prompt -%}
     <|im_start|>assistant
     {%- endif -%}
