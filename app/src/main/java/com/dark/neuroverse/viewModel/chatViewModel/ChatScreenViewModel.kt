@@ -23,15 +23,15 @@ import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
-import com.dark.userdata.addNewChat
-import com.dark.userdata.getDefaultChatHistory
-import com.dark.userdata.helpers.MemoryDataTags
-import com.dark.userdata.helpers.getMemoryByTags
-import com.dark.userdata.helpers.updateMemory
-import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.readBrainFile
-import com.dark.userdata.saveTree
+import com.dark.neuroverse.userdata.addNewChat
+import com.dark.neuroverse.userdata.getDefaultChatHistory
+import com.dark.neuroverse.userdata.helpers.MemoryDataTags
+import com.dark.neuroverse.userdata.helpers.getMemoryByTags
+import com.dark.neuroverse.userdata.helpers.updateMemory
+import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.readBrainFile
+import com.dark.neuroverse.userdata.saveTree
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
@@ -104,6 +104,8 @@ sealed class ChatUiState {
         val isRetryable: Boolean = true,
         val cause: Throwable? = null
     ) : ChatUiState()
+
+    data object GeneratingTitle : ChatUiState()
 }
 
 /**
@@ -1047,7 +1049,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val messages = _messages.value
         if (messages.size < 2) return
 
-
         val firstUserMessage = messages
             .firstOrNull { it.role == Role.User }
             ?.text
@@ -1057,18 +1058,16 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         if (firstUserMessage.isNotBlank()) {
             viewModelScope.launch {
                 try {
-                    _uiState.value = ChatUiState.Generating(_currentMsgId.value ?: "-1", isFirstToken = true)
-                    val generatedTitle = generateTitleFromConversation(
-                        firstUserMessage,
-                    )
+                    // the step that actually *shows* the UI state
+                    _uiState.value = ChatUiState.GeneratingTitle
+
+                    val generatedTitle = generateTitleFromConversation(firstUserMessage)
                     _chatTitle.value = generatedTitle
                     requestSave()
                 } catch (e: Exception) {
-                    _chatTitle.value = firstUserMessage.take(48)
+                    /* fallback – title stays unchanged until a retry */
                 } finally {
-                    if (_uiState.value !is ChatUiState.ExecutingTool) {
-                        _uiState.value = ChatUiState.Idle
-                    }
+                    _uiState.value = ChatUiState.Idle
                 }
             }
         }
@@ -1079,7 +1078,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     ): String = withContext(Dispatchers.IO) {
         try {
             val originalSystemPrompt = selectedModel.value.systemPrompt
-
             val titlePrompt = """
             Generate a concise, descriptive title (3-6 words) for this conversation.
             Rules:
@@ -1126,9 +1124,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             if (cleanTitle.isBlank() || cleanTitle.length < 3) {
                 throw Exception("Generated title too short")
             }
-
             cleanTitle
-
         } catch (e: Exception) {
             userMessage
                 .split(" ")

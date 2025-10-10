@@ -1,8 +1,8 @@
-# ToolNeuron (Previously NeuroVerse)
+# ToolNeuron
 
-**Offline Android AI chat with a modular plugin framework**
+**Your AI Hub in Your Pocket 🤖✨**
 
-ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It allows users to run private AI models and dynamic plugins **fully offline**, with **hardware‑grade encryption** ensuring maximum privacy.
+ToolNeuron is the ultimate **AI-native mobile ecosystem** for Android. Whether you're a casual user, developer, or AI enthusiast, it brings **all your AI models—online or offline—into a single, privacy-focused app**. Run, extend, and interact with AI like never before.
 
 ---
 
@@ -15,21 +15,63 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It allows 
 
 ---
 
-### Note
+## What is ToolNeuron? 🧠
 
-* This repository's C++ code has been **transferred to a separate repo** for optimization: [AI Core](https://github.com/Siddhesh2377/Ai-Core)
+ToolNeuron is your **AI hub on Android**:
+
+* Run offline GGUF models now.
+* Connect to online models with open endpoints (APIs) like OpenRouter.
+* **Coming soon:** TFLite, ONNX, BIN, TUFF, and more offline formats.
+* Fully privacy-focused: **all offline models run locally**, no data leaves your device.
+* Dynamic plugin and DataHub support for enhanced AI capabilities.
+
+**Think of it as an AI operating layer for your pocket 🌟.**
 
 ---
 
-## Try it Now
+## Why Use ToolNeuron? 🚀
 
-* **Download APK:** [Latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
+ToolNeuron helps **any user** get productive with AI:
 
-> Install the APK, grant permissions, open **AI Chat**, and start chatting. **No cloud account required.**
+* Chat with AI, code with AI, or analyze data in real-time.
+* Attach custom datasets dynamically to models (DataHub) to extend knowledge.
+* Switch models mid-conversation, rate responses, and improve outputs.
+* Visualize AI-generated code and tables in an editable Canvas.
+* Use plugins to extend app features without installing extra apps.
+* Micro-features: save conversation code to files, more coming soon.
 
 ---
 
-## Preview: Plugin Installation & Tool‑Calling
+## Key Features 🌟
+
+### AI Models & Chat 🤖
+
+✅ **Offline AI** – Run GGUF models.
+✅ **Online AI** – Connect to any open API endpoint.
+✅ **Dynamic Model Switching** – Switch between models anytime.
+✅ **DataHub Integration** – Enhance model knowledge on the fly.
+✅ **Rate Responses** – Give feedback to improve AI outputs.
+
+### Coding & Data 💻
+
+✅ **Code Canvas** – AI-generated code is editable, copyable.
+✅ **Table & Data Support** – Structured output for clarity.
+✅ **Save & Export** – Save code and chat snippets directly to files (upcoming).
+
+### Plugins 🛠️
+
+✅ **Web Search & Web Scraper** – Extend AI capabilities.
+✅ **Plugin Support** – Build or install custom plugins for tasks like document viewing, editing, or media processing.
+
+### Privacy & Flexibility 🔒
+
+✅ **Fully Offline Capable** – Your data stays on your device.
+✅ **Import Any Model** – Bring models from device storage (GGUF for now).
+✅ **Future-Ready** – Memory architecture to simulate human-like AI memory (coming soon).
+
+---
+
+## Preview 📸
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/f50ceb8a-5a32-4fa7-9ab4-e1223b983eb6" width="220">
@@ -38,113 +80,44 @@ ToolNeuron is a **secure, offline AI ecosystem for Android devices**. It allows 
 
 ---
 
-## Current Status
+## Try It Now 📲
 
-* **Available now:**
-
-  * Local AI chat (on‑device)
-  * **Web Search plugin** (tool‑calling from chat)
-  * Runtime model switching
-  * In‑app updates (check & install)
-  * Import models from device & tweak parameters
-  * Model Store downloads
-  * Plugin manager (enable/disable, inspect metadata like author/role)
-
-* **Coming soon:** Full automation, plugin gallery, advanced on‑device tools
+* **Download APK:** [Latest release](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
+* Open **AI Chat** → Start chatting → Switch models → Use plugins → Attach data.
+* Fully **offline capable**, no account required.
 
 ---
 
-## Key Features
+## Coming Soon 🔮
 
-* Run **local AI chat** without internet
-* **Import custom GGUF models** and tune parameters
-* **Dynamic plugin ecosystem** with validation & sandboxing
-* **Web Search plugin** for optional online context
-* **Switch models at runtime** without restarting
-* **In-app updater** for instant fixes/features
-* Hardware‑backed security with Android KeyStore
+* **Support for TFLite, ONNX, BIN, TUFF** and more offline formats.
+* **Micro-features:** Directly save AI-generated code or data.
+* **Advanced AI Memory:** Emulate human-like memory with context retention, emotions, and family-like structures.
+* **Expanded Model & Plugin Support:** More offline & online models, plugin gallery.
+* **Cross-Platform Desktop Sync:** Linux, Windows, macOS support.
 
 ---
 
-## Why ToolNeuron?
+## Architecture 🏗️
 
-Most mobile AI apps rely on the cloud. ToolNeuron flips the paradigm:
-
-* **Offline-first** — data stays on your device
-* **Pluggable tools** — add capabilities without app updates
-* **Secure by design** — strict plugin validation + sandboxing
-
-> "Honestly, what you're doing is legendary." – Early user on Discord 🌱
-
-Join the community: **[Discord](https://discord.gg/vjGEyQev)**
+* **Llama-CPP** – Local GGUF inference.
+* **OpenRouter API Layer** – Online model integration.
+* **Dynamic Plugin Runtime** – Modular AI extensions.
+* **DataHub** – Dynamic dataset attachment to AI models.
 
 ---
 
-## Official Plugins
+## Community & Support 🌍
 
-First-party plugins: **ToolNeuron System Plugins** — *link placeholder*
-
-* **Web Search** — ✅ Available
-
-> Packaging: `.zip` containing `plugin.aar` and `Manifest.json`
+💬 Discord: [Join ToolNeuron](https://discord.gg/vjGEyQev)
+🐙 GitHub: [ToolNeuron Repo](https://github.com/Siddhesh2377/NeuroVerse)
 
 ---
 
-## Models & Engine
+## License 📜
 
-* **Backend:** `llama.cpp` via **JNI**
-* **Model format:** GGUF (user-importable)
-* **Controls:** temperature, top‑p, max tokens, etc.
-* **Switcher:** change models at runtime from Settings
+Apache 2.0 © Siddhesh2377
 
 ---
 
-## Security & Privacy
-
-* Fully offline experience
-* Zero telemetry/analytics
-* Hardware-backed encryption via Android KeyStore
-* Strict plugin validation before loading
-
----
-
-## Get Involved
-
-* Contribute code via pull requests
-* Submit feedback & feature requests on **[Discord](https://discord.gg/vjGEyQev)**
-
-Every contribution helps keep ToolNeuron free and open-source.
-
----
-
-## Roadmap
-
-* ✅ Import custom models
-* ✅ Web Search plugin
-* ✅ In‑app updates
-* 🚀 Plugin gallery for community sharing
-* 🔒 End-to-end encryption for chat & storage
-* ⚡ Automation tools for advanced workflows
-* 🧩 Expand first-party plugin set
-
----
-
-## License
-
-Licensed under the **Apache License 2.0**. See [`LICENSE`](./LICENSE).
-
----
-
-## Author
-
-**Siddhesh Sonar**
-Android Developer · AI Enthusiast · Open Source Contributor
-GitHub: [@Siddhesh2377](https://github.com/Siddhesh2377)
-
----
-
-## Acknowledgements
-
-* `llama.cpp` and the GGUF community
-* Jetpack Compose & Android Open Source Project
-* Early users and open-source contributors 🙌
+*ToolNeuron: AI in your pocket. Make your life easier, smarter, and more productive ⚡.*

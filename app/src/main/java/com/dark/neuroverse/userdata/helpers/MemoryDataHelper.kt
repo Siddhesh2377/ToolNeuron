@@ -1,10 +1,10 @@
-package com.dark.userdata.helpers
+package com.dark.neuroverse.userdata.helpers
 
-import com.dark.userdata.getDefaultMemoryHistory
-import com.dark.userdata.ntds.neuron_tree.NeuronNode
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.ntds.neuron_tree.NodeData
-import com.dark.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.getDefaultMemoryHistory
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeData
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
 import org.json.JSONObject
 
 fun createNewMemory(root: NeuronNode, id: MemoryDataTags, data: JSONObject): NeuronNode {

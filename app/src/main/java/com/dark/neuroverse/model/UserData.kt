@@ -1,6 +1,6 @@
 package com.dark.neuroverse.model
 
-import com.dark.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
 
 enum class ViewMode {
     TREE, LIST, STATS

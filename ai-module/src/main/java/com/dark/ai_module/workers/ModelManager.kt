@@ -17,10 +17,22 @@ import com.dark.ai_module.model.ModelProvider
 import com.mp.ai_core.services.GenerationService
 import com.mp.ai_core.services.IGenerationCallback
 import com.mp.ai_core.services.IGenerationService
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -37,13 +49,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 object ModelManager {
 
     private const val TAG = "ModelManager"
-
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  AIDL Service (for local GGUF models)                               */
-    /* ═══════════════════════════════════════════════════════════════════ */
     private var service: IGenerationService? = null
     private var serviceBoundContext: Context? = null
-
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
             binder?.let {
@@ -57,13 +64,35 @@ object ModelManager {
             Log.w(TAG, "GenerationService disconnected")
         }
     }
-
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  OpenRouter Executor (for cloud models)                             */
-    /* ═══════════════════════════════════════════════════════════════════ */
     private var openRouterExecutor: OpenRouterExecutor? = null
     private var openRouterApiKey: String = ""
     private var openRouterBaseUrl: String = "https://openrouter.ai/api/v1"
+    private val initGuard = AtomicBoolean(false)
+    private lateinit var dao: ModelDAO
+    private val _currentModel = MutableStateFlow(ModelData())
+    val currentModel: StateFlow<ModelData> = _currentModel.asStateFlow()
+    val isGenerating = MutableStateFlow(false)
+    private val queue = Channel<Request>(capacity = 64)
+    private var processorJob: Job? = null
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val genExecutor = Executors.newSingleThreadExecutor { r ->
+        Thread({
+            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
+            r.run()
+        }, "LLM-Gen")
+    }
+    private val genDispatcher = genExecutor.asCoroutineDispatcher()
+
+    init {
+        startProcessor()
+    }
+
+    fun init(context: Context) {
+        if (initGuard.compareAndSet(false, true)) {
+            dao = DatabaseProvider.getDatabase(context).ModelDAO()
+            startService(context)
+        }
+    }
 
     /**
      * Configure OpenRouter credentials
@@ -81,47 +110,20 @@ object ModelManager {
         Log.i(TAG, "OpenRouter configured: ${if (apiKey.isBlank()) "disabled" else "enabled"}")
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  DB / DAO State                                                      */
-    /* ═══════════════════════════════════════════════════════════════════ */
-    private val initGuard = AtomicBoolean(false)
-    private lateinit var dao: ModelDAO
-
-    /** Call once (e.g. in Application.onCreate()) */
-    fun init(context: Context) {
-        if (initGuard.compareAndSet(false, true)) {
-            dao = DatabaseProvider.getDatabase(context).ModelDAO()
-            startService(context)
-        }
-    }
-
     private fun ensureDaoInitialized() {
         check(initGuard.get()) { "ModelManager.init(context) must be called before use." }
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Public State                                                        */
-    /* ═══════════════════════════════════════════════════════════════════ */
-    private val _currentModel = MutableStateFlow(ModelData())
-    val currentModel: StateFlow<ModelData> = _currentModel.asStateFlow()
-
-    val isGenerating = MutableStateFlow(false)
-
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Load/Unload Model (GGUF only - OpenRouter has no loading step)     */
-    /* ═══════════════════════════════════════════════════════════════════ */
     suspend fun loadModelAwait(
-        modelData: ModelData,
-        onLoaded: (LoadState) -> Unit
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
-
         // Check if this is an OpenRouter model
         if (modelData.providerName == ModelProvider.OpenRouter.toString()) {
             // No loading needed for cloud models
             _currentModel.value = modelData
             onLoaded(LoadState.OnLoaded(modelData))
             return@withContext Result.success(Unit)
-        }else{
+        } else {
             // GGUF model loading
             onLoaded(LoadState.Idle)
             onLoaded(LoadState.Loading(0f))
@@ -183,9 +185,6 @@ object ModelManager {
         svc.setChatTemplate(template)
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Unified Streaming API - Routes to GGUF or OpenRouter               */
-    /* ═══════════════════════════════════════════════════════════════════ */
     suspend fun generateStreaming(
         prompt: String,
         gen: GenerationParams = GenerationParams(),
@@ -198,7 +197,7 @@ object ModelManager {
         return when (model.providerName) {
             ModelProvider.OpenRouter.toString() -> {
                 generateOpenRouter(
-                    modelId = model.modelUrl?: "",
+                    modelId = model.modelUrl ?: "",
                     prompt = prompt,
                     systemPrompt = model.systemPrompt,
                     gen = gen,
@@ -271,10 +270,8 @@ object ModelManager {
         onToken: (String) -> Unit
     ): String {
         val def = CompletableDeferred<String>()
-
         val normalized = ToolJsonUtils.normalizeSpec(toolJson)
         val deduped = ToolJsonUtils.maybeDedup(normalized)
-
         queue.send(
             Request.Streaming(
                 prompt = prompt,
@@ -285,22 +282,20 @@ object ModelManager {
                 completer = def
             )
         )
-
         return def.await()
     }
 
     fun stopGeneration() {
         val model = _currentModel.value
-
         when (model.providerName) {
             ModelProvider.OpenRouter.toString() -> {
                 openRouterExecutor?.stopGeneration()
             }
+
             ModelProvider.LocalGGUF.toString() -> {
                 service?.stopGeneration()
             }
         }
-
         isGenerating.value = false
     }
 
@@ -318,9 +313,6 @@ object ModelManager {
         _currentModel.value = model.copy(systemPrompt = prompt)
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Graceful Shutdown                                                   */
-    /* ═══════════════════════════════════════════════════════════════════ */
     fun shutdown() {
         // Graceful shutdown of the internal queue + background worker
         queue.close()
@@ -350,9 +342,7 @@ object ModelManager {
      */
     fun startService(context: Context) {
         context.bindService(
-            Intent(context, GenerationService::class.java),
-            connection,
-            Context.BIND_AUTO_CREATE
+            Intent(context, GenerationService::class.java), connection, Context.BIND_AUTO_CREATE
         )
         serviceBoundContext = context.applicationContext   // keep a weak reference
     }
@@ -376,34 +366,6 @@ object ModelManager {
         return _currentModel.value.modelName != ""
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Request Queue (GGUF only)                                           */
-    /* ═══════════════════════════════════════════════════════════════════ */
-    private sealed interface Request {
-        data class Blocking(
-            val prompt: String,
-            val gen: GenerationParams,
-            val completer: CompletableDeferred<String>
-        ) : Request
-
-        data class Streaming(
-            val prompt: String,
-            val gen: GenerationParams,
-            val onToken: (String) -> Unit,
-            val toolJson: String?,
-            val onToolCalled: (String, String) -> Unit,
-            val completer: CompletableDeferred<String>
-        ) : Request
-    }
-
-    private val queue = Channel<Request>(capacity = 64)
-    private var processorJob: Job? = null
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    init {
-        startProcessor()
-    }
-
     private fun startProcessor() {
         processorJob?.cancel()
         processorJob = scope.launch {
@@ -412,7 +374,6 @@ object ModelManager {
                 try {
                     isGenerating.value = true
                     when (req) {
-                        is Request.Blocking -> handleBlocking(req)
                         is Request.Streaming -> handleStreaming(req)
                     }
                 } catch (t: Throwable) {
@@ -422,31 +383,6 @@ object ModelManager {
                 }
             }
         }
-    }
-
-    private suspend fun handleBlocking(r: Request.Blocking) {
-        val svc = service ?: run {
-            r.completer.completeExceptionally(RuntimeException("Service not bound"))
-            return
-        }
-
-        svc.generate(
-            r.prompt, r.gen.maxTokens, object : IGenerationCallback.Stub() {
-                var acc = StringBuilder()
-                override fun onToken(token: String) {
-                    acc.append(token)
-                }
-
-                override fun onToolCall(name: String, args: String) {}
-
-                override fun onDone() {
-                    r.completer.complete(acc.toString())
-                }
-
-                override fun onError(error: String) {
-                    r.completer.completeExceptionally(RuntimeException(error))
-                }
-            })
     }
 
     private fun handleStreaming(r: Request.Streaming) {
@@ -477,9 +413,57 @@ object ModelManager {
             })
     }
 
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Tool JSON Utilities                                                 */
-    /* ═══════════════════════════════════════════════════════════════════ */
+    fun observeModels(): Flow<List<ModelData>> {
+        ensureDaoInitialized()
+        return dao.getAllModels()
+    }
+
+    suspend fun addModel(model: ModelData) = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.insertModel(model)
+    }
+
+    suspend fun updateModel(model: ModelData) = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.updateModel(model)
+    }
+
+    suspend fun removeModel(modelName: String) = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getModelByName(modelName)?.let { dao.deleteModel(it) }
+    }
+
+    suspend fun checkIfInstalled(modelName: String): Boolean = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getModelByName(modelName) != null
+    }
+
+    suspend fun getModel(modelName: String): ModelData? = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getModelByName(modelName)
+    }
+
+    suspend fun isAnyModelInstalled(): Boolean = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getAllModels().firstOrNull()?.isNotEmpty() == true
+    }
+
+    suspend fun getAllModels(): List<ModelData> = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getAllModels().firstOrNull() ?: emptyList()
+    }
+
+    private sealed interface Request {
+        data class Streaming(
+            val prompt: String,
+            val gen: GenerationParams,
+            val onToken: (String) -> Unit,
+            val toolJson: String?,
+            val onToolCalled: (String, String) -> Unit,
+            val completer: CompletableDeferred<String>
+        ) : Request
+    }
+
     private object ToolJsonUtils {
         private const val MAX_DESC = 512
         private const val MAX_SPEC_BYTES = 64 * 1024
@@ -547,73 +531,4 @@ object ModelManager {
             }
         }
     }
-
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  Background Thread for GGUF Queue                                    */
-    /* ═══════════════════════════════════════════════════════════════════ */
-    private val genExecutor = Executors.newSingleThreadExecutor { r ->
-        Thread({
-            Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
-            r.run()
-        }, "LLM-Gen")
-    }
-
-    private val genDispatcher = genExecutor.asCoroutineDispatcher()
-
-    /* ═══════════════════════════════════════════════════════════════════ */
-    /*  DB API - Shared for both GGUF and OpenRouter                        */
-    /* ═══════════════════════════════════════════════════════════════════ */
-    fun observeModels(): Flow<List<ModelData>> {
-        ensureDaoInitialized()
-        return dao.getAllModels()
-    }
-
-    suspend fun addModel(model: ModelData) = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.insertModel(model)
-    }
-
-    suspend fun updateModel(model: ModelData) = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.updateModel(model)
-    }
-
-    suspend fun removeModel(modelName: String) = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getModelByName(modelName)?.let { dao.deleteModel(it) }
-    }
-
-    suspend fun checkIfInstalled(modelName: String): Boolean = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getModelByName(modelName) != null
-    }
-
-
-
-    suspend fun getFirstModel(): ModelData? = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getAllModels().firstOrNull()?.firstOrNull()
-    }
-
-    suspend fun getModel(modelName: String): ModelData? = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getModelByName(modelName)
-    }
-
-    suspend fun getModelById(id: String): ModelData? = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getModelByName(id)
-    }
-
-    suspend fun isAnyModelInstalled(): Boolean = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getAllModels().firstOrNull()?.isNotEmpty() == true
-    }
-
-    suspend fun getAllModels(): List<ModelData> = withContext(Dispatchers.IO) {
-        ensureDaoInitialized()
-        dao.getAllModels().firstOrNull() ?: emptyList()
-    }
-
-
 }

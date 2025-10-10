@@ -73,9 +73,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.userdata.ntds.neuron_tree.NeuronNode
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant

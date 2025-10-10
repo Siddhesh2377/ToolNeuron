@@ -1,1 +1,0 @@
--keep class com.dark.userdata.ntds.neuron_tree.** { *; }

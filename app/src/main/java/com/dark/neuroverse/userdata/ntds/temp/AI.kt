@@ -1,4 +1,4 @@
-package com.dark.userdata.ntds.temp
+package com.dark.neuroverse.userdata.ntds.temp
 
 // List of Subjects
 val subjects = listOf(

@@ -1,4 +1,4 @@
-package com.dark.userdata.ntds.neuron_tree
+package com.dark.neuroverse.userdata.ntds.neuron_tree
 
 import kotlinx.serialization.Serializable
 import java.util.UUID

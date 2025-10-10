@@ -1,24 +1,26 @@
 package com.dark.neuroverse.viewModel.userdata
 
+import android.annotation.SuppressLint
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.NodeStats
 import com.dark.neuroverse.model.ViewMode
-import com.dark.userdata.ntds.collectAllNodes
-import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
-import com.dark.userdata.ntds.neuron_tree.NeuronNode
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.ntds.neuron_tree.NodeType
-import com.dark.userdata.readBrainFile
+import com.dark.neuroverse.userdata.ntds.collectAllNodes
+import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.readBrainFile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import javax.crypto.SecretKey
 
-class UserDataViewerViewModel(private val context: Context) : ViewModel() {
+@SuppressLint("StaticFieldLeak")
+class UserDataViewerViewModel( private val context: Context) : ViewModel() {
 
     private val _tree = MutableStateFlow<NeuronTree?>(null)
     val tree: StateFlow<NeuronTree?> = _tree.asStateFlow()
@@ -95,7 +97,7 @@ class UserDataViewerViewModel(private val context: Context) : ViewModel() {
         val allNodes = _tree.value?.collectAllNodes() ?: emptyList()
         return NodeStats(
             total = allNodes.size,
-            byType = NodeType.values().associateWith { type ->
+            byType = NodeType.entries.associateWith { type ->
                 allNodes.count { it.data.type == type }
             },
             totalContent = allNodes.sumOf { it.data.content.length },

@@ -1,4 +1,4 @@
-package com.dark.userdata.ntds
+package com.dark.neuroverse.userdata.ntds
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties

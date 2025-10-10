@@ -1,16 +1,16 @@
-package com.dark.userdata
+package com.dark.neuroverse.userdata
 
 import android.content.Context
-import com.dark.userdata.helpers.MemoryDataTags
-import com.dark.userdata.helpers.createNewMemory
-import com.dark.userdata.ntds.getBrainFilePath
-import com.dark.userdata.ntds.getOrCreateHardwareBackedAesKey
-import com.dark.userdata.ntds.loadEncryptedTree
-import com.dark.userdata.ntds.neuron_tree.NeuronNode
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.ntds.neuron_tree.NodeData
-import com.dark.userdata.ntds.neuron_tree.NodeType
-import com.dark.userdata.ntds.saveEncryptedTree
+import com.dark.neuroverse.userdata.helpers.MemoryDataTags
+import com.dark.neuroverse.userdata.helpers.createNewMemory
+import com.dark.neuroverse.userdata.ntds.getBrainFilePath
+import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
+import com.dark.neuroverse.userdata.ntds.loadEncryptedTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeData
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.ntds.saveEncryptedTree
 import org.json.JSONObject
 import javax.crypto.SecretKey
 

@@ -43,11 +43,10 @@ fun OpenRouterModel.toModelData(): ModelData {
         id = id,
         modelName = name,
         providerName = ModelProvider.OpenRouter.toString(),
-        modelUrl = id, // Assuming modelUrl should be the ID for OpenRouter models
+        modelUrl = id,
         ctxSize = ctxSize,
         temp = temperature,
         topP = topP,
-        // Set other fields as needed, or leave them with default values
     )
 }
 

@@ -243,30 +243,4 @@ class OpenRouterExecutor(
             }
         }
     }
-
-    /**
-     * Test connection and API key validity
-     */
-    suspend fun testConnection(): Result<Boolean> = withContext(Dispatchers.IO) {
-        try {
-            val url = URL("$baseUrl/models")
-            val connection = (url.openConnection() as HttpURLConnection).apply {
-                requestMethod = "GET"
-                setRequestProperty("Authorization", "Bearer $apiKey")
-                connectTimeout = 10_000
-                readTimeout = 10_000
-            }
-
-            val responseCode = connection.responseCode
-            connection.disconnect()
-
-            if (responseCode == 200) {
-                Result.success(true)
-            } else {
-                Result.failure(RuntimeException("Invalid API key or connection failed"))
-            }
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
 }

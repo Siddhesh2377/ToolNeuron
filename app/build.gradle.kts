@@ -92,7 +92,6 @@ android {
 
         //PROJECTS
         api(project(":ai-module"))
-        api(project(":userData"))
         api(project(":plugins"))
         api(project(":data-hub-lib"))
 

@@ -42,6 +42,5 @@ dependencyResolutionManagement {
 rootProject.name = "NeuroVerse"
 include(":app")
 include(":ai-module")
-include(":userData")
 include(":plugins")
 include(":data-hub-lib")

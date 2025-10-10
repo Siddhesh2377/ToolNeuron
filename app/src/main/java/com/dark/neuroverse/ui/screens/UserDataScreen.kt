@@ -88,10 +88,10 @@ import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModel
 import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModelFactory
-import com.dark.userdata.helpers.MemoryDataTags
-import com.dark.userdata.ntds.neuron_tree.NeuronNode
-import com.dark.userdata.ntds.neuron_tree.NeuronTree
-import com.dark.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.userdata.helpers.MemoryDataTags
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
+import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 

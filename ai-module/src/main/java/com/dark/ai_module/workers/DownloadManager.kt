@@ -28,7 +28,6 @@ suspend fun downloadFile(
             val fileLength = headConn.getHeaderFieldLong("Content-Length", -1)
             headConn.disconnect()
 
-            // Then do the actual GET
             val conn = (URL(fileUrl).openConnection() as HttpURLConnection).apply {
                 requestMethod = "GET"
                 connect()
@@ -54,7 +53,6 @@ suspend fun downloadFile(
                     onProgress(-1f)
                 }
             }
-
             output.flush()
             output.close()
             input.close()

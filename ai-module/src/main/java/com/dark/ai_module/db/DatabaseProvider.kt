@@ -11,7 +11,7 @@ object DatabaseProvider {
         return INSTANCE ?: synchronized(this) {
             Room.databaseBuilder(
                 context.applicationContext, AppDatabase::class.java, "mode_db"
-            ).fallbackToDestructiveMigration(false) // Add this line
+            ).fallbackToDestructiveMigration(false)
                 .build().also { INSTANCE = it }
         }
     }
