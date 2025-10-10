@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.components
 
+import android.util.Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -963,7 +964,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
     text: String,
     baseStyle: TextStyle,
     scale: Float = 1f,
-    isHeader: Boolean = false
+    isHeader: Boolean = false,
+    color: Color = Color.Unspecified
 ) {
     if (text.isEmpty()) return
 
@@ -976,7 +978,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
                         fontStyle = FontStyle.Italic,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 3, end)) }
                 idx = end + 3
@@ -987,7 +990,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         fontWeight = FontWeight.ExtraBold,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
@@ -998,7 +1002,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         fontStyle = FontStyle.Italic,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 1, end)) }
                 idx = end + 1
@@ -1010,7 +1015,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
                         background = Color.Gray.copy(alpha = 0.2f),
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 1, end)) }
                 idx = end + 1
@@ -1021,7 +1027,8 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         textDecoration = TextDecoration.LineThrough,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
@@ -1032,20 +1039,56 @@ private fun AnnotatedString.Builder.appendStyledSegment(
                 withStyle(
                     SpanStyle(
                         textDecoration = TextDecoration.Underline,
-                        fontSize = baseStyle.fontSize * scale
+                        fontSize = baseStyle.fontSize * scale,
+                        color = color
                     )
                 ) { append(text.substring(idx + 2, end)) }
                 idx = end + 2
             }
 
             else -> {
-                withStyle(
-                    SpanStyle(
-                        fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
-                        fontSize = baseStyle.fontSize * scale
-                    )
-                ) { append(text[idx]) }
-                idx++
+                val char = text[idx]
+
+                // Check if this is a high surrogate (first part of emoji)
+                val isHighSurrogate = Character.isHighSurrogate(char)
+
+                // Get the codepoint (handles surrogate pairs correctly)
+                val codePoint = if (isHighSurrogate && idx + 1 < text.length) {
+                    Character.toCodePoint(char, text[idx + 1])
+                } else {
+                    char.code
+                }
+
+                // Check if codepoint is an emoji
+                val isEmoji = codePoint in 0x1F300..0x1FAF8 ||  // Emoticons & symbols
+                        codePoint in 0x2600..0x27BF ||     // Misc symbols & dingbats
+                        codePoint in 0x1F900..0x1F9FF ||   // Supplemental symbols
+                        codePoint in 0x1F600..0x1F64F ||   // Emoticons
+                        codePoint in 0x1F680..0x1F6FF ||   // Transport & map
+                        codePoint == 0xFE0F ||             // Variation selector
+                        codePoint == 0x200D                // Zero-width joiner
+
+                if (isEmoji) {
+                    // Append emoji without color styling
+                    if (isHighSurrogate && idx + 1 < text.length) {
+                        append(char)
+                        append(text[idx + 1])
+                        idx += 2
+                    } else {
+                        append(char)
+                        idx++
+                    }
+                } else {
+                    // Apply styling to regular characters
+                    withStyle(
+                        SpanStyle(
+                            fontWeight = if (isHeader) FontWeight.Bold else FontWeight.Normal,
+                            fontSize = baseStyle.fontSize * scale,
+                            color = color
+                        )
+                    ) { append(char) }
+                    idx++
+                }
             }
         }
     }

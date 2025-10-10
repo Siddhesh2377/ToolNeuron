@@ -290,6 +290,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         value = openRouterApiKey,
                         onValueChange = {
                             viewModel.saveOpenRouterApiKey(context, it)
+
                         },
                         label = { Text("API Key") },
                         placeholder = { Text("sk-or-v1-...") },

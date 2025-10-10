@@ -9,6 +9,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.ai_module.workers.downloadFile
 import com.dark.neuroverse.data.UserPrefs
 import com.dark.neuroverse.model.DownloadState
+import com.dark.neuroverse.util.initOpenRouterFromPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.*
@@ -93,6 +94,7 @@ class ModelScreenViewModel : ViewModel() {
         viewModelScope.launch {
             UserPrefs.setOpenRouterApiKey(context, key)
             _openRouterApiKey.value = key
+            initOpenRouterFromPrefs(context)
             if (key.isNotBlank()) fetchAvailableModels()
         }
     }
