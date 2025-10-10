@@ -47,9 +47,13 @@ ToolNeuron helps **any user** get productive with AI:
 ### AI Models & Chat 🤖
 
 ✅ **Offline AI** – Run GGUF models.
+
 ✅ **Online AI** – Connect to any open API endpoint.
+
 ✅ **Dynamic Model Switching** – Switch between models anytime.
+
 ✅ **DataHub Integration** – Enhance model knowledge on the fly.
+
 ✅ **Rate Responses** – Give feedback to improve AI outputs.
 
 ### Coding & Data 💻
