@@ -2,9 +2,6 @@ package com.dark.neuroverse.viewModel.chatViewModel
 
 import android.content.Context
 import android.util.Log
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -14,15 +11,14 @@ import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.model.ChatUiState
+import com.dark.neuroverse.model.DecodeType
+import com.dark.neuroverse.model.DecodingMetrics
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
+import com.dark.neuroverse.model.StreamingState
 import com.dark.neuroverse.model.ToolOutput
-import com.dark.neuroverse.util.extractPureJson
-import com.dark.neuroverse.util.writeToolOutputJson
-import com.dark.plugins.manager.PluginManager
-import com.dark.plugins.model.Tools
-import com.dark.plugins.worker.ToolRunner
 import com.dark.neuroverse.userdata.addNewChat
 import com.dark.neuroverse.userdata.getDefaultChatHistory
 import com.dark.neuroverse.userdata.helpers.MemoryDataTags
@@ -32,6 +28,11 @@ import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.userdata.readBrainFile
 import com.dark.neuroverse.userdata.saveTree
+import com.dark.neuroverse.util.extractPureJson
+import com.dark.neuroverse.util.writeToolOutputJson
+import com.dark.plugins.manager.PluginManager
+import com.dark.plugins.model.Tools
+import com.dark.plugins.worker.ToolRunner
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
@@ -42,7 +43,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -51,7 +51,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -64,77 +63,12 @@ import org.json.JSONObject
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
-data class StreamingState(
-    val messageId: String,
-    val visibleBuffer: StringBuilder = StringBuilder(),
-    val thoughtBuffer: StringBuilder = StringBuilder(),
-    val rawBuffer: StringBuilder = StringBuilder(),
-    var inThinkTag: Boolean = false,
-    val lastBatchTime: Long = System.currentTimeMillis()
-)
-
-/**
- * Unified UI State - Single source of truth
- */
-sealed class ChatUiState {
-    object Idle : ChatUiState()
-
-    data class Loading(
-        val operation: String,
-        val progress: Float? = null
-    ) : ChatUiState()
-
-    data class Generating(
-        val messageId: String,
-        val isFirstToken: Boolean = false
-    ) : ChatUiState()
-
-    data class DecodingStream(
-        val messageId: String,
-        val startTimeNs: Long
-    ) : ChatUiState()
-
-    data class ExecutingTool(
-        val toolName: String,
-        val messageId: String
-    ) : ChatUiState()
-
-    data class Error(
-        val message: String,
-        val isRetryable: Boolean = true,
-        val cause: Throwable? = null
-    ) : ChatUiState()
-
-    data object GeneratingTitle : ChatUiState()
-}
-
-/**
- * Decoding metrics for performance tracking
- */
-data class DecodingMetrics(
-    val type: DecodeType,
-    val chatId: String,
-    val modelId: String,
-    val startedAtNs: Long,
-    val firstTokenAtNs: Long,
-    val durationMs: Long
-)
-
-enum class DecodeType { NORMAL, REGENERATE }
-
-/**
- * Factory
- */
 class ChattingViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
         return ChatScreenViewModel(context.applicationContext) as T
     }
 }
-
-/**
- * Clean, refactored ChatScreenViewModel with proper state management
- */
 class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     companion object {
@@ -217,9 +151,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     @OptIn(FlowPreview::class)
     private fun setupDebouncedSave() {
         viewModelScope.launch {
-            saveChannel.consumeAsFlow()
-                .debounce(SAVE_DEBOUNCE_MS)
-                .collect {
+            saveChannel.consumeAsFlow().debounce(SAVE_DEBOUNCE_MS).collect {
                     performSave()
                 }
         }
@@ -286,7 +218,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 }
 
                 ModelManager.loadModelAwait(
-                    modelData = model.copy(chatTemplate = ModelsList.defaultChatTemplate, systemPrompt = systemPrompt),
+                    modelData = model.copy(
+                        chatTemplate = ModelsList.defaultChatTemplate,
+                        systemPrompt = systemPrompt
+                    ),
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
@@ -362,14 +297,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         try {
             val tree = readBrainFile(encryptionKey.value, appContext)
             val history = getDefaultChatHistory(tree.root)
-            val freshList =
-                NeuronTree(history).getAllChildrenRecursive()
-                    .filter { it.data.content.isNotBlank() }
-                    .map { node ->
-                        val json = JSONObject(node.data.content)
-                        val title = json.optString("title", "Untitled")
-                        ChatINFO(node.id, title)
-                    }
+            val freshList = NeuronTree(history).getAllChildrenRecursive()
+                .filter { it.data.content.isNotBlank() }.map { node ->
+                    val json = JSONObject(node.data.content)
+                    val title = json.optString("title", "Untitled")
+                    ChatINFO(node.id, title)
+                }
 
             _chatList.value = freshList
         } catch (e: Exception) {
@@ -487,7 +420,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         if (_isRag.value) {
             handleRAGRequest(input, isTool, messageId, currentMessages)
         } else {
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
+            streamAndRender(
+                prompt = input,
+                enableTools = isTool,
+                messageId = messageId,
+                existingMessages = currentMessages
+            )
         }
     }
 
@@ -505,7 +443,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         currentGenerationJob = viewModelScope.launch {
             operationSemaphore.withPermit {
                 try {
-                    executeRegenerate(model, messageId, messageIndex, targetMessage, _messages.value)
+                    executeRegenerate(
+                        model,
+                        messageId,
+                        messageIndex,
+                        targetMessage,
+                        _messages.value
+                    )
                 } catch (e: CancellationException) {
                     Log.d(TAG, "Regeneration cancelled")
                     _uiState.value = ChatUiState.Idle
@@ -525,8 +469,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     ) {
         _uiState.value = ChatUiState.Generating(messageId)
 
-        val userContext = currentMessages.take(messageIndex)
-            .lastOrNull { it.role == Role.User }?.text.orEmpty()
+        val userContext =
+            currentMessages.take(messageIndex).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
         _messages.update { messages ->
             messages.toMutableList().apply {
@@ -542,8 +486,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 modelData = model.copy(
                     systemPrompt = """
                         You are a helpful assistant that improves message clarity and accuracy.
-                    """.trimIndent(),
-                    chatTemplate = ModelsList.toolCallingChatTemplate
+                    """.trimIndent(), chatTemplate = ModelsList.toolCallingChatTemplate
                 )
             ) { state ->
                 _modelLoadingState.value = state
@@ -561,28 +504,39 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
     }
 
-    private fun buildOptimizePrompt(userContext: String, originalText: String): String = buildString {
-        appendLine("Improve the following assistant reply for better clarity and accuracy.")
-        appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
-        appendLine("- Make it more concise and well-structured.")
-        appendLine("- Do not add meta commentary.")
-        appendLine()
-        if (userContext.isNotBlank()) {
-            appendLine("[User context]")
-            appendLine(userContext)
+    private fun buildOptimizePrompt(userContext: String, originalText: String): String =
+        buildString {
+            appendLine("Improve the following assistant reply for better clarity and accuracy.")
+            appendLine("- Preserve meaning, facts, numbers, code, and URLs.")
+            appendLine("- Make it more concise and well-structured.")
+            appendLine("- Do not add meta commentary.")
             appendLine()
+            if (userContext.isNotBlank()) {
+                appendLine("[User context]")
+                appendLine(userContext)
+                appendLine()
+            }
+            appendLine("[Original reply to improve]")
+            append(originalText)
         }
-        appendLine("[Original reply to improve]")
-        append(originalText)
-    }
     //endregion
 
     //region RAG Processing
-    private suspend fun handleRAGRequest(input: String, isTool: Boolean, messageId: String, currentMessages: List<Message>) {
+    private suspend fun handleRAGRequest(
+        input: String,
+        isTool: Boolean,
+        messageId: String,
+        currentMessages: List<Message>
+    ) {
         val currentDataset = DataHubManager.currentDataSet.value
         if (currentDataset == null) {
             Log.d(TAG, "No dataset loaded, fallback to normal generation")
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
+            streamAndRender(
+                prompt = input,
+                enableTools = isTool,
+                messageId = messageId,
+                existingMessages = currentMessages
+            )
             return
         }
 
@@ -615,14 +569,24 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         }
                     }
                 } else {
-                    streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
+                    streamAndRender(
+                        prompt = input,
+                        enableTools = isTool,
+                        messageId = messageId,
+                        existingMessages = currentMessages
+                    )
                 }
             } else {
                 throw Exception("RAG failed: $error")
             }
         } catch (e: Exception) {
             handleError("RAG processing failed", e)
-            streamAndRender(prompt = input, enableTools = isTool, messageId = messageId, existingMessages = currentMessages)
+            streamAndRender(
+                prompt = input,
+                enableTools = isTool,
+                messageId = messageId,
+                existingMessages = currentMessages
+            )
         }
     }
 
@@ -729,8 +693,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 },
                 onToolCalled = { toolName, argsJson ->
                     handleToolExecution(toolName, argsJson, messageId)
-                }
-            )
+                })
 
             currentStreamingState?.let { state ->
                 val (finalText, finalThought) = processReasoningPatterns(
@@ -746,9 +709,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(),
-                    state.thoughtBuffer.toString().ifBlank { null }
-                )
+                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
             }
             throw e
         } catch (e: Exception) {
@@ -756,9 +717,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(),
-                    state.thoughtBuffer.toString().ifBlank { null }
-                )
+                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
             }
         } finally {
             refreshChatListFromDisk()
@@ -770,9 +729,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun buildFullPrompt(prompt: String, existingMessages: List<Message>): String {
-        val conversationHistory = existingMessages
-            .filter { it.role == Role.User || it.role == Role.Assistant }
-            .joinToString("\n") { "${it.role.name}: ${it.text}" }
+        val conversationHistory =
+            existingMessages.filter { it.role == Role.User || it.role == Role.Assistant }
+                .joinToString("\n") { "${it.role.name}: ${it.text}" }
 
         return buildString {
             appendLine("Conversation History:")
@@ -827,9 +786,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun processReasoningPatterns(
-        rawText: String,
-        visibleText: String,
-        thoughtText: String
+        rawText: String, visibleText: String, thoughtText: String
     ): Pair<String, String?> {
         runCatching {
             val json = extractPureJson(rawText)
@@ -861,10 +818,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun updateStreamingMessage(
-        messageId: String,
-        text: String,
-        thought: String?,
-        isFinal: Boolean = false
+        messageId: String, text: String, thought: String?, isFinal: Boolean = false
     ) {
         _messages.update { messages ->
             messages.mapIndexed { index, message ->
@@ -875,9 +829,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         message.id
                     }
                     message.copy(
-                        id = finalId,
-                        text = text,
-                        thought = thought
+                        id = finalId, text = text, thought = thought
                     )
                 } else {
                     message
@@ -887,10 +839,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun emitDecodingMetrics(
-        type: DecodeType,
-        startTimeNs: Long,
-        firstTokenTimeNs: Long,
-        messageId: String
+        type: DecodeType, startTimeNs: Long, firstTokenTimeNs: Long, messageId: String
     ) {
         val durationMs = (firstTokenTimeNs - startTimeNs) / 1_000_000
         _lastDecodingMs.value = durationMs
@@ -919,9 +868,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 Log.d(TAG, "Executing tool: $repairedToolCall")
 
                 val pluginResult = PluginManager.runPlugin(
-                    appContext,
-                    selectedTools.value.first,
-                    repairedToolCall.toString()
+                    appContext, selectedTools.value.first, repairedToolCall.toString()
                 )
 
                 ToolRunner.run(pluginResult, appContext, repairedToolCall) { result ->
@@ -995,9 +942,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         val reasoningMessageId = UUID.randomUUID().toString()
         val reasoningMessage = Message(
-            role = Role.Assistant,
-            text = "",
-            id = reasoningMessageId
+            role = Role.Assistant, text = "", id = reasoningMessageId
         )
 
         _messages.update { it + reasoningMessage }
@@ -1049,11 +994,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val messages = _messages.value
         if (messages.size < 2) return
 
-        val firstUserMessage = messages
-            .firstOrNull { it.role == Role.User }
-            ?.text
-            ?.trim()
-            .orEmpty()
+        val firstUserMessage = messages.firstOrNull { it.role == Role.User }?.text?.trim().orEmpty()
 
         if (firstUserMessage.isNotBlank()) {
             viewModelScope.launch {
@@ -1064,8 +1005,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     val generatedTitle = generateTitleFromConversation(firstUserMessage)
                     _chatTitle.value = generatedTitle
                     requestSave()
-                } catch (e: Exception) {
-                    /* fallback – title stays unchanged until a retry */
+                } catch (e: Exception) {/* fallback – title stays unchanged until a retry */
                 } finally {
                     _uiState.value = ChatUiState.Idle
                 }
@@ -1108,29 +1048,21 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                         tokenCount++
                     }
                 },
-                onToolCalled = { _, _ -> }
-            )
+                onToolCalled = { _, _ -> })
 
             ModelManager.setSystemPrompt(originalSystemPrompt)
 
             val rawTitle = titleBuilder.toString().trim()
-            val cleanTitle = rawTitle
-                .replace(Regex("^[\"']|[\"']$"), "")
-                .replace(Regex("[.!?]+$"), "")
-                .replace(Regex("\\s+"), " ")
-                .take(50)
-                .trim()
+            val cleanTitle =
+                rawTitle.replace(Regex("^[\"']|[\"']$"), "").replace(Regex("[.!?]+$"), "")
+                    .replace(Regex("\\s+"), " ").take(50).trim()
 
             if (cleanTitle.isBlank() || cleanTitle.length < 3) {
                 throw Exception("Generated title too short")
             }
             cleanTitle
         } catch (e: Exception) {
-            userMessage
-                .split(" ")
-                .take(6)
-                .joinToString(" ")
-                .take(48)
+            userMessage.split(" ").take(6).joinToString(" ").take(48)
         }
     }
 
@@ -1139,12 +1071,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     ) {
         try {
             val rawTitle = userMessage.trim()
-            val cleanTitle = rawTitle
-                .replace(Regex("^[\"']|[\"']$"), "")
-                .replace(Regex("[.!?]+$"), "")
-                .replace(Regex("\\s+"), " ")
-                .take(50)
-                .trim()
+            val cleanTitle =
+                rawTitle.replace(Regex("^[\"']|[\"']$"), "").replace(Regex("[.!?]+$"), "")
+                    .replace(Regex("\\s+"), " ").take(50).trim()
 
             if (cleanTitle.isBlank() || cleanTitle.length < 3) {
                 throw Exception("Generated title too short")
@@ -1153,11 +1082,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             _chatTitle.value = cleanTitle
             requestSave()
         } catch (e: Exception) {
-            _chatTitle.value = userMessage
-                .split(" ")
-                .take(6)
-                .joinToString(" ")
-                .take(48)
+            _chatTitle.value = userMessage.split(" ").take(6).joinToString(" ").take(48)
             requestSave()
         }
     }
@@ -1249,20 +1174,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             if (value != null) required.add(key)
         }
 
-        val parameters = JSONObject()
-            .put("type", "object")
-            .put("properties", properties)
+        val parameters = JSONObject().put("type", "object").put("properties", properties)
             .put("required", JSONArray(required))
 
-        val function = JSONObject()
-            .put("name", tool.toolName)
-            .put("description", tool.description ?: "")
-            .put("parameters", parameters)
+        val function =
+            JSONObject().put("name", tool.toolName).put("description", tool.description ?: "")
+                .put("parameters", parameters)
 
         return JSONArray().put(
-            JSONObject()
-                .put("type", "function")
-                .put("function", function)
+            JSONObject().put("type", "function").put("function", function)
         )
     }
 
