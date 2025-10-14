@@ -114,6 +114,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.ModelPropEditorActivity
+import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
@@ -131,8 +132,9 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.userdata.helpers.MemoryDataTags
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
-import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
+import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
+import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.mp.data_hub_lib.manager.DataHubManager
@@ -146,15 +148,20 @@ import java.util.UUID
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    onRequestSettingsChange: () -> Unit, viewModel: ChatScreenViewModel = viewModel(
+    onRequestSettingsChange: () -> Unit,
+    chatScreenViewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
-    ), onDataHubClick: () -> Unit, onPluginStoreClick: () -> Unit, onModelsClick: () -> Unit
+    ),
+    ttsViewModel: TTSViewModel = viewModel(factory = TTSViewModelFactory(LocalContext.current)),
+    onDataHubClick: () -> Unit,
+    onPluginStoreClick: () -> Unit,
+    onModelsClick: () -> Unit
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val modelState by viewModel.modelLoadingState.collectAsStateWithLifecycle()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val modelState by chatScreenViewModel.modelLoadingState.collectAsStateWithLifecycle()
+    val uiState by chatScreenViewModel.uiState.collectAsStateWithLifecycle()
 
     // Token tracking
     val tokenCount: MutableStateFlow<Int> = MutableStateFlow(0)
@@ -200,11 +207,11 @@ fun HomeScreen(
         drawerState = drawerState, drawerContent = {
             SettingsDrawerContent(
                 modifier = Modifier,
-                viewModel = viewModel,
+                viewModel = chatScreenViewModel,
                 onSettingsClick = onRequestSettingsChange,
                 onChatSelected = { scope.launch { drawerState.close() } },
                 onNewChatClick = {
-                    viewModel.newChat()
+                    chatScreenViewModel.newChat()
                 },
                 onDataHubClick = {
                     onDataHubClick()
@@ -221,19 +228,24 @@ fun HomeScreen(
             .fillMaxSize()
             .imePadding(), topBar = {
             Column {
-                TopBar(viewModel, onMenu = { scope.launch { drawerState.open() } }, onLeftMenu = {
-                    if (ModelManager.currentModel.value.modelName == "") {
-                        Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
-                    } else {
-                        context.startActivity(
-                            Intent(
-                                context,
-                                ModelPropEditorActivity::class.java
-                            ).apply {
-                                putExtra("modelName", ModelManager.currentModel.value.modelName)
-                            })
-                    }
-                })
+                TopBar(
+                    chatScreenViewModel,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = {
+                        if (ModelManager.currentModel.value.modelName == "") {
+                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
+                                .show()
+                        } else {
+                            context.startActivity(
+                                Intent(
+                                    context, ModelPropEditorActivity::class.java
+                                ).apply {
+                                    putExtra(
+                                        "modelName", ModelManager.currentModel.value.modelName
+                                    )
+                                })
+                        }
+                    })
                 ModelLoadProgressBar(loadState = modelState)
 
                 // Global loading indicator for UI state
@@ -289,9 +301,9 @@ fun HomeScreen(
                 }
             }
         }, bottomBar = {
-            BottomBar(viewModel = viewModel, uiState = uiState)
+            BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
         }) { innerPadding ->
-            BodyContent(innerPadding, viewModel, uiState)
+            BodyContent(innerPadding, chatScreenViewModel, uiState, ttsViewModel)
         }
     }
 }
@@ -358,7 +370,10 @@ fun TopBar(
 
 @Composable
 fun BodyContent(
-    innerPadding: PaddingValues, viewModel: ChatScreenViewModel, uiState: ChatUiState
+    innerPadding: PaddingValues,
+    viewModel: ChatScreenViewModel,
+    uiState: ChatUiState,
+    ttsViewModel: TTSViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -418,6 +433,7 @@ fun BodyContent(
                     ChatBubble(
                         message = message,
                         viewModel = viewModel,
+                        ttsViewModel = ttsViewModel,
                         uiState = uiState,
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
@@ -811,6 +827,7 @@ fun ToolsList(
 private fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel,
     uiState: ChatUiState,
 ) {
     val isUser = message.role == Role.User
@@ -838,7 +855,7 @@ private fun ChatBubble(
             // Main message content based on role
             when (message.role) {
                 Role.User -> UserChatUI(message)
-                Role.Assistant -> RegularChatUI(message, viewModel)
+                Role.Assistant -> RegularChatUI(message, viewModel, ttsViewModel)
                 Role.Tool -> ToolChatUI(
                     message = message,
                     isDecoding = isThisMessageDecoding,
@@ -871,14 +888,20 @@ private fun UserChatUI(message: Message) {
 
 @Composable
 private fun RegularChatUI(
-    message: Message, viewModel: ChatScreenViewModel
+    message: Message, viewModel: ChatScreenViewModel, ttsViewModel: TTSViewModel,
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
 
+    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+
     val showDecoder = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
+
+    LaunchedEffect(Unit) {
+        ttsViewModel.initTTS(context)
+    }
 
     Crossfade(targetState = showDecoder, label = "assistant-content") { empty ->
         when (empty) {
@@ -929,6 +952,22 @@ private fun RegularChatUI(
                                     Toast.makeText(
                                         context, "Copied to clipboard!", Toast.LENGTH_SHORT
                                     ).show()
+                                })
+
+                        Icon(
+                            painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
+                            contentDescription = "Copy text",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        if (isPlayingAudio) {
+                                            ttsViewModel.onClickStop()
+                                        }else{
+                                            ttsViewModel.onGenerate(message.text, 1)
+                                        }
+                                    }
                                 })
 
                         // Regenerate button

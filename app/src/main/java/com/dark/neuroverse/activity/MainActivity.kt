@@ -36,6 +36,7 @@ import com.dark.neuroverse.userdata.ntds.getBrainFilePath
 import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.neuroverse.userdata.ntds.loadEncryptedTree
 import com.dark.neuroverse.userdata.ntds.saveEncryptedTree
+import com.mp.ai_core.tts.TtsEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -221,18 +222,9 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Resets intro preferences - useful for testing or user preference.
-     */
-    fun resetIntroPreferences() {
-        val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
-        prefs.edit().putBoolean(KEY_INTRO_SHOWN, false).putBoolean(KEY_FIRST_LAUNCH, true).apply()
-        Log.d("MainActivity", "Intro preferences reset")
-    }
-
-    /**
      * Ensure the encrypted brain structure exists; create it if missing.
      */
-    private suspend fun ensureBrainFileExists() {
+    private fun ensureBrainFileExists() {
         runCatching {
             Log.d("MainActivity", "Checking brain file existence...")
 
@@ -274,6 +266,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
         ModelManager.shutdown()
+        TtsEngine.tts?.release()
     }
 
     override fun onStop() {

@@ -49,9 +49,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
-import com.dark.neuroverse.viewModel.chatViewModel.ChatUiState
 import kotlinx.coroutines.launch
 
 @Composable
