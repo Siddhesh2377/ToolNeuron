@@ -24,17 +24,7 @@ dependencyResolutionManagement {
         mavenLocal()
         maven(url = "https://jitpack.io")
         flatDir {
-            dirs("libs")
-        }
-        maven {
-            name = "GitHubPackagesCactus"
-            url = uri("https://maven.pkg.github.com/cactus-compute/cactus-kotlin")
-            credentials {
-                username = providers.gradleProperty("gpr.usr").orNull
-                    ?: System.getenv("GITHUB_ACTOR")
-                password = providers.gradleProperty("gpr.key").orNull
-                    ?: System.getenv("GITHUB_TOKEN")
-            }
+            dir("${rootDir.path}/libs")
         }
     }
 }

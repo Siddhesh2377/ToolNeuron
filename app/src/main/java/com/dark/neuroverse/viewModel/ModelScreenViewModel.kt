@@ -117,7 +117,7 @@ class ModelScreenViewModel : ViewModel() {
     }
 
     fun removeOpenRouterModel(modelId: String) {
-        _openRouterInstalledModels.update { it.filter { it.id != modelId } }
+        _openRouterInstalledModels.update { it -> it.filter { it.id != modelId } }
 
         viewModelScope.launch {
             try {

@@ -88,7 +88,7 @@ android {
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
         //LIBS
-        implementation(files("libs/ai-core-release.aar"))
+        implementation(":ai-core-release@aar")
 
         //PROJECTS
         api(project(":ai-module"))

@@ -45,7 +45,7 @@ android {
 
 dependencies {
     //PROJECTS
-    implementation(files("libs/ai-core-release.aar"))
+    implementation(":ai-core-release@aar")
 
     //DATABASE
     implementation(libs.androidx.room.runtime)

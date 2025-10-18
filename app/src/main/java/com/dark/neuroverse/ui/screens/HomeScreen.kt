@@ -135,6 +135,7 @@ import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
+import com.dark.neuroverse.viewModel.chatViewModel.ToolCallingManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.mp.data_hub_lib.manager.DataHubManager
@@ -532,8 +533,8 @@ private fun BottomBar(
     viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
     var input by remember { mutableStateOf("") }
-    val tools by viewModel.toolList.collectAsStateWithLifecycle()
-    val selectedTools by viewModel.selectedTools.collectAsStateWithLifecycle()
+    val tools by ToolCallingManager.toolList.collectAsStateWithLifecycle()
+    val selectedTools by ToolCallingManager.selectedTools.collectAsStateWithLifecycle()
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
@@ -899,10 +900,6 @@ private fun RegularChatUI(
 
     val showDecoder = uiState is ChatUiState.DecodingStream && currentMsgId == message.id
 
-    LaunchedEffect(Unit) {
-        ttsViewModel.initTTS(context)
-    }
-
     Crossfade(targetState = showDecoder, label = "assistant-content") { empty ->
         when (empty) {
             true -> {
@@ -922,7 +919,7 @@ private fun RegularChatUI(
                         .fillMaxWidth()
                         .padding(vertical = rDP(4.dp))
                 ) {
-                    if (message.text.isNotEmpty()) {
+                    if (message.text.isNotEmpty() && uiState is ChatUiState.Idle) {
                         MarkdownText(
                             text = message.text,
                             isStreaming = isStreaming,
@@ -965,6 +962,7 @@ private fun RegularChatUI(
                                         if (isPlayingAudio) {
                                             ttsViewModel.onClickStop()
                                         }else{
+                                            ttsViewModel.initTTS(context)
                                             ttsViewModel.onGenerate(message.text, 1)
                                         }
                                     }

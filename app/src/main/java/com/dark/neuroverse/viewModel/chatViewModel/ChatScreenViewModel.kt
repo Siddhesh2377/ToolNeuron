@@ -30,13 +30,10 @@ import com.dark.neuroverse.userdata.readBrainFile
 import com.dark.neuroverse.userdata.saveTree
 import com.dark.neuroverse.util.extractPureJson
 import com.dark.neuroverse.util.writeToolOutputJson
-import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
-import com.dark.plugins.worker.ToolRunner
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.BrainDoc
-import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -54,7 +51,6 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -69,6 +65,7 @@ class ChattingViewModelFactory(private val context: Context) : ViewModelProvider
         return ChatScreenViewModel(context.applicationContext) as T
     }
 }
+
 class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     companion object {
@@ -120,8 +117,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     //endregion
 
     //region Configuration State
-    val toolList: MutableStateFlow<List<Pair<String, List<Tools>>>> = MutableStateFlow(emptyList())
-    val selectedTools: MutableStateFlow<Pair<String, Tools>> = MutableStateFlow("" to Tools())
     val modelList: MutableStateFlow<List<ModelData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelData> = MutableStateFlow(ModelData())
     val chatId = MutableStateFlow("")
@@ -152,8 +147,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private fun setupDebouncedSave() {
         viewModelScope.launch {
             saveChannel.consumeAsFlow().debounce(SAVE_DEBOUNCE_MS).collect {
-                    performSave()
-                }
+                performSave()
+            }
         }
     }
 
@@ -170,8 +165,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 loadInitialChat()
                 refreshChatListFromDisk()
 
-                // Load tools and models
-                toolList.value = PluginManager.toolsList.value
+                //models
+                ToolCallingManager.initViewModel()
                 modelList.value = ModelManager.getAllModels()
 
                 _uiState.value = ChatUiState.Idle
@@ -211,7 +206,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 ModelManager.unloadModel()
 
-                val systemPrompt = if (selectedTools.value.first.isBlank()) {
+                val systemPrompt = if (ToolCallingManager.isToolSelected()) {
                     ModelsList.defaultSystemPrompt
                 } else {
                     ModelsList.toolCallingSystemPrompt
@@ -219,8 +214,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 ModelManager.loadModelAwait(
                     modelData = model.copy(
-                        chatTemplate = ModelsList.defaultChatTemplate,
-                        systemPrompt = systemPrompt
+                        chatTemplate = ModelsList.defaultChatTemplate, systemPrompt = systemPrompt
                     ),
                 ) { state ->
                     _modelLoadingState.value = state
@@ -250,13 +244,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     fun selectTool(tool: Pair<String, Tools>) {
-        selectedTools.value = tool
-        ModelManager.setSystemPrompt(ModelsList.toolCallingSystemPrompt)
+        ToolCallingManager.selectTool(tool)
     }
 
     fun unSelectTool() {
-        selectedTools.value = "" to Tools()
-        ModelManager.setSystemPrompt(ModelsList.defaultSystemPrompt)
+        ToolCallingManager.unSelectTool()
     }
     //endregion
 
@@ -402,13 +394,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val messageId = UUID.randomUUID().toString()
         _uiState.value = ChatUiState.Generating(messageId)
 
-        val isTool = selectedTools.value.second.toolName.isNotEmpty()
+        val isTool = ToolCallingManager.isToolSelected()
         val assistantMessage = Message(
             role = if (isTool) Role.Tool else Role.Assistant,
             text = "",
             id = messageId,
             tool = if (isTool) RunningTool(
-                toolName = selectedTools.value.second.toolName,
+                toolName = ToolCallingManager.getSelectedTool().toolName,
                 toolPreview = "",
                 toolOutput = ToolOutput()
             ) else null
@@ -419,6 +411,18 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         if (_isRag.value) {
             handleRAGRequest(input, isTool, messageId, currentMessages)
+            viewModelScope.launch {
+                val result = RAGManager.initRAG()
+                if (result.has("error")) {
+                    handleError(result.getString("error"))
+                    streamAndRender(
+                        prompt = input,
+                        enableTools = isTool,
+                        messageId = messageId,
+                        existingMessages = currentMessages
+                    )
+                }
+            }
         } else {
             streamAndRender(
                 prompt = input,
@@ -444,11 +448,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             operationSemaphore.withPermit {
                 try {
                     executeRegenerate(
-                        model,
-                        messageId,
-                        messageIndex,
-                        targetMessage,
-                        _messages.value
+                        model, messageId, messageIndex, targetMessage, _messages.value
                     )
                 } catch (e: CancellationException) {
                     Log.d(TAG, "Regeneration cancelled")
@@ -523,118 +523,78 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     //region RAG Processing
     private suspend fun handleRAGRequest(
-        input: String,
-        isTool: Boolean,
-        messageId: String,
-        currentMessages: List<Message>
+        input: String, isTool: Boolean, messageId: String, currentMessages: List<Message>
     ) {
         val currentDataset = DataHubManager.currentDataSet.value
         if (currentDataset == null) {
             Log.d(TAG, "No dataset loaded, fallback to normal generation")
-            streamAndRender(
-                prompt = input,
-                enableTools = isTool,
-                messageId = messageId,
-                existingMessages = currentMessages
-            )
+            streamAndRender(input, isTool, messageId, false, currentMessages)
             return
         }
 
         try {
             _uiState.value = ChatUiState.Loading("Processing with RAG...")
 
-            val initResult = DataHubManager.reinitializeEmbeddingModel()
-            if (initResult.isFailure) {
-                throw Exception("Embedding model initialization failed: ${initResult.exceptionOrNull()?.message}")
+            val ragResult = RAGManager.handleRAGRequest(input)
+
+            if (ragResult.has("error")) {
+                handleError(ragResult.getString("error"))
+                streamAndRender(input, isTool, messageId, false, currentMessages)
+                return
             }
 
-            val (ragData, error) = suspendCancellableCoroutine { continuation ->
-                DataHubManager.runRAG(query = input, topK = 5) { ragResult, ragError ->
-                    continuation.resumeWith(Result.success(ragResult to ragError))
-                }
-            }
+            val finalPrompt = ragResult.getString("success")
 
-            if (ragData != null && error == null) {
-                val ragContext = extractRAGContext(ragData)
-                if (ragContext.isNotBlank()) {
-                    val finalPrompt = buildRAGPrompt(ragContext, input)
-                    ensureGenerationModelReady {
-                        viewModelScope.launch {
-                            streamAndRender(
-                                prompt = finalPrompt,
-                                enableTools = isTool,
-                                messageId = messageId,
-                                existingMessages = currentMessages
-                            )
-                        }
-                    }
-                } else {
-                    streamAndRender(
-                        prompt = input,
-                        enableTools = isTool,
-                        messageId = messageId,
-                        existingMessages = currentMessages
-                    )
-                }
-            } else {
-                throw Exception("RAG failed: $error")
+            // Simply call it directly - no callback needed
+            val result = ensureGenerationModelReady()
+
+            if (result.has("error")) {
+                return
             }
+            // Then call streamAndRender after the model is ready
+            streamAndRender(finalPrompt, isTool, messageId, false, currentMessages)
+
         } catch (e: Exception) {
             handleError("RAG processing failed", e)
-            streamAndRender(
-                prompt = input,
-                enableTools = isTool,
-                messageId = messageId,
-                existingMessages = currentMessages
-            )
+            streamAndRender(input, isTool, messageId, false, currentMessages)
         }
     }
 
-    private fun buildRAGPrompt(context: String, input: String): String = buildString {
-        append("Use the following context to answer:\n\n")
-        append("Context:\n")
-        append(context)
-        append("\n\nQuestion: ")
-        append(input)
-    }
-
-    private fun extractRAGContext(ragData: RagResult): String {
-        return try {
-            ragData.docs.joinToString("\n") { it.text }
-        } catch (e: Exception) {
-            handleError("Failed to extract RAG context", e)
-            ""
-        }
-    }
-
-    private suspend fun ensureGenerationModelReady(onReady: () -> Unit) {
-        try {
+    private suspend fun ensureGenerationModelReady(): JSONObject = withContext(Dispatchers.IO) {
+        return@withContext try {
             val currentModel = selectedModel.value
             val generationLib = NativeLib.getGenerationInstance()
             generationLib.nativeRelease()
 
             delay(500)
 
-            ModelManager.loadModelAwait(currentModel) { loadState ->
+            // Call loadModelAwait directly - it already returns Result<Unit>
+            val result = ModelManager.loadModelAwait(currentModel) { loadState ->
                 when (loadState) {
                     is LoadState.OnLoaded -> {
                         Log.d(TAG, "Generation model ready: ${loadState.model.modelName}")
-                        onReady()
                     }
 
                     is LoadState.Error -> {
-                        handleError("Generation model load failed: ${loadState.message}")
+                        Log.e(TAG, "Generation model error: ${loadState.message}")
                     }
 
                     else -> Log.d(TAG, "Generation model loading: $loadState")
                 }
-            }.onFailure { error ->
-                handleError("Model preparation failed: ${error.message}")
+            }
+            if (result.isSuccess) {
+                JSONObject().put("success", "Model loaded successfully")
+            } else {
+                JSONObject().put(
+                    "error", "Generation model load failed: ${result.exceptionOrNull()?.message}"
+                )
             }
         } catch (e: Exception) {
             handleError("Error ensuring generation model ready", e)
+            JSONObject().put("error", "Error ensuring generation model ready $e")
         }
     }
+
     //endregion
 
     //region Streaming & Rendering
@@ -673,7 +633,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
             ModelManager.generateStreaming(
                 prompt = fullPrompt,
-                toolJson = if (enableTools) convertToolsToJson(selectedTools.value.second).toString() else null,
+                toolJson = if (enableTools) convertToolsToJson(ToolCallingManager.getSelectedTool()).toString() else "",
                 onToken = { token ->
                     if (!firstTokenReceived) {
                         firstTokenReceived = true
@@ -863,101 +823,44 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 _uiState.value = ChatUiState.ExecutingTool(toolName, messageId)
                 currentRunningToolName.value = toolName
+                ToolCallingManager.executeTool(
+                    appContext, toolName, argsJson, onExecute = { result ->
+                        viewModelScope.launch {
+                            try {
+                                val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
+                                updateToolPreview(messageId, toolOutput)
 
-                val repairedToolCall = repairToolCall(toolName, argsJson)
-                Log.d(TAG, "Executing tool: $repairedToolCall")
+                                if (result.toString().isNotBlank()) {
+                                    Log.d("ToolOutput", "Tool output: $result")
+                                    executeInternalReasoning()
+                                }
 
-                val pluginResult = PluginManager.runPlugin(
-                    appContext, selectedTools.value.first, repairedToolCall.toString()
-                )
-
-                ToolRunner.run(pluginResult, appContext, repairedToolCall) { result ->
-                    viewModelScope.launch {
-                        try {
-                            val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
-                            updateToolPreview(messageId, toolOutput)
-
-                            if (result.toString().isNotBlank()) {
-                                val summaryPrompt = buildSummaryPrompt(result.toString())
-                                executeInternalReasoning(summaryPrompt)
+                                _uiState.value = ChatUiState.Idle
+                            } catch (e: Exception) {
+                                handleError("Tool result processing failed", e)
                             }
-
-                            _uiState.value = ChatUiState.Idle
-                        } catch (e: Exception) {
-                            handleError("Tool result processing failed", e)
                         }
-                    }
-                }
+                    })
             } catch (e: Exception) {
                 handleError("Tool execution failed", e)
             }
         }
     }
 
-    private fun repairToolCall(toolName: String, argsJson: String): JSONObject {
-        val lastUserQuery =
-            messages.value.lastOrNull { it.role == Role.User }?.text?.trim().orEmpty()
-        val selectedToolName = selectedTools.value.second.toolName
-        val fallbackTool = toolName.ifBlank { selectedToolName }
-
-        return try {
-            val root = JSONObject(argsJson)
-            val calls = root.optJSONArray("tool_calls")
-            val firstCall = calls?.optJSONObject(0)
-            val extractedToolName = firstCall?.optString("name").orEmpty().ifBlank { fallbackTool }
-            val argObj = firstCall?.optJSONObject("arguments")
-
-            val isSchemaEcho = argObj?.let { obj ->
-                obj.has("type") || obj.has("properties") || obj.has("required")
-            } ?: true
-
-            if (isSchemaEcho) {
-                JSONObject().apply {
-                    put("tool", extractedToolName)
-                    put("args", JSONObject().put("query", lastUserQuery))
-                }
-            } else {
-                JSONObject().apply {
-                    put("tool", extractedToolName)
-                    put("args", argObj)
-                }
-            }
-        } catch (e: Exception) {
-            JSONObject().apply {
-                put("tool", fallbackTool)
-                put("args", JSONObject().put("query", lastUserQuery))
-            }
-        }
-    }
-
-    private fun buildSummaryPrompt(toolOutput: String): String = buildString {
-        append("Summarize the tool output in 5-6 concise lines. ")
-        append("Preserve entities, numbers, and URLs. Be factual and crisp.\n\n")
-        append(toolOutput)
-    }
-
-    private suspend fun executeInternalReasoning(prompt: String) {
+    private fun executeInternalReasoning() {
         unSelectTool()
-        ModelManager.setSystemPrompt("You are a crisp summarizer. Be concise and factual.")
 
         val reasoningMessageId = UUID.randomUUID().toString()
         val reasoningMessage = Message(
-            role = Role.Assistant, text = "", id = reasoningMessageId
+            role = Role.Assistant, text = "Tool Executed Successfully..!", id = reasoningMessageId
         )
 
         _messages.update { it + reasoningMessage }
         streamingMessageIndex = _messages.value.size - 1
-
-        streamAndRender(
-            prompt = prompt,
-            enableTools = false,
-            messageId = reasoningMessageId,
-            existingMessages = _messages.value
-        )
     }
 
     fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
-        val selectedToolName = selectedTools.value.second.toolName
+        val selectedToolName = toolOutput.toolName
 
         _messages.update { messages ->
             messages.map { message ->
@@ -1041,7 +944,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
             ModelManager.generateStreaming(
                 prompt = titlePrompt,
-                toolJson = null,
+                toolJson = "",
                 onToken = { token ->
                     if (tokenCount < 15) {
                         titleBuilder.append(token)
@@ -1178,12 +1081,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             .put("required", JSONArray(required))
 
         val function =
-            JSONObject().put("name", tool.toolName).put("description", tool.description ?: "")
+            JSONObject().put("name", tool.toolName).put("description", tool.description)
                 .put("parameters", parameters)
 
-        return JSONArray().put(
+        val temp = JSONArray().put(
             JSONObject().put("type", "function").put("function", function)
         )
+
+        Log.d("Tools", "Tools: $temp")
+        return temp
     }
 
     private suspend fun <T> Semaphore.withPermit(action: suspend () -> T): T {
@@ -1209,5 +1115,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     private fun handleError(message: String, cause: Throwable? = null) {
         cause?.let { Log.e(TAG, message, cause) } ?: Log.e(TAG, message)
         _uiState.value = ChatUiState.Error(message, cause = cause)
+    }
+
+    private fun handleError(message: String) {
+        _uiState.value = ChatUiState.Error(message)
     }
 }

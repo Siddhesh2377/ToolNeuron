@@ -188,7 +188,7 @@ object ModelManager {
     suspend fun generateStreaming(
         prompt: String,
         gen: GenerationParams = GenerationParams(),
-        toolJson: String? = null,
+        toolJson: String = "",
         onToolCalled: (String, String) -> Unit = { _, _ -> },
         onToken: (String) -> Unit = {}
     ): String {
@@ -231,7 +231,7 @@ object ModelManager {
         prompt: String,
         systemPrompt: String,
         gen: GenerationParams,
-        toolJson: String?,
+        toolJson: String,
         onToolCalled: (String, String) -> Unit,
         onToken: (String) -> Unit
     ): String {
@@ -248,7 +248,7 @@ object ModelManager {
                 prompt = prompt,
                 systemPrompt = systemPrompt,
                 gen = gen,
-                toolsJson = normalized,
+                toolsJson = if (toolJson.isNotEmpty()) normalized else null,
                 onToken = onToken,
                 onToolCall = onToolCalled
             )
@@ -265,19 +265,21 @@ object ModelManager {
     private suspend fun generateGGUF(
         prompt: String,
         gen: GenerationParams,
-        toolJson: String?,
+        toolJson: String,
         onToolCalled: (String, String) -> Unit,
         onToken: (String) -> Unit
     ): String {
         val def = CompletableDeferred<String>()
         val normalized = ToolJsonUtils.normalizeSpec(toolJson)
         val deduped = ToolJsonUtils.maybeDedup(normalized)
+
+        Log.d("GGUF", "Sending request to queue \n $normalized \n $deduped ")
         queue.send(
             Request.Streaming(
                 prompt = prompt,
                 gen = gen,
                 onToken = onToken,
-                toolJson = deduped,
+                toolJson = if (toolJson.isNotEmpty()) deduped else "",
                 onToolCalled = onToolCalled,
                 completer = def
             )
@@ -392,7 +394,7 @@ object ModelManager {
         }
 
         svc.generate(
-            r.prompt, r.gen.maxTokens, object : IGenerationCallback.Stub() {
+            r.prompt, r.gen.maxTokens, r.toolJson.toString(), object : IGenerationCallback.Stub() {
                 var acc = StringBuilder()
                 override fun onToken(token: String) {
                     r.onToken(token)

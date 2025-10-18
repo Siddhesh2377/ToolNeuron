@@ -54,8 +54,8 @@ android {
 }
 
 dependencies {
-    implementation(files("libs/ai-core-release.aar"))
-    implementation(files("libs/libsodium-1.0.20.0.aar"))
+    implementation(":ai-core-release@aar")
+    implementation(files(":libsodium-1.0.20.0@aar"))
     implementation(libs.zip4j)
     implementation(libs.gson)
     implementation(libs.androidx.room.runtime)
