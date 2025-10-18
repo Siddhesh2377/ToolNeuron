@@ -975,7 +975,7 @@ private fun RegularChatUI(
                                             ttsViewModel.onClickStop()
                                         } else {
                                             ttsViewModel.initTTS(context)
-                                            ttsViewModel.onGenerate(message.text, 1)
+                                            ttsViewModel.onGenerate(message.text, 3)
                                         }
                                     }
                                 })
