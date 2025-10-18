@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -11,27 +12,35 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -41,6 +50,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
+import kotlinx.coroutines.delay
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.pow
@@ -204,7 +214,7 @@ fun FuturisticNeuralAnimation(
     // Auto-decay spike with frame control
     LaunchedEffect(spikeValue) {
         if (spikeValue > 0f) {
-            kotlinx.coroutines.delay(frameDelay)
+            delay(frameDelay)
             state.spike(spikeValue * 0.85f)
         }
     }
@@ -417,69 +427,189 @@ class TempActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NeuroVerseTheme {
-                Scaffold {
-                    val neuralState = rememberNeuralNetworkState()
+                TempScreen()
+            }
+        }
+    }
+}
 
-                    // Set speeds (optional)
-                    LaunchedEffect(Unit) {
-                        neuralState.setRotationSpeed(2f)  // 1.5x faster rotation
-                        neuralState.setPulseSpeed(1f)       // 2x faster pulse
-                        neuralState.setOrbitSpeed(3f)     // 1.2x faster orbits
-                        neuralState.setTargetFps(90)        // 60 FPS
-                    }
+fun colorsILike() {
 
-                    // Variable spike patterns
-                    LaunchedEffect(Unit) {
-                        while (true) {
-                            neuralState.spike(0.3f)
-                            kotlinx.coroutines.delay(2000)
+    //3. Arctic Dawn (Warm Ice)
+    var primaryColor = Color(0xFF00BCD4)
+    var secondaryColor = Color(0xFF00ACC1)
+    var accentColor = Color(0xFF0F3438)
+    var backgroundColor = Color(0xFFEFF8FA)
+    var starColor = Color(0xFF006064)
+    var starGlowColor = Color(0xFF00BCD4)
 
-                            neuralState.spike(0.3f)
-                            kotlinx.coroutines.delay(800)
+    //4. Arctic Teal (My Favorite for "Cold")
+    primaryColor = Color(0xFF00E5CC)
+    secondaryColor = Color(0xFF00BFA5)
+    accentColor = Color(0xFF64FFDA)
+    backgroundColor = Color(0xFF051015)
+    starColor = Color(0xFFB2DFDB)
+    starGlowColor = Color(0xFF00E5CC)
 
-                            neuralState.spike(0.3f)
-                            kotlinx.coroutines.delay(1500)
+    //1. Crimson Blood (Deep Red)
+    primaryColor = Color(0xFFFF1744)
+    secondaryColor = Color(0xFFF50057)
+    accentColor = Color(0xFFFF4081)
+    backgroundColor = Color(0xFF1A0308)
+    starColor = Color(0xFFFFCDD2)
+    starGlowColor = Color(0xFFFF1744)
 
-                            neuralState.spike(0.3f)
-                            kotlinx.coroutines.delay(1200)
+    //3. Coral Dawn (Warm Light)
+    primaryColor = Color(0xFFFF5252)
+    secondaryColor = Color(0xFFFF1744)
+    accentColor = Color(0xFFD32F2F)
+    backgroundColor = Color(0xFFFFF5F5)
+    starColor = Color(0xFF6D1B1B)
+    starGlowColor = Color(0xFFFF5252)
 
-                            kotlinx.coroutines.delay(3000)
-                        }
-                    }
+    //2. Midnight Moss (Very Minimal)
+    primaryColor = Color(0xFF689F38)
+    secondaryColor = Color(0xFF558B2F)
+    accentColor = Color(0xFF8BC34A)
+    backgroundColor = Color(0xFF0D1A0A)
+    starColor = Color(0xFFDCEDC8)
+    starGlowColor = Color(0xFF689F38)
 
-                    Column(
-                        Modifier
-                            .fillMaxSize()
-                            .padding(it),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+    //2. Sage Garden (Minimal Light)
+    primaryColor = Color(0xFF689F38)
+    secondaryColor = Color(0xFF558B2F)
+    accentColor = Color(0xFF33691E)
+    backgroundColor = Color(0xFFF9FDF7)
+    starColor = Color(0xFF33691E)
+    starGlowColor = Color(0xFF689F38)
+}
+
+@Composable
+fun TempScreen() {
+    val neuralState = rememberNeuralNetworkState()
+
+    // Current theme state
+    var currentTheme by remember { mutableStateOf(myThemes.last()) } // default Sage Garden
+
+    // Animate colors
+    val primary by animateColorAsState(currentTheme.primary)
+    val secondary by animateColorAsState(currentTheme.secondary)
+    val accent by animateColorAsState(currentTheme.accent)
+    val background by animateColorAsState(currentTheme.background)
+    val star by animateColorAsState(currentTheme.star)
+    val starGlow by animateColorAsState(currentTheme.starGlow)
+
+    Scaffold(containerColor = background) { padding ->
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Card(
+                Modifier.size(370.dp),
+                shape = CircleShape,
+                elevation = CardDefaults.outlinedCardElevation(0.dp)
+            ) {
+                FuturisticNeuralAnimation(
+                    modifier = Modifier.fillMaxSize(),
+                    state = neuralState,
+                    neuronCount = 44,
+                    layers = 2,
+                    primaryColor = primary,
+                    secondaryColor = secondary,
+                    accentColor = accent,
+                    backgroundColor = background,
+                    starColor = star,
+                    starGlowColor = starGlow,
+                    baseRotationDuration = 6000,
+                    basePulseDuration = 2000,
+                    baseOrbitDuration = 1000
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            // Buttons row
+            LazyRow(
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(myThemes) { theme ->
+                    Button(
+                        onClick = { currentTheme = theme },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
                     ) {
-                        Card(
-                            Modifier.size(370.dp),
-                            shape = CircleShape,
-                            elevation = CardDefaults.outlinedCardElevation(
-                                defaultElevation = 0.dp
-                            ),
-                        ) {
-                            FuturisticNeuralAnimation(
-                                modifier = Modifier.fillMaxSize(),
-                                state = neuralState,
-                                neuronCount = 44,
-                                layers = 3,
-                                primaryColor = Color(0xFFFF6B6B),
-                                secondaryColor = Color(0xFFEE5A6F),
-                                accentColor = Color(0xFF000000),
-                                backgroundColor = Color(0xFFFFFBF5),
-                                starColor = Color(0xFF262626),
-                                starGlowColor = Color(0xFFFF6B6B),
-                                baseRotationDuration = 6000,
-                                basePulseDuration = 2000,
-                                baseOrbitDuration = 1000
-                            )
-                        }
+                        Text(theme.name, color = Color.Black)
                     }
                 }
             }
         }
     }
 }
+
+data class ThemeColors(
+    val name: String,
+    val primary: Color,
+    val secondary: Color,
+    val accent: Color,
+    val background: Color,
+    val star: Color,
+    val starGlow: Color
+)
+
+val myThemes = listOf(
+    ThemeColors(
+        "Arctic Dawn",
+        primary = Color(0xFF00BCD4),
+        secondary = Color(0xFF00ACC1),
+        accent = Color(0xFF0F3438),
+        background = Color(0xFFEFF8FA),
+        star = Color(0xFF006064),
+        starGlow = Color(0xFF00BCD4)
+    ), ThemeColors(
+        "Arctic Teal",
+        primary = Color(0xFF00E5CC),
+        secondary = Color(0xFF00BFA5),
+        accent = Color(0xFF64FFDA),
+        background = Color(0xFF051015),
+        star = Color(0xFFB2DFDB),
+        starGlow = Color(0xFF00E5CC)
+    ), ThemeColors(
+        "Crimson Blood",
+        primary = Color(0xFFFF1744),
+        secondary = Color(0xFFF50057),
+        accent = Color(0xFFFF4081),
+        background = Color(0xFF1A0308),
+        star = Color(0xFFFFCDD2),
+        starGlow = Color(0xFFFF1744)
+    ), ThemeColors(
+        "Coral Dawn",
+        primary = Color(0xFFFF5252),
+        secondary = Color(0xFFFF1744),
+        accent = Color(0xFFD32F2F),
+        background = Color(0xFFFFF5F5),
+        star = Color(0xFF6D1B1B),
+        starGlow = Color(0xFFFF5252)
+    ), ThemeColors(
+        "Midnight Moss",
+        primary = Color(0xFF689F38),
+        secondary = Color(0xFF558B2F),
+        accent = Color(0xFF8BC34A),
+        background = Color(0xFF0D1A0A),
+        star = Color(0xFFDCEDC8),
+        starGlow = Color(0xFF689F38)
+    ), ThemeColors(
+        "Sage Garden",
+        primary = Color(0xFF689F38),
+        secondary = Color(0xFF558B2F),
+        accent = Color(0xFF33691E),
+        background = Color(0xFFF9FDF7),
+        star = Color(0xFF33691E),
+        starGlow = Color(0xFF689F38)
+    )
+)
