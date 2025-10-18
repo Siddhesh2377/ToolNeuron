@@ -113,22 +113,22 @@ class NeuronTree(val root: NeuronNode) {
         return result
     }
 
-    fun deleteNodeById(id: String) {
+    fun deleteNodeById(id: String): Boolean {
         if (id == "root") {
             Log.d("NeuronTree", "Attempted to delete root, operation ignored.")
-            return // Never delete root
+            return false
         }
 
         val nodeToDelete = nodeMap[id]
         if (nodeToDelete == null) {
             Log.w("NeuronTree", "No node found with id=$id, nothing to delete.")
-            return
+            return false
         }
 
         val path = nodeIndex[id]
         if (path == null) {
             Log.w("NeuronTree", "No path found for node id=$id, inconsistent state.")
-            return
+            return false
         }
 
         Log.d("NeuronTree", "Deleting node id=$id at path=$path")
@@ -159,6 +159,7 @@ class NeuronTree(val root: NeuronNode) {
 
         removeRecursively(nodeToDelete)
         Log.d("NeuronTree", "Finished deleting node id=$id and its descendants")
+        return true
     }
 
 

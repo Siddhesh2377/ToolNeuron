@@ -20,8 +20,9 @@ fun getDefaultBrainStructure(): NeuronTree {
 
     val chatHistory = NeuronNode("chatHistory", NodeData("", NodeType.OPERATOR))
     val memoryHistory = NeuronNode("memoryHistory", NodeData("", NodeType.OPERATOR))
+    val modelState = NeuronNode("modelSate", NodeData("", NodeType.OPERATOR))
 
-    tree.addChild(root.id, chatHistory, memoryHistory)
+    tree.addChild(root.id, chatHistory, memoryHistory, modelState)
 
     createNewMemory(root, MemoryDataTags.Family, JSONObject())
     createNewMemory(root, MemoryDataTags.Friends, JSONObject())

@@ -49,7 +49,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 object ModelManager {
 
     private const val TAG = "ModelManager"
-    private var service: IGenerationService? = null
+    var service: IGenerationService? = null
     private var serviceBoundContext: Context? = null
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder?) {

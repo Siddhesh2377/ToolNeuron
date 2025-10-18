@@ -26,33 +26,52 @@ object ModelsList {
     """.trimIndent()
 
     val toolCallingChatTemplate = """
-    {%- if professional is defined or emotional is defined -%}
-    <|im_start|>system
-    The assistant should modulate style accordingly while staying accurate.
-    <|im_end|>
-    {%- endif -%}
-    {%- if gbnf is defined and gbnf|length > 0 -%}
-    <|im_start|>system
-    The assistant's NEXT message MUST conform to the following GBNF grammar.
-    If a token would violate the grammar, do not emit it.
-    <GBNF>
-    {{ gbnf }}
-    </GBNF>
-    <|im_end|>
-    {%- endif -%}
-    {%- for m in messages -%}
-    <|im_start|>{{ m['role'] }}
-    {{ m['content'] }}
-    <|im_end|>
-    {%- endfor -%}
-    {%- if add_generation_prompt -%}
-    <|im_start|>assistant
-    {%- endif -%}
+        {%- if professional is defined or emotional is defined -%}
+        <|im_start|>system
+        The assistant should modulate style accordingly while staying accurate.
+        <|im_end|>
+        {%- endif -%}
+        {%- if gbnf is defined and gbnf|length > 0 -%}
+        <|im_start|>system
+        The assistant's NEXT message MUST conform to the following GBNF grammar.
+        If a token would violate the grammar, do not emit it.
+        <GBNF>
+        {{ gbnf }}
+        </GBNF>
+        <|im_end|>
+        {%- endif -%}
+        {%- for m in messages -%}
+        <|im_start|>{{ m['role'] }}
+        {{ m['content'] }}
+        <|im_end|>
+        {%- endfor -%}
+        {%- if add_generation_prompt -%}
+        <|im_start|>assistant
+        {%- endif -%}
 """.trimIndent()
 
     val toolCallingSystemPrompt = """
-        You are a tool‑calling assistant. Tools are provided to you as a schema; NEVER echo the schema back. 
-    """.trimIndent()
+        You are a function-calling assistant. When tools are available, respond ONLY with a JSON object in this EXACT format:
+        
+        {
+          "tool_calls": [{
+            "name": "toolName",
+            "arguments": {
+              "param1": "value1",
+              "param2": "value2"
+            }
+          }]
+        }
+        
+        CRITICAL RULES:
+        1. Use "arguments" as an object containing all parameters
+        2. NEVER put parameters directly in the tool_calls object
+        3. NEVER include any text before or after the JSON
+        4. The "arguments" field must be a JSON object, not a string
+        5. Match parameter names exactly as defined in the tool schema
+        
+        If no tool is needed, respond with plain text.
+""".trimIndent()
 
     fun getModelList(context: Context): List<ModelData> {
         val modelsDir = File(context.filesDir, "models")

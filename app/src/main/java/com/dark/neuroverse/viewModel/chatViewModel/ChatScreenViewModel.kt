@@ -9,6 +9,7 @@ import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
+import com.dark.ai_module.workers.ModelManager.service
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatINFO
 import com.dark.neuroverse.model.ChatUiState
@@ -22,6 +23,8 @@ import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.userdata.addNewChat
 import com.dark.neuroverse.userdata.getDefaultChatHistory
 import com.dark.neuroverse.userdata.helpers.MemoryDataTags
+import com.dark.neuroverse.userdata.helpers.ModelStateHelper
+import com.dark.neuroverse.userdata.helpers.StateStatistics
 import com.dark.neuroverse.userdata.helpers.getMemoryByTags
 import com.dark.neuroverse.userdata.helpers.updateMemory
 import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
@@ -56,6 +59,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -206,7 +210,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 ModelManager.unloadModel()
 
-                val systemPrompt = if (ToolCallingManager.isToolSelected()) {
+                val systemPrompt = if (!ToolCallingManager.isToolSelected()) {
+                    Log.d(TAG, "Tool calling selected")
                     ModelsList.defaultSystemPrompt
                 } else {
                     ModelsList.toolCallingSystemPrompt
@@ -219,6 +224,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 ) { state ->
                     _modelLoadingState.value = state
                     selectedModel.value = model
+                    val root = rootNode.value.getNodeDirect("root")
+                    if (ModelStateHelper.hasModelState(root, chatId.value)) {
+                        val stateInfo = ModelStateHelper.getModelState(root, chatId.value)
+                        if (stateInfo != null) {
+                            val success = service?.loadStateFile(stateInfo.stateFilePath)
+                            if (success == true) {
+                                Log.i(TAG, "Model state loaded: ${stateInfo.size / 1024} KB")
+                            } else {
+                                Log.w(TAG, "Failed to load model state")
+                            }
+                        }
+                    } else {
+                        Log.d(TAG, "No saved model state for chat: $chatId.value")
+                    }
                 }
 
                 toggleModelLoading(false)
@@ -347,6 +366,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         viewModelScope.launch {
             try {
                 Log.d(TAG, "Deleting chat $id")
+
+                ModelStateHelper.deleteModelState(rootNode.value.root, id)
+
+
                 rootNode.value.deleteNodeById(id)
                 performTreeSave()
                 rootNode.value = readBrainFile(encryptionKey.value, appContext)
@@ -386,6 +409,34 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 }
             }
         }
+    }
+
+    suspend fun continueGenerating(message: Message){
+        try {
+            val root = rootNode.value.getNodeDirect("root")
+            if (ModelStateHelper.hasModelState(root, chatId.value)) {
+                val stateInfo = ModelStateHelper.getModelState(root, chatId.value)
+                if (stateInfo != null) {
+                    val success = service?.loadStateFile(stateInfo.stateFilePath)
+                    if (success == true) {
+                        Log.i(TAG, "Model state loaded: ${stateInfo.size / 1024} KB")
+                    } else {
+                        Log.w(TAG, "Failed to load model state")
+                    }
+                }
+            } else {
+                Log.d(TAG, "No saved model state for chat: $chatId.value")
+            }
+        }catch (e: Exception) {
+            Log.e(TAG, "Error loading model state", e)
+        }
+
+        streamAndRender(
+            prompt = message.text,
+            enableTools = message.tool != null,
+            messageId = message.id,
+            existingMessages = messages.value
+        )
     }
 
     private suspend fun executeSendMessage(input: String, currentMessages: List<Message>) {
@@ -460,6 +511,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
+    fun deleteMessage(messageId: String) {
+        _messages.update { messages ->
+            messages.filterNot { it.id == messageId }
+        }
+        requestSave()
+        saveModelState()
+    }
+
     private suspend fun executeRegenerate(
         model: ModelData,
         messageId: String,
@@ -491,6 +550,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             ) { state ->
                 _modelLoadingState.value = state
                 selectedModel.value = model
+                val root = rootNode.value.getNodeDirect("root")
+                if (ModelStateHelper.hasModelState(root, chatId.value)) {
+                    val stateInfo = ModelStateHelper.getModelState(root, chatId.value)
+                    if (stateInfo != null) {
+                        val success = service?.loadStateFile(stateInfo.stateFilePath)
+                        if (success == true) {
+                            Log.i(TAG, "Model state loaded: ${stateInfo.size / 1024} KB")
+                        } else {
+                            Log.w(TAG, "Failed to load model state")
+                        }
+                    }
+                } else {
+                    Log.d(TAG, "No saved model state for chat: $chatId.value")
+                }
             }
         }
 
@@ -778,8 +851,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private fun updateStreamingMessage(
-        messageId: String, text: String, thought: String?, isFinal: Boolean = false
+        messageId: String,
+        text: String,
+        thought: String? = null,
+        toolError: String? = null,
+        isFinal: Boolean = false
     ) {
+        if (isFinal) {
+            saveModelState()
+        }
         _messages.update { messages ->
             messages.mapIndexed { index, message ->
                 if (message.id == messageId || index == streamingMessageIndex) {
@@ -788,13 +868,40 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     } else {
                         message.id
                     }
-                    if (isFinal && text == ""){
-                        message.copy(
-                            id = finalId, text = "Error: Empty text received", thought = thought
+
+                    // Handle tool calling error FIRST
+                    if (toolError != null && message.role == Role.Tool) {
+                        return@mapIndexed message.copy(
+                            id = finalId,
+                            text = text.ifBlank { "Tool execution failed" },
+                            thought = thought,
+                            tool = message.tool?.copy(
+                                toolPreview = "Error: $toolError",
+                                toolOutput = ToolOutput(
+                                    toolName = message.tool.toolName,
+                                    output = JSONObject().apply {
+                                        put("error", toolError)
+                                        put("ok", false)
+                                    }.toString()
+                                )
+                            )
                         )
                     }
+
+                    // Handle empty text error
+                    if (isFinal && text.isBlank()) {
+                        return@mapIndexed message.copy(
+                            id = finalId,
+                            text = "Error: Empty text received",
+                            thought = thought
+                        )
+                    }
+
+                    // Normal update
                     message.copy(
-                        id = finalId, text = text, thought = thought
+                        id = finalId,
+                        text = text,
+                        thought = thought
                     )
                 } else {
                     message
@@ -802,6 +909,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             }
         }
     }
+
 
     private fun emitDecodingMetrics(
         type: DecodeType, startTimeNs: Long, firstTokenTimeNs: Long, messageId: String
@@ -828,10 +936,30 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             try {
                 _uiState.value = ChatUiState.ExecutingTool(toolName, messageId)
                 currentRunningToolName.value = toolName
+
                 ToolCallingManager.executeTool(
-                    appContext, toolName, argsJson, onExecute = { result ->
+                    appContext, toolName, argsJson,
+                    onExecute = { result ->
                         viewModelScope.launch {
                             try {
+                                // Check for errors first
+                                if (result.has("error")) {
+                                    val errorMsg = result.getString("error")
+                                    Log.e(TAG, "Tool execution error: $errorMsg")
+
+                                    // Update message with error
+                                    updateStreamingMessage(
+                                        messageId = messageId,
+                                        text = "",
+                                        toolError = errorMsg,
+                                        isFinal = true
+                                    )
+
+                                    _uiState.value = ChatUiState.Idle
+                                    return@launch
+                                }
+
+                                // Success path
                                 val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
                                 updateToolPreview(messageId, toolOutput)
 
@@ -843,11 +971,23 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                                 _uiState.value = ChatUiState.Idle
                             } catch (e: Exception) {
                                 handleError("Tool result processing failed", e)
+                                updateStreamingMessage(
+                                    messageId = messageId,
+                                    text = "",
+                                    toolError = e.message ?: "Unknown error",
+                                    isFinal = true
+                                )
                             }
                         }
                     })
             } catch (e: Exception) {
                 handleError("Tool execution failed", e)
+                updateStreamingMessage(
+                    messageId = messageId,
+                    text = "",
+                    toolError = e.message ?: "Tool execution failed",
+                    isFinal = true
+                )
             }
         }
     }
@@ -892,8 +1032,29 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         currentGenerationJob?.cancel()
         batchingJob?.cancel()
         ModelManager.stopGeneration()
+
+        // Handle incomplete tool calls
+        val currentMsgId = _currentMsgId.value
+        if (currentMsgId != null) {
+            val currentMessage = _messages.value.find { it.id == currentMsgId }
+
+            if (currentMessage?.role == Role.Tool) {
+                // Update tool message with cancellation error
+                val errorOutput = JSONObject().apply {
+                    put("err", "Generation cancelled by user....")
+                }
+                updateStreamingMessage(
+                    messageId = currentMsgId,
+                    text = "Generation cancelled by user",
+                    toolError = errorOutput.toString(),
+                    isFinal = true
+                )
+            }
+        }
+
         currentStreamingState = null
         _uiState.value = ChatUiState.Idle
+        requestSave()
     }
 
     private fun generateTitleIfNeeded() {
@@ -1115,7 +1276,91 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         saveChannel.close()
         currentStreamingState = null
     }
+
+    /**
+     * Cleanup old states periodically
+     */
+    fun cleanupModelStates() {
+        viewModelScope.launch {
+            try {
+                val root = rootNode.value.root
+
+                // Cleanup orphaned files
+                val orphanedCount = ModelStateHelper.cleanupOrphanedStates(root, appContext)
+
+                // Keep only 10 most recent states
+                val oldCount = ModelStateHelper.cleanupOldStates(root, maxStates = 10)
+
+                // Remove states larger than 50 MB
+                val largeCount = ModelStateHelper.cleanupLargeStates(root)
+
+                if (orphanedCount + oldCount + largeCount > 0) {
+                    performTreeSave()
+                    Log.i(TAG, "Cleanup: $orphanedCount orphaned, $oldCount old, $largeCount large")
+                }
+            } catch (e: Exception) {
+                handleError("Error during cleanup", e)
+            }
+        }
+    }
+
+    /**
+     * Get state statistics for UI
+     */
+    fun getStateStatistics(): StateStatistics {
+        return ModelStateHelper.getStateStatistics(rootNode.value.root, appContext)
+    }
     //endregion
+
+
+    /**
+     * Save model state for current chat
+     */
+    fun saveModelState() {
+        val currentChatId = chatId.value
+        if (currentChatId.isBlank()) {
+            Log.w(TAG, "Cannot save model state: no active chat")
+            return
+        }
+
+
+        val svc = service ?: run {
+            Log.w(TAG, "Cannot save model state: service not available")
+            return
+        }
+
+        viewModelScope.launch {
+            try {
+                val stateFilePath = File(
+                    appContext.filesDir,
+                    "model_states/$currentChatId.state"
+                ).absolutePath
+
+                // Save state via service
+                val success = svc.saveStateFile(stateFilePath)
+
+                if (success) {
+                    // Update tree with state info
+                    val stateFile = File(stateFilePath)
+                    ModelStateHelper.createOrUpdateModelState(
+                        root = rootNode.value.root,
+                        context = appContext,
+                        chatId = currentChatId,
+                        stateSize = stateFile.length()
+                    )
+
+                    // Save tree
+                    performTreeSave()
+
+                    Log.i(TAG, "Model state saved: ${stateFile.length() / 1024} KB")
+                } else {
+                    Log.e(TAG, "Failed to save model state")
+                }
+            } catch (e: Exception) {
+                handleError("Error saving model state", e)
+            }
+        }
+    }
 
     private fun handleError(message: String, cause: Throwable? = null) {
         cause?.let { Log.e(TAG, message, cause) } ?: Log.e(TAG, message)

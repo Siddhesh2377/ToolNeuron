@@ -52,11 +52,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.outlined.SmartToy
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Stop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -130,7 +131,6 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
-import com.dark.neuroverse.userdata.helpers.MemoryDataTags
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
@@ -138,13 +138,11 @@ import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.ToolCallingManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
-import com.mp.data_hub_lib.manager.DataHubManager
-import com.mp.data_hub_lib.model.BrainDoc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
-import java.util.UUID
+import org.json.JSONObject
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -729,7 +727,7 @@ private fun ChatInputBar(
                 when {
                     isGenerating -> {
                         Icon(
-                            Icons.Default.Stop,
+                            Icons.Rounded.Stop,
                             modifier = Modifier.padding(rDP(8.dp)),
                             contentDescription = "Stop",
                             tint = MaterialTheme.colorScheme.background
@@ -855,7 +853,10 @@ private fun ChatBubble(
 
             // Main message content based on role
             when (message.role) {
-                Role.User -> UserChatUI(message)
+                Role.User -> UserChatUI(message) {
+                    viewModel.deleteMessage(it)
+                }
+
                 Role.Assistant -> RegularChatUI(message, viewModel, ttsViewModel)
                 Role.Tool -> ToolChatUI(
                     message = message,
@@ -867,25 +868,41 @@ private fun ChatBubble(
 }
 
 @Composable
-private fun UserChatUI(message: Message) {
+private fun UserChatUI(
+    message: Message, onMessageDelete: (String) -> Unit = {}
+) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
+    val actionIconSize = rDP(14.dp)
 
-    Box(
-        modifier = Modifier
-            .widthIn(max = rDP(240.dp))
-            .clip(corner)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
-        contentAlignment = Alignment.CenterEnd
+    Column(
+        modifier = Modifier.widthIn(max = rDP(240.dp)),
+        horizontalAlignment = Alignment.End
     ) {
+        // Message text
         Text(
+            modifier = Modifier
+                .clip(corner)
+                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
+                .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
             text = message.text,
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.bodyMedium
         )
+
+        Spacer(modifier = Modifier.height(rDP(8.dp)))
+
+        Icon(
+            Icons.Rounded.DeleteOutline,
+            contentDescription = "Delete",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .padding(end = rDP(8.dp))
+                .size(actionIconSize)
+                .clickable { onMessageDelete(message.id) })
     }
 }
+
 
 @Composable
 private fun RegularChatUI(
@@ -992,32 +1009,27 @@ private fun RegularChatUI(
                                     )
                                 })
 
-                        // Save Memory button
                         Icon(
-                            painter = painterResource(R.drawable.memory_stick),
-                            contentDescription = "Save To Memory",
+                            painterResource(R.drawable.resource_continue),
+                            contentDescription = "Continue",
                             tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                             modifier = Modifier
                                 .size(actionIconSize)
                                 .clickable {
                                     CoroutineScope(Dispatchers.IO).launch {
-                                        Log.d("HomeScreen", "SaveMemory")
-                                        DataHubManager.reinitializeEmbeddingModel()
-                                        val data = DataHubManager.getEmbeddingManager()
-                                            .getEmbedding(message.text)
-                                        Log.d("HomeScreen", "SaveMemory: $data")
-                                        val memory = listOf(
-                                            BrainDoc(
-                                                id = UUID.randomUUID().toString(),
-                                                text = message.text,
-                                                embedding = data.getOrNull()?.toList()
-                                                    ?: emptyList()
-                                            )
-                                        )
-                                        Log.d("HomeScreen", "SaveMemory: $memory")
-                                        viewModel.addMessageInMemory(memory, MemoryDataTags.Other)
-                                        Log.d("HomeScreen", "SaveMemory done")
+                                        viewModel.continueGenerating(message)
                                     }
+                                })
+
+                        // Save Memory button
+                        Icon(
+                            Icons.Rounded.DeleteOutline,
+                            contentDescription = "Delete",
+                            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                            modifier = Modifier
+                                .size(actionIconSize)
+                                .clickable {
+                                    viewModel.deleteMessage(message.id)
                                 })
                     }
                 }
@@ -1053,58 +1065,42 @@ private fun ToolChatUI(
                     // Tool identifier tag
                     AssistTag(message.tool?.toolName ?: "Unknown Tool")
                     Spacer(Modifier.height(rDP(6.dp)))
+                    val toolOutput = message.tool?.toolOutput
+                    val out = remember(toolOutput) {
+                        try {
+                            val outputString = toolOutput?.output ?: ""
 
-                    val pluginLoading by PluginManager.currentPlugin.collectAsState(initial = null)
+                            when {
+                                outputString.isBlank() -> {
+                                    JSONObject().apply {
+                                        put("err", "Tool not executed yet")
+                                    }
+                                }
+
+                                else -> {
+                                    JSONObject(outputString)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e("ToolChatUI", "Parse error: ${e.message}", e)
+                            JSONObject().apply {
+                                put("err", "Failed to parse: ${e.message}")
+                            }
+                        }
+                    }
 
                     when (message.tool?.toolOutput == null) {
                         true -> {
-                            val isLoading = pluginLoading == null
-                            Crossfade(
-                                targetState = isLoading, label = "plugin-loading"
-                            ) { loading ->
-                                if (loading) {
-                                    // Loading state for plugin
-                                    Card(
-                                        colors = CardDefaults.cardColors(
-                                            containerColor = MaterialTheme.colorScheme.surface
-                                        ),
-                                        elevation = CardDefaults.cardElevation(rDP(0.dp)),
-                                        modifier = Modifier.fillMaxWidth(),
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .padding(rDP(24.dp)),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                                        ) {
-                                            CircularProgressIndicator(
-                                                modifier = Modifier.size(rDP(32.dp)),
-                                                strokeWidth = rDP(3.dp)
-                                            )
-                                            Text(
-                                                text = "Loading Plugin\n${message.tool?.toolName ?: "Unknown"}",
-                                                style = MaterialTheme.typography.bodyMedium.copy(
-                                                    fontSize = rSp(14.sp),
-                                                    fontFamily = FontFamily.Serif
-                                                ),
-                                                textAlign = TextAlign.Center
-                                            )
-                                        }
-                                    }
-                                } else {
-                                    // Plugin content
-                                    Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                                        PluginManager.currentPlugin.collectAsState().value?.api?.content()
-                                            ?.invoke()
-                                    }
-                                }
+                            Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                                PluginManager.currentPlugin.collectAsState().value?.api?.ToolPreviewContent(
+                                    out.toString()
+                                )
                             }
                         }
 
                         false -> {
                             // Tool output available
-                            ToolOutputToggle(toolOutput = message.tool.toolOutput)
+                            ToolOutputToggle(toolOutput = message.tool.toolOutput, out = out)
                         }
                     }
                 }
@@ -1174,7 +1170,7 @@ private fun ThinkingChatUI(message: Message) {
 }
 
 @Composable
-fun ToolOutputToggle(toolOutput: ToolOutput) {
+fun ToolOutputToggle(toolOutput: ToolOutput, out: JSONObject) {
     var expanded by remember { mutableStateOf(false) }
 
     val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
@@ -1220,21 +1216,40 @@ fun ToolOutputToggle(toolOutput: ToolOutput) {
             enter = expandVertically() + fadeIn(),
             exit = shrinkVertically() + fadeOut()
         ) {
-            ToolOutputContent(toolOutput = toolOutput)
+            ToolOutputContent(toolOutput = toolOutput, out = out)
         }
     }
 }
 
 @Composable
 fun ToolOutputContent(
-    modifier: Modifier = Modifier, toolOutput: ToolOutput
+    modifier: Modifier = Modifier, toolOutput: ToolOutput, out: JSONObject
 ) {
     val context = LocalContext.current
     val runningPlugin = PluginManager.runPlugin(context, toolOutput.toolName, toolOutput.output)
 
-    Card(modifier = modifier) {
-        runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+    if (out.has("err")) {
+        Card(
+            elevation = CardDefaults.cardElevation(rDP(0.dp)),
+            colors = CardDefaults.cardColors(containerColor = Color.White)
+        ) {
+            Box(modifier = Modifier.padding(vertical = rDP(16.dp), horizontal = rDP(34.dp))) {
+                Text(
+                    text = out.getString("err"),
+                    color = Color(0xFFEF4444),
+                    fontSize = rSp(12.sp),
+                    lineHeight = rSp(18.sp),
+                    fontFamily = FontFamily.Monospace,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    } else {
+        Card(modifier = modifier) {
+            runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+        }
     }
+
 }
 
 @Composable
