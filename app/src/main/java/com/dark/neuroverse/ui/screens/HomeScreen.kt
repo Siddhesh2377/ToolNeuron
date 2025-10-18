@@ -919,19 +919,14 @@ private fun RegularChatUI(
                         .fillMaxWidth()
                         .padding(vertical = rDP(4.dp))
                 ) {
-                    if (message.text.isNotEmpty() && uiState is ChatUiState.Idle) {
-                        MarkdownText(
-                            text = message.text,
-                            isStreaming = isStreaming,
-                            color = MaterialTheme.colorScheme.primary,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    } else {
-                        Text(
-                            "Error Generating Response....\uD83D\uDE1E",
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
+
+                    MarkdownText(
+                        text = message.text,
+                        isStreaming = isStreaming,
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+
 
                     Spacer(Modifier.height(rDP(10.dp)))
 
@@ -961,7 +956,7 @@ private fun RegularChatUI(
                                     CoroutineScope(Dispatchers.IO).launch {
                                         if (isPlayingAudio) {
                                             ttsViewModel.onClickStop()
-                                        }else{
+                                        } else {
                                             ttsViewModel.initTTS(context)
                                             ttsViewModel.onGenerate(message.text, 1)
                                         }

@@ -788,6 +788,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     } else {
                         message.id
                     }
+                    if (isFinal && text == ""){
+                        message.copy(
+                            id = finalId, text = "Error: Empty text received", thought = thought
+                        )
+                    }
                     message.copy(
                         id = finalId, text = text, thought = thought
                     )
