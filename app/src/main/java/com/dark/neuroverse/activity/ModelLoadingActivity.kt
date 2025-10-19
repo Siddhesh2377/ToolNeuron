@@ -216,7 +216,6 @@ fun ModelLoadingScreen(
                                 isToolCalling = toolCalling,
                                 modelPath = f.absolutePath,
                                 providerName = ModelProvider.LocalGGUF.toString(),
-                                chatTemplate = core?.optString("n_embd")
                             )
 
                             viewModel.checkIfInstalled(candidate.modelName) { exists ->

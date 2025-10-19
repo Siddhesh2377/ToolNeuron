@@ -239,13 +239,37 @@ class ModelScreenViewModel : ViewModel() {
     /* ----------------------------------------------------------- *//* 5️⃣  Persist a ModelData to DB (used for local GGUF)      *//* ----------------------------------------------------------- */
     fun addModel(model: ModelData) = viewModelScope.launch { ModelManager.addModel(model) }
     fun removeModel(name: String) = viewModelScope.launch {
-        ModelManager.getModel(name)?.let { m ->
-            if (!m.isImported && m.providerName == ModelProvider.LocalGGUF.toString()) {
-                File(m.modelUrl!!).delete()
+        val model = ModelManager.getModel(name)
+
+        if (model != null) {
+            val isLocalGGUF = model.providerName == ModelProvider.LocalGGUF.toString()
+            val isImported = model.isImported
+
+            // Delete only if: LocalGGUF + not imported
+            if (isLocalGGUF && !isImported) {
+                model.modelUrl?.let { path ->
+                    try {
+                        val file = File(path)
+                        if (file.exists()) {
+                            file.delete()
+                            Log.i("ModelRemove", "Deleted file for model: ${model.modelName}")
+                        } else {
+                            Log.w("ModelRemove", "File missing for ${model.modelName}")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ModelRemove", "File deletion failed: ${e.message}")
+                    }
+                } ?: Log.w("ModelRemove", "Null modelUrl for ${model.modelName}")
+            } else {
+                Log.i("ModelRemove", "Skipping delete for imported or non-local model: ${model.modelName}")
             }
+
+            ModelManager.removeModel(name)
+        } else {
+            Log.w("ModelRemove", "Model not found in DB: $name")
         }
-        ModelManager.removeModel(name)
     }
+
 
     /* --------------------------------------------------------------------------- *//* Helper – convert a ModelData that already holds an OpenRouter entry to an      *//*        OpenRouterModel object that's suitable for the UI.                     *//* --------------------------------------------------------------------------- */
     private fun ModelData.toOpenRouterModel() = OpenRouterModel(id, modelName, ctxSize, temp, topP)

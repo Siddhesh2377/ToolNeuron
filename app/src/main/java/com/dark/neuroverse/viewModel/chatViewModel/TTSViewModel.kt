@@ -69,7 +69,7 @@ class TTSViewModel(context: Context) : ViewModel() {
         initAudioTrack()
     }
 
-    fun unLoadTTS(){
+    fun unLoadTTS() {
         TtsEngine.tts?.release()
     }
 
@@ -105,11 +105,12 @@ class TTSViewModel(context: Context) : ViewModel() {
 
         val startTime = TimeSource.Monotonic.markNow()
 
-        val audio = TtsEngine.tts!!.generateWithCallback(normalizedText, speakerId, callback = ::callback).also {
-            _isPlaying.value = false
-            Log.d(TAG, "Audio generated")
-            it
-        }
+        val audio =
+            TtsEngine.tts!!.generateWithCallback(normalizedText, callback = ::callback).also {
+                _isPlaying.value = false
+                Log.d(TAG, "Audio generated")
+                it
+            }
 
         playbackJob.cancelAndJoin()
 
@@ -150,7 +151,7 @@ class TTSViewModel(context: Context) : ViewModel() {
         stopMediaPlayer()
     }
 
-    private fun callback(samples: FloatArray): Int {
+    private fun callback(samples: FloatArray, process: Float): Int {
         return if (!stopped) {
             val samplesCopy = samples.copyOf()
             CoroutineScope(Dispatchers.IO).launch {
@@ -186,8 +187,7 @@ class TTSViewModel(context: Context) : ViewModel() {
     }
 
     private fun normalizeText(raw: String): String {
-        return raw
-            .replace("\u2011", "-")        // non-breaking hyphen → normal hyphen
+        return raw.replace("\u2011", "-")        // non-breaking hyphen → normal hyphen
             .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1") // remove bold markdown
             .replace(Regex("\\s+"), " ")   // collapse whitespace
             .trim()

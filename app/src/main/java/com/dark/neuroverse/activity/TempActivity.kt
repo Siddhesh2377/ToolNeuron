@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RawRes
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.Easing
@@ -63,7 +64,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -556,31 +556,22 @@ fun TempScreen() {
     var currentTheme by remember { mutableStateOf(myThemes.last()) }
 
     val primary by animateColorAsState(
-        currentTheme.primary,
-        tween(durationMillis = 600),
-        label = "primary"
+        currentTheme.primary, tween(durationMillis = 600), label = "primary"
     )
     val secondary by animateColorAsState(
-        currentTheme.secondary,
-        tween(durationMillis = 600),
-        label = "secondary"
+        currentTheme.secondary, tween(durationMillis = 600), label = "secondary"
     )
     val accent by animateColorAsState(
-        currentTheme.accent,
-        tween(durationMillis = 600),
-        label = "accent"
+        currentTheme.accent, tween(durationMillis = 600), label = "accent"
     )
     val background by animateColorAsState(
-        currentTheme.background,
-        tween(durationMillis = 600),
-        label = "background"
+        currentTheme.background, tween(durationMillis = 600), label = "background"
     )
     val star by animateColorAsState(currentTheme.star, tween(durationMillis = 600), label = "star")
     val starGlow by animateColorAsState(
-        currentTheme.starGlow,
-        tween(durationMillis = 600),
-        label = "starGlow"
+        currentTheme.starGlow, tween(durationMillis = 600), label = "starGlow"
     )
+    var size by remember { mutableStateOf(200.dp) }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
         Column(
@@ -591,7 +582,7 @@ fun TempScreen() {
             verticalArrangement = Arrangement.Center
         ) {
             Card(
-                Modifier.size(200.dp),
+                Modifier.animateContentSize().size(size),
                 shape = CircleShape,
                 elevation = CardDefaults.outlinedCardElevation(0.dp)
             ) {
@@ -608,6 +599,11 @@ fun TempScreen() {
                     basePulseDuration = 2000,
                     baseOrbitDuration = 1000
                 )
+            }
+            Spacer(Modifier.height(24.dp))
+
+            Row (Modifier.fillMaxWidth().padding(horizontal = 46.dp)){
+                ModernSlider("Label", "Description", size.value, { size = it.dp }, 100f..300f, 10)
             }
 
             Spacer(Modifier.height(24.dp))

@@ -219,7 +219,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
                 ModelManager.loadModelAwait(
                     modelData = model.copy(
-                        chatTemplate = ModelsList.defaultChatTemplate, systemPrompt = systemPrompt
+                      //  chatTemplate = ModelsList.defaultChatTemplate, systemPrompt = systemPrompt
                     ),
                 ) { state ->
                     _modelLoadingState.value = state
