@@ -87,6 +87,10 @@ object ChatManager {
                 return
             }
 
+            Log.d(TAG, "Messages: $messages")
+
+            Log.d(TAG, "Root node: $rootNode")
+
             Log.d(TAG, "Saving chat: id=$chatId, title='$chatTitle', messages=${messages.size}")
 
             // 1️⃣  build the JSON payload
@@ -119,6 +123,8 @@ object ChatManager {
                     Log.d(TAG, "Creating new chat node")
                     val newNode = addNewChat(rootNode, jsonData)
                     _currentChatID.value = newNode.id
+                    Log.d(TAG, "Root node: $rootNode")
+                    Log.d(TAG, "Node Ref: $newNode")
                     Log.d(TAG, "Created new chat with id: ${newNode.id}")
                 }
             }

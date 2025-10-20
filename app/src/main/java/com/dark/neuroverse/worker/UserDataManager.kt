@@ -87,9 +87,10 @@ object UserDataManager {
      */
     fun performTreeSave(appContext: Context) {
         try {
-            Log.d(TAG, "=== Saving tree structure to disk ===")
             saveTree(NeuronTree(_rootNode.value), appContext, BuildConfig.ALIAS)
-            Log.d(TAG, "Tree structure saved successfully")
+            // **Reload fresh root after write** so in‑memory view matches disk
+            reloadBrainFile(appContext)
+            Log.d(TAG, "root reloaded from disk after save")
         } catch (e: Exception) {
             Log.e(TAG, "Tree save failed", e)
             UIStateManager.setStateError("Tree save failed", cause = e)

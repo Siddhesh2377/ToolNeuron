@@ -71,22 +71,10 @@ fun getDefaultMemoryHistory(root: NeuronNode): NeuronNode {
     return NeuronTree(root).getNodeDirect("memoryHistory")
 }
 
-/**
- * Adds a new leaf (chat) under the <chatHistory> operator node.
- *
- * @param root   The real root node that is currently in memory.
- * @param data   Raw JSON that will be stored as the leaf’s content.
- * @return       The freshly‑created chat node.
- */
-/**
- * Adds a new leaf (chat) under the <chatHistory> operator node.
- */
 fun addNewChat(root: NeuronNode, data: JSONObject): NeuronNode {
     val chatHistory = getDefaultChatHistory(root)
-    val newChat = NeuronNode(
-        data = NodeData(data.toString(), NodeType.LEAF)
-    )
-    chatHistory.addChild(newChat)
+    val newChat = NeuronNode(data = NodeData(data.toString(), NodeType.LEAF))
+    NeuronTree(root).addChild(chatHistory.id, newChat)
     return newChat
 }
 
