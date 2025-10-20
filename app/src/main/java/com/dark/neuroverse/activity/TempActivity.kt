@@ -552,6 +552,8 @@ fun TempScreen() {
 
     val interfaceSwitched = rememberSoundPlayer(context, R.raw.interface_switch)
     val interfaceSuccess = rememberSoundPlayer(context, R.raw.interface_success)
+    val interfaceError = rememberSoundPlayer(context, R.raw.error_interface)
+    val interfaceStage = rememberSoundPlayer(context, R.raw.stages_interface) // 6sec sound effect
 
     var currentTheme by remember { mutableStateOf(myThemes.last()) }
 

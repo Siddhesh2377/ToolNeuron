@@ -24,9 +24,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.Article
+import androidx.compose.material.icons.automirrored.outlined.List
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Analytics
-import androidx.compose.material.icons.outlined.Article
 import androidx.compose.material.icons.outlined.Calculate
 import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Clear
@@ -37,7 +38,6 @@ import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.FolderOff
 import androidx.compose.material.icons.outlined.Height
-import androidx.compose.material.icons.outlined.List
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -86,12 +86,12 @@ import com.dark.neuroverse.model.NodeStats
 import com.dark.neuroverse.model.ViewMode
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.theme.rDP
-import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModel
-import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModelFactory
 import com.dark.neuroverse.userdata.helpers.MemoryDataTags
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NodeType
+import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModel
+import com.dark.neuroverse.viewModel.userdata.UserDataViewerViewModelFactory
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -146,7 +146,7 @@ fun UserDataViewerScreen(
                     IconButton(
                         onClick = { viewModel.setViewMode(ViewMode.LIST) }) {
                         Icon(
-                            Icons.Outlined.List,
+                            Icons.AutoMirrored.Outlined.List,
                             contentDescription = "List View",
                             tint = if (viewMode == ViewMode.LIST) MaterialTheme.colorScheme.primary
                             else MaterialTheme.colorScheme.onSurfaceVariant
@@ -237,9 +237,7 @@ fun UserDataViewerScreen(
 
                     ViewMode.STATS -> {
                         StatisticsView(
-                            stats = viewModel.getNodeStats(),
-                            tree = tree!!,
-                            modifier = Modifier.fillMaxSize()
+                            stats = viewModel.getNodeStats(), modifier = Modifier.fillMaxSize()
                         )
                     }
                 }
@@ -592,8 +590,7 @@ fun NodeDetailView(
                         MetadataRow("Children Count", "${node.children.size}")
                         MetadataRow("Content Length", "${node.data.content.length} characters")
                         MetadataRow(
-                            "Has Content",
-                            if (node.data.content.isNotBlank()) "Yes" else "No"
+                            "Has Content", if (node.data.content.isNotBlank()) "Yes" else "No"
                         )
                     }
                 })
@@ -779,7 +776,7 @@ fun NodeListItem(
 
 @Composable
 fun StatisticsView(
-    stats: NodeStats, tree: NeuronTree, modifier: Modifier = Modifier
+    stats: NodeStats, modifier: Modifier = Modifier
 ) {
     LazyColumn(
         modifier = modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -845,7 +842,7 @@ fun StatsOverviewCard(stats: NodeStats) {
                 StatItem(
                     value = "${stats.totalContent}",
                     label = "Characters",
-                    icon = Icons.Outlined.Article
+                    icon = Icons.AutoMirrored.Outlined.Article
                 )
             }
         }

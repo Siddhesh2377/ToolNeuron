@@ -48,10 +48,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.R
-import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.model.ChatList
 import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
+import com.dark.neuroverse.worker.UIStateManager
 import kotlinx.coroutines.launch
 
 @Composable
@@ -66,7 +67,7 @@ fun SettingsDrawerContent(
     onModelsClick: () -> Unit
 ) {
     val chatList by viewModel.chatList.collectAsStateWithLifecycle()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val currentChatId by viewModel.chatId.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
@@ -332,7 +333,7 @@ private fun CompactSearchBox(
 
 @Composable
 private fun CompactChatHistoryItem(
-    chat: ChatINFO,
+    chat: ChatList,
     isCurrentChat: Boolean,
     isDeleting: Boolean,
     onChatClick: () -> Unit,

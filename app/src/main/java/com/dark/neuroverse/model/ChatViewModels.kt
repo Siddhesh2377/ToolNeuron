@@ -16,8 +16,7 @@ sealed class ChatUiState {
     object Idle : ChatUiState()
 
     data class Loading(
-        val operation: String,
-        val progress: Float? = null
+        val message: String,
     ) : ChatUiState()
 
     data class Generating(

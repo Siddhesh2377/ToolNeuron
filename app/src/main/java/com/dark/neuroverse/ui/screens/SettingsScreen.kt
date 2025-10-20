@@ -60,7 +60,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.activity.UserDataActivity
 import com.dark.neuroverse.data.UserPrefs
-import com.dark.neuroverse.model.ChatINFO
+import com.dark.neuroverse.model.ChatList
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.userdata.getDefaultChatHistory
@@ -79,7 +79,7 @@ import org.json.JSONObject
 fun SettingsScreen(onBackClick: () -> Unit = {}) {
     // UI State
     var isLoading by remember { mutableStateOf(true) }
-    var chatList by remember { mutableStateOf<List<ChatINFO>>(emptyList()) }
+    var chatList by remember { mutableStateOf<List<ChatList>>(emptyList()) }
     var clearingData by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -496,7 +496,7 @@ fun SettingCard(
 }
 
 // Helper functions moved outside composable scope
-private suspend fun loadChatHistory(context: Context): List<ChatINFO> =
+private suspend fun loadChatHistory(context: Context): List<ChatList> =
     withContext(Dispatchers.IO) {
         try {
             val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
@@ -504,13 +504,13 @@ private suspend fun loadChatHistory(context: Context): List<ChatINFO> =
             val root = rootNode.getNodeDirect("root")
             val history = getDefaultChatHistory(root)
 
-            val chatInfo = mutableListOf<ChatINFO>()
+            val chatInfo = mutableListOf<ChatList>()
             NeuronTree(history).getAllChildrenRecursive().forEach { node ->
                 if (node.data.content.isNotBlank()) {
                     val title = runCatching {
                         JSONObject(node.data.content).optString("title", "Untitled")
                     }.getOrElse { "Untitled" }
-                    chatInfo.add(ChatINFO(node.id, title))
+                    chatInfo.add(ChatList(node.id, title))
                 }
             }
             chatInfo
@@ -520,7 +520,7 @@ private suspend fun loadChatHistory(context: Context): List<ChatINFO> =
         }
     }
 
-private suspend fun clearChatHistory(context: Context, chatList: List<ChatINFO>) =
+private suspend fun clearChatHistory(context: Context, chatList: List<ChatList>) =
     withContext(Dispatchers.IO) {
         val key = getOrCreateHardwareBackedAesKey(BuildConfig.ALIAS)
         val rootNode = readBrainFile(key, context)

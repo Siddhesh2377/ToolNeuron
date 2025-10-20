@@ -135,7 +135,8 @@ import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
-import com.dark.neuroverse.viewModel.chatViewModel.ToolCallingManager
+import com.dark.neuroverse.worker.ToolCallingManager
+import com.dark.neuroverse.worker.UIStateManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import kotlinx.coroutines.CoroutineScope
@@ -160,7 +161,7 @@ fun HomeScreen(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val modelState by chatScreenViewModel.modelLoadingState.collectAsStateWithLifecycle()
-    val uiState by chatScreenViewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
 
     // Token tracking
     val tokenCount: MutableStateFlow<Int> = MutableStateFlow(0)
@@ -256,7 +257,7 @@ fun HomeScreen(
                         )
                         if (uiState is ChatUiState.Loading) {
                             Text(
-                                text = (uiState as ChatUiState.Loading).operation,
+                                text = (uiState as ChatUiState.Loading).message,
                                 modifier = Modifier.padding(
                                     horizontal = 16.dp, vertical = 4.dp
                                 ),
@@ -483,7 +484,7 @@ private fun EmptyStateContent(uiState: ChatUiState) {
                 )
                 Spacer(Modifier.height(rDP(16.dp)))
                 Text(
-                    text = uiState.operation,
+                    text = uiState.message,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontSize = rSp(16.sp),
                     textAlign = TextAlign.Center
@@ -532,7 +533,7 @@ private fun BottomBar(
 ) {
     var input by remember { mutableStateOf("") }
     val tools by ToolCallingManager.toolList.collectAsStateWithLifecycle()
-    val selectedTools by ToolCallingManager.selectedTools.collectAsStateWithLifecycle()
+    val selectedTools by ToolCallingManager.selectedTool.collectAsStateWithLifecycle()
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
@@ -556,7 +557,7 @@ private fun BottomBar(
         onRag = viewModel::setRag,
         onToolSelected = viewModel::selectTool,
         selectedTools = if (selectedTools.first.isEmpty()) emptyList() else listOf(selectedTools.second),
-        onToolRemoved = { viewModel.unSelectTool() },
+        onToolRemoved = { viewModel.unselectTool() },
         onSend = {
             when {
                 isGenerating -> viewModel.stopGenerating()
@@ -910,7 +911,7 @@ private fun RegularChatUI(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val currentMsgId by viewModel.currentMsgId.collectAsStateWithLifecycle()
 
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
@@ -1257,8 +1258,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     var showDialog by remember { mutableStateOf(false) }
     val modelList by viewModel.modelList.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
-    val isLoading by viewModel.isModelLoading.collectAsStateWithLifecycle()
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     var selectedModelName by remember { mutableStateOf("") }
     val isGeneratingTitle = uiState is ChatUiState.GeneratingTitle
     LaunchedEffect(selectedModel) {
@@ -1335,7 +1335,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .padding(vertical = rDP(6.dp))
-                                        .clickable(enabled = !isLoading) {
+                                        .clickable {
                                             Log.d("ModelSelection", "Selected model: $model")
                                             viewModel.selectModel(model)
                                         }, colors = CardDefaults.cardColors(
@@ -1365,14 +1365,6 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                         }
                                         Spacer(Modifier.weight(1f))
                                         when {
-                                            isLoading && model.modelName == modelList.find { it.modelName == selectedModel.modelName }?.modelName -> {
-                                                CircularProgressIndicator(
-                                                    strokeWidth = 2.dp,
-                                                    modifier = Modifier.size(rDP(20.dp)),
-                                                    color = Mint
-                                                )
-                                            }
-
                                             isSelected -> {
                                                 Icon(
                                                     imageVector = Icons.Default.Check,
