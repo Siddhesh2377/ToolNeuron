@@ -546,7 +546,6 @@ fun NodeDetailView(
                         MarkdownText(
                             text = node.id,
                             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 })

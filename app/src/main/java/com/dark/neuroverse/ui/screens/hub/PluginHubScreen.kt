@@ -114,7 +114,7 @@ fun PluginHubScreen(
             title = {
                 Text(
                     "Plugin Store",
-                    style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
             }, actions = {
                 Button(
@@ -212,15 +212,14 @@ private fun PluginCard(
             .fillMaxWidth()
             .animateContentSize(animationSpec = tween(250))
             .clip(RoundedCornerShape(16.dp)),
-        colors = CardDefaults.cardColors(containerColor = colors.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
+        colors = CardDefaults.cardColors(containerColor = colors.secondary.copy(0.1f))
     ) {
         Column(modifier = Modifier.padding(rDP(14.dp))) {
             // Header row: name + badges + delete
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text(text = manifest?.name?.ifBlank { plugin.pluginName } ?: plugin.pluginName,
-                        style = MaterialTheme.typography.titleMedium.copy(fontFamily = FontFamily.Serif),
+                        style = MaterialTheme.typography.titleMedium.copy(),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis)
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -386,12 +385,12 @@ private fun EmptyState(onSeed: () -> Unit) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 "No plugins yet",
-                style = MaterialTheme.typography.titleLarge.copy(fontFamily = FontFamily.Serif)
+                style = MaterialTheme.typography.titleLarge.copy()
             )
             Spacer(Modifier.height(8.dp))
             Text(
                 "Tap below to Load Plugins From Device",
-                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Serif)
+                style = MaterialTheme.typography.bodyMedium.copy()
             )
             Spacer(Modifier.height(16.dp))
             Button(onClick = onSeed) { Text("+  Add Plugins") }

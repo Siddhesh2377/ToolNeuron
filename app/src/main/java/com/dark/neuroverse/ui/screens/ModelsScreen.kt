@@ -75,6 +75,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
@@ -261,7 +262,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
         item {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
                 )
             ) {
                 Column(
@@ -349,7 +350,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
         item {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
                 )
             ) {
                 Column(
@@ -589,7 +590,7 @@ private fun ModelPickerDialog(
 
 @Composable
 private fun EmptyStateCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String
+    icon: ImageVector, title: String, subtitle: String
 ) {
     Column(
         modifier = Modifier
@@ -660,7 +661,7 @@ private fun InstalledModelCard(
             .fillMaxWidth()
             .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp)),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
+            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
         )
     ) {
         Column(
@@ -742,7 +743,9 @@ fun ModelCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp)),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f)
+        )
     ) {
         Column(
             modifier = Modifier
