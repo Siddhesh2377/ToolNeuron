@@ -545,7 +545,6 @@ fun NodeDetailView(
                     SelectionContainer {
                         MarkdownText(
                             text = node.id,
-                            isStreaming = false,
                             style = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurface
                         )

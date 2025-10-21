@@ -70,43 +70,44 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @Composable
 fun MarkdownText(
     text: String,
-    isStreaming: Boolean,
     modifier: Modifier = Modifier,
     color: Color = MaterialTheme.colorScheme.primary,
     style: TextStyle = MaterialTheme.typography.bodySmall
 ) {
-    if (isStreaming) {
-        Text(
-            text = text, modifier = modifier, color = color, style = style
-        )
-    } else {
-        val blocks = remember(text) { parseMarkdownBlocks(text) }
+    var debouncedText by remember { mutableStateOf(text) }
 
-        Column(
-            modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-        ) {
-            blocks.forEach { block ->
-                when (block) {
-                    is MdBlock.Text -> RichText(
-                        text = block.content,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = color,
-                        style = style
-                    )
+    LaunchedEffect(text) {
+        delay(150) // Wait 150ms after text stops changing
+        debouncedText = text
+    }
 
-                    is MdBlock.Code -> CodeCanvas(
-                        code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
-                    )
+    val blocks = remember(debouncedText) { parseMarkdownBlocks(debouncedText) }
 
-                    is MdBlock.Table -> MarkdownTable(
-                        table = block, modifier = Modifier.fillMaxWidth()
-                    )
-                }
+    Column(
+        modifier = modifier, verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
+    ) {
+        blocks.forEach { block ->
+            when (block) {
+                is MdBlock.Text -> RichText(
+                    text = block.content,
+                    modifier = Modifier.fillMaxWidth(),
+                    color = color,
+                    style = style
+                )
+
+                is MdBlock.Code -> CodeCanvas(
+                    code = block.code, language = block.lang, modifier = Modifier.fillMaxWidth()
+                )
+
+                is MdBlock.Table -> MarkdownTable(
+                    table = block, modifier = Modifier.fillMaxWidth()
+                )
             }
         }
     }
@@ -154,11 +155,12 @@ fun CodeCanvas(
     }
 
     // ---------- auto‑scroll when new text arrives ----------
-    LaunchedEffect(text, editing, follow) {
-        if (!editing && follow) {
-            val last = highlightedLinesCount(text)
-            scope.launch { listState.animateScrollToItem(last) }
-            if (autoScrollHorizontal) scope.launch {
+    LaunchedEffect(text.length, editing, follow) {
+        if (!editing && follow && text.isNotEmpty()) {
+            delay(100)
+            val last = text.split('\n').size
+            listState.animateScrollToItem(last)
+            if (autoScrollHorizontal) {
                 hScroll.animateScrollTo(hScroll.maxValue)
             }
         }
@@ -222,7 +224,11 @@ fun CodeCanvas(
         // ---------- Scrolled preview when collapsed (non‑read mode) ----------
         if (!editing && !showReadDialog) {
             val preview = remember(text, language, isDarkMode) {
-                highlight(text, language, isDarkMode)
+                if (text.length > 5000) {
+                    AnnotatedString(text)
+                } else {
+                    highlight(text, language, isDarkMode)
+                }
             }
             Text(
                 text = preview,
@@ -369,10 +375,8 @@ fun CodeCanvas(
     }
 }
 
-/* -------------------------------------------------------------------------- *//*  Helper – count how many lines we have (used for the auto‑scroll effect)   *//* -------------------------------------------------------------------------- */
 private fun highlightedLinesCount(text: String): Int = text.split('\n').size
 
-/* -------------------------------------------------------------------------- *//*  FULL‑SCREEN EDITOR (Dialog)                                             *//* -------------------------------------------------------------------------- */
 @Composable
 private fun FullScreenCodeEditor(
     initialCode: String,
@@ -595,17 +599,15 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
         var idx = startIdx
         val rows = mutableListOf<List<String>>()
 
-        // collect all consecutive pipe-rows
-        while (idx < lines.size) {
+        // ✅ Limit table scanning to max 100 rows
+        var rowCount = 0
+        while (idx < lines.size && rowCount < 100) {
             val line = lines[idx].trim()
 
-            // Stop if line doesn't start with pipe or is empty
             if (line.isEmpty() || !line.startsWith("|")) break
 
-            // Split by pipe and clean up cells
             val cells = line.removePrefix("|").removeSuffix("|").split("|").map { it.trim() }
 
-            // Skip empty rows
             if (cells.all { it.isEmpty() }) {
                 idx++
                 break
@@ -613,33 +615,29 @@ private fun parseMarkdownBlocks(input: String): List<MdBlock> {
 
             rows += cells
             idx++
+            rowCount++
         }
 
-        // need at least header + separator row
         if (rows.size < 2) return startIdx to null
 
-        // Check if second row is a separator (contains only dashes, colons, and spaces)
+        // ✅ Fast separator check without complex regex
         val separatorRow = rows[1]
         val isSeparator = separatorRow.all { cell ->
-            cell.isEmpty() || cell.matches(Regex("^:?-+:?$"))
+            cell.isEmpty() || cell.all { it == '-' || it == ':' || it.isWhitespace() }
         }
 
         if (!isSeparator) return startIdx to null
 
-        // Parse column alignment from separator
+        // ✅ Simple alignment detection
         val align = separatorRow.map { cell ->
             when {
                 cell.startsWith(":") && cell.endsWith(":") -> TextAlign.Center
                 cell.endsWith(":") -> TextAlign.End
-                cell.startsWith(":") -> TextAlign.Start
                 else -> TextAlign.Start
             }
         }
 
-        // Remove separator row and return the table
         val dataRows = rows.filterIndexed { rowIndex, _ -> rowIndex != 1 }
-
-        // Ensure all rows have the same number of columns
         val maxCols = dataRows.maxOfOrNull { it.size } ?: align.size
         val normalizedRows = dataRows.map { row ->
             if (row.size < maxCols) {
