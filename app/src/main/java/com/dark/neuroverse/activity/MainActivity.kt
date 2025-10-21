@@ -24,7 +24,7 @@ import androidx.navigation.compose.rememberNavController
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.Screen
-import com.dark.neuroverse.ui.screens.HomeScreen
+import com.dark.neuroverse.ui.screens.home.HomeScreen
 import com.dark.neuroverse.ui.screens.IntroScreen
 import com.dark.neuroverse.ui.screens.ModelsScreen
 import com.dark.neuroverse.ui.screens.SettingsScreen

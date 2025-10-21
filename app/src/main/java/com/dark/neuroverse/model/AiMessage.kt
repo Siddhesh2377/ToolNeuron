@@ -23,6 +23,7 @@ data class ToolOutput(
     val output: String = ""
 )
 
+@Serializable
 enum class ToolOutputType {
     File, Text, Url
 }
@@ -34,6 +35,13 @@ data class Message(
     val role: Role,
     val text: String,
     val thought: String? = null,
-    val tool: RunningTool? = null
+    val tool: RunningTool? = null,
+    val codeCanvas: List<CodeCanvas>? = null,
 )
 
+@Serializable
+data class CodeCanvas(
+    val id: String = UUID.randomUUID().toString(),
+    val code: String,
+    val language: String
+)

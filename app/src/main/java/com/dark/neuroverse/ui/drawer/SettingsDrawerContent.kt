@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowCircleDown
 import androidx.compose.material.icons.outlined.GridView
@@ -30,7 +31,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -88,43 +91,49 @@ fun SettingsDrawerContent(
         modifier = modifier
             .fillMaxHeight()
             .width(rDP(300.dp))
-            .background(MaterialTheme.colorScheme.background)
-            .padding(top = rDP(12.dp))
-            .padding(rDP(16.dp))
+            .background(colorScheme.background)
+            .padding(horizontal = rDP(16.dp))
+            .padding(top = rDP(6.dp))
     ) {
         // Compact Header with Settings Menu Button
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = rDP(16.dp), bottom = rDP(12.dp)),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Tool-Neuron", style = MaterialTheme.typography.headlineSmall.copy(
+                text = "Tool-Neuron", style = MaterialTheme.typography.headlineMedium.copy(
                     fontFamily = FontFamily.Serif,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = colorScheme.primary
                 ), modifier = Modifier.weight(1f)
             )
-
-            IconButton(onClick = {
-                onNewChatClick()
-            }) {
+            IconButton(
+                onClick = { onNewChatClick() },
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = colorScheme.secondary.copy(0.1f),
+                    contentColor = colorScheme.secondary
+                ),
+                shape = RoundedCornerShape(rDP(8.dp)),
+            ) {
                 Icon(
                     Icons.Rounded.AddCircleOutline,
                     contentDescription = "New Chat",
-                    tint = MaterialTheme.colorScheme.primary
                 )
             }
 
             Box {
-                IconButton(onClick = {
-                    showSettingsMenu = true
-                }) {
+                IconButton(
+                    onClick = {
+                        showSettingsMenu = true
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(
+                        containerColor = colorScheme.secondary.copy(0.1f),
+                        contentColor = colorScheme.secondary
+                    ),
+                    shape = RoundedCornerShape(rDP(8.dp)),
+                ) {
                     Icon(
                         Icons.Rounded.Settings,
                         contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
@@ -157,7 +166,7 @@ fun SettingsDrawerContent(
         // Chat History Header
         Text(
             text = "Recent Chats", style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontWeight = FontWeight.SemiBold, color = colorScheme.onSurfaceVariant
             ), modifier = Modifier.padding(bottom = rDP(8.dp))
         )
 
@@ -170,7 +179,7 @@ fun SettingsDrawerContent(
                     Text(
                         text = "No chats yet\nStart a new conversation!",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                        color = colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                         modifier = Modifier.padding(vertical = rDP(24.dp), horizontal = rDP(8.dp))
                     )
                 }
@@ -216,7 +225,7 @@ private fun SettingsDropdownMenu(
     DropdownMenu(
         expanded = expanded,
         onDismissRequest = onDismiss,
-        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+        modifier = Modifier.background(colorScheme.surface)
     ) {
         DropdownMenuItem(
             text = {
@@ -227,7 +236,7 @@ private fun SettingsDropdownMenu(
                     Icon(
                         painter = painterResource(id = R.drawable.database_zap),
                         contentDescription = "Data Hub",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(rDP(20.dp))
                     )
                     Text(
@@ -248,7 +257,7 @@ private fun SettingsDropdownMenu(
                     Icon(
                         imageVector = Icons.Outlined.GridView,
                         contentDescription = "Plugins",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(rDP(20.dp))
                     )
                     Text(
@@ -267,7 +276,7 @@ private fun SettingsDropdownMenu(
                     Icon(
                         imageVector = Icons.Outlined.ArrowCircleDown,
                         contentDescription = "Models",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(rDP(20.dp))
                     )
                     Text(
@@ -279,7 +288,7 @@ private fun SettingsDropdownMenu(
 
         HorizontalDivider(
             modifier = Modifier.padding(vertical = rDP(4.dp)),
-            color = MaterialTheme.colorScheme.outlineVariant
+            color = colorScheme.outlineVariant
         )
 
         DropdownMenuItem(
@@ -291,7 +300,7 @@ private fun SettingsDropdownMenu(
                     Icon(
                         imageVector = Icons.Outlined.Settings,
                         contentDescription = "Settings",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(rDP(20.dp))
                     )
                     Text(
@@ -311,7 +320,7 @@ private fun CompactSearchBox(
         .fillMaxWidth()
         .clickable(enabled = enabled) { onClick() }
         .background(
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            color = colorScheme.surfaceVariant.copy(alpha = 0.5f),
             shape = MaterialTheme.shapes.medium
         )
         .padding(horizontal = rDP(12.dp), vertical = rDP(10.dp)),
@@ -319,14 +328,14 @@ private fun CompactSearchBox(
         Icon(
             imageVector = Icons.Outlined.Search,
             contentDescription = "Search",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            tint = colorScheme.onSurfaceVariant,
             modifier = Modifier.size(rDP(18.dp))
         )
         Spacer(Modifier.width(rDP(8.dp)))
         Text(
             text = "Search chats...",
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            color = colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
         )
     }
 }
@@ -346,9 +355,9 @@ private fun CompactChatHistoryItem(
             .clickable(enabled = !isDeleting) { onChatClick() }
             .background(
                 color = if (isCurrentChat) {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                    colorScheme.primary.copy(alpha = 0.1f)
                 } else {
-                    MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                    colorScheme.secondary.copy(alpha = 0.1f)
                 }, shape = MaterialTheme.shapes.small
             )
             .padding(horizontal = rDP(12.dp), vertical = rDP(4.dp))) {
@@ -360,9 +369,9 @@ private fun CompactChatHistoryItem(
                 fontWeight = if (isCurrentChat) FontWeight.Medium else FontWeight.Normal
             ),
             color = if (isCurrentChat) {
-                MaterialTheme.colorScheme.primary
+                colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.onSurface
+                colorScheme.onSurface
             },
             modifier = Modifier
                 .weight(1f)
@@ -375,7 +384,7 @@ private fun CompactChatHistoryItem(
                     .padding(start = rDP(8.dp))
                     .size(rDP(16.dp)),
                 strokeWidth = rDP(2.dp),
-                color = MaterialTheme.colorScheme.error
+                color = colorScheme.error
             )
         } else {
             IconButton(
@@ -384,7 +393,7 @@ private fun CompactChatHistoryItem(
                 Icon(
                     imageVector = Icons.TwoTone.Delete,
                     contentDescription = "Delete chat",
-                    tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
+                    tint = colorScheme.error.copy(alpha = 0.7f),
                     modifier = Modifier.size(rDP(16.dp))
                 )
             }

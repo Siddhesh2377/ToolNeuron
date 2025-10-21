@@ -1,6 +1,8 @@
 package com.dark.neuroverse.ui.components
 
+import android.webkit.WebView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -34,8 +36,12 @@ import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Done
 import androidx.compose.material.icons.rounded.ModeEditOutline
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
@@ -63,9 +69,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextMotion
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.dark.neuroverse.ui.theme.rDP
@@ -382,18 +390,14 @@ private fun FullScreenCodeEditor(
     initialCode: String,
     onDismiss: (String) -> Unit,
     language: String? = null,
-    isDarkMode: Boolean = isSystemInDarkTheme()
 ) {
-    // --------- 1️⃣  Raw source – editable -------------
-    var source by remember { mutableStateOf(initialCode) }   // plain string
-
-    // --------- 2️⃣  Highlighted view for display  ------
-    var highlighted by remember { mutableStateOf(highlight(initialCode, language, isDarkMode)) }
+    var source by remember { mutableStateOf(initialCode) }
+    var showWebPreview by remember { mutableStateOf(false) }
 
     val clipboard = LocalClipboardManager.current
 
     Dialog(
-        onDismissRequest = { onDismiss(source) },   // return the raw code
+        onDismissRequest = { onDismiss(source) },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
@@ -404,7 +408,7 @@ private fun FullScreenCodeEditor(
                 .padding(rDP(16.dp))
         ) {
             Column {
-                /* ---------- Header ---------- */
+                // ---------- Header ----------
                 Row(
                     Modifier
                         .fillMaxWidth()
@@ -413,54 +417,96 @@ private fun FullScreenCodeEditor(
                 ) {
                     LanguagePill(language ?: "code")
                     Spacer(Modifier.weight(1f))
-                    Icon(
-                        Icons.Rounded.ContentCopy,
-                        contentDescription = "Copy",
-                        modifier = Modifier
-                            .size(rDP(20.dp))
-                            .clickable { clipboard.setText(AnnotatedString(source)) })
+
+                    IconButton(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(source))
+                        },
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Rounded.ContentCopy,
+                            contentDescription = "Copy",
+                            modifier = Modifier.size(rDP(20.dp))
+                        )
+                    }
+
                     Spacer(Modifier.width(rDP(8.dp)))
-                    Icon(
-                        Icons.Rounded.Done,
-                        contentDescription = "Done",
-                        modifier = Modifier
-                            .size(rDP(20.dp))
-                            .clickable { onDismiss(source) })
+
+                    IconButton(
+                        onClick = {
+                            onDismiss(source)
+                        },
+                        shape = RoundedCornerShape(rDP(8.dp)),
+                        colors = IconButtonDefaults.iconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.secondary
+                        )
+                    ) {
+                        Icon(
+                            Icons.Rounded.Done,
+                            contentDescription = "Done",
+                            modifier = Modifier.size(rDP(20.dp))
+                        )
+                    }
+
+                    if (language.equals("html", ignoreCase = true)){
+                        Spacer(Modifier.width(rDP(8.dp)))
+
+                        IconButton(
+                            onClick = {
+                                showWebPreview = !showWebPreview
+                            },
+                            shape = RoundedCornerShape(rDP(8.dp)),
+                            colors = IconButtonDefaults.iconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
+                                contentColor = MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
+                            Icon(
+                                Icons.Rounded.PlayArrow,
+                                contentDescription = "Run",
+                                modifier = Modifier.size(rDP(20.dp))
+                            )
+                        }
+                    }
+
                 }
 
-                /* ---------- Editor ---------- */
-                BasicTextField(
-                    value = source, onValueChange = { new ->
-                        source = new
-                        highlighted = highlight(new, language, isDarkMode)
-                    }, textStyle = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = rSp(13.sp),
-                        lineHeight = rSp(20.sp),
-                        color = MaterialTheme.colorScheme.onSurface
-                    ), modifier = Modifier
-                        .fillMaxSize()
-                        .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
-                            RoundedCornerShape(rDP(12.dp))
+                // ---------- Editor / WebView ----------
+                Crossfade(targetState = showWebPreview) { isPreview ->
+                    if (isPreview) {
+                        MicroBrowserView(
+                            htmlContent = source, // your HTML string
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                                    RoundedCornerShape(rDP(12.dp))
+                                )
                         )
-                        .padding(rDP(12.dp))
-                )
-
-                /* ---------- Preview (syntax‑highlighted) ---------- */
-                // This is optional – you can remove it if you only need raw editing.
-                Text(
-                    text = highlighted,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    style = TextStyle(
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = rSp(12.sp),
-                        lineHeight = rSp(20.sp)
-                    ),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
+                    } else {
+                        BasicTextField(
+                            value = source, onValueChange = { source = it }, textStyle = TextStyle(
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = rSp(11.sp),
+                                lineHeight = rSp(14.sp),
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textMotion = TextMotion.Animated
+                            ), modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.05f),
+                                    RoundedCornerShape(rDP(12.dp))
+                                )
+                                .padding(rDP(12.dp))
+                        )
+                    }
+                }
             }
         }
     }
@@ -1086,6 +1132,6 @@ private fun AnnotatedString.Builder.appendStyledSegment(
 @Composable
 private fun LanguagePill(label: String) {
     Text(
-        text = label, color = MaterialTheme.colorScheme.primary, fontSize = rSp(11.sp)
+        text = label, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleMedium
     )
 }

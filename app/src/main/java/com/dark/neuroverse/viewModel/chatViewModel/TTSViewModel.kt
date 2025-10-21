@@ -12,6 +12,7 @@ import android.os.RemoteException
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.dark.neuroverse.data.UserPrefs
 import com.mp.ai_core.tts.TtsEngine
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -19,6 +20,8 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -75,6 +78,7 @@ class TTSViewModel(context: Context) : ViewModel() {
 
     @SuppressLint("DefaultLocale")
     suspend fun onGenerate(text: String, speakerId: Int): String = withContext(Dispatchers.IO) {
+        TtsEngine.tts?.currentSid = UserPrefs.getTTSVoiceId(context).firstOrNull() ?: speakerId
         stopped = false
         _isPlaying.value = true
         val normalizedText = normalizeText(text)

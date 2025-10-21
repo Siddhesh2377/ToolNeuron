@@ -58,7 +58,7 @@ fun DataHubScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(MaterialTheme.colorScheme.secondary.copy(0.1f)),
             ) {
                 Column(
                     modifier = Modifier.padding(rDP(16.dp)),

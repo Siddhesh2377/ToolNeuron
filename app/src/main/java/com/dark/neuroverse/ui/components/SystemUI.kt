@@ -19,13 +19,13 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun StandardBottomBar(
     modifier: Modifier = Modifier,
-    title: String = "Neuro V",
+    title: String = "T-Neuron",
     item: @Composable (RowScope.() -> Unit)
 ) {
     Card(
         modifier = modifier,
         shape = CircleShape,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.onPrimary),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondary.copy(0.2f)),
         elevation = CardDefaults.cardElevation(defaultElevation = 30.dp)
     ) {
         Row(

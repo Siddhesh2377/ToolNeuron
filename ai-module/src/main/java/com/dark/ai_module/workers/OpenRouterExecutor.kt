@@ -51,8 +51,8 @@ class OpenRouterExecutor(
                 requestMethod = "POST"
                 setRequestProperty("Authorization", "Bearer $apiKey")
                 setRequestProperty("Content-Type", "application/json")
-                setRequestProperty("HTTP-Referer", "https://github.com/your-app")
-                setRequestProperty("X-Title", "YourAppName")
+                setRequestProperty("HTTP-Referer", "https://github.com/Siddhesh2377/ToolNeuron")
+                setRequestProperty("X-Title", "ToolNeuron")
                 connectTimeout = CONNECT_TIMEOUT
                 readTimeout = READ_TIMEOUT
                 doOutput = true

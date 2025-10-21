@@ -19,7 +19,7 @@ android {
 
     defaultConfig {
         applicationId = "com.dark.neurov"
-        minSdk = 30
+        minSdk = 31
         targetSdk = 36
         versionCode = 3
         versionName = "0.3-beta"

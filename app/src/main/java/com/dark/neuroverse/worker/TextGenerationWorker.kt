@@ -2,8 +2,10 @@ package com.dark.neuroverse.worker
 
 import android.content.Context
 import android.util.Log
+import com.dark.ai_module.model.GenerationParams
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.model.ChatUiState
+import com.dark.neuroverse.model.CodeCanvas
 import com.dark.neuroverse.model.DecodeType
 import com.dark.neuroverse.model.DecodingMetrics
 import com.dark.neuroverse.model.Message
@@ -83,7 +85,15 @@ object TextGenerationWorker {
             batchingJob?.cancel()
 
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
-            ChatManager.updateStreamingMessage(messageId, text, finalThought, isFinal = true)
+            val codeCanvases = extractCodeCanvases(text)
+
+            ChatManager.updateStreamingMessage(
+                messageId = messageId,
+                text = text,
+                thought = finalThought,
+                isFinal = true,
+                codeCanvas = codeCanvases // ⚡ IMPORTANT: save the extracted code
+            )
 
             // Generate title if no thought (normal conversation)
             ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
@@ -95,6 +105,7 @@ object TextGenerationWorker {
             currentStreamingState = null
         }
 
+
         try {
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
             val toolJson = if (enableTools) {
@@ -105,6 +116,9 @@ object TextGenerationWorker {
 
             ModelManager.generateStreaming(
                 prompt = fullPrompt,
+                gen = GenerationParams(
+                    maxTokens = ModelManager.currentModel.value.maxTokens
+                ),
                 toolJson = toolJson,
                 onToken = { token ->
                     if (!firstTokenReceived) {
@@ -222,9 +236,16 @@ object TextGenerationWorker {
      * Builds full prompt with conversation history.
      */
     fun buildFullPrompt(prompt: String, existingMessages: List<Message>): String {
+        // Filter normal conversation messages (ignore code for now)
         val conversationHistory =
             existingMessages.filter { it.role == Role.User || it.role == Role.Assistant }
                 .joinToString("\n") { "${it.role.name}: ${it.text}" }
+
+        // Get the last AI-generated code if any
+        val lastAICode =
+            existingMessages.lastOrNull { it.role == Role.Assistant && it.codeCanvas?.isNotEmpty() == true }?.codeCanvas?.joinToString(
+                    "\n"
+                ) { it.code } // assuming CodeCanvas has 'content' field
 
         return buildString {
             if (conversationHistory.isNotBlank()) {
@@ -232,9 +253,17 @@ object TextGenerationWorker {
                 appendLine(conversationHistory)
                 appendLine()
             }
+
+            if (!lastAICode.isNullOrBlank()) {
+                appendLine("Latest AI Code:")
+                appendLine(lastAICode)
+                appendLine()
+            }
+
             append("User: $prompt")
         }
     }
+
 
     /**
      * Adds token to appropriate buffer based on thinking tags.
@@ -350,6 +379,22 @@ object TextGenerationWorker {
         )
 
         _decodingMetrics.tryEmit(metrics)
+    }
+
+    /**
+     * Extracts code blocks from a text and converts them into CodeCanvas objects.
+     * Example code block:
+     * ```kotlin
+     * val x = 5
+     * ```
+     */
+    private fun extractCodeCanvases(input: String): List<CodeCanvas> {
+        val codeRegex = Regex("(?s)```(\\w+)?\\n(.*?)```")
+        return codeRegex.findAll(input).map { match ->
+            val lang = match.groups[1]?.value?.trim()
+            val code = match.groups[2]?.value?.trim() ?: ""
+            CodeCanvas(code = code, language = lang ?: "text")
+        }.toList()
     }
 
     /**

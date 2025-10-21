@@ -67,6 +67,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.dark.ai_module.model.ModelData
+import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.ui.theme.rDP
@@ -317,8 +318,8 @@ fun ModelContent(
                     description = "Maximum response length",
                     value = model.maxTokens.toFloat(),
                     onValueChange = { onModelChange(model.copy(maxTokens = it.toInt())) },
-                    valueRange = 128f..8192f,
-                    steps = 15
+                    valueRange = if (model.providerName == ModelProvider.OpenRouter.toString()) 1f..80192f else 1f..16096f,
+                    steps = if (model.providerName == ModelProvider.OpenRouter.toString()) 79 else 15
                 )
             }
         }

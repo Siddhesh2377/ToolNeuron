@@ -21,14 +21,13 @@ coreKtx = "1.17.0"                   # androidx.core:core-ktx
 appcompat = "1.7.1"                  # androidx.appcompat:appcompat
 
 # ▶ Compose / UI
-composeBom = "2025.09.01"            # Compose BOM (controls Compose artifacts without explicit versions)
-library = "0.3-beta.1"
-material3 = "1.5.0-alpha04"           # androidx.compose.material3:material3
+composeBom = "2025.10.00"            # Compose BOM (controls Compose artifacts without explicit versions)
+material3 = "1.5.0-alpha06"           # androidx.compose.material3:material3
 material = "1.13.0"                   # androidx.compose.material:material
 materialIconsExtended = "1.7.8"      # androidx.compose.material:material-icons-extended
 activityCompose = "1.11.0"           # androidx.activity:activity-compose
-animation = "1.9.2"                  # androidx.compose.animation:animation
-runtimeAndroid = "1.9.2"             # androidx.compose.runtime:runtime-android
+animation = "1.9.3"                  # androidx.compose.animation:animation
+runtimeAndroid = "1.9.3"             # androidx.compose.runtime:runtime-android
 
 # ▶ Lifecycle
 lifecycleRuntimeKtx = "2.9.4"
@@ -42,7 +41,7 @@ accompanistInsets = "0.30.1"         # Insets (legacy)
 accompanistInsetsUi = "0.36.0"       # Insets/UI + nav-animation version
 
 # ▶ Data & Persistence
-roomRuntime = "2.8.1"                # Room (runtime/ktx/compiler share this)
+roomRuntime = "2.8.2"                # Room (runtime/ktx/compiler share this)
 datastorePreferences = "1.1.7"       # DataStore Preferences
 
 # ▶ Background Work
@@ -58,12 +57,12 @@ moshiKotlin = "1.15.2"
 gson = "2.13.2"
 
 # ▶ Networking / Parsing
-okhttp = "5.1.0"
+okhttp = "5.2.1"
 jsoup = "1.21.2"
 
 # ▶ GMS / Firebase
-firebaseBom = "34.3.0"
-googleGmsGoogleServices = "4.4.3"
+firebaseBom = "34.4.0"
+googleGmsGoogleServices = "4.4.4"
 firebaseDatabase = "22.0.1"
 firebase-firestore = "25.1.4"
 
@@ -86,7 +85,6 @@ zip4j = "2.11.5"
 # ▶ Networking & Parsing
 jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }                               # HTML parser
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib" }
-library = { module = "com.cactus:library", version.ref = "library" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }                 # HTTP client
 
 # ▶ GMS / Firebase

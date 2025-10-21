@@ -6,6 +6,7 @@ import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatList
+import com.dark.neuroverse.model.CodeCanvas
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
@@ -250,6 +251,7 @@ object ChatManager {
         thought: String? = null,
         toolError: String? = null,
         isFinal: Boolean = false,
+        codeCanvas: List<CodeCanvas>? = null // make nullable for optional updates
     ) {
         _messages.update { messages ->
             messages.mapIndexed { index, message ->
@@ -268,26 +270,35 @@ object ChatManager {
                             text = text.ifBlank { "Tool execution failed" },
                             thought = thought,
                             tool = message.tool?.copy(
-                                toolPreview = "Error: $toolError", toolOutput = ToolOutput(
-                                    toolName = message.tool.toolName, output = JSONObject().apply {
+                                toolPreview = "Error: $toolError",
+                                toolOutput = ToolOutput(
+                                    toolName = message.tool.toolName,
+                                    output = JSONObject().apply {
                                         put("error", toolError)
                                         put("ok", false)
                                     }.toString()
                                 )
-                            )
+                            ),
+                            codeCanvas = codeCanvas ?: message.codeCanvas // ⚡ save canvases
                         )
                     }
 
                     // Handle empty text error
                     if (isFinal && text.isBlank()) {
                         return@mapIndexed message.copy(
-                            id = finalId, text = "Error: Empty text received", thought = thought
+                            id = finalId,
+                            text = "Error: Empty text received",
+                            thought = thought,
+                            codeCanvas = codeCanvas ?: message.codeCanvas
                         )
                     }
 
                     // Normal update
-                    message.copy(
-                        id = finalId, text = text, thought = thought
+                    return@mapIndexed message.copy(
+                        id = finalId,
+                        text = text,
+                        thought = thought,
+                        codeCanvas = codeCanvas ?: message.codeCanvas
                     )
                 } else {
                     message
@@ -300,6 +311,7 @@ object ChatManager {
             streamingMessageIndex = -1
         }
     }
+
 
     /**
      * Updates tool preview for a message.
