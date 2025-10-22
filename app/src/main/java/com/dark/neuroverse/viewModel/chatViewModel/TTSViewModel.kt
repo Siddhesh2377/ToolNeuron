@@ -6,22 +6,20 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.media.MediaPlayer
-import android.net.Uri
-import android.os.RemoteException
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.data.UserPrefs
-import com.mp.ai_core.tts.TtsEngine
-import kotlinx.coroutines.CoroutineScope
+import com.mp.ai_core.tts.ITtsService
+import com.mp.ai_core.tts.TtsConfig
+import com.mp.ai_core.tts.TtsServiceFactory
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -31,178 +29,200 @@ import kotlin.time.TimeSource
 class TTSViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
     @Suppress("UNCHECKED_CAST")
     override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return TTSViewModel(context.applicationContext) as T
+        return TTSViewModel(
+            context = context.applicationContext,
+            ttsService = TtsServiceFactory.createTtsService()
+        ) as T
     }
 }
 
-class TTSViewModel(context: Context) : ViewModel() {
+class TTSViewModel(
+    context: Context,
+    private val ttsService: ITtsService // Dependency injection
+) : ViewModel() {
+
     companion object {
         private const val TAG = "TTSViewModel"
-        private const val OUTPUT_FILENAME = "generated.wav"
     }
 
     @SuppressLint("StaticFieldLeak")
     private val context: Context = context.applicationContext
 
-    private var mediaPlayer: MediaPlayer? = null
     private lateinit var track: AudioTrack
-    private var stopped: Boolean = false
-    private var samplesChannel = Channel<FloatArray>()
+    private var generationJob: Job? = null
 
-    private var _isPlaying = MutableStateFlow(false)
+    private val _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
 
-    suspend fun initTTS(context: Context) {
-        val ttsModel = ModelManager.getTTSModels() ?: return
+    private val _generationStatus = MutableStateFlow<String?>(null)
+    val generationStatus = _generationStatus.asStateFlow()
+
+    private val _audioProgress = MutableStateFlow(0f)
+    val audioProgress = _audioProgress.asStateFlow()
+
+    private val _isInitialized = MutableStateFlow(false)
+    val isInitialized = _isInitialized.asStateFlow()
+
+    suspend fun initTTS() {
+        val ttsModel = ModelManager.getTTSModels() ?: run {
+            Log.e(TAG, "No TTS model available")
+            return
+        }
 
         Log.d(TAG, "Loading TTS model from ${ttsModel.modelPath}")
-        Log.i(TAG, "Start to initialize TTS")
-        val json = """
-        {
-          "modelDir": "${File(ttsModel.modelPath)}/kokoro-en-v0_19",
-          "modelName": "model.onnx",
-          "voices": "voices.bin",
-          "dataDir": "${File(ttsModel.modelPath)}/kokoro-en-v0_19/espeak-ng-data",
-          "lang": "eng"
-        }
-        """.trimIndent()
+
+        val config = TtsConfig(
+            modelDir = "${File(ttsModel.modelPath)}/kokoro-en-v0_19",
+            modelName = "model.onnx",
+            voices = "voices.bin",
+            dataDir = "${File(ttsModel.modelPath)}/kokoro-en-v0_19/espeak-ng-data",
+            lang = "eng"
+        )
 
         try {
-            TtsEngine.loadFromJson(context, json)
-        } catch (e: RemoteException) {
-            Log.e(TAG, "TTS load RPC failed", e)
+            ttsService.initialize(config)
+            Log.i(TAG, "TTS initialized successfully")
+            _isInitialized.value = true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize TTS", e)
+            _isInitialized.value = false
+            throw e
         }
-        Log.i(TAG, "Finish initializing TTS")
-        initAudioTrack()
-    }
-
-    fun unLoadTTS() {
-        TtsEngine.tts?.release()
     }
 
     @SuppressLint("DefaultLocale")
-    suspend fun onGenerate(text: String, speakerId: Int): String = withContext(Dispatchers.IO) {
-        TtsEngine.tts?.currentSid = UserPrefs.getTTSVoiceId(context).firstOrNull() ?: speakerId
-        stopped = false
-        _isPlaying.value = true
-        val normalizedText = normalizeText(text)
+    fun generateAndPlayAudio(text: String) {
+        // Cancel any ongoing generation
+        generationJob?.cancel()
 
-        // Always re-create the channel to avoid sending to a closed one
-        samplesChannel = Channel(Channel.BUFFERED)
-
-        // Make sure track is ready
-        if (!::track.isInitialized) initAudioTrack()
-
-        track.pause()
-        track.flush()
-        track.play()
-
-        // Launch playback coroutine safely
-        val playbackJob = launch {
+        generationJob = viewModelScope.launch {
             try {
-                for (samples in samplesChannel) {
-                    if (stopped) break
-                    track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                val speakerId = UserPrefs.getTTSVoiceId(context).firstOrNull() ?: 0
+                val normalizedText = normalizeText(text)
+
+                _isPlaying.value = true
+                _generationStatus.value = "Generating..."
+
+                // Initialize audio track
+                if (!::track.isInitialized) {
+                    initAudioTrack()
                 }
+
+                track.pause()
+                track.flush()
+                track.play()
+
+                val startTime = TimeSource.Monotonic.markNow()
+                var totalSamples = 0
+
+                // Collect and play audio chunks as they arrive
+                ttsService.generateAudioStream(normalizedText, speakerId)
+                    .catch { e ->
+                        Log.e(TAG, "Error in audio stream", e)
+                        _generationStatus.value = "Error: ${e.message}"
+                    }
+                    .collect { chunk ->
+                        withContext(Dispatchers.IO) {
+                            track.write(
+                                chunk.samples,
+                                0,
+                                chunk.samples.size,
+                                AudioTrack.WRITE_BLOCKING
+                            )
+                            totalSamples += chunk.samples.size
+                        }
+                    }
+
+                val elapsed = startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
+                val ttsInfo = ttsService.getTtsInfo()
+                val audioDuration = if (ttsInfo != null) {
+                    totalSamples / ttsInfo.sampleRate.toFloat()
+                } else {
+                    0f
+                }
+
+                _generationStatus.value = String.format(
+                    "Elapsed: %.3f s | Audio: %.3f s | RTF: %.3f",
+                    elapsed,
+                    audioDuration,
+                    if (audioDuration > 0) elapsed / audioDuration else 0f
+                )
+
+                Log.i(TAG, "Audio generation and playback completed")
+
             } catch (e: Exception) {
-                Log.e(TAG, "Audio write failed", e)
+                Log.e(TAG, "Error during generation", e)
+                _generationStatus.value = "Error: ${e.message}"
             } finally {
                 _isPlaying.value = false
             }
         }
-
-        val startTime = TimeSource.Monotonic.markNow()
-
-        val audio =
-            TtsEngine.tts!!.generateWithCallback(normalizedText, callback = ::callback).also {
-                _isPlaying.value = false
-                Log.d(TAG, "Audio generated")
-                it
-            }
-
-        playbackJob.cancelAndJoin()
-
-        val elapsed = startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
-        val audioDuration = audio.samples.size / TtsEngine.tts!!.sampleRate().toFloat()
-        val filename = "${context.filesDir.absolutePath}/$OUTPUT_FILENAME"
-        audio.save(filename)
-
-        String.format(
-            "Threads: %d\nElapsed: %.3f s\nAudio: %.3f s\nRTF: %.3f",
-            TtsEngine.tts!!.config.model.numThreads,
-            elapsed,
-            audioDuration,
-            elapsed / audioDuration
-        )
     }
 
+    fun stopPlayback() {
+        Log.i(TAG, "Stopping playback")
+        generationJob?.cancel()
+        ttsService.stop()
 
-    fun stopMediaPlayer() {
-        mediaPlayer?.stop()
-        mediaPlayer?.release()
-        mediaPlayer = null
-    }
-
-    fun onClickPlay() {
-        val filename = context.filesDir.absolutePath + "/${OUTPUT_FILENAME}"
-        stopMediaPlayer()
-        mediaPlayer = MediaPlayer.create(
-            context, Uri.fromFile(File(filename))
-        )
-        mediaPlayer?.start()
-    }
-
-    fun onClickStop() {
-        stopped = true
-        track.pause()
-        track.flush()
-        stopMediaPlayer()
-    }
-
-    private fun callback(samples: FloatArray, process: Float): Int {
-        return if (!stopped) {
-            val samplesCopy = samples.copyOf()
-            CoroutineScope(Dispatchers.IO).launch {
-                samplesChannel.send(samplesCopy)
-            }
-            1
-        } else {
-            track.stop()
-            Log.i(TAG, "Callback stopped")
-            0
+        if (::track.isInitialized) {
+            track.pause()
+            track.flush()
         }
+
+        _isPlaying.value = false
+        _generationStatus.value = "Stopped"
     }
 
     private fun initAudioTrack() {
-        Log.i(TAG, "Start to initialize AudioTrack")
-        val sampleRate = TtsEngine.tts!!.sampleRate()
+        Log.i(TAG, "Initializing AudioTrack")
+
+        val ttsInfo = ttsService.getTtsInfo()
+            ?: throw IllegalStateException("TTS not initialized")
+
+        val sampleRate = ttsInfo.sampleRate
         val bufLength = AudioTrack.getMinBufferSize(
-            sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
+            sampleRate,
+            AudioFormat.CHANNEL_OUT_MONO,
+            AudioFormat.ENCODING_PCM_FLOAT
         )
-        Log.i(TAG, "sampleRate: $sampleRate, buffLength: $bufLength")
 
-        val attr = AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .setUsage(AudioAttributes.USAGE_MEDIA).build()
+        val attr = AudioAttributes.Builder()
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
+            .build()
 
-        val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setSampleRate(sampleRate).build()
+        val format = AudioFormat.Builder()
+            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+            .setSampleRate(sampleRate)
+            .build()
 
         track = AudioTrack(
-            attr, format, bufLength, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE
+            attr,
+            format,
+            bufLength,
+            AudioTrack.MODE_STREAM,
+            AudioManager.AUDIO_SESSION_ID_GENERATE
         )
-        track.play()
-        Log.i(TAG, "Finish initializing AudioTrack")
+
+        Log.i(TAG, "AudioTrack initialized: sampleRate=$sampleRate, bufLength=$bufLength")
     }
 
     private fun normalizeText(raw: String): String {
-        return raw.replace("\u2011", "-")        // non-breaking hyphen → normal hyphen
-            .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1") // remove bold markdown
-            .replace(Regex("\\s+"), " ")   // collapse whitespace
+        return raw.replace("\u2011", "-")
+            .replace(Regex("\\*\\*(.*?)\\*\\*"), "$1")
+            .replace(Regex("\\s+"), " ")
             .trim()
     }
 
     override fun onCleared() {
         super.onCleared()
-        unLoadTTS()
+        Log.i(TAG, "ViewModel cleared, releasing resources")
+        generationJob?.cancel()
+        ttsService.release()
+
+        if (::track.isInitialized) {
+            track.release()
+        }
     }
 }

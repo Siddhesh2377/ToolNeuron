@@ -100,6 +100,8 @@ fun HomeScreen(
     // Snackbar host for errors
     val snackbarHostState = remember { SnackbarHostState() }
 
+
+
     // Keep toast for legacy messages (still used)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
