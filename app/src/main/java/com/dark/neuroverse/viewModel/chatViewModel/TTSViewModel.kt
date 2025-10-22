@@ -12,6 +12,7 @@ import android.os.RemoteException
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.data.UserPrefs
 import com.mp.ai_core.tts.TtsEngine
 import kotlinx.coroutines.CoroutineScope
@@ -51,14 +52,17 @@ class TTSViewModel(context: Context) : ViewModel() {
     private var _isPlaying = MutableStateFlow(false)
     val isPlaying = _isPlaying.asStateFlow()
 
-    fun initTTS(context: Context) {
+    suspend fun initTTS(context: Context) {
+        val ttsModel = ModelManager.getTTSModels() ?: return
+
+        Log.d(TAG, "Loading TTS model from ${ttsModel.modelPath}")
         Log.i(TAG, "Start to initialize TTS")
         val json = """
         {
-          "modelDir": "kokoro-en-v0_19",
+          "modelDir": "${File(ttsModel.modelPath)}/kokoro-en-v0_19",
           "modelName": "model.onnx",
           "voices": "voices.bin",
-          "dataDir": "kokoro-en-v0_19/espeak-ng-data",
+          "dataDir": "${File(ttsModel.modelPath)}/kokoro-en-v0_19/espeak-ng-data",
           "lang": "eng"
         }
         """.trimIndent()

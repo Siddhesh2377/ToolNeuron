@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.ai_module.model.ModelType
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.ui.theme.Mint
@@ -97,6 +98,10 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val isGeneratingTitle = uiState is ChatUiState.GeneratingTitle
 
+    val filteredModellist = modelList.filter {
+        it.modelType == ModelType.TEXT
+    }
+
     val selectedModelName = remember(selectedModel) {
         if (selectedModel.modelName == "") "Select Model"
         else selectedModel.modelName
@@ -155,9 +160,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                         LazyColumn(
                             modifier = Modifier.heightIn(min = rDP(150.dp), max = rDP(320.dp)),
                         ) {
-                            items(modelList) { model ->
+                            items(filteredModellist) { model ->
                                 val isSelected = model.modelName == selectedModel.modelName
-
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()

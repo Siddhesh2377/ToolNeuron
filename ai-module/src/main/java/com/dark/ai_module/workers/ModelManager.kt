@@ -455,6 +455,16 @@ object ModelManager {
         dao.getAllModels().firstOrNull() ?: emptyList()
     }
 
+    suspend fun getTTSModels(): ModelData? = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getTTSModel()
+    }
+
+    suspend fun getSTTModels(): ModelData? = withContext(Dispatchers.IO) {
+        ensureDaoInitialized()
+        dao.getSTTModel()
+    }
+
     private sealed interface Request {
         data class Streaming(
             val prompt: String,

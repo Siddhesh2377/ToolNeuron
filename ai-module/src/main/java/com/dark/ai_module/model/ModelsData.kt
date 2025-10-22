@@ -11,6 +11,7 @@ data class ModelData(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
     var modelName: String = "",
     var providerName: String = "",
+    var modelType: ModelType = ModelType.TEXT,
     var modelPath: String = "",
     var threads: Int = (Runtime.getRuntime().availableProcessors().coerceAtLeast(2)) / 2,
     var gpuLayers: Int = 0,
@@ -62,4 +63,10 @@ data class GenerationParams(val maxTokens: Int = 2048)
 enum class ModelProvider {
     OpenRouter,
     LocalGGUF
+}
+
+enum class ModelType {
+    TEXT,
+    TTS,
+    STT
 }
