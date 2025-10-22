@@ -34,10 +34,10 @@ ToolNeuron is your **AI hub on Android**:
 ### For Everyone 👥
 * **Chat with AI** about anything—get answers, advice, or creative ideas
 * **Access 100+ models** via OpenRouter—GPT-4, Claude, Llama, uncensored models, and more
-* **11 premium TTS voices**—choose between American and British, male and female narrators
+* **11 premium TTS voices**—choose between American and British, male and female narrators [ OFFLINE ]
 * **No subscriptions** for offline models—run AI completely free
 * **Switch between models** mid-conversation to get the best responses
-* **100% private**—your conversations stay on your device with offline models
+* **100% private**—your conversations stay on your device with offline & Online models
 
 ### For Creators & Professionals 💼
 * **Code generation** with syntax highlighting and live preview
@@ -59,7 +59,6 @@ ToolNeuron is your **AI hub on Android**:
 - **Dual Mode:** Switch between offline and online models instantly
 - **Smart Streaming:** Real-time responses as AI generates them
 - **Context Aware:** AI remembers your conversation history
-- **Model Ratings:** Rate responses to help improve quality
 - **Message Actions:** Copy, share, regenerate, or delete messages
 
 ### 🎙️ Text-to-Speech (TTS)
