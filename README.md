@@ -64,10 +64,10 @@ ToolNeuron is your **AI hub on Android**:
 
 ### 🎙️ Text-to-Speech (TTS)
 - **11 premium voices** to choose from—find your perfect narrator
-    - **American Female:** AF (Standard), Bella (Warm), Nicole (Professional), Sarah (Clear), Sky (Energetic)
-    - **American Male:** Adam (Standard), Michael (Professional)
-    - **British Female:** Emma (Elegant), Isabella (Refined)
-    - **British Male:** George (Distinguished), Lewis (Clear)
+  - **American Female:** AF (Standard), Bella (Warm), Nicole (Professional), Sarah (Clear), Sky (Energetic)
+  - **American Male:** Adam (Standard), Michael (Professional)
+  - **British Female:** Emma (Elegant), Isabella (Refined)
+  - **British Male:** George (Distinguished), Lewis (Clear)
 - **Real-time audio generation** as you read AI responses
 - **Easy voice switching** in Settings—preview and select your favorite
 - **Progress tracking** with smooth playback controls
@@ -203,7 +203,7 @@ ToolNeuron is your **AI hub on Android**:
 * **Image generation** with Stable Diffusion
 * **Advanced memory system** for context retention
 * **Plugin marketplace** for community extensions
-*
+* 
 ### 🗓️ Q3 2026
 * **Multi-modal models** (text + images)
 * **Cross-device sync** (optional cloud backup)
