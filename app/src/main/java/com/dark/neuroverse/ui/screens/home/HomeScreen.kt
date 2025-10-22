@@ -12,9 +12,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,12 +39,10 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
-import androidx.compose.material3.SnackbarVisuals
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -62,6 +62,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.activity.ModelPropEditorActivity
 import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
+import com.dark.neuroverse.ui.components.TTSPlaybackBarCompact
 import com.dark.neuroverse.ui.drawer.SettingsDrawerContent
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
@@ -70,6 +71,8 @@ import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
 import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -100,6 +103,7 @@ fun HomeScreen(
     // Snackbar host for errors
     val snackbarHostState = remember { SnackbarHostState() }
 
+
     // Keep toast for legacy messages (still used)
     LaunchedEffect(uiState) {
         when (val state = uiState) {
@@ -108,12 +112,14 @@ fun HomeScreen(
                 val message = state.message.ifBlank { "Unknown error" }
                 // Provide an action when retryable — here we open settings so user can fix config.
                 val actionLabel = if (state.isRetryable) "Open settings" else "Dismiss"
-                val result = snackbarHostState.showSnackbar(message = message, actionLabel = actionLabel)
+                val result =
+                    snackbarHostState.showSnackbar(message = message, actionLabel = actionLabel)
                 if (result == SnackbarResult.ActionPerformed && state.isRetryable) {
                     // Let user configure settings (or swap this with viewModel.retry() if available)
                     onRequestSettingsChange()
                 }
             }
+
             is ChatUiState.DecodingStream -> {
                 // Token counting occurs only while decoding stream
                 tokenCount++
@@ -131,6 +137,7 @@ fun HomeScreen(
                     lastDisplayUpdate = currentTime
                 }
             }
+
             else -> {
                 // Reset counters when generation stops
                 if (tokenCount > 0) {
@@ -139,6 +146,17 @@ fun HomeScreen(
                     tkPerSecond = 0
                     lastDisplayUpdate = 0L
                 }
+            }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                ttsViewModel.initTTS()
+            } catch (e: Exception) {
+                Log.e("ChatScreen", "Failed to initialize TTS", e)
+                // Show error to user if needed
             }
         }
     }
@@ -152,7 +170,8 @@ fun HomeScreen(
     }
 
     // Hide keyboard when drawer opens
-    val imm = LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val imm =
+        LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     val token = LocalView.current.windowToken
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) imm.hideSoftInputFromWindow(token, 0)
@@ -169,87 +188,86 @@ fun HomeScreen(
                     onNewChatClick = { chatScreenViewModel.newChat() },
                     onDataHubClick = { onDataHubClick() },
                     onPluginStoreClick = { onPluginStoreClick() },
-                    onModelsClick = { onModelsClick() }
-                )
+                    onModelsClick = { onModelsClick() })
             }
         }) {
-        Scaffold(
-            modifier = Modifier.fillMaxSize(),
-            topBar = {
-                Column {
-                    TopBar(
-                        chatScreenViewModel,
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onLeftMenu = {
-                            if (ModelManager.currentModel.value.modelName.isBlank()) {
-                                Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
-                                    .show()
-                            } else {
-                                context.startActivity(
-                                    Intent(context, ModelPropEditorActivity::class.java).apply {
-                                        putExtra("modelName", ModelManager.currentModel.value.modelName)
-                                    }
-                                )
-                            }
+        Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
+            Column {
+                TopBar(
+                    chatScreenViewModel,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = {
+                        if (ModelManager.currentModel.value.modelName.isBlank()) {
+                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
+                                .show()
+                        } else {
+                            context.startActivity(
+                                Intent(context, ModelPropEditorActivity::class.java).apply {
+                                    putExtra(
+                                        "modelName",
+                                        ModelManager.currentModel.value.modelName
+                                    )
+                                })
                         }
-                    )
-                    ModelLoadProgressBar(loadState = modelState)
-
-                    // Global loading indicator for UI state
-                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                // primary color from Material3 theme
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (uiState is ChatUiState.Loading) {
-                                Text(
-                                    text = (uiState as ChatUiState.Loading).message,
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                    }
-
-                    AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.secondary
-                            )
+                    })
+                ModelLoadProgressBar(loadState = modelState)
+                TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
+                // Global loading indicator for UI state
+                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            // primary color from Material3 theme
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (uiState is ChatUiState.Loading) {
                             Text(
-                                text = "Generating title…",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // Token rate display — show only while decoding and have a non-zero rate
-                    AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Tokens/s: $tkPerSecond",
+                                text = (uiState as ChatUiState.Loading).message,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp,
+                                    vertical = 4.dp
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
                 }
-            },
-            bottomBar = {
-                BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
-            },
-            snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // bottom snackbar
+
+                AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "Generating title…",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Token rate display — show only while decoding and have a non-zero rate
+                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Tokens/s: $tkPerSecond",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }, bottomBar = {
+            BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
+        }, snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // bottom snackbar
         ) { innerPadding ->
             BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
@@ -303,7 +321,11 @@ fun BodyContent(
                 )
             ) {
                 items(items = messages, key = { it.id }, contentType = { it.role }) { message ->
-                    ChatBubble(message = message, viewModel = viewModel, ttsViewModel = ttsViewModel)
+                    ChatBubble(
+                        message = message,
+                        viewModel = viewModel,
+                        ttsViewModel = ttsViewModel
+                    )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
             }
@@ -328,7 +350,40 @@ fun BodyContent(
                 containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
-                Icon(imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom")
+                Icon(
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TtsStatusIndicator(ttsViewModel: TTSViewModel) {
+    val generationStatus by ttsViewModel.generationStatus.collectAsStateWithLifecycle()
+    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
+
+    generationStatus?.let { status ->
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = status,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            if (audioProgress > 0f) {
+                Text(
+                    text = "${(audioProgress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
     }
@@ -373,6 +428,5 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        }
-    )
+        })
 }

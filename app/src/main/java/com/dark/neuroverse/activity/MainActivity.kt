@@ -36,7 +36,6 @@ import com.dark.neuroverse.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.neuroverse.userdata.ntds.loadEncryptedTree
 import com.dark.neuroverse.userdata.ntds.saveEncryptedTree
 import com.dark.neuroverse.util.makeToast
-import com.mp.ai_core.tts.TtsEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -284,7 +283,6 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
         ModelManager.shutdown()
-        TtsEngine.tts?.release()
     }
 
     override fun onStop() {

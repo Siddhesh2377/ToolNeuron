@@ -45,6 +45,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -89,7 +90,6 @@ import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.plugins.manager.PluginManager
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -117,7 +117,7 @@ fun ChatBubble(
 
             when (message.role) {
                 Role.User -> UserChatUI(
-                    message = message, ttsViewModel = ttsViewModel
+                    message = message,
                 ) {
                     viewModel.deleteMessage(it)
                 }
@@ -177,15 +177,14 @@ private fun DecodingPlaceholder() {
 
 @Composable
 private fun UserChatUI(
-    message: Message, ttsViewModel: TTSViewModel, onMessageDelete: (String) -> Unit = {}
+    message: Message, onMessageDelete: (String) -> Unit = {}
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
     val actionIconSize = rDP(14.dp)
     val clipboardManager = LocalClipboard.current
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
@@ -197,13 +196,13 @@ private fun UserChatUI(
                 .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
                 .padding(horizontal = rDP(14.dp), vertical = rDP(8.dp)),
             text = message.text,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurface,
             style = MaterialTheme.typography.bodyMedium
         )
 
         Spacer(modifier = Modifier.height(rDP(10.dp)))
 
-        // Action buttons - same as Assistant
+        // Action buttons
         Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
             // Copy button
             Icon(
@@ -215,37 +214,12 @@ private fun UserChatUI(
                     .clickable {
                         scope.launch {
                             clipboardManager.setClipEntry(
-                                ClipEntry(
-                                    ClipData.newPlainText(
-                                        "message", message.text
-                                    )
-                                )
+                                ClipEntry(ClipData.newPlainText("message", message.text))
                             )
-                            Toast.makeText(
-                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                            ).show()
                         }
                         Toast.makeText(
                             context, "Copied to clipboard!", Toast.LENGTH_SHORT
                         ).show()
-                    })
-
-            // TTS button
-            Icon(
-                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
-                contentDescription = "Play/Stop audio",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable {
-                        CoroutineScope(Dispatchers.IO).launch {
-                            if (isPlayingAudio) {
-                                ttsViewModel.onClickStop()
-                            } else {
-                                ttsViewModel.initTTS(context)
-                                ttsViewModel.onGenerate(message.text, 3)
-                            }
-                        }
                     })
 
             // Share button
@@ -262,9 +236,7 @@ private fun UserChatUI(
                             type = "text/plain"
                         }
                         context.startActivity(
-                            Intent.createChooser(
-                                shareIntent, "Share message"
-                            )
+                            Intent.createChooser(shareIntent, "Share message")
                         )
                     })
 
@@ -280,16 +252,21 @@ private fun UserChatUI(
     }
 }
 
-
 @Composable
 private fun RegularChatUI(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
 ) {
-    LocalClipboard.current
     val context = LocalContext.current
+    val clipboardManager = LocalClipboard.current
+
+    // ✅ Collect state properly
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
+    val isInitialized by ttsViewModel.isInitialized.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+
     var showRegenerateDialog by remember { mutableStateOf(false) }
     val actionIconSize = rDP(14.dp)
 
@@ -300,19 +277,18 @@ private fun RegularChatUI(
         else -> false
     }
 
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = rDP(4.dp))
     ) {
-        // ✅ Use Crossfade for smooth transition between streaming/markdown
-        Crossfade(isStreaming, label = "content-transition") {
-            when (it) {
+        // Content with smooth transition
+        Crossfade(isStreaming, label = "content-transition") { streaming ->
+            when (streaming) {
                 true -> {
                     Text(
                         text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -321,7 +297,7 @@ private fun RegularChatUI(
                 false -> {
                     MarkdownText(
                         text = message.text,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = MaterialTheme.colorScheme.onSurface,
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }
@@ -330,7 +306,7 @@ private fun RegularChatUI(
 
         Spacer(Modifier.height(rDP(10.dp)))
 
-        // Action buttons (without Continue)
+        // Action buttons
         Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
             // Copy button
             Icon(
@@ -340,29 +316,51 @@ private fun RegularChatUI(
                 modifier = Modifier
                     .size(actionIconSize)
                     .clickable {
-                        ClipEntry(ClipData.newPlainText("message", message.text))
+                        scope.launch {
+                            clipboardManager.setClipEntry(
+                                ClipEntry(ClipData.newPlainText("message", message.text))
+                            )
+                        }
                         Toast.makeText(
                             context, "Copied to clipboard!", Toast.LENGTH_SHORT
                         ).show()
                     })
 
-            // TTS button
-            Icon(
-                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
-                contentDescription = "Play/Stop audio",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable {
-                        CoroutineScope(Dispatchers.IO).launch {
+            // ✅ TTS button - Fixed implementation
+            Box(contentAlignment = Alignment.Center) {
+                // Show progress indicator if playing
+                if (isPlayingAudio && audioProgress > 0f) {
+                    CircularProgressIndicator(
+                        progress = { audioProgress },
+                        modifier = Modifier.size(actionIconSize + 4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        strokeWidth = 2.dp,
+                        trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
+                        strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
+                    )
+                }
+
+                Icon(
+                    painter = painterResource(
+                        if (isPlayingAudio) R.drawable.stop else R.drawable.speaker
+                    ),
+                    contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
+                    tint = MaterialTheme.colorScheme.primary.copy(
+                        alpha = if (isInitialized) 0.7f else 0.3f
+                    ),
+                    modifier = Modifier
+                        .size(actionIconSize)
+                        .clickable(enabled = isInitialized) {
                             if (isPlayingAudio) {
-                                ttsViewModel.onClickStop()
+                                ttsViewModel.stopPlayback()
                             } else {
-                                ttsViewModel.initTTS(context)
-                                ttsViewModel.onGenerate(message.text, 3)
+                                scope.launch(Dispatchers.IO) {
+                                    val normalizer = ttsViewModel.normalizeText(message.text)
+                                    ttsViewModel.generateAndPlayAudio(normalizer)
+                                }
                             }
-                        }
-                    })
+                        })
+            }
 
             // Regenerate button
             Icon(
@@ -387,9 +385,7 @@ private fun RegularChatUI(
                             type = "text/plain"
                         }
                         context.startActivity(
-                            Intent.createChooser(
-                                shareIntent, "Share message"
-                            )
+                            Intent.createChooser(shareIntent, "Share message")
                         )
                     })
 
@@ -400,9 +396,7 @@ private fun RegularChatUI(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
                     .size(actionIconSize)
-                    .clickable {
-                        viewModel.deleteMessage(message.id)
-                    })
+                    .clickable { viewModel.deleteMessage(message.id) })
         }
     }
 
