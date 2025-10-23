@@ -29,7 +29,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme.colorScheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
@@ -272,7 +271,7 @@ private fun ModelDialogItem(
                         color = if (isSelected) colorScheme.onSurface else Color.Gray
                     )
                 )
-                if (model.isToolCalling){
+                if (model.isToolCalling) {
                     Spacer(Modifier.width(rDP(4.dp)))
                     Icon(
                         painterResource(R.drawable.hammer),
@@ -285,20 +284,3 @@ private fun ModelDialogItem(
         }
     }
 }
-
-@Composable
-private fun Pill(text: String, isRemote: Boolean = false) {
-    Surface(
-        shape = RoundedCornerShape(rDP(12.dp)),
-        color = if (!isRemote) Mint.copy(alpha = 0.2f) else Color(0xFF87CEEB).copy(alpha = 0.2f) // SkyBlue
-    ) {
-        Text(
-            text = text,
-            modifier = Modifier.padding(horizontal = rDP(10.dp), vertical = rDP(4.dp)),
-            style = MaterialTheme.typography.labelMedium.copy(
-                color = if (!isRemote) Mint else Color(0xFF87CEEB), fontWeight = FontWeight.Bold
-            )
-        )
-    }
-}
-

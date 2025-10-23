@@ -16,7 +16,6 @@ import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
 import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.userdata.helpers.ModelStateHelper
-import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.worker.ChatManager
 import com.dark.neuroverse.worker.RAGManager
 import com.dark.neuroverse.worker.TextGenerationWorker
@@ -24,7 +23,6 @@ import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import com.dark.neuroverse.worker.UserDataManager
 import com.dark.plugins.model.Tools
-import com.mp.data_hub_lib.manager.DataHubManager
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -88,9 +86,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val selectedTool = ToolCallingManager.selectedTool
 
     val isGenerating: StateFlow<Boolean> = uiState.map { state ->
-        state is ChatUiState.Generating ||
-                state is ChatUiState.DecodingStream ||
-                state is ChatUiState.ExecutingTool
+        state is ChatUiState.Generating || state is ChatUiState.DecodingStream || state is ChatUiState.ExecutingTool
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
@@ -112,7 +108,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 ToolCallingManager.initViewModel()
 
                 // Load models
-                modelList.value = ModelManager.getAllModels()
+                refreshModelList()
 
                 UIStateManager.setStateIdle()
                 Log.d(TAG, "ViewModel initialized successfully")
@@ -121,6 +117,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 UIStateManager.setStateError("Initialization failed", cause = e)
             }
         }
+    }
+
+    suspend fun refreshModelList(){
+        modelList.value = ModelManager.getAllModels()
     }
     //endregion
 
@@ -261,26 +261,28 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private suspend fun executeSendMessage(input: String) {
         // Add user message
-        ChatManager.addMessage(Message(
-            role = Role.User,
-            text = input,
-            id = UUID.randomUUID().toString()
-        ))
+        ChatManager.addMessage(
+            Message(
+                role = Role.User, text = input, id = UUID.randomUUID().toString()
+            )
+        )
 
         // Prepare assistant/tool message
         val messageId = UUID.randomUUID().toString()
         val isTool = ToolCallingManager.isToolSelected()
 
-        ChatManager.addMessage(Message(
-            role = if (isTool) Role.Tool else Role.Assistant,
-            text = "",
-            id = messageId,
-            tool = if (isTool) RunningTool(
-                toolName = ToolCallingManager.getSelectedTool().toolName,
-                toolPreview = "",
-                toolOutput = ToolOutput()
-            ) else null
-        ))
+        ChatManager.addMessage(
+            Message(
+                role = if (isTool) Role.Tool else Role.Assistant,
+                text = "",
+                id = messageId,
+                tool = if (isTool) RunningTool(
+                    toolName = ToolCallingManager.getSelectedTool().toolName,
+                    toolPreview = "",
+                    toolOutput = ToolOutput()
+                ) else null
+            )
+        )
 
         // Handle RAG if enabled
         if (_isRag.value) {
@@ -291,9 +293,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun handleRAGRequest(
-        input: String,
-        isTool: Boolean,
-        messageId: String
+        input: String, isTool: Boolean, messageId: String
     ) {
         if (!RAGManager.isRAGReady()) {
             Log.w(TAG, "RAG not ready, falling back to normal generation")
@@ -318,8 +318,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Ensure generation model is ready
             val modelResult = RAGManager.ensureGenerationModelReady(
                 currentModel = selectedModel.value,
-                onStateUpdate = { _modelLoadingState.value = it }
-            )
+                onStateUpdate = { _modelLoadingState.value = it })
 
             if (modelResult.has("error")) {
                 Log.e(TAG, "Model switch failed: ${modelResult.getString("error")}")
@@ -337,9 +336,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun streamMessage(
-        prompt: String,
-        enableTools: Boolean,
-        messageId: String
+        prompt: String, enableTools: Boolean, messageId: String
     ) {
         TextGenerationWorker.streamAndRender(
             prompt = prompt,
@@ -350,8 +347,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             existingMessages = messages.value,
             onToolExecution = { result ->
                 saveCurrentChat()
-            }
-        )
+            })
 
         // CRITICAL: Save and refresh chat list after streaming completes
         saveCurrentChat()
@@ -392,22 +388,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun executeRegenerate(
-        model: ModelData,
-        messageId: String,
-        messageIndex: Int,
-        targetMessage: Message
+        model: ModelData, messageId: String, messageIndex: Int, targetMessage: Message
     ) {
         // Get user context
-        val userContext = messages.value
-            .take(messageIndex)
-            .lastOrNull { it.role == Role.User }?.text.orEmpty()
+        val userContext =
+            messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
         // Clear existing message
         ChatManager.updateStreamingMessage(
-            messageId = messageId,
-            text = "",
-            thought = null,
-            isFinal = false
+            messageId = messageId, text = "", thought = null, isFinal = false
         )
 
         // Switch model if needed
@@ -517,20 +506,16 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun executeSummarization(
-        messageId: String,
-        toolName: String,
-        toolOutput: String
+        messageId: String, toolName: String, toolOutput: String
     ) {
         // Save current model configuration
         val originalModel = selectedModel.value
-        val needsModelSwitch = originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
+        val needsModelSwitch =
+            originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
 
         // Clear existing message text (prepare for streaming)
         ChatManager.updateStreamingMessage(
-            messageId = messageId,
-            text = "",
-            thought = null,
-            isFinal = false
+            messageId = messageId, text = "", thought = null, isFinal = false
         )
 
         try {
@@ -574,8 +559,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 messageId = messageId,
                 isRegeneration = true, // Treat like regeneration for metrics
                 existingMessages = emptyList(), // No conversation history needed
-                onToolExecution = { /* Not applicable */ }
-            )
+                onToolExecution = { /* Not applicable */ })
 
             // Restore original model if we switched
             if (needsModelSwitch) {
@@ -626,9 +610,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
      */
     fun summarizeAllToolOutputs() {
         val toolMessages = messages.value.filter {
-            it.role == Role.Tool &&
-                    it.tool != null &&
-                    it.tool.toolOutput.toString().isNotBlank()
+            it.role == Role.Tool && it.tool != null && it.tool.toolOutput.toString().isNotBlank()
         }
 
         if (toolMessages.isEmpty()) {
@@ -749,7 +731,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun setIsDialogOpen(show: Boolean){
+    fun setIsDialogOpen(show: Boolean) {
         _isDialogSelected.value = show
     }
     //endregion

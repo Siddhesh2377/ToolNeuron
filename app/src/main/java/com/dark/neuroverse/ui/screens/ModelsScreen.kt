@@ -132,90 +132,95 @@ fun ModelsScreen(onNext: () -> Unit) {
 
     Scaffold { innerPadding ->
         val isDialogOpen by viewModel.isDialogOpened.collectAsStateWithLifecycle()
-        Column(
-            Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
-                .blur(if (isDialogOpen) rDP(10.dp) else rDP(0.dp), BlurredEdgeTreatment.Unbounded),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // Header
-            Row(
+        Box {
+            Column(
                 Modifier
-                    .fillMaxWidth()
-                    .padding(top = rDP(24.dp), bottom = rDP(12.dp))
-                    .padding(horizontal = rDP(26.dp)),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(innerPadding)
+                    .fillMaxSize()
+                    .blur(
+                        if (isDialogOpen) rDP(10.dp) else rDP(0.dp), BlurredEdgeTreatment.Unbounded
+                    ), horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Icon(
-                    Icons.Rounded.SmartToy,
-                    modifier = Modifier.size(rDP(30.dp)),
-                    contentDescription = null
-                )
-                Spacer(Modifier.width(rDP(12.dp)))
-                Text(
-                    "Models", style = MaterialTheme.typography.headlineLarge.copy(
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = FontFamily.Serif,
-                        fontSize = rSp(28.sp)
-                    )
-                )
-
-                Spacer(Modifier.weight(1f))
-
-                Button(onClick = {
-                    context.startActivity(Intent(context, GgufPickerActivity::class.java))
-                }) {
+                // Header
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(top = rDP(24.dp), bottom = rDP(12.dp))
+                        .padding(horizontal = rDP(26.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Icon(
-                        Icons.TwoTone.FileOpen,
-                        modifier = Modifier.size(rDP(18.dp)),
+                        Icons.Rounded.SmartToy,
+                        modifier = Modifier.size(rDP(30.dp)),
                         contentDescription = null
                     )
-                    Spacer(Modifier.width(rDP(8.dp)))
-                    Text("Import", fontSize = rSp(15.sp))
-                }
-            }
-
-            // Tabs
-            SecondaryTabRow(
-                selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()
-            ) {
-                tabs.forEachIndexed { index, label ->
-                    Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = {
-                        Text(
-                            label, fontSize = rSp(14.sp), maxLines = 1
+                    Spacer(Modifier.width(rDP(12.dp)))
+                    Text(
+                        "Models", style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Serif,
+                            fontSize = rSp(28.sp)
                         )
-                    })
+                    )
+
+                    Spacer(Modifier.weight(1f))
+
+                    Button(onClick = {
+                        context.startActivity(Intent(context, GgufPickerActivity::class.java))
+                    }) {
+                        Icon(
+                            Icons.TwoTone.FileOpen,
+                            modifier = Modifier.size(rDP(18.dp)),
+                            contentDescription = null
+                        )
+                        Spacer(Modifier.width(rDP(8.dp)))
+                        Text("Import", fontSize = rSp(15.sp))
+                    }
+                }
+
+                // Tabs
+                SecondaryTabRow(
+                    selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()
+                ) {
+                    tabs.forEachIndexed { index, label ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(
+                                    label, fontSize = rSp(14.sp), maxLines = 1
+                                )
+                            })
+                    }
+                }
+
+                // Content
+                AnimatedContent(
+                    targetState = selectedTab,
+                    transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
+                    modifier = Modifier.weight(1f)
+                ) { tab ->
+                    when (tab) {
+                        0 -> MarketplaceList(viewModel)
+                        1 -> OpenRouterTab(viewModel)
+                        else -> InstalledList(viewModel)
+                    }
                 }
             }
 
-            // Content
-            AnimatedContent(
-                targetState = selectedTab,
-                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(200)) },
-                modifier = Modifier.weight(1f)
-            ) { tab ->
-                when (tab) {
-                    0 -> MarketplaceList(viewModel)
-                    1 -> OpenRouterTab(viewModel)
-                    else -> InstalledList(viewModel)
-                }
-            }
-
-            StandardBottomBar(Modifier.padding(bottom = rDP(14.dp))) {
-                CollapsableButton(
-                    text = "Finish",
-                    icon = Icons.AutoMirrored.Filled.ArrowForward,
-                    enabled = isEnabled
-                ) { onNext() }
-            }
+//            StandardBottomBar(Modifier
+//                .align(Alignment.BottomCenter)
+//                .padding(bottom = rDP(14.dp))) {
+//                CollapsableButton(
+//                    text = "Finish",
+//                    icon = Icons.AutoMirrored.Filled.ArrowForward,
+//                    enabled = isEnabled
+//                ) { onNext() }
+//            }
         }
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// GGUF MARKETPLACE TAB
-// ═══════════════════════════════════════════════════════════════════════════
 @Composable
 private fun MarketplaceList(viewModel: ModelScreenViewModel) {
     val context = LocalContext.current
@@ -238,9 +243,6 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel) {
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// OPENROUTER TAB - Complete Redesign
-// ═══════════════════════════════════════════════════════════════════════════
 @Composable
 private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
     val context = LocalContext.current
@@ -924,7 +926,7 @@ private fun InstalledModelCard(
                         colors = IconButtonDefaults.outlinedIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.onPrimary,
                         )
-                    )  {
+                    ) {
                         Icon(
                             imageVector = Icons.TwoTone.Info,
                             contentDescription = "Model Info",

@@ -171,6 +171,7 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                chatScreenViewModel.refreshModelList()
                 ttsViewModel.initTTS()
             } catch (e: Exception) {
                 Log.e("ChatScreen", "Failed to initialize TTS", e)
@@ -211,87 +212,85 @@ fun HomeScreen(
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp),
-            topBar = {
-                Column {
-                    TopBar(
-                        chatScreenViewModel,
-                        onMenu = { scope.launch { drawerState.open() } },
-                        onLeftMenu = {
-                            if (ModelManager.currentModel.value.modelName.isBlank()) {
-                                Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
-                                    .show()
-                            } else {
-                                context.startActivity(
-                                    Intent(context, ModelPropEditorActivity::class.java).apply {
-                                        putExtra(
-                                            "modelName", ModelManager.currentModel.value.modelName
-                                        )
-                                    })
-                            }
-                        })
-
-                    ModelLoadProgressBar(loadState = modelState)
-                    TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
-
-                    // Global loading indicator for UI state
-                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            if (uiState is ChatUiState.Loading) {
-                                Text(
-                                    text = (uiState as ChatUiState.Loading).message,
-                                    modifier = Modifier.padding(
-                                        horizontal = 16.dp, vertical = 4.dp
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
+                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp), topBar = {
+            Column {
+                TopBar(
+                    chatScreenViewModel,
+                    onMenu = { scope.launch { drawerState.open() } },
+                    onLeftMenu = {
+                        if (ModelManager.currentModel.value.modelName.isBlank()) {
+                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
+                                .show()
+                        } else {
+                            context.startActivity(
+                                Intent(context, ModelPropEditorActivity::class.java).apply {
+                                    putExtra(
+                                        "modelName", ModelManager.currentModel.value.modelName
+                                    )
+                                })
                         }
-                    }
+                    })
 
-                    AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
-                        Column {
-                            LinearProgressIndicator(
-                                modifier = Modifier.fillMaxWidth(),
-                                color = MaterialTheme.colorScheme.secondary
-                            )
+                ModelLoadProgressBar(loadState = modelState)
+                TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
+
+                // Global loading indicator for UI state
+                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        if (uiState is ChatUiState.Loading) {
                             Text(
-                                text = "Generating title…",
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                                text = (uiState as ChatUiState.Loading).message,
+                                modifier = Modifier.padding(
+                                    horizontal = 16.dp, vertical = 4.dp
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-
-                    // Token rate display
-                    AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(horizontal = 16.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "Tokens/s: $tkPerSecond",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    // TOP ERROR SNACKBAR - Positioned right below TopBar
-                    TopErrorSnackbar(snackbarHostState = snackbarHostState)
                 }
-            },
-            bottomBar = {
-                BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
-            }) { innerPadding ->
+
+                AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
+                    Column {
+                        LinearProgressIndicator(
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "Generating title…",
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // Token rate display
+                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface)
+                            .padding(horizontal = 16.dp, vertical = 4.dp)
+                    ) {
+                        Text(
+                            text = "Tokens/s: $tkPerSecond",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                // TOP ERROR SNACKBAR - Positioned right below TopBar
+                TopErrorSnackbar(snackbarHostState = snackbarHostState)
+            }
+        }, bottomBar = {
+            BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
+        }) { innerPadding ->
             BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
