@@ -48,6 +48,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -91,8 +93,8 @@ import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONObject
-import androidx.compose.runtime.collectAsState
 
 @Composable
 fun ChatBubble(
@@ -135,6 +137,9 @@ fun ChatBubble(
                 Role.Tool -> ToolChatUI(
                     message = message,
                     isDecoding = isThisMessageExecutingTool,
+                    onMessageDelete = {
+                        viewModel.deleteMessage(message.id)
+                    }
                 )
             }
         }
@@ -414,7 +419,13 @@ private fun RegularChatUI(
 private fun ToolChatUI(
     message: Message,
     isDecoding: Boolean,
+    onMessageDelete: (String) -> Unit = {}
 ) {
+    val actionIconSize = rDP(14.dp)
+    val clipboardManager = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
     if (isDecoding) {
         RobotDecodePlaceholder(
             active = true, modifier = Modifier.fillMaxWidth()
@@ -464,6 +475,55 @@ private fun ToolChatUI(
                     // Tool output available
                     ToolOutputToggle(toolOutput = message.tool.toolOutput, out = out)
                 }
+            }
+
+            Spacer(Modifier.height(rDP(12.dp)))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+                // Copy button
+                Icon(
+                    painter = painterResource(R.drawable.copy),
+                    contentDescription = "Copy text",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(actionIconSize)
+                        .clickable {
+                            scope.launch {
+                                clipboardManager.setClipEntry(
+                                    ClipEntry(ClipData.newPlainText("message", message.text))
+                                )
+                            }
+                            Toast.makeText(
+                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                            ).show()
+                        })
+
+                // Share button
+                Icon(
+                    imageVector = Icons.Rounded.Share,
+                    contentDescription = "Share",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(actionIconSize)
+                        .clickable {
+                            val shareIntent = Intent().apply {
+                                action = Intent.ACTION_SEND
+                                putExtra(Intent.EXTRA_TEXT, message.text)
+                                type = "text/plain"
+                            }
+                            context.startActivity(
+                                Intent.createChooser(shareIntent, "Share message")
+                            )
+                        })
+
+                // Delete button
+                Icon(
+                    Icons.Rounded.DeleteOutline,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                    modifier = Modifier
+                        .size(actionIconSize)
+                        .clickable { onMessageDelete(message.id) })
             }
         }
     }
@@ -605,7 +665,21 @@ fun ToolOutputContent(
         }
     } else {
         Card(modifier = modifier) {
-            runningPlugin?.api?.ToolPreviewContent(toolOutput.output)
+            if (runningPlugin == null) {
+                val context = LocalContext.current
+                val pluginName = toolOutput.pluginName
+                LaunchedEffect(pluginName) {
+                    try {
+                        withContext(Dispatchers.IO) {
+                            PluginManager.runPlugin(context, pluginName)
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ToolOutputContent", "Error launching plugin: $pluginName", e)
+                    }
+                }
+            } else {
+                runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+            }
         }
     }
 }

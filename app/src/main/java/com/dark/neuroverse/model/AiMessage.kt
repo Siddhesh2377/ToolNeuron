@@ -18,7 +18,7 @@ data class RunningTool(
 
 @Serializable
 data class ToolOutput(
-    val toolName: String = "",
+    val pluginName: String = "",
     val type: ToolOutputType = ToolOutputType.Text,
     val output: String = ""
 )

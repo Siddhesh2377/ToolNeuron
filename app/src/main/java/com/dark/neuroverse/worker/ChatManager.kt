@@ -274,7 +274,7 @@ object ChatManager {
                             tool = message.tool?.copy(
                                 toolPreview = "Error: $toolError",
                                 toolOutput = ToolOutput(
-                                    toolName = message.tool.toolName,
+                                    pluginName = message.tool.toolName,
                                     output = JSONObject().apply {
                                         put("error", toolError)
                                         put("ok", false)
@@ -328,7 +328,7 @@ object ChatManager {
                     Log.d(TAG, "Tool preview updated: $pretty")
                     message.copy(
                         tool = RunningTool(
-                            toolName = toolOutput.toolName,
+                            toolName = toolOutput.pluginName,
                             toolPreview = pretty,
                             toolOutput = toolOutput
                         )

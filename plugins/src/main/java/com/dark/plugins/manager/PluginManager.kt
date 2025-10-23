@@ -186,6 +186,23 @@ object PluginManager {
         }
     }
 
+    /**
+     * Returns the plugin name that provides the given tool name.
+     * If no matching tool is found, returns null.
+     */
+    fun getPluginNameByToolName(toolName: String): String? {
+        val allTools = toolsList.value
+        for ((pluginName, tools) in allTools) {
+            if (tools.any { it.toolName.equals(toolName, ignoreCase = true) }) {
+                Log.d(TAG, "Tool '$toolName' belongs to plugin '$pluginName'")
+                return pluginName
+            }
+        }
+        Log.w(TAG, "Tool not found: $toolName")
+        return null
+    }
+
+
     private val LoadedPlugin.pluginName: String
         get() = manifest?.name.orEmpty()
 }
