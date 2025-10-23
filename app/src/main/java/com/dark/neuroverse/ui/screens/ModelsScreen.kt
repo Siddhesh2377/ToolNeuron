@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
@@ -105,7 +107,6 @@ import com.dark.neuroverse.ui.components.CollapsableButton
 import com.dark.neuroverse.ui.components.StandardBottomBar
 import com.dark.neuroverse.ui.theme.Mint
 import com.dark.neuroverse.ui.theme.SkyBlue
-import com.dark.neuroverse.ui.theme.Success
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
@@ -490,9 +491,11 @@ private fun OpenRouterModelItem(
                 )
             }
 
-            IconButton(
-                onClick = onDelete, colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.background
+            OutlinedIconButton(
+                onClick = onDelete,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                colors = IconButtonDefaults.outlinedIconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.errorContainer,
                 )
             ) {
                 Icon(
@@ -752,9 +755,9 @@ fun ModelCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = rDP(16.dp), vertical = rDP(6.dp))
-            .clip(RoundedCornerShape(rDP(14.dp))), colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
-        ), elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
+            .clip(RoundedCornerShape(rDP(8.dp))), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceDim
+        ), elevation = CardDefaults.cardElevation(defaultElevation = rDP(0.dp))
     ) {
         Column(
             modifier = Modifier
@@ -809,7 +812,8 @@ fun ModelCard(
                         }
                     }, colors = if (!isInstalled) ButtonDefaults.buttonColors()
                     else ButtonDefaults.buttonColors(
-                        containerColor = Success.copy(alpha = 0.2f), contentColor = Success
+                        containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
+                        contentColor = MaterialTheme.colorScheme.secondary
                     ), shape = RoundedCornerShape(rDP(12.dp)), modifier = Modifier.weight(1f)
                 ) {
                     AnimatedContent(
@@ -825,18 +829,21 @@ fun ModelCard(
 
                 // Delete Button (visible only if installed)
                 AnimatedVisibility(visible = isInstalled) {
-                    IconButton(
+                    OutlinedIconButton(
                         onClick = {
                             viewModel.removeModel(modelData.modelName)
                             isInstalled = false
-                        }, colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        ), modifier = Modifier.size(rDP(44.dp))
+                        },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        colors = IconButtonDefaults.outlinedIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                        )
                     ) {
                         Icon(
-                            imageVector = Icons.TwoTone.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
+                            Icons.TwoTone.Delete,
+                            contentDescription = "Remove",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(rDP(18.dp))
                         )
                     }
                 }
@@ -909,11 +916,15 @@ private fun InstalledModelCard(
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(rDP(6.dp))) {
-                    IconButton(
-                        onClick = onInfo, colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                    OutlinedIconButton(
+                        onClick = {
+                            onInfo()
+                        },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary),
+                        colors = IconButtonDefaults.outlinedIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.onPrimary,
                         )
-                    ) {
+                    )  {
                         Icon(
                             imageVector = Icons.TwoTone.Info,
                             contentDescription = "Model Info",
@@ -921,15 +932,21 @@ private fun InstalledModelCard(
                         )
                     }
 
-                    IconButton(
-                        onClick = onDelete, colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
+
+                    OutlinedIconButton(
+                        onClick = {
+                            onDelete()
+                        },
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                        colors = IconButtonDefaults.outlinedIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer,
                         )
                     ) {
                         Icon(
-                            imageVector = Icons.TwoTone.Delete,
-                            contentDescription = "Delete Model",
-                            tint = MaterialTheme.colorScheme.error
+                            Icons.TwoTone.Delete,
+                            contentDescription = "Remove",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(rDP(18.dp))
                         )
                     }
                 }
@@ -962,7 +979,8 @@ private fun FileDetailDialog(
     model: ModelData, onDismiss: () -> Unit, onSelect: () -> Unit
 ) {
     Dialog(
-        onDismissRequest = onDismiss, properties = DialogProperties(dismissOnBackPress = true, usePlatformDefaultWidth = false)
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true, usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier
@@ -1001,7 +1019,10 @@ private fun FileDetailDialog(
                     OutlinedButton(onClick = onDismiss) {
                         Text("Close")
                     }
-                    Button(onClick = onSelect, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)) {
+                    Button(
+                        onClick = onSelect,
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
                         Text("Delete")
                     }
                 }
