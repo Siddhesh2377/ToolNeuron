@@ -63,6 +63,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val modelList: MutableStateFlow<List<ModelData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelData> = MutableStateFlow(ModelData())
 
+    private val _isDialogSelected = MutableStateFlow(false)
+    val isDialogSelected: StateFlow<Boolean> = _isDialogSelected.asStateFlow()
+
     // RAG state
     private val _isRag = MutableStateFlow(false)
     val isRag: StateFlow<Boolean> = _isRag.asStateFlow()
@@ -744,6 +747,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         return uiState.value.let { state ->
             state is ChatUiState.ExecutingTool && state.messageId == messageId
         }
+    }
+
+    fun setIsDialogOpen(show: Boolean){
+        _isDialogSelected.value = show
     }
     //endregion
 

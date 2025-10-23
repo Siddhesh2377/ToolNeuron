@@ -31,7 +31,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
@@ -49,7 +48,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +61,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
@@ -105,6 +104,7 @@ fun HomeScreen(
 
     val modelState by chatScreenViewModel.modelLoadingState.collectAsStateWithLifecycle()
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
+    val isDialog by chatScreenViewModel.isDialogSelected.collectAsStateWithLifecycle()
 
     // Token rate state (throttled updates)
     var tokenCount by remember { mutableIntStateOf(0) }
@@ -208,85 +208,90 @@ fun HomeScreen(
                     onModelsClick = { onModelsClick() })
             }
         }) {
-        Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
-            Column {
-                TopBar(
-                    chatScreenViewModel,
-                    onMenu = { scope.launch { drawerState.open() } },
-                    onLeftMenu = {
-                        if (ModelManager.currentModel.value.modelName.isBlank()) {
-                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
-                                .show()
-                        } else {
-                            context.startActivity(
-                                Intent(context, ModelPropEditorActivity::class.java).apply {
-                                    putExtra(
-                                        "modelName", ModelManager.currentModel.value.modelName
-                                    )
-                                })
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp),
+            topBar = {
+                Column {
+                    TopBar(
+                        chatScreenViewModel,
+                        onMenu = { scope.launch { drawerState.open() } },
+                        onLeftMenu = {
+                            if (ModelManager.currentModel.value.modelName.isBlank()) {
+                                Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
+                                    .show()
+                            } else {
+                                context.startActivity(
+                                    Intent(context, ModelPropEditorActivity::class.java).apply {
+                                        putExtra(
+                                            "modelName", ModelManager.currentModel.value.modelName
+                                        )
+                                    })
+                            }
+                        })
+
+                    ModelLoadProgressBar(loadState = modelState)
+                    TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
+
+                    // Global loading indicator for UI state
+                    AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+                        Column {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (uiState is ChatUiState.Loading) {
+                                Text(
+                                    text = (uiState as ChatUiState.Loading).message,
+                                    modifier = Modifier.padding(
+                                        horizontal = 16.dp, vertical = 4.dp
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
-                    })
+                    }
 
-                ModelLoadProgressBar(loadState = modelState)
-                TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
-
-                // Global loading indicator for UI state
-                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                    Column {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (uiState is ChatUiState.Loading) {
+                    AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
+                        Column {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.secondary
+                            )
                             Text(
-                                text = (uiState as ChatUiState.Loading).message,
-                                modifier = Modifier.padding(
-                                    horizontal = 16.dp, vertical = 4.dp
-                                ),
+                                text = "Generating title…",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
-                }
 
-                AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
-                    Column {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            text = "Generating title…",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    // Token rate display
+                    AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(horizontal = 16.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "Tokens/s: $tkPerSecond",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
-                }
 
-                // Token rate display
-                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "Tokens/s: $tkPerSecond",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    // TOP ERROR SNACKBAR - Positioned right below TopBar
+                    TopErrorSnackbar(snackbarHostState = snackbarHostState)
                 }
-
-                // TOP ERROR SNACKBAR - Positioned right below TopBar
-                TopErrorSnackbar(snackbarHostState = snackbarHostState)
-            }
-        }, bottomBar = {
-            BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
-        }) { innerPadding ->
+            },
+            bottomBar = {
+                BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
+            }) { innerPadding ->
             BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
@@ -314,7 +319,7 @@ fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDP(8.dp),  vertical = rDP(12.dp)),
+                    .padding(horizontal = rDP(8.dp), vertical = rDP(12.dp)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
