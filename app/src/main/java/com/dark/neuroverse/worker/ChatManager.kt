@@ -274,7 +274,7 @@ object ChatManager {
                             tool = message.tool?.copy(
                                 toolPreview = "Error: $toolError",
                                 toolOutput = ToolOutput(
-                                    toolName = message.tool.toolName,
+                                    pluginName = message.tool.toolName,
                                     output = JSONObject().apply {
                                         put("error", toolError)
                                         put("ok", false)
@@ -322,21 +322,24 @@ object ChatManager {
 
         _messages.update { messages ->
             messages.map { message ->
+                Log.d(TAG, "List Of Available Messages: ${message.id}")
                 if (message.id == messageId) {
                     val pretty = JSONObject(toolOutput.output).toString(2)
+                    Log.d(TAG, "Tool preview updated: $pretty")
                     message.copy(
                         tool = RunningTool(
-                            toolName = toolOutput.toolName,
+                            toolName = toolOutput.pluginName,
                             toolPreview = pretty,
                             toolOutput = toolOutput
                         )
                     )
                 } else {
+                    Log.e(TAG, "Tool preview not updated for message: $messageId")
                     message
                 }
             }
         }
-        Log.d(TAG, "Tool preview updated for message: $messageId")
+        Log.d(TAG, "Tool message: $_messages updated")
     }
 
     /**

@@ -341,7 +341,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             enableTools = enableTools,
             messageId = messageId,
             isRegeneration = false,
-            existingMessages = messages.value
+            existingMessages = messages.value,
+            onToolExecution = { result ->
+                saveCurrentChat()
+            }
         )
 
         // CRITICAL: Save and refresh chat list after streaming completes
@@ -493,7 +496,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         Log.d(TAG, "Generation stopped")
     }
 
-    private fun saveCurrentChat() {
+    fun saveCurrentChat() {
         viewModelScope.launch {
             try {
                 ChatManager.saveChat(
@@ -503,6 +506,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     rootNode = UserDataManager.getRootNode(),
                     appContext = appContext
                 )
+                Log.d(TAG, "Chat saved successfully")
             } catch (e: Exception) {
                 Log.e(TAG, "Error saving chat", e)
             }
