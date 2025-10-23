@@ -1,6 +1,8 @@
 package com.dark.neuroverse.worker
 
 import android.util.Log
+import com.dark.ai_module.model.LoadState
+import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.mp.ai_core.NativeLib
 import com.mp.data_hub_lib.manager.DataHubManager
@@ -18,7 +20,7 @@ object RAGManager {
     private const val TAG = "RAGManager"
     private const val DEFAULT_TOP_K = 5
     private const val MAX_CONTEXT_LENGTH = 4096
-    private const val MODEL_SWITCH_DELAY_MS = 500L
+    private const val MODEL_SWITCH_DELAY_MS = 1000L
 
     /**
      * Initializes or reinitializes the embedding model for RAG operations.
@@ -59,12 +61,12 @@ object RAGManager {
      */
     suspend fun handleRAGRequest(
         input: String, topK: Int = DEFAULT_TOP_K
-    ): JSONObject = withContext(Dispatchers.IO) {
+    ): Pair<JSONObject, RagResult?> = withContext(Dispatchers.IO) {
         // Validate dataset
         val currentDataset = DataHubManager.currentDataSet.value
         if (currentDataset == null) {
             Log.w(TAG, "No dataset loaded for RAG query")
-            return@withContext JSONObject().put("error", "No dataset loaded")
+            return@withContext Pair(JSONObject().put("error", "No dataset loaded"), null)
         }
 
         Log.d(TAG, "Processing RAG request for query: ${input.take(50)}...")
@@ -79,20 +81,20 @@ object RAGManager {
 
                 if (ragContext.isBlank()) {
                     Log.w(TAG, "RAG returned empty context")
-                    JSONObject().put("error", "No relevant context found")
+                    Pair(JSONObject().put("error", "No relevant context found"), null)
                 } else {
                     Log.d(TAG, "RAG context extracted: ${ragContext.length} chars")
                     val finalPrompt = buildRAGPrompt(ragContext, input)
-                    JSONObject().put("success", finalPrompt)
+                    Pair(JSONObject().put("success", finalPrompt), ragData)
                 }
             } else {
                 val errorMsg = error ?: "Unknown RAG error"
                 Log.e(TAG, "RAG query failed: $errorMsg")
-                JSONObject().put("error", "RAG failed: $errorMsg")
+                Pair(JSONObject().put("error", "RAG failed: $errorMsg"), null)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Exception during RAG processing", e)
-            JSONObject().put("error", "RAG processing failed: ${e.message}")
+            Pair(JSONObject().put("error", "RAG processing failed: ${e.message}"), null)
         }
     }
 
@@ -105,11 +107,12 @@ object RAGManager {
      * @return JSONObject with "success" or "error"
      */
     suspend fun ensureGenerationModelReady(
-        currentModel: com.dark.ai_module.model.ModelData,
-        onStateUpdate: (com.dark.ai_module.model.LoadState) -> Unit = {}
+        currentModel: ModelData,
+        onStateUpdate: (LoadState) -> Unit = {}
     ): JSONObject = withContext(Dispatchers.IO) {
         return@withContext try {
-            Log.d(TAG, "Ensuring generation model is ready...")
+            Log.d(TAG, "Releasing embedding model and loading generation model...")
+            Log.d(TAG, "Current model: ${currentModel.modelName}")
 
             // Release embedding model instance
             val generationLib = NativeLib.getGenerationInstance()
@@ -122,11 +125,11 @@ object RAGManager {
             val result = ModelManager.loadModelAwait(currentModel) { loadState ->
                 onStateUpdate(loadState)
                 when (loadState) {
-                    is com.dark.ai_module.model.LoadState.OnLoaded -> {
+                    is LoadState.OnLoaded -> {
                         Log.d(TAG, "Generation model loaded: ${loadState.model.modelName}")
                     }
 
-                    is com.dark.ai_module.model.LoadState.Error -> {
+                    is LoadState.Error -> {
                         Log.e(TAG, "Generation model error: ${loadState.message}")
                     }
 
@@ -158,9 +161,11 @@ object RAGManager {
         query: String, topK: Int
     ): Pair<RagResult?, String?> = suspendCancellableCoroutine { continuation ->
         try {
-            DataHubManager.runRAG(query = query, topK = topK) { ragResult, ragError ->
-                if (continuation.isActive) {
-                    continuation.resume(ragResult to ragError)
+            ModelManager.unloadModel().let {
+                DataHubManager.runRAG(query = query, topK = topK) { ragResult, ragError ->
+                    if (continuation.isActive) {
+                        continuation.resume(ragResult to ragError)
+                    }
                 }
             }
         } catch (e: Exception) {

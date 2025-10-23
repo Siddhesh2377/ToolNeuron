@@ -1,6 +1,8 @@
 package com.dark.neuroverse.ui.screens.home
 
 import android.annotation.SuppressLint
+import android.graphics.drawable.Icon
+import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,9 +27,13 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.ModalBottomSheetLayout
+import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Web
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Stop
+import androidx.compose.material.rememberModalBottomSheetState
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -62,6 +69,120 @@ import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.plugins.model.Tools
+
+
+import androidx.compose.material3.*
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import com.mp.data_hub_lib.manager.DataHubManager
+import com.mp.data_hub_lib.model.DataSetModel
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChatInputWithDataHubDialog(
+    value: String,
+    tools: List<Pair<String, List<Tools>>>,
+    selectedTools: List<Tools>,
+    onToolSelected: (Pair<String, Tools>) -> Unit,
+    onValueChange: (String) -> Unit,
+    onRag: (Boolean) -> Unit,
+    onSend: () -> Unit,
+    onToolRemoved: (Tools) -> Unit,
+    isGenerating: Boolean,
+    inputEnabled: Boolean
+) {
+    var showDialog by remember { mutableStateOf(false) }
+    val currentDataset by DataHubManager.currentDataSet.collectAsState()
+    val datasets by DataHubManager.installedDataSets.collectAsState()
+
+    ChatInputBar(
+        value = value,
+        tools = tools,
+        selectedTools = selectedTools,
+        onToolSelected = onToolSelected,
+        onValueChange = onValueChange,
+        onRag = {
+            onRag(it)
+            if (it) showDialog = true
+        },
+        onSend = onSend,
+        onToolRemoved = onToolRemoved,
+        isGenerating = isGenerating,
+        inputEnabled = inputEnabled
+    )
+
+    if (showDialog) {
+        AlertDialog(
+            onDismissRequest = { showDialog = false },
+            title = { Text("Select Dataset") },
+            text = {
+                if (datasets.isEmpty()) {
+                    Text("No datasets installed", color = Color.Gray)
+                } else {
+                    LazyColumn {
+                        items(datasets) { dataset ->
+                            val isSelected = currentDataset?.modelName == dataset.modelName
+
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                                    .clickable {
+                                        val isAlreadySelected = currentDataset?.modelName == dataset.modelName
+                                        if (isAlreadySelected) {
+                                            DataHubManager.clearCurrentDataSet() // add this function
+                                        } else {
+                                            DataHubManager.setCurrentDataSet(dataset) { success ->
+                                                if (!success) Log.e("DataHub", "Failed to set dataset")
+                                            }
+                                        }
+                                    },
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.background
+                                )
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column {
+                                        Text(dataset.modelName, style = MaterialTheme.typography.bodyLarge)
+                                        if (dataset.modelDescription.isNotBlank()) {
+                                            Text(
+                                                dataset.modelDescription,
+                                                color = Color.Gray,
+                                                style = MaterialTheme.typography.bodySmall
+                                            )
+                                        }
+                                    }
+
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Rounded.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showDialog = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @SuppressLint("StateFlowValueCalledInComposition")

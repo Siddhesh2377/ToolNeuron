@@ -1,6 +1,8 @@
 package com.dark.neuroverse.ui.screens.home
 
+import android.annotation.SuppressLint
 import android.content.ClipData
+import android.content.Context
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
@@ -52,6 +54,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -96,6 +99,8 @@ import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
 import com.dark.plugins.manager.PluginManager
+import com.mp.data_hub_lib.model.RagResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -263,6 +268,7 @@ private fun UserChatUI(
     }
 }
 
+@SuppressLint("DefaultLocale")
 @Composable
 private fun RegularChatUI(
     message: Message,
@@ -270,16 +276,14 @@ private fun RegularChatUI(
     ttsViewModel: TTSViewModel,
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
-    // ✅ Collect state properly
+    // TTS states
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
     val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
     val isInitialized by ttsViewModel.isInitialized.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
 
     var showRegenerateDialog by remember { mutableStateOf(false) }
-    val actionIconSize = rDP(14.dp)
 
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val isStreaming = when (uiState) {
@@ -293,136 +297,134 @@ private fun RegularChatUI(
             .fillMaxWidth()
             .padding(vertical = rDP(4.dp))
     ) {
-        // Content with smooth transition
+        // Main message content
         Crossfade(isStreaming, label = "content-transition") { streaming ->
-            when (streaming) {
-                true -> {
-                    Text(
-                        text = message.text,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                false -> {
-                    MarkdownText(
-                        text = message.text,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+            if (streaming) {
+                Text(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                MarkdownText(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
 
-        Spacer(Modifier.height(rDP(10.dp)))
+        Spacer(Modifier.height(rDP(8.dp)))
 
-        // Action buttons
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Copy button
-            Icon(
-                painter = painterResource(R.drawable.copy),
-                contentDescription = "Copy text",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable {
-                        scope.launch {
-                            clipboardManager.setClipEntry(
-                                ClipEntry(ClipData.newPlainText("message", message.text))
-                            )
-                        }
-                        Toast.makeText(
-                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                        ).show()
-                    })
-
-            // ✅ TTS button - Fixed implementation
-            Box(contentAlignment = Alignment.Center) {
-                // Show progress indicator if playing
-                if (isPlayingAudio && audioProgress > 0f) {
-                    CircularProgressIndicator(
-                        progress = { audioProgress },
-                        modifier = Modifier.size(actionIconSize + 4.dp),
-                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        strokeWidth = 2.dp,
-                        trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
-                        strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
-                    )
-                }
-
-                Icon(
-                    painter = painterResource(
-                        if (isPlayingAudio) R.drawable.stop else R.drawable.speaker
-                    ),
-                    contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
-                    tint = MaterialTheme.colorScheme.primary.copy(
-                        alpha = if (isInitialized) 0.7f else 0.3f
-                    ),
-                    modifier = Modifier
-                        .size(actionIconSize)
-                        .clickable(enabled = isInitialized) {
-                            if (isPlayingAudio) {
-                                ttsViewModel.stopPlayback()
-                            } else {
-                                scope.launch(Dispatchers.IO) {
-                                    val normalizer = ttsViewModel.normalizeText(message.text)
-                                    ttsViewModel.generateAndPlayAudio(normalizer)
-                                }
-                            }
-                        })
-            }
-
-            // Regenerate button
-            Icon(
-                painter = painterResource(R.drawable.regen),
-                contentDescription = "Regenerate response",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable { showRegenerateDialog = true })
-
-            // Share button
-            Icon(
-                imageVector = Icons.Rounded.Share,
-                contentDescription = "Share",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable {
-                        val shareIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
-                            putExtra(Intent.EXTRA_TEXT, message.text)
-                            type = "text/plain"
-                        }
-                        context.startActivity(
-                            Intent.createChooser(shareIntent, "Share message")
-                        )
-                    })
-
-            // Delete button
-            Icon(
-                Icons.Rounded.DeleteOutline,
-                contentDescription = "Delete",
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable { viewModel.deleteMessage(message.id) })
+        // Expandable RAG section
+        message.ragResult?.let {
+            RagResultCard(rag = it)
         }
+
+        Spacer(Modifier.height(rDP(8.dp)))
+
+        // Action buttons row (copy, TTS, regen, share, delete)
+        ChatMessageActions(
+            message = message,
+            scope = scope,
+            context = context,
+            ttsViewModel = ttsViewModel,
+            isPlayingAudio = isPlayingAudio,
+            audioProgress = audioProgress,
+            isInitialized = isInitialized,
+            onRegenerateClick = { showRegenerateDialog = true },
+            onDeleteClick = { viewModel.deleteMessage(message.id) })
     }
 
     // Regenerate dialog
     if (showRegenerateDialog) {
         RegenerateModelPickerDialog(
             viewModel = viewModel, messageId = message.id
-        ) {
-            showRegenerateDialog = false
+        ) { showRegenerateDialog = false }
+    }
+}
+
+@SuppressLint("DefaultLocale")
+@Composable
+fun RagResultCard(rag: RagResult) {
+    var ragExpanded by remember { mutableStateOf(false) }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        tonalElevation = 4.dp,
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+
+            // Header Row
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { ragExpanded = !ragExpanded }
+            ) {
+                Text(
+                    text = "RAG Result (${rag.docs.size} docs)",
+                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Icon(
+                    imageVector = if (ragExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = "Expand RAG",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            AnimatedVisibility(visible = ragExpanded) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    // Stats
+                    val stats = rag.stats
+                    Text(
+                        text = "Stats → Docs: ${stats.tokenCount}, Time: ${stats.totalTime}ms, TPS: ${String.format("%.2f", stats.tokensPerSecond)}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                            .padding(8.dp)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Docs List
+                    rag.docs.forEach { doc ->
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                .padding(8.dp)
+                                .padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = doc.text.take(120) + if (doc.text.length > 120) "..." else "",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Similarity: ${String.format("%.3f", doc.similarity)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
+
+
 
 @Composable
 private fun ThinkingChatUI(message: Message) {
@@ -465,6 +467,104 @@ private fun ThinkingChatUI(message: Message) {
     }
 }
 
+@Composable
+private fun ChatMessageActions(
+    message: Message,
+    scope: CoroutineScope,
+    context: Context,
+    ttsViewModel: TTSViewModel,
+    isPlayingAudio: Boolean,
+    audioProgress: Float,
+    isInitialized: Boolean,
+    onRegenerateClick: () -> Unit,
+    onDeleteClick: () -> Unit,
+) {
+    val actionIconSize = rDP(14.dp)
+
+    val clipboardManager = LocalClipboard.current
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // Copy button
+        Icon(
+            painter = painterResource(R.drawable.copy),
+            contentDescription = "Copy text",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .size(actionIconSize)
+                .clickable {
+                    scope.launch {
+                        clipboardManager.setClipEntry(
+                            ClipEntry(ClipData.newPlainText("message", message.text))
+                        )
+                    }
+                    Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                })
+
+        // TTS button
+        Box(contentAlignment = Alignment.Center) {
+            if (isPlayingAudio && audioProgress > 0f) {
+                CircularProgressIndicator(
+                    progress = { audioProgress },
+                    modifier = Modifier.size(actionIconSize + 4.dp),
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                    strokeWidth = 2.dp,
+                    trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor
+                )
+            }
+
+            Icon(
+                painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
+                contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = if (isInitialized) 0.7f else 0.3f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable(enabled = isInitialized) {
+                        if (isPlayingAudio) ttsViewModel.stopPlayback()
+                        else scope.launch(Dispatchers.IO) {
+                            val normalized = ttsViewModel.normalizeText(message.text)
+                            ttsViewModel.generateAndPlayAudio(normalized)
+                        }
+                    })
+        }
+
+        // Regenerate button
+        Icon(
+            painter = painterResource(R.drawable.regen),
+            contentDescription = "Regenerate response",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .size(actionIconSize)
+                .clickable { onRegenerateClick() })
+
+        // Share button
+        Icon(
+            imageVector = Icons.Rounded.Share,
+            contentDescription = "Share",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .size(actionIconSize)
+                .clickable {
+                    val shareIntent = Intent().apply {
+                        action = Intent.ACTION_SEND
+                        putExtra(Intent.EXTRA_TEXT, message.text)
+                        type = "text/plain"
+                    }
+                    context.startActivity(Intent.createChooser(shareIntent, "Share message"))
+                })
+
+        // Delete button
+        Icon(
+            Icons.Rounded.DeleteOutline,
+            contentDescription = "Delete",
+            tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+            modifier = Modifier
+                .size(actionIconSize)
+                .clickable { onDeleteClick() })
+    }
+}
 
 @Composable
 private fun ToolChatUI(

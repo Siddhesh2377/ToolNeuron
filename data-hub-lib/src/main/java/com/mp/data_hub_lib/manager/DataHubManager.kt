@@ -1,5 +1,6 @@
 package com.mp.data_hub_lib.manager
 
+import android.adservices.ondevicepersonalization.ModelManager
 import android.annotation.SuppressLint
 import android.content.Context
 import android.util.Log
@@ -277,6 +278,7 @@ object DataHubManager {
         }
     }
 
+
     /**
      * Search documents using embedding
      */
@@ -344,9 +346,13 @@ object DataHubManager {
             return
         }
 
-        scope.launch {
+        scope.launch(Dispatchers.IO) {
             ragMutex.withLock {
                 try {
+
+                    Log.w("RAG", "RAG not ready, reinitializing embedding")
+                    reinitializeEmbeddingModel()
+
                     _ragStatus.value = RAGStatus.SEARCHING
                     Log.i(TAG, "RAG started with query: '$query'")
                     val startTime = System.currentTimeMillis()
@@ -462,15 +468,6 @@ object DataHubManager {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-
-    // Legacy compatibility methods (deprecated but kept for backward compatibility)
-    @Deprecated(
-        "Use embeddingManager directly",
-        ReplaceWith("embeddingManager.getEmbedding(query)")
-    )
-    suspend fun getQueryEmbedding(query: String, modelPath: String): FloatArray? {
-        return generateQueryEmbedding(query).getOrNull()
     }
 
     @Deprecated(

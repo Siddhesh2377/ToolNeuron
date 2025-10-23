@@ -469,7 +469,7 @@ private fun BottomBar(
         else -> true
     }
 
-    ChatInputBar(
+    ChatInputWithDataHubDialog(
         value = input,
         onValueChange = { if (inputEnabled) input = it },
         tools = tools,

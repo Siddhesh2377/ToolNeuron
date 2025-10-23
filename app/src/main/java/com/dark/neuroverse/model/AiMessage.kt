@@ -1,5 +1,6 @@
 package com.dark.neuroverse.model
 
+import com.mp.data_hub_lib.model.RagResult
 import kotlinx.serialization.Serializable
 import java.util.UUID
 
@@ -36,6 +37,7 @@ data class Message(
     val text: String,
     val thought: String? = null,
     val tool: RunningTool? = null,
+    val ragResult: RagResult? = null,
     val codeCanvas: List<CodeCanvas>? = null,
 )
 
