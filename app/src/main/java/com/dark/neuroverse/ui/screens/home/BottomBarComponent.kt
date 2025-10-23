@@ -113,7 +113,7 @@ fun ChatInputBar(
                         if (inputEnabled) {
                             showToolsList = !showToolsList
                         }
-                    }, enabled = inputEnabled, colors = ButtonDefaults.buttonColors(
+                    }, enabled = ModelManager.currentModel.value.isToolCalling, colors = ButtonDefaults.buttonColors(
                         containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                         contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
                     ), shape = RoundedCornerShape(rDP(8.dp))
@@ -157,7 +157,10 @@ fun ChatInputBar(
                         contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
                     )
                 ) {
-                    Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
+                    Icon(
+                        painterResource(R.drawable.database_zap),
+                        contentDescription = "Toggle RAG"
+                    )
                 }
             }
 

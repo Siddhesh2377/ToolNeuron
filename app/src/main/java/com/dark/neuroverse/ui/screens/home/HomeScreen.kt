@@ -393,6 +393,7 @@ fun TtsStatusIndicator(ttsViewModel: TTSViewModel) {
 private fun BottomBar(
     viewModel: ChatScreenViewModel, uiState: ChatUiState
 ) {
+    ToolCallingManager.refreshToolList()
     var input by remember { mutableStateOf("") }
     val tools by ToolCallingManager.toolList.collectAsStateWithLifecycle()
     val selectedTools by ToolCallingManager.selectedTool.collectAsStateWithLifecycle()

@@ -13,6 +13,7 @@
             <option value="$PROJECT_DIR$/ai-module" />
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/data-hub-lib" />
+            <option value="$PROJECT_DIR$/plugin-api" />
             <option value="$PROJECT_DIR$/plugins" />
           </set>
         </option>

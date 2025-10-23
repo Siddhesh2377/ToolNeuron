@@ -18,12 +18,6 @@ class PluginManifestWorker {
         this.root = JSONObject(manifestCode)
     }
 
-    constructor(manifestCode: JSONObject) {
-        requireNotNull(manifestCode) { "Manifest JSONObject cannot be null" }
-        this.root = manifestCode
-        this.jsonCode = manifestCode.toString()
-    }
-
     fun getMainClass(): String = root.getString("mainClass")
 
     fun getPluginName(): String = root.getString("name")

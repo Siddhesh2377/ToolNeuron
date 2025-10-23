@@ -2,7 +2,15 @@ package com.dark.neuroverse.ui.screens.home
 
 import android.util.Log
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -10,10 +18,24 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.SmartToy
-import androidx.compose.material3.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MaterialTheme.colorScheme
+import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -42,54 +64,55 @@ fun TopBar(
 
     CenterAlignedTopAppBar(
         title = {
-            if (messages.isEmpty()) {
-                ModelSelection(viewModel, false)
-            } else {
-                Row(
-                    Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = title,
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.primary
-                    )
+        if (messages.isEmpty()) {
+            ModelSelection(viewModel, false)
+        } else {
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = title,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = colorScheme.primary
+                )
 
-                    ModelSelection(viewModel, true)
-                }
+                ModelSelection(viewModel, true)
             }
-        }, navigationIcon = {
-            IconButton(
-                onClick = onMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
-            }
-        }, actions = {
-            IconButton(
-                onClick = onLeftMenu,
-                shape = RoundedCornerShape(rDP(8.dp)),
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.secondary
-                )
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
-                )
-            }
-        }, colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        }
+    }, navigationIcon = {
+        IconButton(
+            onClick = onMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = colorScheme.secondary.copy(0.1f),
+                contentColor = colorScheme.secondary
+            )
+        ) {
+            Icon(painter = painterResource(R.drawable.menu), contentDescription = "Menu")
+        }
+    }, actions = {
+        IconButton(
+            onClick = onLeftMenu,
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = colorScheme.secondary.copy(0.1f),
+                contentColor = colorScheme.secondary
+            )
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.settings), contentDescription = "New Chat"
+            )
+        }
+    }, colors = topAppBarColors(
+        containerColor = colorScheme.background
+    )
     )
 }
+
 @Composable
 fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
     var showDialog by remember { mutableStateOf(false) }
@@ -123,8 +146,8 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             Button(
                 onClick = { if (!isGeneratingTitle) showDialog = true },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.secondary.copy(0.1f),
-                    contentColor = MaterialTheme.colorScheme.secondary
+                    containerColor = colorScheme.secondary.copy(0.1f),
+                    contentColor = colorScheme.secondary
                 ),
                 shape = RoundedCornerShape(rDP(8.dp)),
             ) {
@@ -144,7 +167,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
             Dialog(onDismissRequest = { showDialog = false }) {
                 Card(
                     shape = RoundedCornerShape(rDP(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+                    colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
                 ) {
                     Column(
                         modifier = Modifier
@@ -181,18 +204,29 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
                                         Column {
+
                                             Text(
                                                 text = model.modelName,
                                                 style = MaterialTheme.typography.bodyLarge.copy(
                                                     fontSize = rSp(16.sp)
                                                 )
                                             )
-                                            Text(
-                                                text = if (isSelected) "Currently Loaded" else "Tap to Load",
-                                                style = MaterialTheme.typography.bodySmall.copy(
-                                                    color = if (isSelected) Color.Unspecified else Color.Gray
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text(
+                                                    text = if (isSelected) "Currently Loaded" else "Tap to Load",
+                                                    style = MaterialTheme.typography.bodySmall.copy(
+                                                        color = if (isSelected) Color.Unspecified else Color.Gray
+                                                    )
                                                 )
-                                            )
+                                                if (model.isToolCalling) {
+                                                    Icon(
+                                                        painterResource(R.drawable.hammer),
+                                                        contentDescription = "Loaded",
+                                                        modifier = Modifier.size(rDP(12.dp))
+                                                    )
+                                                }
+                                            }
+
                                         }
                                         Spacer(Modifier.weight(1f))
                                         if (isSelected) {

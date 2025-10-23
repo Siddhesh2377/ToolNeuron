@@ -203,6 +203,8 @@ object ChatManager {
                 json.getJSONArray("conversations").toString()
             )
 
+            Log.d(TAG, "Chat $id loaded successfully :: $conversations")
+
             _currentChatTitle.value = title
             _messages.value = conversations
             _currentChatID.value = id
@@ -317,13 +319,15 @@ object ChatManager {
      * Updates tool preview for a message.
      */
     fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
+
         _messages.update { messages ->
             messages.map { message ->
                 if (message.id == messageId) {
+                    val pretty = JSONObject(toolOutput.output).toString(2)
                     message.copy(
                         tool = RunningTool(
                             toolName = toolOutput.toolName,
-                            toolPreview = toolOutput.toString(),
+                            toolPreview = pretty,
                             toolOutput = toolOutput
                         )
                     )

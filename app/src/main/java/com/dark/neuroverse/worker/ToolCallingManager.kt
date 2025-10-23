@@ -9,10 +9,13 @@ import com.dark.neuroverse.util.writeToolOutputJson
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.Tools
 import com.dark.plugins.worker.ToolRunner
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -24,20 +27,36 @@ import org.json.JSONObject
 object ToolCallingManager {
     private const val TAG = "ToolCallingManager"
 
-    // Tool state
-    private val _toolList = MutableStateFlow<List<Pair<String, List<Tools>>>>(emptyList())
-    val toolList: StateFlow<List<Pair<String, List<Tools>>>> = _toolList.asStateFlow()
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
 
-    private val _selectedTool = MutableStateFlow<Pair<String, Tools>>("" to Tools())
-    val selectedTool: StateFlow<Pair<String, Tools>> = _selectedTool.asStateFlow()
+    // Directly observe PluginManager's tools list (reactive)
+    val toolList: StateFlow<List<Pair<String, List<Tools>>>> =
+        PluginManager.toolsList
+
+    // Use toolList.value for synchronous access
+    private val _selectedTool = kotlinx.coroutines.flow.MutableStateFlow("" to Tools())
+    val selectedTool: StateFlow<Pair<String, Tools>> = _selectedTool
 
     /**
      * Initializes the tool list from PluginManager.
      * Should be called during ViewModel initialization.
      */
     fun initViewModel() {
-        _toolList.value = PluginManager.toolsList.value
-        Log.d(TAG, "Initialized with ${_toolList.value.size} tool categories")
+        // Start observing the flow
+        scope.launch {
+            toolList.collect { tools ->
+                Log.d(TAG, "Tools updated: ${tools.size} plugin(s), ${tools.sumOf { it.second.size }} tool(s)")
+                tools.forEach { (pluginName, pluginTools) ->
+                    pluginTools.forEach { tool ->
+                        Log.d(TAG, "Tool: ${tool.toolName}, description: ${tool.description}")
+                    }
+                }
+            }
+        }
+
+        // Log initial state
+        val current = toolList.value
+        Log.d(TAG, "Initialized with ${current.size} tool categories")
     }
 
     /**
@@ -68,16 +87,12 @@ object ToolCallingManager {
     /**
      * Checks if a tool is currently selected.
      */
-    fun isToolSelected(): Boolean {
-        return _selectedTool.value.first.isNotEmpty()
-    }
+    fun isToolSelected(): Boolean = _selectedTool.value.first.isNotEmpty()
 
     /**
      * Gets the currently selected tool.
      */
-    fun getSelectedTool(): Tools {
-        return _selectedTool.value.second
-    }
+    fun getSelectedTool(): Tools = _selectedTool.value.second
 
     /**
      * Builds JSON tool definition for the model.
@@ -97,18 +112,21 @@ object ToolCallingManager {
             if (value != null) required.add(key)
         }
 
-        val parameters = JSONObject().put("type", "object").put("properties", properties)
+        val parameters = JSONObject()
+            .put("type", "object")
+            .put("properties", properties)
             .put("required", JSONArray(required))
 
-        val function = JSONObject().put("name", tool.toolName).put("description", tool.description)
+        val function = JSONObject()
+            .put("name", tool.toolName)
+            .put("description", tool.description)
             .put("parameters", parameters)
 
-        val toolDefinition = JSONArray().put(
-            JSONObject().put("type", "function").put("function", function)
+        return JSONArray().put(
+            JSONObject()
+                .put("type", "function")
+                .put("function", function)
         )
-
-        Log.d(TAG, "Built tool definition: $toolDefinition")
-        return toolDefinition
     }
 
     /**
@@ -116,7 +134,10 @@ object ToolCallingManager {
      * Handles tool execution, error handling, and result processing.
      */
     suspend fun executeTool(
-        appContext: Context, toolName: String, argsJson: String, onExecute: (JSONObject) -> Unit
+        appContext: Context,
+        toolName: String,
+        argsJson: String,
+        onExecute: (JSONObject) -> Unit
     ) = withContext(Dispatchers.IO) {
         try {
             // Repair potentially malformed tool call
@@ -134,9 +155,7 @@ object ToolCallingManager {
             val messageId = TextGenerationWorker.currentMsgId.value
 
             // Run plugin
-            val pluginResult = PluginManager.runPlugin(
-                appContext, _selectedTool.value.first, repairedToolCall.toString()
-            )
+            val pluginResult = PluginManager.runPlugin(appContext, _selectedTool.value.first)
 
             // Execute tool and handle result
             ToolRunner.run(pluginResult, appContext, repairedToolCall) { result ->
@@ -151,7 +170,10 @@ object ToolCallingManager {
                         Log.e(TAG, "Tool execution error: $errorMsg")
 
                         ChatManager.updateStreamingMessage(
-                            messageId = messageId, text = "", toolError = errorMsg, isFinal = true
+                            messageId = messageId,
+                            text = "",
+                            toolError = errorMsg,
+                            isFinal = true
                         )
 
                         UIStateManager.setStateIdle()
@@ -162,7 +184,6 @@ object ToolCallingManager {
                     // Success path
                     Log.d(TAG, "Tool executed successfully")
                     val toolOutput = writeToolOutputJson(result.toString()) ?: ToolOutput()
-
                     ChatManager.updateToolPreview(messageId, toolOutput)
                     UIStateManager.setStateIdle()
 
@@ -226,9 +247,7 @@ object ToolCallingManager {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error repairing tool call", e)
-            JSONObject().apply {
-                put("err", "Tool call parsing failed: ${e.message}")
-            }
+            JSONObject().put("err", "Tool call parsing failed: ${e.message}")
         }
     }
 
@@ -237,14 +256,17 @@ object ToolCallingManager {
      * Useful after dynamic plugin loading/unloading.
      */
     fun refreshToolList() {
-        _toolList.value = PluginManager.toolsList.value
-        Log.d(TAG, "Tool list refreshed: ${_toolList.value.size} categories")
+        // toolList is already reactive, just log current state
+        val current = toolList.value
+        Log.d(TAG, "Tool list: ${current.size} categories")
     }
 
     /**
      * Gets tool by name for validation or lookup.
      */
     fun getToolByName(toolName: String): Tools? {
-        return _toolList.value.flatMap { it.second }.firstOrNull { it.toolName == toolName }
+        return toolList.value
+            .flatMap { it.second }
+            .firstOrNull { it.toolName == toolName }
     }
 }

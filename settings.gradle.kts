@@ -11,7 +11,7 @@ pluginManagement {
         gradlePluginPortal()
         maven(url = "https://jitpack.io")
         flatDir {
-            dirs("libs")
+            dir("${rootDir.path}/libs")
         }
 
     }
@@ -34,3 +34,4 @@ include(":app")
 include(":ai-module")
 include(":plugins")
 include(":data-hub-lib")
+include(":plugin-api")

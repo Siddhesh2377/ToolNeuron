@@ -32,8 +32,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Star
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,7 +51,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,11 +71,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.activity.MainActivity
 import com.dark.neuroverse.ui.theme.SkyBlue
+import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.PluginStoreScreenViewModel
-import com.dark.plugins.model.PluginLocalDB
+import com.dark.plugins.model.InstalledPlugin
 import com.dark.plugins.model.PluginManifest
 import com.dark.plugins.model.Tools
-import com.dark.plugins.ui.theme.rDP
 import com.dark.plugins.worker.PluginManifestWorker
 import com.google.gson.GsonBuilder
 import org.json.JSONObject
@@ -91,20 +88,11 @@ fun PluginHubScreen(
     val context = LocalContext.current
 
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle(emptyList())
-    val running by viewModel.runningPlugins.collectAsStateWithLifecycle(emptyList())
-    val current by viewModel.currentPlugin.collectAsStateWithLifecycle(null)
-
-    val runningNames by remember(running) {
-        derivedStateOf { running.mapNotNull { it.api?.getPluginInfo()?.name }.toSet() }
-    }
-    val currentName by remember(current) {
-        derivedStateOf { current?.api?.getPluginInfo()?.name }
-    }
 
     val addLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(), onResult = { uri ->
             if (uri != null) {
-                viewModel.addPluginFromUri(context, uri)
+                viewModel.installFromUri(context, uri)
                 Toast.makeText(context, "Installing plugin…", Toast.LENGTH_SHORT).show()
             }
         })
@@ -112,29 +100,29 @@ fun PluginHubScreen(
     Scaffold(topBar = {
         TopAppBar(
             title = {
-                Text(
-                    "Plugin Store",
-                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold)
+            Text(
+                "Plugin Store",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold)
+            )
+        }, actions = {
+            Button(
+                onClick = {
+                    val intent = Intent(context, MainActivity::class.java).apply {
+                        putExtra("nav", true)
+                    }
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.padding(end = rDP(12.dp)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
                 )
-            }, actions = {
-                Button(
-                    onClick = {
-                        val intent = Intent(context, MainActivity::class.java).apply {
-                            putExtra("nav", true)
-                        }
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.padding(end = rDP(12.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(Icons.Outlined.Home, "Home")
-                    Spacer(Modifier.width(rDP(3.dp)))
-                    Text("Home")
-                }
-            }, scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+            ) {
+                Icon(Icons.Outlined.Home, "Home")
+                Spacer(Modifier.width(rDP(3.dp)))
+                Text("Home")
+            }
+        }, scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
         )
     }, floatingActionButton = {
         FloatingActionButton(
@@ -166,17 +154,12 @@ fun PluginHubScreen(
                     verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
                 ) {
                     items(installed, key = { it.pluginPath }) { plugin ->
-                        val isRunning = runningNames.contains(plugin.pluginName)
-                        val isCurrent = currentName == plugin.pluginName
+
                         PluginCard(
-                            plugin = plugin,
-                            isRunning = isRunning,
-                            isCurrent = isCurrent,
-                            onDelete = {
-                                val ok = viewModel.deletePlugin(plugin.pluginName)
-                                val msg =
-                                    if (ok) "Deleted ${plugin.pluginName}" else "Failed to delete ${plugin.pluginName}"
-                                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                            plugin = plugin, onDelete = {
+                                viewModel.uninstallPlugin(plugin.pluginName)
+                                Toast.makeText(context, "Plugin uninstalled..!", Toast.LENGTH_SHORT)
+                                    .show()
                             })
                     }
                     item { Spacer(Modifier.height(rDP(56.dp))) }
@@ -189,7 +172,7 @@ fun PluginHubScreen(
 
 @Composable
 private fun PluginCard(
-    plugin: PluginLocalDB, isRunning: Boolean, isCurrent: Boolean, onDelete: () -> Unit
+    plugin: InstalledPlugin, onDelete: () -> Unit
 ) {
     val colors = MaterialTheme.colorScheme
 
@@ -230,12 +213,6 @@ private fun PluginCard(
                         }
                     }
                 }
-                if (isCurrent) {
-                    AssistChip(
-                        onClick = {},
-                        label = { Text("Current") },
-                        leadingIcon = { Icon(Icons.Outlined.Star, contentDescription = null) })
-                }
                 IconButton(onClick = onDelete) {
                     Icon(
                         Icons.Default.Delete, contentDescription = "Delete", tint = colors.error
@@ -247,10 +224,6 @@ private fun PluginCard(
 
             // Primary info (structured)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                InfoLine(
-                    "Status",
-                    (if (isRunning) "Running" else "Stopped") + (if (isCurrent) " · Current" else "")
-                )
                 InfoLine("Description", manifest?.description?.takeIf { it.isNotBlank() } ?: "—")
                 InfoLine("Main class", manifest?.mainClass?.takeIf { it.isNotBlank() } ?: "—")
             }
@@ -384,8 +357,7 @@ private fun EmptyState(onSeed: () -> Unit) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "No plugins yet",
-                style = MaterialTheme.typography.titleLarge.copy()
+                "No plugins yet", style = MaterialTheme.typography.titleLarge.copy()
             )
             Spacer(Modifier.height(8.dp))
             Text(
@@ -406,7 +378,7 @@ private fun PluginManifest.authorText(): String {
     }.getOrDefault("")
 }
 
-private fun PluginLocalDB.manifestJsonOrNull(): String? {
+private fun InstalledPlugin.manifestJsonOrNull(): String? {
     fun read(name: String): String? = runCatching {
         val f = this.javaClass.getDeclaredField(name)
         f.isAccessible = true

@@ -29,8 +29,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowCircleDown
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Build
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.twotone.CheckCircle
 import androidx.compose.material.icons.twotone.Cloud
@@ -565,17 +567,29 @@ private fun ModelPickerDialog(
                             ) {
                                 Text(
                                     modelId.name,
-                                    modifier = Modifier.weight(1f),
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
                                 )
+
+                                // Add small tool icon if model supports tool calling
+                                if (modelId.supportsTools) {
+                                    Icon(
+                                        painterResource(R.drawable.hammer), // or any tool icon you like
+                                        contentDescription = "Supports tool calling",
+                                        tint = MaterialTheme.colorScheme.secondary,
+                                        modifier = Modifier.size(rDP(16.dp))
+                                    )
+                                }
                                 Icon(
                                     Icons.Filled.Add,
                                     contentDescription = "Add",
-                                    tint = MaterialTheme.colorScheme.primary
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(rDP(16.dp))
                                 )
                             }
+
                         }
                     }
                 }

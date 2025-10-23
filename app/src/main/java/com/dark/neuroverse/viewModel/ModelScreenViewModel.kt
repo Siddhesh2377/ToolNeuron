@@ -161,12 +161,17 @@ class ModelScreenViewModel : ViewModel() {
                 try {
                     val m = data.getJSONObject(i)
                     val default = m.optJSONObject("default_parameters") ?: JSONObject()
+                    val supportsTools = m.optJSONArray("supported_parameters")?.let { arr ->
+                        (0 until arr.length()).any { idx -> arr.getString(idx) == "tools" }
+                    } ?: false
+
                     OpenRouterModel(
                         id = m.getString("id"),
                         name = m.getString("name"),
                         ctxSize = m.getInt("context_length"),
                         temperature = default.optDouble("temperature", 0.7).toFloat(),
-                        topP = default.optDouble("top_p", 0.9).toFloat()
+                        topP = default.optDouble("top_p", 0.9).toFloat(),
+                        supportsTools = supportsTools
                     )
                 } catch (e: Exception) {
                     Log.w("OpenRouter", "Skipping bad entry $i – ${e.message}")

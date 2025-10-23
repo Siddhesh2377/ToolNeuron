@@ -33,7 +33,7 @@ fun writeToolOutputJson(json: String): ToolOutput? {
             identifyTheToolType(root.getString("type")),
             root.getString("output")
         )
-    } catch (err: Throwable) {
+    } catch (_: Throwable) {
         null
     }
 }

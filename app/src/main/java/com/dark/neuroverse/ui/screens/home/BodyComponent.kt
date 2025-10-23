@@ -48,7 +48,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -93,6 +92,7 @@ import com.dark.plugins.manager.PluginManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import androidx.compose.runtime.collectAsState
 
 @Composable
 fun ChatBubble(
@@ -451,8 +451,11 @@ private fun ToolChatUI(
             when (message.tool?.toolOutput == null) {
                 true -> {
                     Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                        PluginManager.currentPlugin.collectAsState().value?.api?.ToolPreviewContent(
-                            out.toString()
+                        Text(
+                            text = "Err",
+                            fontSize = rSp(14.sp),
+                            color = Color(0xFF64748B),
+                            modifier = Modifier.padding(rDP(8.dp))
                         )
                     }
                 }
@@ -582,8 +585,7 @@ fun ToolOutputToggle(toolOutput: ToolOutput, out: JSONObject) {
 fun ToolOutputContent(
     modifier: Modifier = Modifier, toolOutput: ToolOutput, out: JSONObject
 ) {
-    val context = LocalContext.current
-    val runningPlugin = PluginManager.runPlugin(context, toolOutput.toolName, toolOutput.output)
+    val runningPlugin = PluginManager.activePlugin.collectAsState().value
 
     if (out.has("err")) {
         Card(
@@ -603,7 +605,7 @@ fun ToolOutputContent(
         }
     } else {
         Card(modifier = modifier) {
-            runningPlugin.api?.ToolPreviewContent(toolOutput.output)
+            runningPlugin?.api?.ToolPreviewContent(toolOutput.output)
         }
     }
 }

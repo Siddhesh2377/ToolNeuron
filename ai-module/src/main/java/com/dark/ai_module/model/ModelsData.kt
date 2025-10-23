@@ -37,6 +37,7 @@ data class OpenRouterModel(
     val ctxSize: Int,
     val temperature: Float,
     val topP: Float,
+    val supportsTools: Boolean = false
 )
 
 fun OpenRouterModel.toModelData(): ModelData {
@@ -48,6 +49,7 @@ fun OpenRouterModel.toModelData(): ModelData {
         ctxSize = ctxSize,
         temp = temperature,
         topP = topP,
+        isToolCalling = supportsTools
     )
 }
 

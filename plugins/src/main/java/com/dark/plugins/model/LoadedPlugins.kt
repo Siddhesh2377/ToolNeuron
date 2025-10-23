@@ -1,7 +1,7 @@
 package com.dark.plugins.model
 
 import androidx.compose.runtime.Composable
-import com.dark.plugins.api.PluginApi
+import com.mp.plugin_api.api.PluginApi
 import kotlinx.coroutines.Job
 
 data class LoadedPlugin(

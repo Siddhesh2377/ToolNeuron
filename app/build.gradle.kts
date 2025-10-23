@@ -88,6 +88,7 @@ android {
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
         //LIBS
+        implementation(":plugin-api-release@aar")
         implementation(":ai-core-release@aar")
 
         //PROJECTS
@@ -106,10 +107,6 @@ android {
         implementation(libs.androidx.lifecycle.viewmodel.compose)
 
         //CORE-UI-LIBS
-        implementation(platform("io.github.rosemoe:editor-bom:0.23.7"))
-        implementation("io.github.rosemoe:editor")
-        implementation("io.github.rosemoe:editor-lsp")
-        implementation("io.github.rosemoe:language-java")
         implementation(libs.accompanist.insets)
         implementation(libs.accompanist.insets.ui)
         implementation(libs.androidx.navigation.compose)
