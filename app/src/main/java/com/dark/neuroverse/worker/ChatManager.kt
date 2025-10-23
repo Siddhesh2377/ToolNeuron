@@ -322,8 +322,10 @@ object ChatManager {
 
         _messages.update { messages ->
             messages.map { message ->
+                Log.d(TAG, "List Of Available Messages: ${message.id}")
                 if (message.id == messageId) {
                     val pretty = JSONObject(toolOutput.output).toString(2)
+                    Log.d(TAG, "Tool preview updated: $pretty")
                     message.copy(
                         tool = RunningTool(
                             toolName = toolOutput.toolName,
@@ -332,11 +334,12 @@ object ChatManager {
                         )
                     )
                 } else {
+                    Log.e(TAG, "Tool preview not updated for message: $messageId")
                     message
                 }
             }
         }
-        Log.d(TAG, "Tool preview updated for message: $messageId")
+        Log.d(TAG, "Tool message: $_messages updated")
     }
 
     /**

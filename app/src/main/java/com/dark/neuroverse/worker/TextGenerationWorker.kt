@@ -71,7 +71,8 @@ object TextGenerationWorker {
         enableTools: Boolean,
         messageId: String,
         isRegeneration: Boolean = false,
-        existingMessages: List<Message>
+        existingMessages: List<Message>,
+        onToolExecution: (String) -> Unit = {}
     ) {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
@@ -138,7 +139,7 @@ object TextGenerationWorker {
                     }
                 },
                 onToolCalled = { toolName, argsJson ->
-                    handleToolExecution(appContext, toolName, argsJson, messageId)
+                    handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
                 })
 
             // Process final output
@@ -181,7 +182,7 @@ object TextGenerationWorker {
      * Handles tool execution during streaming.
      */
     private fun handleToolExecution(
-        appContext: Context, toolName: String, argsJson: String, messageId: String
+        appContext: Context, toolName: String, argsJson: String, messageId: String, onToolExecution: (String) -> Unit
     ) {
         workerScope.launch {
             try {
@@ -202,9 +203,10 @@ object TextGenerationWorker {
                                     toolError = errorMsg,
                                     isFinal = true
                                 )
+                                onToolExecution("error")
                             } else {
                                 Log.d(TAG, "Tool executed successfully")
-                                // Tool preview already updated in ToolCallingManager
+                                onToolExecution("success")
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error processing tool result", e)
@@ -214,6 +216,7 @@ object TextGenerationWorker {
                                 toolError = e.message ?: "Unknown error",
                                 isFinal = true
                             )
+                            onToolExecution("error")
                         } finally {
                             UIStateManager.setStateIdle()
                         }
