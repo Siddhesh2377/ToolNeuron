@@ -471,7 +471,7 @@ private fun BottomBar(
 
     ChatInputWithDataHubDialog(
         value = input,
-        onValueChange = { if (inputEnabled) input = it },
+        onValueChange = { input = it },
         tools = tools,
         isGenerating = isGenerating,
         inputEnabled = inputEnabled,

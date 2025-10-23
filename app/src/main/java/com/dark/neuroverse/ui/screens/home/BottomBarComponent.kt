@@ -1,7 +1,7 @@
 package com.dark.neuroverse.ui.screens.home
 
+
 import android.annotation.SuppressLint
-import android.graphics.drawable.Icon
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -27,18 +26,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ModalBottomSheetLayout
-import androidx.compose.material.ModalBottomSheetValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Web
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Stop
-import androidx.compose.material.rememberModalBottomSheetState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -46,12 +44,16 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -61,6 +63,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.CyberViolet
@@ -68,15 +71,16 @@ import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
+import com.dark.neuroverse.viewModel.stt.STTEvent
+import com.dark.neuroverse.viewModel.stt.STTViewModel
 import com.dark.plugins.model.Tools
-
-
-import androidx.compose.material3.*
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 import com.mp.data_hub_lib.manager.DataHubManager
-import com.mp.data_hub_lib.model.DataSetModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -90,11 +94,22 @@ fun ChatInputWithDataHubDialog(
     onSend: () -> Unit,
     onToolRemoved: (Tools) -> Unit,
     isGenerating: Boolean,
-    inputEnabled: Boolean
+    inputEnabled: Boolean,
+    sttViewModel: STTViewModel = viewModel()
 ) {
     var showDialog by remember { mutableStateOf(false) }
     val currentDataset by DataHubManager.currentDataSet.collectAsState()
     val datasets by DataHubManager.installedDataSets.collectAsState()
+
+    LaunchedEffect(Unit) {
+        val modelDir = ModelManager.getSTTModels() ?: return@LaunchedEffect
+
+        CoroutineScope(Dispatchers.IO).launch {
+            sttViewModel.initialize(
+                modelDir = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny",
+            )
+        }
+    }
 
     ChatInputBar(
         value = value,
@@ -109,7 +124,8 @@ fun ChatInputWithDataHubDialog(
         onSend = onSend,
         onToolRemoved = onToolRemoved,
         isGenerating = isGenerating,
-        inputEnabled = inputEnabled
+        inputEnabled = inputEnabled,
+        sttViewModel = sttViewModel
     )
 
     if (showDialog) {
@@ -129,25 +145,32 @@ fun ChatInputWithDataHubDialog(
                                     .fillMaxWidth()
                                     .padding(vertical = 4.dp)
                                     .clickable {
-                                        val isAlreadySelected = currentDataset?.modelName == dataset.modelName
+                                        val isAlreadySelected =
+                                            currentDataset?.modelName == dataset.modelName
                                         if (isAlreadySelected) {
                                             DataHubManager.clearCurrentDataSet() // add this function
                                         } else {
                                             DataHubManager.setCurrentDataSet(dataset) { success ->
-                                                if (!success) Log.e("DataHub", "Failed to set dataset")
+                                                if (!success) Log.e(
+                                                    "DataHub", "Failed to set dataset"
+                                                )
                                             }
                                         }
-                                    },
-                                colors = CardDefaults.cardColors(
+                                    }, colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.background
                                 )
                             ) {
                                 Row(
-                                    modifier = Modifier.fillMaxWidth().padding(12.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
                                     verticalAlignment = Alignment.CenterVertically,
                                 ) {
                                     Column {
-                                        Text(dataset.modelName, style = MaterialTheme.typography.bodyLarge)
+                                        Text(
+                                            dataset.modelName,
+                                            style = MaterialTheme.typography.bodyLarge
+                                        )
                                         if (dataset.modelDescription.isNotBlank()) {
                                             Text(
                                                 dataset.modelDescription,
@@ -178,15 +201,13 @@ fun ChatInputWithDataHubDialog(
                 TextButton(onClick = { showDialog = false }) {
                     Text("Cancel")
                 }
-            }
-        )
+            })
     }
 }
 
 
-
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
-@SuppressLint("StateFlowValueCalledInComposition")
+@SuppressLint("StateFlowValueCalledInComposition", "MissingPermission")
 @Composable
 fun ChatInputBar(
     value: String,
@@ -198,11 +219,48 @@ fun ChatInputBar(
     onSend: () -> Unit,
     onToolRemoved: (Tools) -> Unit,
     isGenerating: Boolean,
-    inputEnabled: Boolean
+    inputEnabled: Boolean,
+    sttViewModel: STTViewModel // Add this parameter
 ) {
     var showToolsList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recordingJob: Job? by remember { mutableStateOf(null) }
+
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val sttUiState by sttViewModel.uiState.collectAsState()
+
+    // Handle STT events
+    LaunchedEffect(Unit) {
+        sttViewModel.events.collect { event ->
+            when (event) {
+                is STTEvent.TranscriptionSuccess -> {
+                    // Update the text field with transcription
+                    onValueChange(value + " " + event.text)
+                    Toast.makeText(context, "Transcribed! ${event.text}", Toast.LENGTH_SHORT).show()
+                }
+
+                is STTEvent.TranscriptionFailed -> {
+                    Toast.makeText(
+                        context,
+                        "Transcription failed: ${event.message}",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+
+                is STTEvent.NoSpeechDetected -> {
+                    Toast.makeText(context, "No speech detected", Toast.LENGTH_SHORT).show()
+                }
+
+                is STTEvent.Error -> {
+                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+                }
+
+                else -> {}
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -235,10 +293,13 @@ fun ChatInputBar(
                         if (inputEnabled) {
                             showToolsList = !showToolsList
                         }
-                    }, enabled = ModelManager.currentModel.value.isToolCalling, colors = ButtonDefaults.buttonColors(
+                    },
+                    enabled = ModelManager.currentModel.value.isToolCalling,
+                    colors = ButtonDefaults.buttonColors(
                         containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
                         contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                    ), shape = RoundedCornerShape(rDP(8.dp))
+                    ),
+                    shape = RoundedCornerShape(rDP(8.dp))
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -280,8 +341,7 @@ fun ChatInputBar(
                     )
                 ) {
                     Icon(
-                        painterResource(R.drawable.database_zap),
-                        contentDescription = "Toggle RAG"
+                        painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG"
                     )
                 }
             }
@@ -298,15 +358,18 @@ fun ChatInputBar(
                 TextField(
                     value = value,
                     onValueChange = onValueChange,
-                    enabled = inputEnabled,
+                    enabled = inputEnabled && !isRecording,
                     modifier = Modifier
                         .weight(1f)
                         .padding(horizontal = rDP(6.dp)),
                     placeholder = {
                         Text(
-                            text = if (inputEnabled) "Say Anything…" else "Processing...",
-                            color = SlateGrey,
-                            fontSize = rSp(14.sp)
+                            text = when {
+                                isRecording -> "Recording..."
+                                sttUiState.isTranscribing -> "Transcribing..."
+                                inputEnabled -> "Say Anything…"
+                                else -> "Processing..."
+                            }, color = SlateGrey, fontSize = rSp(14.sp)
                         )
                     },
                     colors = TextFieldDefaults.colors(
@@ -322,10 +385,64 @@ fun ChatInputBar(
                     )
                 )
 
+                Spacer(Modifier.width(rDP(4.dp)))
+
+                STTButton(
+                    isRecording = isRecording,
+                    isProcessing = sttUiState.isTranscribing,
+                    isReady = sttUiState.isReady,
+                    onClick = {
+                        if (!sttUiState.isReady) {
+                            Toast.makeText(context, "STT not initialized", Toast.LENGTH_SHORT)
+                                .show()
+                            return@STTButton
+                        }
+
+                        if (isRecording) {
+                            // Stop recording - just set flag, don't cancel job
+                            isRecording = false
+                            // Job will complete naturally and transcribe
+                        } else {
+                            // Start recording
+                            isRecording = true
+                            recordingJob = scope.launch(Dispatchers.IO) {
+                                var audioFile: File? = null
+                                try {
+                                    audioFile = recordAudioUntilStopped(context) {
+                                        // Check if we should stop
+                                        !isRecording
+                                    }
+
+                                    withContext(Dispatchers.Main) {
+                                        Log.d(
+                                            "ChatInputBar",
+                                            "Starting transcription for: ${audioFile.absolutePath}"
+                                        )
+                                        sttViewModel.transcribeFile(audioFile.absolutePath)
+                                    }
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    Log.d("ChatInputBar", "Recording cancelled")
+                                    withContext(Dispatchers.Main) {
+                                        isRecording = false
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("ChatInputBar", "Recording error", e)
+                                    withContext(Dispatchers.Main) {
+                                        Toast.makeText(
+                                            context,
+                                            "Recording error: ${e.message}",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        isRecording = false
+                                    }
+                                } finally {
+                                    recordingJob = null
+                                }
+                            }
+                        }
+                    })
+
                 Spacer(Modifier.width(rDP(8.dp)))
-
-
-
 
                 Box(
                     modifier = Modifier
@@ -372,12 +489,12 @@ fun ChatInputBar(
                             )
                         }
                     }
-
                 }
             }
         }
     }
 }
+
 
 @Composable
 private fun ToolChip(
