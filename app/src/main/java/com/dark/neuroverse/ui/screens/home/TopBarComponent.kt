@@ -1,6 +1,6 @@
 package com.dark.neuroverse.ui.screens.home
 
-import android.util.Log
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults.topAppBarColors
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,11 +41,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelType
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.ChatUiState
@@ -130,6 +134,10 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
         else selectedModel.modelName
     }
 
+    LaunchedEffect(showDialog) {
+        viewModel.setIsDialogOpen(showDialog)
+    }
+
     Column {
         if (isCompact) {
             IconButton(
@@ -164,7 +172,12 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
         }
 
         if (showDialog) {
-            Dialog(onDismissRequest = { showDialog = false }) {
+            Dialog(
+                onDismissRequest = { showDialog = false }, properties = DialogProperties(
+                    dismissOnBackPress = true,
+                    dismissOnClickOutside = true,
+                )
+            ) {
                 Card(
                     shape = RoundedCornerShape(rDP(16.dp)),
                     colors = CardDefaults.cardColors(containerColor = colorScheme.surface)
@@ -185,62 +198,13 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                         ) {
                             items(filteredModellist) { model ->
                                 val isSelected = model.modelName == selectedModel.modelName
-                                Card(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = rDP(1.5.dp))
-                                        .clickable {
-                                            Log.d("ModelSelection", "Selected model: $model")
-                                            viewModel.selectModel(model)
-                                        }, colors = CardDefaults.cardColors(
-                                        containerColor = if (isSelected) Mint.copy(alpha = 0.15f)
-                                        else colorScheme.secondary.copy(0.1f)
-                                    ), elevation = CardDefaults.cardElevation(rDP(0.dp))
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .padding(rDP(14.dp))
-                                            .fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Column {
-
-                                            Text(
-                                                text = model.modelName,
-                                                style = MaterialTheme.typography.bodyLarge.copy(
-                                                    fontSize = rSp(16.sp)
-                                                )
-                                            )
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Text(
-                                                    text = if (isSelected) "Currently Loaded" else "Tap to Load",
-                                                    style = MaterialTheme.typography.bodySmall.copy(
-                                                        color = if (isSelected) Color.Unspecified else Color.Gray
-                                                    )
-                                                )
-                                                if (model.isToolCalling) {
-                                                    Icon(
-                                                        painterResource(R.drawable.hammer),
-                                                        contentDescription = "Loaded",
-                                                        modifier = Modifier.size(rDP(12.dp))
-                                                    )
-                                                }
-                                            }
-
-                                        }
-                                        Spacer(Modifier.weight(1f))
-                                        if (isSelected) {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = "Loaded",
-                                                tint = Mint,
-                                                modifier = Modifier.size(rDP(20.dp))
-                                            )
-                                        }
-                                    }
-                                }
+                                ModelDialogItem(
+                                    model = model,
+                                    isSelected = isSelected,
+                                    onSelect = { viewModel.selectModel(it) })
                             }
                         }
+
 
                         Spacer(Modifier.height(rDP(12.dp)))
                         Button(
@@ -251,6 +215,70 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                             Text("Close")
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelDialogItem(
+    model: ModelData, isSelected: Boolean, onSelect: (ModelData) -> Unit
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) Mint.copy(alpha = 0.15f)
+        else colorScheme.surfaceVariant
+    )
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = rDP(4.dp))
+            .clickable { onSelect(model) },
+        shape = RoundedCornerShape(rDP(12.dp)),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(rDP(0.dp))
+    ) {
+        Column(modifier = Modifier.padding(rDP(14.dp))) {
+
+            // --- Top Row: Name + Selection Check ---
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = model.modelName, style = MaterialTheme.typography.bodyLarge.copy(
+                        fontWeight = FontWeight.Medium, fontSize = rSp(16.sp)
+                    ), maxLines = 2
+                )
+
+                Spacer(Modifier.weight(1f))
+
+                if (isSelected) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Loaded",
+                        tint = Mint,
+                        modifier = Modifier.size(rDP(20.dp))
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(rDP(4.dp)))
+
+            // --- Subtitle ---
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = if (isSelected) "Currently Loaded" else "Tap to Load",
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        color = if (isSelected) colorScheme.onSurface else Color.Gray
+                    )
+                )
+                if (model.isToolCalling) {
+                    Spacer(Modifier.width(rDP(4.dp)))
+                    Icon(
+                        painterResource(R.drawable.hammer),
+                        "Hammer Icon",
+                        tint = Color.Gray,
+                        modifier = Modifier.size(rDP(12.dp))
+                    )
                 }
             }
         }

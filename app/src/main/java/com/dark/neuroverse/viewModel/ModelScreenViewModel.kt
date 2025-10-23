@@ -51,6 +51,9 @@ class ModelScreenViewModel : ViewModel() {
     private val _availableModels = MutableStateFlow<List<OpenRouterModel>>(emptyList())
     val availableModels: StateFlow<List<OpenRouterModel>> = _availableModels
 
+    private val _isDialogOpened = MutableStateFlow(false)
+    val isDialogOpened: StateFlow<Boolean> = _isDialogOpened
+
     init {
         observeModels()
     }
@@ -77,6 +80,10 @@ class ModelScreenViewModel : ViewModel() {
                 if (key.isNotBlank() && _availableModels.value.isEmpty()) fetchAvailableModels()
             }
         }
+    }
+
+    fun setIsDialogOpen(isDialogOpen: Boolean) {
+        _isDialogOpened.value = isDialogOpen
     }
 
     private fun loadOpenRouterConfig(context: Context) = viewModelScope.launch {

@@ -3,8 +3,6 @@ package com.dark.neuroverse.ui.screens.picker
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
-import android.net.Uri
-import android.os.Build
 import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -29,13 +27,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -56,7 +53,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -70,18 +66,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.core.net.toUri
 import com.dark.neuroverse.ui.theme.rDP
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.Date
 import java.util.Locale
+import kotlin.math.log10
 import kotlin.math.min
+import kotlin.math.pow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,7 +86,7 @@ fun ModelPickerScreen(
     val context = LocalContext.current
     val rootPath = remember { Environment.getExternalStorageDirectory().absolutePath }
 
-    var hasAllFiles by remember { mutableStateOf(hasAllFilesAccess(context)) }
+    var hasAllFiles by remember { mutableStateOf(hasAllFilesAccess()) }
     var currentPath by rememberSaveable { mutableStateOf(rootPath) }
     var listState by remember { mutableStateOf<List<FileItem>>(emptyList()) }
     var loading by remember { mutableStateOf(false) }
@@ -130,26 +125,26 @@ fun ModelPickerScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    scrolledContainerColor = MaterialTheme.colorScheme.background,
-                    navigationIconContentColor = Color.Unspecified,
-                    titleContentColor = Color.Unspecified,
-                    actionIconContentColor = Color.Unspecified
-                ), navigationIcon = {
-                    IconButton(onClick = {
-                        if (currentPath != rootPath) {
-                            currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
-                        } else onClose()
-                    }) { Icon(Icons.Outlined.ArrowBack, contentDescription = "Back") }
-                }, title = { PathBreadcrumbText(currentPath) }, actions = {
-                    if (!hasAllFiles) {
-                        TextButton(onClick = { openAllFilesAccessSettings(context) }) { Text("Grant access") }
-                    } else {
-                        IconButton(onClick = { currentPath = rootPath }) {
-                            Icon(Icons.Outlined.Home, contentDescription = "Reset to root")
-                        }
+                containerColor = MaterialTheme.colorScheme.background,
+                scrolledContainerColor = MaterialTheme.colorScheme.background,
+                navigationIconContentColor = Color.Unspecified,
+                titleContentColor = Color.Unspecified,
+                actionIconContentColor = Color.Unspecified
+            ), navigationIcon = {
+                IconButton(onClick = {
+                    if (currentPath != rootPath) {
+                        currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
+                    } else onClose()
+                }) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, contentDescription = "Back") }
+            }, title = { PathBreadcrumbText(currentPath) }, actions = {
+                if (!hasAllFiles) {
+                    TextButton(onClick = { openAllFilesAccessSettings(context) }) { Text("Grant access") }
+                } else {
+                    IconButton(onClick = { currentPath = rootPath }) {
+                        Icon(Icons.Outlined.Home, contentDescription = "Reset to root")
                     }
-                }, scrollBehavior = scrollBehavior
+                }
+            }, scrollBehavior = scrollBehavior
             )
         }) { inner ->
         val blurRadius = if (detailTarget != null) 12.dp else 0.dp
@@ -162,7 +157,7 @@ fun ModelPickerScreen(
             when {
                 !hasAllFiles -> PermGate(
                     modifier = Modifier.fillMaxSize()
-                ) { hasAllFiles = hasAllFilesAccess(context) }
+                ) { hasAllFiles = hasAllFilesAccess() }
 
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
@@ -170,10 +165,10 @@ fun ModelPickerScreen(
 
                 error != null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("Error: ${error}")
+                        Text("Error: $error")
                         Spacer(Modifier.height(8.dp))
                         Button(onClick = {
-                            hasAllFiles = hasAllFilesAccess(context)
+                            hasAllFiles = hasAllFilesAccess()
                         }) { Text("Retry") }
                     }
                 }
@@ -275,9 +270,9 @@ private fun FileList(
             val subtitle = if (isDir) "Folder" else humanSize(item.size)
             ListRow(
                 icon = {
-                    if (isDir) Icon(Icons.Outlined.Folder, contentDescription = null)
-                    else Icon(Icons.Filled.SmartToy, contentDescription = null)
-                },
+                if (isDir) Icon(Icons.Outlined.Folder, contentDescription = null)
+                else Icon(Icons.Filled.SmartToy, contentDescription = null)
+            },
                 title = item.name,
                 subtitle = subtitle,
                 trailing = if (!isDir) {
@@ -348,9 +343,6 @@ private fun ListRow(
 private fun FileDetailDialog(
     item: FileItem, onDismiss: () -> Unit, onSelect: () -> Unit
 ) {
-    val scope = rememberCoroutineScope()
-    var probing by remember { mutableStateOf(false) }
-    var probeJson by remember { mutableStateOf<JSONObject?>(null) }
     var quickSha by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(item.file) {
@@ -367,8 +359,7 @@ private fun FileDetailDialog(
             color = MaterialTheme.colorScheme.surface
         ) {
             Column(
-                Modifier.padding(rDP(20.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+                Modifier.padding(rDP(20.dp)), verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
             ) {
                 Text(
                     "Model details",
@@ -382,53 +373,7 @@ private fun FileDetailDialog(
                 guessQuant(item.name)?.let { InfoRow("Quant", it) }
                 quickSha?.let { InfoRow("SHA-256 (first 4MB)", it) }
 
-                // Native probe section (optional, uses com.mp.ai_core.NativeLib reflectively)
                 HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Deep probe (native)", style = MaterialTheme.typography.labelLarge)
-                    if (!probing && probeJson == null) {
-                        OutlinedButton(onClick = {
-                            probing = true
-                            scope.launch(Dispatchers.IO) {
-                                val probed = probeWithNative(item.file.absolutePath)
-                                withContext(Dispatchers.Main) {
-                                    probeJson = probed
-                                    probing = false
-                                }
-                            }
-                        }) { Text("Probe") }
-                    } else if (probing) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(rDP(20.dp)), strokeWidth = rDP(2.dp)
-                        )
-                    } else {
-                        AssistChip(onClick = { probeJson = null }, label = { Text("Clear") })
-                    }
-                }
-                probeJson?.let { json ->
-                    Spacer(Modifier.height(rDP(6.dp)))
-                    json.optJSONObject("core")?.let { core ->
-                        Text("Core dims", style = MaterialTheme.typography.labelLarge)
-                        val embd = core.optInt("n_embd", -1).takeIf { it > 0 }
-                        val layers = core.optInt("n_layer", -1).takeIf { it > 0 }
-                        val heads = core.optInt("n_head", -1).takeIf { it > 0 }
-                        if (embd != null) InfoRow("n_embd", embd.toString())
-                        if (layers != null) InfoRow("n_layer", layers.toString())
-                        if (heads != null) InfoRow("n_head", heads.toString())
-                    }
-                    json.optJSONObject("kv")?.let { kv ->
-                        Text("KV cache", style = MaterialTheme.typography.labelLarge)
-                        kv.keys().forEachRemaining { k ->
-                            @Composable {
-                                InfoRow(k, kv.opt(k).toString())
-                            }
-                        }
-                    }
-                }
 
                 Spacer(Modifier.height(rDP(6.dp)))
                 Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
@@ -442,17 +387,16 @@ private fun FileDetailDialog(
 
 @Composable
 private fun InfoRow(k: String, v: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+    Column(Modifier.fillMaxWidth()) {
         Text(
             k,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.width(12.dp))
+        Spacer(Modifier.height(3.dp))
         Text(
             v,
             style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f),
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -484,20 +428,16 @@ private suspend fun listChildrenFiltered(path: String): List<FileItem> =
         }
     }
 
-private fun hasAllFilesAccess(context: Context): Boolean {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-        Environment.isExternalStorageManager()
-    } else {
-        context.checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == android.content.pm.PackageManager.PERMISSION_GRANTED
-    }
+private fun hasAllFilesAccess(): Boolean {
+    return Environment.isExternalStorageManager()
 }
 
 private fun openAllFilesAccessSettings(context: Context) {
     try {
         val intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
-        intent.data = Uri.parse("package:${context.packageName}")
+        intent.data = "package:${context.packageName}".toUri()
         context.startActivity(intent)
-    } catch (e: ActivityNotFoundException) {
+    } catch (_: ActivityNotFoundException) {
         try {
             val intent = Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)
             context.startActivity(intent)
@@ -509,16 +449,10 @@ private fun openAllFilesAccessSettings(context: Context) {
 private fun humanSize(bytes: Long): String {
     if (bytes <= 0) return "0 B"
     val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val group =
-        (Math.log10(bytes.toDouble()) / Math.log10(1024.0)).toInt().coerceAtMost(units.lastIndex)
+    val group = (log10(bytes.toDouble()) / log10(1024.0)).toInt().coerceAtMost(units.lastIndex)
     return String.format(
-        Locale.getDefault(), "%.1f %s", bytes / Math.pow(1024.0, group.toDouble()), units[group]
+        Locale.getDefault(), "%.1f %s", bytes / 1024.0.pow(group.toDouble()), units[group]
     )
-}
-
-private fun formatTime(millis: Long): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return sdf.format(Date(millis))
 }
 
 private fun guessQuant(name: String): String? {
@@ -547,44 +481,3 @@ private suspend fun computeSha256Prefix(file: File, limitBytes: Long): String? =
             null
         }
     }
-
-private suspend fun probeWithNative(path: String): JSONObject? = withContext(Dispatchers.IO) {
-    return@withContext try {
-        val clazz = Class.forName("com.mp.ai_core.NativeLib")
-        val ctor = clazz.getConstructor()
-        val native = ctor.newInstance()
-        val init = clazz.getMethod(
-            "initModel",
-            String::class.java,
-            Int::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
-            Boolean::class.javaPrimitiveType,
-            Boolean::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
-            Float::class.javaPrimitiveType,
-            Int::class.javaPrimitiveType,
-            Float::class.javaPrimitiveType,
-            Float::class.javaPrimitiveType
-        )
-        val ok = init.invoke(
-            native,
-            path,
-            maxOf(1, Runtime.getRuntime().availableProcessors() / 2),
-            -1,
-            true,
-            false,
-            512,
-            0.7f,
-            20,
-            0.9f,
-            0f
-        ) as Boolean
-        if (!ok) null else {
-            val getInfo = clazz.getMethod("nativeGetModelInfo")
-            val raw = getInfo.invoke(native) as String
-            JSONObject(raw)
-        }
-    } catch (_: Throwable) {
-        null
-    }
-}

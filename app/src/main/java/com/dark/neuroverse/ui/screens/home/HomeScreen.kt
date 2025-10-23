@@ -22,20 +22,28 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ArrowDownward
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
@@ -53,8 +61,10 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +85,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
@@ -93,6 +104,7 @@ fun HomeScreen(
 
     val modelState by chatScreenViewModel.modelLoadingState.collectAsStateWithLifecycle()
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
+    val isDialog by chatScreenViewModel.isDialogSelected.collectAsStateWithLifecycle()
 
     // Token rate state (throttled updates)
     var tokenCount by remember { mutableIntStateOf(0) }
@@ -100,23 +112,29 @@ fun HomeScreen(
     var tkPerSecond by remember { mutableIntStateOf(0) }
     var lastDisplayUpdate by remember { mutableLongStateOf(0L) }
 
-    // Snackbar host for errors
+    // Snackbar host for errors - positioned at TOP
     val snackbarHostState = remember { SnackbarHostState() }
 
-
-    // Keep toast for legacy messages (still used)
+    // Handle error states with top snackbar
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is ChatUiState.Error -> {
-                // Show a Material Snackbar when errors occur
+                // Show error at top with action
                 val message = state.message.ifBlank { "Unknown error" }
-                // Provide an action when retryable — here we open settings so user can fix config.
-                val actionLabel = if (state.isRetryable) "Open settings" else "Dismiss"
-                val result =
-                    snackbarHostState.showSnackbar(message = message, actionLabel = actionLabel)
-                if (result == SnackbarResult.ActionPerformed && state.isRetryable) {
-                    // Let user configure settings (or swap this with viewModel.retry() if available)
-                    onRequestSettingsChange()
+                val actionLabel = if (state.isRetryable) "Retry" else null
+
+                scope.launch {
+                    val result = snackbarHostState.showSnackbar(
+                        message = message,
+                        actionLabel = actionLabel,
+                        duration = if (state.isRetryable) SnackbarDuration.Long
+                        else SnackbarDuration.Short
+                    )
+
+                    if (result == SnackbarResult.ActionPerformed && state.isRetryable) {
+                        // Dismiss error and allow retry
+                        UIStateManager.setStateIdle()
+                    }
                 }
             }
 
@@ -153,10 +171,10 @@ fun HomeScreen(
     LaunchedEffect(Unit) {
         CoroutineScope(Dispatchers.IO).launch {
             try {
+                chatScreenViewModel.refreshModelList()
                 ttsViewModel.initTTS()
             } catch (e: Exception) {
                 Log.e("ChatScreen", "Failed to initialize TTS", e)
-                // Show error to user if needed
             }
         }
     }
@@ -191,7 +209,10 @@ fun HomeScreen(
                     onModelsClick = { onModelsClick() })
             }
         }) {
-        Scaffold(modifier = Modifier.fillMaxSize(), topBar = {
+        Scaffold(
+            modifier = Modifier
+                .fillMaxSize()
+                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp), topBar = {
             Column {
                 TopBar(
                     chatScreenViewModel,
@@ -204,28 +225,27 @@ fun HomeScreen(
                             context.startActivity(
                                 Intent(context, ModelPropEditorActivity::class.java).apply {
                                     putExtra(
-                                        "modelName",
-                                        ModelManager.currentModel.value.modelName
+                                        "modelName", ModelManager.currentModel.value.modelName
                                     )
                                 })
                         }
                     })
+
                 ModelLoadProgressBar(loadState = modelState)
                 TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
+
                 // Global loading indicator for UI state
                 AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
                     Column {
                         LinearProgressIndicator(
                             modifier = Modifier.fillMaxWidth(),
-                            // primary color from Material3 theme
                             color = MaterialTheme.colorScheme.primary
                         )
                         if (uiState is ChatUiState.Loading) {
                             Text(
                                 text = (uiState as ChatUiState.Loading).message,
                                 modifier = Modifier.padding(
-                                    horizontal = 16.dp,
-                                    vertical = 4.dp
+                                    horizontal = 16.dp, vertical = 4.dp
                                 ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -249,7 +269,7 @@ fun HomeScreen(
                     }
                 }
 
-                // Token rate display — show only while decoding and have a non-zero rate
+                // Token rate display
                 AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
                     Box(
                         modifier = Modifier
@@ -264,16 +284,87 @@ fun HomeScreen(
                         )
                     }
                 }
+
+                // TOP ERROR SNACKBAR - Positioned right below TopBar
+                TopErrorSnackbar(snackbarHostState = snackbarHostState)
             }
         }, bottomBar = {
             BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
-        }, snackbarHost = { SnackbarHost(hostState = snackbarHostState) } // bottom snackbar
-        ) { innerPadding ->
+        }) { innerPadding ->
             BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
 }
 
+/**
+ * Top-positioned error snackbar with dismiss action
+ */
+@Composable
+fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
+    SnackbarHost(
+        hostState = snackbarHostState, modifier = Modifier.fillMaxWidth()
+    ) { data ->
+        // Custom snackbar design for errors
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDP(12.dp)),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            ),
+            elevation = CardDefaults.cardElevation(rDP(4.dp)),
+            shape = RoundedCornerShape(rDP(6.dp))
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDP(8.dp), vertical = rDP(12.dp)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Error icon and message
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ErrorOutline,
+                        contentDescription = "Error",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(rDP(24.dp))
+                    )
+
+                    Column(verticalArrangement = Arrangement.spacedBy(rDP(4.dp))) {
+                        Text(
+                            text = "Error",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = data.visuals.message,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+
+                IconButton(
+                    onClick = { data.dismiss() }, modifier = Modifier.size(rDP(32.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Close,
+                        contentDescription = "Dismiss",
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Keep the rest of your code unchanged
 @Composable
 fun BodyContent(
     innerPadding: PaddingValues, viewModel: ChatScreenViewModel, ttsViewModel: TTSViewModel
@@ -322,9 +413,7 @@ fun BodyContent(
             ) {
                 items(items = messages, key = { it.id }, contentType = { it.role }) { message ->
                     ChatBubble(
-                        message = message,
-                        viewModel = viewModel,
-                        ttsViewModel = ttsViewModel
+                        message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
@@ -351,38 +440,7 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward,
-                    contentDescription = "Jump to bottom"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun TtsStatusIndicator(ttsViewModel: TTSViewModel) {
-    val generationStatus by ttsViewModel.generationStatus.collectAsStateWithLifecycle()
-    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
-
-    generationStatus?.let { status ->
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = status,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            if (audioProgress > 0f) {
-                Text(
-                    text = "${(audioProgress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary
+                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -431,3 +489,4 @@ private fun BottomBar(
             }
         })
 }
+

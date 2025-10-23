@@ -30,14 +30,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.Card
@@ -83,7 +89,6 @@ import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.ui.components.MarkdownText
 import com.dark.neuroverse.ui.components.RegenerateModelPickerDialog
-import com.dark.neuroverse.ui.components.RobotDecodePlaceholder
 import com.dark.neuroverse.ui.theme.Coral
 import com.dark.neuroverse.ui.theme.SlateGrey
 import com.dark.neuroverse.ui.theme.rDP
@@ -136,11 +141,12 @@ fun ChatBubble(
 
                 Role.Tool -> ToolChatUI(
                     message = message,
+                    viewModel = viewModel,
+                    ttsViewModel = ttsViewModel,
                     isDecoding = isThisMessageExecutingTool,
                     onMessageDelete = {
                         viewModel.deleteMessage(message.id)
-                    }
-                )
+                    })
             }
         }
     }
@@ -312,7 +318,10 @@ private fun RegularChatUI(
         Spacer(Modifier.height(rDP(10.dp)))
 
         // Action buttons
-        Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             // Copy button
             Icon(
                 painter = painterResource(R.drawable.copy),
@@ -416,139 +425,6 @@ private fun RegularChatUI(
 }
 
 @Composable
-private fun ToolChatUI(
-    message: Message,
-    isDecoding: Boolean,
-    onMessageDelete: (String) -> Unit = {}
-) {
-    val actionIconSize = rDP(14.dp)
-    val clipboardManager = LocalClipboard.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    if (isDecoding) {
-        RobotDecodePlaceholder(
-            active = true, modifier = Modifier.fillMaxWidth()
-        )
-    } else {
-        Column {
-            // Tool identifier tag
-            AssistTag(message.tool?.toolName ?: "Unknown Tool")
-            Spacer(Modifier.height(rDP(6.dp)))
-            val toolOutput = message.tool?.toolOutput
-            val out = remember(toolOutput) {
-                try {
-                    val outputString = toolOutput?.output ?: ""
-
-                    when {
-                        outputString.isBlank() -> {
-                            JSONObject().apply {
-                                put("err", "Tool not executed yet")
-                            }
-                        }
-
-                        else -> {
-                            JSONObject(outputString)
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("ToolChatUI", "Parse error: ${e.message}", e)
-                    JSONObject().apply {
-                        put("err", "Failed to parse: ${e.message}")
-                    }
-                }
-            }
-
-            when (message.tool?.toolOutput == null) {
-                true -> {
-                    Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                        Text(
-                            text = "Err",
-                            fontSize = rSp(14.sp),
-                            color = Color(0xFF64748B),
-                            modifier = Modifier.padding(rDP(8.dp))
-                        )
-                    }
-                }
-
-                false -> {
-                    // Tool output available
-                    ToolOutputToggle(toolOutput = message.tool.toolOutput, out = out)
-                }
-            }
-
-            Spacer(Modifier.height(rDP(12.dp)))
-
-            Row(horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
-                // Copy button
-                Icon(
-                    painter = painterResource(R.drawable.copy),
-                    contentDescription = "Copy text",
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .size(actionIconSize)
-                        .clickable {
-                            scope.launch {
-                                clipboardManager.setClipEntry(
-                                    ClipEntry(ClipData.newPlainText("message", message.text))
-                                )
-                            }
-                            Toast.makeText(
-                                context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                            ).show()
-                        })
-
-                // Share button
-                Icon(
-                    imageVector = Icons.Rounded.Share,
-                    contentDescription = "Share",
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .size(actionIconSize)
-                        .clickable {
-                            val shareIntent = Intent().apply {
-                                action = Intent.ACTION_SEND
-                                putExtra(Intent.EXTRA_TEXT, message.text)
-                                type = "text/plain"
-                            }
-                            context.startActivity(
-                                Intent.createChooser(shareIntent, "Share message")
-                            )
-                        })
-
-                // Delete button
-                Icon(
-                    Icons.Rounded.DeleteOutline,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                    modifier = Modifier
-                        .size(actionIconSize)
-                        .clickable { onMessageDelete(message.id) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun AssistTag(name: String) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clip(RoundedCornerShape(rDP(10.dp)))
-            .background(Color(0x1A3B82F6))
-            .padding(horizontal = rDP(8.dp), vertical = rDP(4.dp))
-    ) {
-        Text(
-            text = "via $name",
-            fontSize = rSp(12.sp),
-            color = Color(0xFF2563EB),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
-    }
-}
-
-@Composable
 private fun ThinkingChatUI(message: Message) {
     AnimatedVisibility(
         visible = true,
@@ -589,8 +465,300 @@ private fun ThinkingChatUI(message: Message) {
     }
 }
 
+
 @Composable
-fun ToolOutputToggle(toolOutput: ToolOutput, out: JSONObject) {
+private fun ToolChatUI(
+    message: Message,
+    isDecoding: Boolean,
+    viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel,
+    onMessageDelete: (String) -> Unit = {}
+) {
+    val actionIconSize = rDP(14.dp)
+    val clipboardManager = LocalClipboard.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+
+    // Track if tool is executing
+    val isExecutingTool = viewModel.isMessageExecutingTool(message.id)
+    val isGenerating by viewModel.isGenerating.collectAsState()
+
+    // ✅ Collect state properly
+    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
+    val isInitialized by ttsViewModel.isInitialized.collectAsStateWithLifecycle()
+
+
+    Column {
+        // Tool identifier tag
+        AssistTag(message.tool?.toolName ?: "Unknown Tool")
+        Spacer(Modifier.height(rDP(6.dp)))
+
+        when {
+            // Show loader when tool is being called/executed
+            isDecoding || isExecutingTool -> {
+                ToolExecutionLoader(
+                    toolName = message.tool?.toolName ?: "Tool", isExecutingTool = isExecutingTool
+                )
+            }
+
+            // Show tool output when available
+            else -> {
+                val toolOutput = message.tool?.toolOutput
+                val out = remember(toolOutput) {
+                    try {
+                        val outputString = toolOutput?.output ?: ""
+
+                        when {
+                            outputString.isBlank() -> {
+                                JSONObject().apply {
+                                    put("err", "Tool not executed yet")
+                                }
+                            }
+
+                            else -> {
+                                JSONObject(outputString)
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ToolChatUI", "Parse error: ${e.message}", e)
+                        JSONObject().apply {
+                            put("err", "Failed to parse: ${e.message}")
+                        }
+                    }
+                }
+
+                when (message.tool?.toolOutput == null) {
+                    true -> {
+                        Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
+                            Text(
+                                text = "Err",
+                                fontSize = rSp(14.sp),
+                                color = Color(0xFF64748B),
+                                modifier = Modifier.padding(rDP(8.dp))
+                            )
+                        }
+                    }
+
+                    false -> {
+                        // Tool output available
+                        ToolOutputToggle(
+                            toolOutput = message.tool.toolOutput,
+                            out = out,
+                            messageId = message.id,
+                            viewModel = viewModel,
+                            isGenerating = isGenerating
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(rDP(12.dp)))
+
+        MarkdownText(
+            text = message.text,
+            color = MaterialTheme.colorScheme.onSurface,
+            style = MaterialTheme.typography.bodyMedium
+        )
+
+        Spacer(Modifier.height(rDP(12.dp)))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Copy button
+            Icon(
+                painter = painterResource(R.drawable.copy),
+                contentDescription = "Copy text",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        scope.launch {
+                            clipboardManager.setClipEntry(
+                                ClipEntry(ClipData.newPlainText("message", message.text))
+                            )
+                        }
+                        Toast.makeText(
+                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
+                        ).show()
+                    })
+
+            Box(contentAlignment = Alignment.Center) {
+                // Show progress indicator if playing
+                if (isPlayingAudio && audioProgress > 0f) {
+                    CircularProgressIndicator(
+                        progress = { audioProgress },
+                        modifier = Modifier.size(actionIconSize + 4.dp),
+                        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
+                        strokeWidth = 2.dp,
+                        trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
+                        strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
+                    )
+                }
+
+                Icon(
+                    painter = painterResource(
+                        if (isPlayingAudio) R.drawable.stop else R.drawable.speaker
+                    ),
+                    contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
+                    tint = MaterialTheme.colorScheme.primary.copy(
+                        alpha = if (isInitialized) 0.7f else 0.3f
+                    ),
+                    modifier = Modifier
+                        .size(actionIconSize)
+                        .clickable(enabled = isInitialized) {
+                            if (isPlayingAudio) {
+                                ttsViewModel.stopPlayback()
+                            } else {
+                                scope.launch(Dispatchers.IO) {
+                                    val normalizer = ttsViewModel.normalizeText(message.text)
+                                    ttsViewModel.generateAndPlayAudio(normalizer)
+                                }
+                            }
+                        })
+            }
+
+            // Share button
+            Icon(
+                imageVector = Icons.Rounded.Share,
+                contentDescription = "Share",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable {
+                        val shareIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, message.text)
+                            type = "text/plain"
+                        }
+                        context.startActivity(
+                            Intent.createChooser(shareIntent, "Share message")
+                        )
+                    })
+
+            // Delete button
+            Icon(
+                Icons.Rounded.DeleteOutline,
+                contentDescription = "Delete",
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .size(actionIconSize)
+                    .clickable { onMessageDelete(message.id) })
+        }
+    }
+}
+
+@Composable
+fun ToolExecutionLoader(
+    toolName: String, isExecutingTool: Boolean
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "toolLoader")
+
+    val shimmerX by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
+            tween(1200, easing = LinearEasing), RepeatMode.Restart
+        ), label = "shimmerFloat"
+    )
+
+    val dotAnimation by infiniteTransition.animateFloat(
+        initialValue = 0f, targetValue = 3f, animationSpec = infiniteRepeatable(
+            tween(1000, easing = LinearEasing), RepeatMode.Restart
+        ), label = "dots"
+    )
+
+    val shimmerBrush = Brush.linearGradient(
+        colors = listOf(
+            Coral.copy(alpha = 0.3f), Coral.copy(alpha = 0.8f), Coral.copy(alpha = 0.3f)
+        ), start = Offset.Zero, end = Offset(1000f * shimmerX, 0f)
+    )
+
+    Card(
+        modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        ), elevation = CardDefaults.cardElevation(rDP(2.dp))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDP(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+        ) {
+            // Status indicator
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            ) {
+                // Animated pulsing circle
+                Box(
+                    modifier = Modifier
+                        .size(rDP(8.dp))
+                        .clip(CircleShape)
+                        .background(Coral)
+                        .drawWithContent {
+                            drawContent()
+                            drawCircle(
+                                brush = shimmerBrush, alpha = 0.6f, blendMode = BlendMode.SrcOver
+                            )
+                        })
+
+                Text(
+                    text = if (isExecutingTool) "Executing $toolName" else "Preparing $toolName",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontWeight = FontWeight.SemiBold
+                )
+
+                // Animated dots
+                Text(
+                    text = ".".repeat(dotAnimation.toInt() + 1),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Coral,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.width(rDP(24.dp))
+                )
+            }
+
+            // Progress bar
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(rDP(4.dp))
+                    .clip(RoundedCornerShape(rDP(2.dp)))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth()
+                        .drawWithContent {
+                            drawContent()
+                            drawRect(
+                                brush = shimmerBrush, blendMode = BlendMode.SrcOver
+                            )
+                        })
+            }
+
+            // Helper text
+            Text(
+                text = if (isExecutingTool) "Processing request..." else "Generating tool call...",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
+    }
+}
+
+@Composable
+fun ToolOutputToggle(
+    toolOutput: ToolOutput,
+    out: JSONObject,
+    messageId: String,
+    viewModel: ChatScreenViewModel,
+    isGenerating: Boolean
+) {
     var expanded by remember { mutableStateOf(false) }
 
     val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
@@ -608,26 +776,87 @@ fun ToolOutputToggle(toolOutput: ToolOutput, out: JSONObject) {
     Column(
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        // Toggle Button
-        Box(
-            modifier = Modifier
-                .clip(RoundedCornerShape(rDP(5.dp)))
-                .border(
-                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
-                )
-                .drawWithContent {
-                    drawContent()
-                    drawRect(
-                        brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
+        // Toggle Button with Action Buttons
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Show Output Toggle
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(rDP(5.dp)))
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outlineVariant,
+                        RoundedCornerShape(rDP(5.dp))
+                    )
+                    .drawWithContent {
+                        drawContent()
+                        drawRect(
+                            brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
+                        )
+                    }
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                Row(
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (expanded) "Hide Tool Output" else "Show Tool Output",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Icon(
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = if (expanded) "Collapse" else "Expand",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(rDP(20.dp))
                     )
                 }
-                .clickable { expanded = !expanded }
-                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
-            Text(
-                text = "Show Tool Output",
-                style = MaterialTheme.typography.titleMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            }
+
+            // Summarize Button
+            if (!out.has("err")) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(rDP(5.dp)))
+                        .background(
+                            if (isGenerating) MaterialTheme.colorScheme.surfaceVariant
+                            else Coral.copy(alpha = 0.1f)
+                        )
+                        .clickable(enabled = !isGenerating) {
+                            viewModel.summarizeToolOutput(messageId)
+                        }
+                        .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = "Summarize",
+                            tint = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.5f
+                            )
+                            else Coral,
+                            modifier = Modifier.size(rDP(16.dp))
+                        )
+                        Text(
+                            text = "Summarize",
+                            style = MaterialTheme.typography.labelLarge,
+                            color = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                alpha = 0.5f
+                            )
+                            else Coral,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+            }
         }
 
         // Animated expansion for Tool Output
@@ -684,6 +913,24 @@ fun ToolOutputContent(
     }
 }
 
+@Composable
+private fun AssistTag(name: String) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .clip(RoundedCornerShape(rDP(10.dp)))
+            .background(Color(0x1A3B82F6))
+            .padding(horizontal = rDP(8.dp), vertical = rDP(4.dp))
+    ) {
+        Text(
+            text = "via $name",
+            fontSize = rSp(12.sp),
+            color = Color(0xFF2563EB),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
 
 @Composable
 fun EmptyStateContent(uiState: ChatUiState) {

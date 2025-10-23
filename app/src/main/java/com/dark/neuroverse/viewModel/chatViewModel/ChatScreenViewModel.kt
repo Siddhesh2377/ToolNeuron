@@ -16,7 +16,6 @@ import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
 import com.dark.neuroverse.model.ToolOutput
 import com.dark.neuroverse.userdata.helpers.ModelStateHelper
-import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.worker.ChatManager
 import com.dark.neuroverse.worker.RAGManager
 import com.dark.neuroverse.worker.TextGenerationWorker
@@ -24,14 +23,16 @@ import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import com.dark.neuroverse.worker.UserDataManager
 import com.dark.plugins.model.Tools
-import com.mp.data_hub_lib.manager.DataHubManager
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
@@ -60,6 +61,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val modelList: MutableStateFlow<List<ModelData>> = MutableStateFlow(emptyList())
     val selectedModel: MutableStateFlow<ModelData> = MutableStateFlow(ModelData())
 
+    private val _isDialogSelected = MutableStateFlow(false)
+    val isDialogSelected: StateFlow<Boolean> = _isDialogSelected.asStateFlow()
+
     // RAG state
     private val _isRag = MutableStateFlow(false)
     val isRag: StateFlow<Boolean> = _isRag.asStateFlow()
@@ -82,9 +86,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     val selectedTool = ToolCallingManager.selectedTool
 
     val isGenerating: StateFlow<Boolean> = uiState.map { state ->
-        state is ChatUiState.Generating ||
-                state is ChatUiState.DecodingStream ||
-                state is ChatUiState.ExecutingTool
+        state is ChatUiState.Generating || state is ChatUiState.DecodingStream || state is ChatUiState.ExecutingTool
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
@@ -106,7 +108,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 ToolCallingManager.initViewModel()
 
                 // Load models
-                modelList.value = ModelManager.getAllModels()
+                refreshModelList()
 
                 UIStateManager.setStateIdle()
                 Log.d(TAG, "ViewModel initialized successfully")
@@ -115,6 +117,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 UIStateManager.setStateError("Initialization failed", cause = e)
             }
         }
+    }
+
+    suspend fun refreshModelList(){
+        modelList.value = ModelManager.getAllModels()
     }
     //endregion
 
@@ -255,26 +261,28 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
     private suspend fun executeSendMessage(input: String) {
         // Add user message
-        ChatManager.addMessage(Message(
-            role = Role.User,
-            text = input,
-            id = UUID.randomUUID().toString()
-        ))
+        ChatManager.addMessage(
+            Message(
+                role = Role.User, text = input, id = UUID.randomUUID().toString()
+            )
+        )
 
         // Prepare assistant/tool message
         val messageId = UUID.randomUUID().toString()
         val isTool = ToolCallingManager.isToolSelected()
 
-        ChatManager.addMessage(Message(
-            role = if (isTool) Role.Tool else Role.Assistant,
-            text = "",
-            id = messageId,
-            tool = if (isTool) RunningTool(
-                toolName = ToolCallingManager.getSelectedTool().toolName,
-                toolPreview = "",
-                toolOutput = ToolOutput()
-            ) else null
-        ))
+        ChatManager.addMessage(
+            Message(
+                role = if (isTool) Role.Tool else Role.Assistant,
+                text = "",
+                id = messageId,
+                tool = if (isTool) RunningTool(
+                    toolName = ToolCallingManager.getSelectedTool().toolName,
+                    toolPreview = "",
+                    toolOutput = ToolOutput()
+                ) else null
+            )
+        )
 
         // Handle RAG if enabled
         if (_isRag.value) {
@@ -285,9 +293,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun handleRAGRequest(
-        input: String,
-        isTool: Boolean,
-        messageId: String
+        input: String, isTool: Boolean, messageId: String
     ) {
         if (!RAGManager.isRAGReady()) {
             Log.w(TAG, "RAG not ready, falling back to normal generation")
@@ -312,8 +318,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Ensure generation model is ready
             val modelResult = RAGManager.ensureGenerationModelReady(
                 currentModel = selectedModel.value,
-                onStateUpdate = { _modelLoadingState.value = it }
-            )
+                onStateUpdate = { _modelLoadingState.value = it })
 
             if (modelResult.has("error")) {
                 Log.e(TAG, "Model switch failed: ${modelResult.getString("error")}")
@@ -331,9 +336,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun streamMessage(
-        prompt: String,
-        enableTools: Boolean,
-        messageId: String
+        prompt: String, enableTools: Boolean, messageId: String
     ) {
         TextGenerationWorker.streamAndRender(
             prompt = prompt,
@@ -344,8 +347,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             existingMessages = messages.value,
             onToolExecution = { result ->
                 saveCurrentChat()
-            }
-        )
+            })
 
         // CRITICAL: Save and refresh chat list after streaming completes
         saveCurrentChat()
@@ -386,22 +388,15 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun executeRegenerate(
-        model: ModelData,
-        messageId: String,
-        messageIndex: Int,
-        targetMessage: Message
+        model: ModelData, messageId: String, messageIndex: Int, targetMessage: Message
     ) {
         // Get user context
-        val userContext = messages.value
-            .take(messageIndex)
-            .lastOrNull { it.role == Role.User }?.text.orEmpty()
+        val userContext =
+            messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
         // Clear existing message
         ChatManager.updateStreamingMessage(
-            messageId = messageId,
-            text = "",
-            thought = null,
-            isFinal = false
+            messageId = messageId, text = "", thought = null, isFinal = false
         )
 
         // Switch model if needed
@@ -451,6 +446,217 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         )
 
         saveCurrentChat()
+    }
+    //endregion
+
+    //region Tool-Summarization
+
+    /**
+     * Summarizes tool output with streaming UI updates.
+     * Works like regeneration - streams the summary and updates the message in real-time.
+     * Uses TextGenerationWorker for proper streaming management.
+     *
+     * @param messageId The ID of the message containing the tool output to summarize
+     */
+    fun summarizeToolOutput(messageId: String) {
+        if (selectedModel.value.modelName == "") {
+            UIStateManager.setStateError("No model selected")
+            return
+        }
+        // Find the message
+        val message = messages.value.find { it.id == messageId }
+        if (message == null) {
+            Log.w(TAG, "Cannot summarize: message not found")
+            UIStateManager.setStateError("Message not found")
+            return
+        }
+
+        // Validate it's a tool message with output
+        if (message.role != Role.Tool || message.tool == null) {
+            Log.w(TAG, "Cannot summarize: not a tool message")
+            UIStateManager.setStateError("Not a tool message")
+            return
+        }
+
+        val toolOutput = message.tool.toolOutput.toString()
+        if (toolOutput.isBlank()) {
+            Log.w(TAG, "Cannot summarize: tool output is empty")
+            UIStateManager.setStateError("Tool output is empty")
+            return
+        }
+
+        // Prevent concurrent operations
+        if (UIStateManager.isGenerating()) {
+            Log.w(TAG, "Cannot summarize: already generating")
+            return
+        }
+
+        currentGenerationJob?.cancel()
+        currentGenerationJob = viewModelScope.launch {
+            try {
+                executeSummarization(messageId, message.tool.toolName, toolOutput)
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Summarization cancelled")
+                UIStateManager.setStateIdle()
+            } catch (e: Exception) {
+                Log.e(TAG, "Summarization failed", e)
+                UIStateManager.setStateError("Summarization failed", cause = e)
+            }
+        }
+    }
+
+    private suspend fun executeSummarization(
+        messageId: String, toolName: String, toolOutput: String
+    ) {
+        // Save current model configuration
+        val originalModel = selectedModel.value
+        val needsModelSwitch =
+            originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
+
+        // Clear existing message text (prepare for streaming)
+        ChatManager.updateStreamingMessage(
+            messageId = messageId, text = "", thought = null, isFinal = false
+        )
+
+        try {
+            // Switch to summarization model if needed
+            if (needsModelSwitch) {
+                UIStateManager.toggleSwitchingModels(true)
+                ModelManager.unloadModel()
+
+                val summarizationModel = originalModel.copy(
+                    systemPrompt = ModelsList.toolSummarizationSystemPrompt,
+                    chatTemplate = ModelsList.toolSummarizationChatTemplate
+                )
+
+                ModelManager.loadModelAwait(
+                    modelData = summarizationModel
+                ) { state ->
+                    _modelLoadingState.value = state
+                    if (state is LoadState.OnLoaded) {
+                        selectedModel.value = summarizationModel
+                    }
+                }
+
+                UIStateManager.toggleSwitchingModels(false)
+            }
+
+            // Build summarization prompt
+            val summarizationPrompt = buildString {
+                appendLine("Tool: $toolName")
+                appendLine()
+                appendLine("Output:")
+                appendLine(toolOutput)
+                appendLine()
+                appendLine("Provide a clear, concise summary of the above tool output.")
+            }
+
+            // Use TextGenerationWorker for streaming (just like normal generation)
+            TextGenerationWorker.streamAndRender(
+                prompt = summarizationPrompt,
+                appContext = appContext,
+                enableTools = false, // No tool calling during summarization
+                messageId = messageId,
+                isRegeneration = true, // Treat like regeneration for metrics
+                existingMessages = emptyList(), // No conversation history needed
+                onToolExecution = { /* Not applicable */ })
+
+            // Restore original model if we switched
+            if (needsModelSwitch) {
+                UIStateManager.toggleSwitchingModels(true)
+                ModelManager.unloadModel()
+
+                ModelManager.loadModelAwait(
+                    modelData = originalModel
+                ) { state ->
+                    _modelLoadingState.value = state
+                    if (state is LoadState.OnLoaded) {
+                        selectedModel.value = originalModel
+                    }
+                }
+
+                UIStateManager.toggleSwitchingModels(false)
+            }
+
+            // Save the chat with the summary
+            saveCurrentChat()
+            Log.d(TAG, "Tool output summarized successfully for message: $messageId")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during summarization", e)
+
+            // Try to restore original model on error
+            if (needsModelSwitch && originalModel.id.isNotEmpty()) {
+                try {
+                    ModelManager.unloadModel()
+                    ModelManager.loadModelAwait(originalModel) { state ->
+                        _modelLoadingState.value = state
+                        if (state is LoadState.OnLoaded) {
+                            selectedModel.value = originalModel
+                        }
+                    }
+                } catch (restoreError: Exception) {
+                    Log.e(TAG, "Failed to restore original model", restoreError)
+                }
+            }
+
+            throw e
+        }
+    }
+
+    /**
+     * Alternative: Batch summarize multiple tool outputs in sequence.
+     * Useful when user wants to summarize all tool outputs in a conversation.
+     */
+    fun summarizeAllToolOutputs() {
+        val toolMessages = messages.value.filter {
+            it.role == Role.Tool && it.tool != null && it.tool.toolOutput.toString().isNotBlank()
+        }
+
+        if (toolMessages.isEmpty()) {
+            Log.w(TAG, "No tool messages to summarize")
+            UIStateManager.setStateError("No tool outputs found")
+            return
+        }
+
+        if (UIStateManager.isGenerating()) {
+            Log.w(TAG, "Cannot summarize: already generating")
+            return
+        }
+
+        currentGenerationJob?.cancel()
+        currentGenerationJob = viewModelScope.launch {
+            try {
+                UIStateManager.setStateLoading("Summarizing ${toolMessages.size} tool outputs...")
+
+                for ((index, message) in toolMessages.withIndex()) {
+                    if (!currentCoroutineContext().isActive) break
+
+                    Log.d(TAG, "Summarizing tool output ${index + 1}/${toolMessages.size}")
+
+                    executeSummarization(
+                        messageId = message.id,
+                        toolName = message.tool?.toolName ?: "Unknown Tool",
+                        toolOutput = message.tool?.toolOutput.toString()
+                    )
+
+                    // Small delay between summarizations
+                    if (index < toolMessages.size - 1) {
+                        delay(500)
+                    }
+                }
+
+                UIStateManager.setStateIdle()
+                Log.d(TAG, "All tool outputs summarized successfully")
+
+            } catch (e: CancellationException) {
+                Log.d(TAG, "Batch summarization cancelled")
+                UIStateManager.setStateIdle()
+            } catch (e: Exception) {
+                Log.e(TAG, "Batch summarization failed", e)
+                UIStateManager.setStateError("Batch summarization failed", cause = e)
+            }
+        }
     }
     //endregion
 
@@ -523,6 +729,10 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         return uiState.value.let { state ->
             state is ChatUiState.ExecutingTool && state.messageId == messageId
         }
+    }
+
+    fun setIsDialogOpen(show: Boolean) {
+        _isDialogSelected.value = show
     }
     //endregion
 

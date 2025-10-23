@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
@@ -21,8 +22,8 @@ import com.dark.neuroverse.ui.theme.Mint
 fun ModelLoadProgressBar(
     loadState: LoadState,
     modifier: Modifier = Modifier,
-    normalColor: Color = Mint,
-    errorColor: Color = Coral,
+    normalColor: Color = Coral,
+    errorColor: Color = MaterialTheme.colorScheme.error,
 ) {
     val show = when (loadState) {
         is LoadState.Loading -> true
