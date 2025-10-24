@@ -164,6 +164,26 @@ class SetupViewModel(
                     )
                 )
             }
+
+            4 -> {
+                // Text + STT + TTS
+                listOf(
+                    ModelDownloadState(
+                        name = "Whisper-EN-Small",
+                        description = "A STT Model With 90% Accuracy",
+                        downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
+                        fileName = "whisper-en-smallzip",
+                        modelType = ModelType.STT
+                    ),
+                    ModelDownloadState(
+                        name = "KOR0-TTS-0.19-M",
+                        description = "Quick To Reply, But Less Accurate",
+                        downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
+                        fileName = "kor0-tts-0.19-mzip",
+                        modelType = ModelType.TTS
+                    )
+                )
+            }
             else -> emptyList() // Skip option
         }
 

@@ -183,6 +183,7 @@ fun SetupOptionsScreen(
         "Text + STT" to "Speech-to-text included",
         "Text + TTS" to "Text-to-speech included",
         "Text + STT + TTS" to "Full voice features",
+        "STT + TTS" to "Full voice features No text :)",
         "Skip" to "Start Fresh..!"
     )
 
@@ -614,6 +615,7 @@ fun getSelectedOptionTitle(modelCount: Int): String {
         1 -> "Text"
         2 -> "Text + STT" // or "Text + TTS"
         3 -> "Text + STT + TTS"
+        4 -> "STT + TTS"
         else -> "Models"
     }
 }
