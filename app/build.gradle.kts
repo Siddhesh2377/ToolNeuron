@@ -88,13 +88,13 @@ android {
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
         //LIBS
-        implementation(":plugin-api-release@aar")
+        implementation(project(":plugin-api"))
         implementation(":ai-core-release@aar")
 
         //PROJECTS
-        api(project(":ai-module"))
-        api(project(":plugins"))
-        api(project(":data-hub-lib"))
+        implementation(project(":ai-module"))
+        implementation(project(":plugins"))
+        implementation(project(":data-hub-lib"))
 
         //UTILS
         implementation(libs.androidx.datastore.preferences)

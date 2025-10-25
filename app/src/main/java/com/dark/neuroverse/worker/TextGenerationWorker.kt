@@ -12,6 +12,7 @@ import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.StreamingState
 import com.dark.neuroverse.util.extractPureJson
+import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -44,7 +45,6 @@ object TextGenerationWorker {
 
     // Coroutine management
     private val workerScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-    private val operationSemaphore = Semaphore(MAX_CONCURRENT_OPERATIONS)
     private var currentGenerationJob: Job? = null
     private var batchingJob: Job? = null
 
@@ -72,11 +72,13 @@ object TextGenerationWorker {
         messageId: String,
         isRegeneration: Boolean = false,
         existingMessages: List<Message>,
+        ragResult: RagResult? = null,
         onToolExecution: (String) -> Unit = {}
     ) {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
         _currentMsgId.value = messageId
+        Log.d(TAG, "RAG :: $ragResult")
 
         UIStateManager.setStateDecoding(messageId, startTimeNs)
         currentStreamingState = StreamingState(messageId = messageId)
@@ -93,6 +95,7 @@ object TextGenerationWorker {
                 text = text,
                 thought = finalThought,
                 isFinal = true,
+                ragResult = ragResult,
                 codeCanvas = codeCanvases // ⚡ IMPORTANT: save the extracted code
             )
 

@@ -29,6 +29,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.ai_module.model.ModelType
 import com.dark.neuroverse.R
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
@@ -58,13 +59,12 @@ fun RegenerateModelPickerDialog(
                 ) {
                     // Current model first
                     val sorted =
-                        listOf(selected) + models.filter { it.modelName != selected.modelName }
+                        listOf(selected) + models.filter { (it.modelName != selected.modelName && it.modelType == ModelType.TEXT) }
                     items(sorted, key = { it.modelName }) { model ->
                         ModelRow(
                             name = shortModelLabel(model.modelName),
                             isCurrent = model.modelName == selected.modelName,
                             onClick = {
-                                // Fire & close
                                 viewModel.regenerateResponse(model, messageId)
                                 onDismiss()
                             })

@@ -23,6 +23,7 @@ import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import com.dark.neuroverse.worker.UserDataManager
 import com.dark.plugins.model.Tools
+import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -307,13 +308,13 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Get augmented prompt
             val ragResult = RAGManager.handleRAGRequest(input)
 
-            if (ragResult.has("error")) {
-                Log.e(TAG, "RAG failed: ${ragResult.getString("error")}")
+            if (ragResult.first.has("error")) {
+                Log.e(TAG, "RAG failed: ${ragResult.first.getString("error")}")
                 streamMessage(input, isTool, messageId)
                 return
             }
 
-            val augmentedPrompt = ragResult.getString("success")
+            val augmentedPrompt = ragResult.first.getString("success")
 
             // Ensure generation model is ready
             val modelResult = RAGManager.ensureGenerationModelReady(
@@ -327,7 +328,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             }
 
             // Stream with augmented prompt
-            streamMessage(augmentedPrompt, isTool, messageId)
+            streamMessage(augmentedPrompt, isTool, messageId, ragResult = ragResult.second)
 
         } catch (e: Exception) {
             Log.e(TAG, "RAG processing failed", e)
@@ -336,7 +337,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     private suspend fun streamMessage(
-        prompt: String, enableTools: Boolean, messageId: String
+        prompt: String, enableTools: Boolean, messageId: String, ragResult: RagResult? = null
     ) {
         TextGenerationWorker.streamAndRender(
             prompt = prompt,
@@ -345,6 +346,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             messageId = messageId,
             isRegeneration = false,
             existingMessages = messages.value,
+            ragResult = ragResult,
             onToolExecution = { result ->
                 saveCurrentChat()
             })
@@ -394,9 +396,12 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         val userContext =
             messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.text.orEmpty()
 
+        val ragResult =
+            messages.value.take(messageIndex).lastOrNull { it.role == Role.User }?.ragResult
+
         // Clear existing message
         ChatManager.updateStreamingMessage(
-            messageId = messageId, text = "", thought = null, isFinal = false
+            messageId = messageId, text = "", thought = null, isFinal = false, ragResult = ragResult,
         )
 
         // Switch model if needed
@@ -442,6 +447,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             enableTools = false,
             messageId = messageId,
             isRegeneration = true,
+            ragResult = ragResult,
             existingMessages = messages.value
         )
 

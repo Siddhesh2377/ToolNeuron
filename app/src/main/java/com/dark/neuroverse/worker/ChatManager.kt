@@ -17,6 +17,7 @@ import com.dark.neuroverse.userdata.helpers.ModelStateHelper
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronNode
 import com.dark.neuroverse.userdata.ntds.neuron_tree.NeuronTree
 import com.dark.neuroverse.userdata.saveTree
+import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -253,6 +254,7 @@ object ChatManager {
         thought: String? = null,
         toolError: String? = null,
         isFinal: Boolean = false,
+        ragResult: RagResult? = null,
         codeCanvas: List<CodeCanvas>? = null // make nullable for optional updates
     ) {
         _messages.update { messages ->
@@ -291,6 +293,7 @@ object ChatManager {
                             id = finalId,
                             text = "Error: Empty text received",
                             thought = thought,
+                            ragResult = ragResult,
                             codeCanvas = codeCanvas ?: message.codeCanvas
                         )
                     }
@@ -300,6 +303,7 @@ object ChatManager {
                         id = finalId,
                         text = text,
                         thought = thought,
+                        ragResult = ragResult,
                         codeCanvas = codeCanvas ?: message.codeCanvas
                     )
                 } else {
