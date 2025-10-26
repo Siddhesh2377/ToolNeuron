@@ -1,48 +1,35 @@
 package com.dark.neuroverse.viewModel.chatViewModel
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioTrack
 import android.util.Log
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.dark.ai_module.workers.AudioManager
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.data.UserPrefs
-import com.mp.ai_core.tts.ITtsService
-import com.mp.ai_core.tts.TtsConfig
-import com.mp.ai_core.tts.TtsServiceFactory
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.firstOrNull
-import java.io.File
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import kotlin.time.TimeSource
 
-class TTSViewModelFactory(private val context: Context) : ViewModelProvider.Factory {
-    @Suppress("UNCHECKED_CAST")
-    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-        return TTSViewModel(
-            context.applicationContext,
-            TtsServiceFactory.createTtsService()
-        ) as T
-    }
-}
 
-class TTSViewModel(
-    context: Context,
-    private val ttsService: ITtsService
-) : ViewModel() {
+class TTSViewModel() : ViewModel() {
 
     companion object {
         private const val TAG = "TTSViewModel"
     }
 
-    private val context: Context = context.applicationContext
     private var generatedAudio = FloatArray(0)
     private var totalSamples = 0
     private var currentSampleIndex = 0
@@ -65,21 +52,13 @@ class TTSViewModel(
 
     // Initialize TTS
     suspend fun initTTS() {
-        val ttsModel = ModelManager.getTTSModels() ?: run {
+        val ttsModel = ModelManager.getTTSModel() ?: run {
             Log.e(TAG, "No TTS model available")
             return
         }
 
-        val config = TtsConfig(
-            modelDir = "${File(ttsModel.modelPath)}/kokoro-en-v0_19",
-            modelName = "model.onnx",
-            voices = "voices.bin",
-            dataDir = "${File(ttsModel.modelPath)}/kokoro-en-v0_19/espeak-ng-data",
-            lang = "eng"
-        )
-
         try {
-            ttsService.initialize(config)
+            AudioManager.loadTtsModel(ttsModel)
             _isInitialized.value = true
             Log.i(TAG, "TTS initialized successfully")
         } catch (e: Exception) {
@@ -95,14 +74,15 @@ class TTSViewModel(
         generationJob?.cancelAndJoin()
         progressJob?.cancelAndJoin()
 
-        ttsService.release()
+        AudioManager.unloadTtsModel()
 
         if (::track.isInitialized) {
             try {
                 track.pause()
                 track.flush()
                 track.release()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         generatedAudio = FloatArray(0)
@@ -118,7 +98,7 @@ class TTSViewModel(
     }
 
     // Generate and play audio
-    fun generateAndPlayAudio(text: String) {
+    fun generateAndPlayAudio(text: String, context: Context) {
         generationJob?.cancel()
         generationJob = viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -133,27 +113,22 @@ class TTSViewModel(
 
                 val startTime = TimeSource.Monotonic.markNow()
 
-                ttsService.generateAudioStream(text, speakerId)
-                    .catch { e ->
-                        if (e !is CancellationException) {
-                            _generationStatus.value = "Error: ${e.message}"
-                            Log.e(TAG, "Audio stream error", e)
-                        }
-                    }
-                    .collect { chunk ->
-                        generatedAudio += chunk.samples
-                        totalSamples += chunk.samples.size
-                        track.write(chunk.samples, 0, chunk.samples.size, AudioTrack.WRITE_BLOCKING)
-                        currentSampleIndex += chunk.samples.size
-                        _audioProgress.value = currentSampleIndex.toFloat() / totalSamples
-                    }
+                AudioManager.generateTts(text, speakerId, onAudioChunk = { chunk ->
+                    generatedAudio += chunk
+                    totalSamples += chunk.size
+                    track.write(chunk, 0, chunk.size, AudioTrack.WRITE_BLOCKING)
+                    currentSampleIndex += chunk.size
+                    _audioProgress.value = currentSampleIndex.toFloat() / totalSamples
+                })
 
-                val ttsInfo = ttsService.getTtsInfo()
-                val audioDuration = ttsInfo?.let { totalSamples / it.sampleRate.toFloat() } ?: 0f
+                val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+                val audioDuration =
+                    ttsInfo.let { totalSamples / it.getInt("sample_rate").toFloat() }
                 val elapsed = startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
 
-                _generationStatus.value = "Elapsed: %.3f s | Audio: %.3f s | RTF: %.3f"
-                    .format(elapsed, audioDuration, if (audioDuration > 0) elapsed / audioDuration else 0f)
+                _generationStatus.value = "Elapsed: %.3f s | Audio: %.3f s | RTF: %.3f".format(
+                    elapsed, audioDuration, if (audioDuration > 0) elapsed / audioDuration else 0f
+                )
 
             } catch (e: Exception) {
                 if (e !is CancellationException) {
@@ -169,13 +144,14 @@ class TTSViewModel(
     fun stopPlayback() {
         Log.i(TAG, "Stopping playback")
         generationJob?.cancel()
-        ttsService.stop()
+        AudioManager.stopTts()
 
         if (::track.isInitialized) {
             try {
                 track.pause()
                 track.flush()
-            } catch (_: Exception) {}
+            } catch (_: Exception) {
+            }
         }
 
         _isPlaying.value = false
@@ -238,34 +214,34 @@ class TTSViewModel(
     }
 
     private fun initAudioTrack() {
-        val ttsInfo = ttsService.getTtsInfo() ?: throw IllegalStateException("TTS not initialized")
-        val sampleRate = ttsInfo.sampleRate
+        val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+        val sampleRate = ttsInfo.getInt("sample_rate")
+
 
         val bufLength = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_FLOAT
+            sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT
         )
 
-        val attr = AudioAttributes.Builder()
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .build()
+        val attr = AudioAttributes.Builder().setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .setUsage(AudioAttributes.USAGE_MEDIA).build()
 
-        val format = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .setSampleRate(sampleRate)
-            .build()
+        val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).setSampleRate(sampleRate).build()
 
-        track = AudioTrack(attr, format, bufLength, AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
+        track = AudioTrack(
+            attr,
+            format,
+            bufLength,
+            AudioTrack.MODE_STREAM,
+            android.media.AudioManager.AUDIO_SESSION_ID_GENERATE
+        )
         Log.i(TAG, "AudioTrack initialized with sampleRate=$sampleRate, buffer=$bufLength")
     }
 
     override fun onCleared() {
         super.onCleared()
         generationJob?.cancel()
-        ttsService.release()
+        AudioManager.unloadTtsModel()
         if (::track.isInitialized) track.release()
         Log.i(TAG, "ViewModel cleared, resources released")
     }
@@ -292,8 +268,7 @@ class TTSViewModel(
             // Normalize multiple spaces/tabs to a single space
             .replace(Regex("[\\s]+"), " ")
             // Normalize multiple newlines to exactly 2
-            .replace(Regex("(\\n\\s*){2,}"), "\n\n")
-            .trim()
+            .replace(Regex("(\\n\\s*){2,}"), "\n\n").trim()
     }
 
 }

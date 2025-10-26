@@ -70,5 +70,7 @@ enum class ModelProvider {
 enum class ModelType {
     TEXT,
     TTS,
-    STT
+    STT,
+    VLM,
+    EMBEDDING
 }

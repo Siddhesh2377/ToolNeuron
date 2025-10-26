@@ -1,11 +1,7 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("data_hub_lib")
 
-# Set the path to the libsodium AAR file to help CMake find it.
-# The `prefab` subdirectory is where the necessary CMake files are located.
-# IMPORTANT: Replace '/path/to/your/libsodium-1.0.20.0.aar' with the actual path
-# in your project, e.g., 'app/src/main/libs/libsodium-1.0.20.0.aar'.
-set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/data-hub-lib/libs/libsodium-1.0.20.0.aar/prefab/")
+set(CMAKE_PREFIX_PATH "${PROJECT_SOURCE_DIR}/libs/libsodium-1.0.20.0.aar/prefab/")
 
 # This will now successfully find the libsodium package
 find_package(sodium REQUIRED CONFIG)

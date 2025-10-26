@@ -25,11 +25,11 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.consumeAsFlow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,41 +38,34 @@ import org.json.JSONObject
 import java.io.File
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.math.min
 
-/**
- * ModelManager – unified interface for:
- *   • Local GGUF models (via AIDL GenerationService)
- *   • OpenRouter cloud models (via OpenRouterExecutor)
- *   • DB persistence (Room)
- */
 @SuppressLint("StaticFieldLeak")
 object ModelManager {
 
     private const val TAG = "ModelManager"
-    var service: IGenerationService? = null
-    private var serviceBoundContext: Context? = null
-    private val connection = object : ServiceConnection {
-        override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
-            binder?.let {
-                service = IGenerationService.Stub.asInterface(it)
-                Log.i(TAG, "GenerationService connected")
-            }
-        }
 
-        override fun onServiceDisconnected(name: ComponentName) {
-            service = null
-            Log.w(TAG, "GenerationService disconnected")
-        }
-    }
+    // Service
+    private var service: IGenerationService? = null
+    private var serviceBoundContext: Context? = null
+    private val serviceConnection = ServiceConnectionImpl()
+
+    // OpenRouter
     private var openRouterExecutor: OpenRouterExecutor? = null
     private var openRouterApiKey: String = ""
     private var openRouterBaseUrl: String = "https://openrouter.ai/api/v1"
+
+    // Database
     private val initGuard = AtomicBoolean(false)
     private lateinit var dao: ModelDAO
+
+    // State
     private val _currentModel = MutableStateFlow(ModelData())
     val currentModel: StateFlow<ModelData> = _currentModel.asStateFlow()
     val isGenerating = MutableStateFlow(false)
-    private val queue = Channel<Request>(capacity = 64)
+
+    // Generation Queue
+    private val queue = Channel<GenerationRequest>(capacity = 64)
     private var processorJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val genExecutor = Executors.newSingleThreadExecutor { r ->
@@ -87,103 +80,235 @@ object ModelManager {
         startProcessor()
     }
 
+    //region Initialization
+
     fun init(context: Context) {
         if (initGuard.compareAndSet(false, true)) {
             dao = DatabaseProvider.getDatabase(context).ModelDAO()
-            startService(context)
+            bindService(context)
         }
     }
 
-    /**
-     * Configure OpenRouter credentials
-     * Call this when API key changes
-     */
     fun configureOpenRouter(apiKey: String, baseUrl: String = "https://openrouter.ai/api/v1") {
         openRouterApiKey = apiKey
         openRouterBaseUrl = baseUrl
         openRouterExecutor = if (apiKey.isNotBlank()) {
             OpenRouterExecutor(apiKey, baseUrl)
-        } else {
-            Log.e("ModelManager", "OpenRouter API key is blank")
-            null
-        }
+        } else null
         Log.i(TAG, "OpenRouter configured: ${if (apiKey.isBlank()) "disabled" else "enabled"}")
     }
 
-    private fun ensureDaoInitialized() {
-        check(initGuard.get()) { "ModelManager.init(context) must be called before use." }
+    //endregion
+
+    //region Service Management
+
+    private fun bindService(context: Context) {
+        context.bindService(
+            Intent(context, GenerationService::class.java),
+            serviceConnection,
+            Context.BIND_AUTO_CREATE
+        )
+        serviceBoundContext = context.applicationContext
     }
 
-    suspend fun loadModelAwait(
-        modelData: ModelData, onLoaded: (LoadState) -> Unit
-    ): Result<Unit> = withContext(Dispatchers.IO) {
-        // Check if this is an OpenRouter model
-        if (modelData.providerName == ModelProvider.OpenRouter.toString()) {
-            // No loading needed for cloud models
-            _currentModel.value = modelData
-            onLoaded(LoadState.OnLoaded(modelData))
-            return@withContext Result.success(Unit)
-        } else {
-            // GGUF model loading
-            onLoaded(LoadState.Idle)
-            onLoaded(LoadState.Loading(0f))
-
+    private fun unbindService() {
+        serviceBoundContext?.let { ctx ->
             try {
-                val f = File(modelData.modelPath)
-                if (!f.exists()) {
-                    val err = IllegalArgumentException("Missing model: ${f.absolutePath}")
-                    onLoaded(LoadState.Error(err.message ?: "Load failed"))
-                    Log.e("Model", err.message ?: "Load failed")
-                    return@withContext Result.failure(err)
-                }
-
-                val svc = service ?: run {
-                    onLoaded(LoadState.Error("Service not bound"))
-                    Log.e("Model", "Service not bound")
-                    return@withContext Result.failure(RuntimeException("Service not bound"))
-                }
-
-                val ok = svc.loadModel(
-                    modelData.modelPath,
-                    modelData.threads,
-                    modelData.gpuLayers,
-                    modelData.useMMAP,
-                    modelData.ctxSize,
-                    modelData.temp,
-                    modelData.topK,
-                    modelData.topP,
-                    modelData.minP
-                )
-
-                if (!ok) {
-                    onLoaded(LoadState.Error("Model load failed in service"))
-                    Log.e("Model", "Model load failed")
-                    return@withContext Result.failure(RuntimeException("Model load failed"))
-                }
-
-                svc.setSystemPrompt(modelData.systemPrompt)
-                modelData.chatTemplate?.let { svc.setChatTemplate(it) }
-
-                _currentModel.value = modelData
-                onLoaded(LoadState.OnLoaded(modelData))
-                Result.success(Unit)
-            } catch (t: Throwable) {
-                onLoaded(LoadState.Error(t.message ?: "Load failed"))
-                Result.failure(t)
+                ctx.unbindService(serviceConnection)
+            } catch (_: IllegalArgumentException) {
             }
+        }
+        service = null
+        serviceBoundContext = null
+    }
+
+    private class ServiceConnectionImpl : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
+            service = IGenerationService.Stub.asInterface(binder)
+            Log.i(TAG, "Service connected")
+        }
+
+        override fun onServiceDisconnected(name: ComponentName) {
+            service = null
+            Log.w(TAG, "Service disconnected")
         }
     }
 
-    fun unloadModel() {
-        val svc = service ?: return
-        svc.unloadModel()
+    //endregion
+
+    //region Model Loading
+
+    suspend fun loadGenerationModel(
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        when (modelData.providerName) {
+            ModelProvider.OpenRouter.toString() -> loadOpenRouterModel(modelData, onLoaded)
+            ModelProvider.LocalGGUF.toString() -> loadGGUFModel(modelData, onLoaded)
+            else -> Result.failure(IllegalArgumentException("Unknown provider: ${modelData.providerName}"))
+        }
+    }
+
+    private fun loadOpenRouterModel(
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
+    ): Result<Unit> {
+        _currentModel.value = modelData
+        onLoaded(LoadState.OnLoaded(modelData))
+        return Result.success(Unit)
+    }
+
+    private suspend fun loadGGUFModel(
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        onLoaded(LoadState.Idle)
+        onLoaded(LoadState.Loading(0f))
+
+        val file = File(modelData.modelPath)
+        if (!file.exists()) {
+            val err = "Model not found: ${file.absolutePath}"
+            onLoaded(LoadState.Error(err))
+            return@withContext Result.failure(IllegalArgumentException(err))
+        }
+
+        val svc = service ?: run {
+            onLoaded(LoadState.Error("Service not bound"))
+            return@withContext Result.failure(RuntimeException("Service not bound"))
+        }
+
+        return@withContext try {
+            val ok = svc.loadTextGenerationModel(
+                modelData.modelPath,
+                modelData.threads,
+                modelData.gpuLayers,
+                modelData.useMMAP,
+                modelData.ctxSize,
+                modelData.temp,
+                modelData.topK,
+                modelData.topP,
+                modelData.minP
+            )
+
+            if (!ok) {
+                onLoaded(LoadState.Error("Model load failed"))
+                return@withContext Result.failure(RuntimeException("Model load failed"))
+            }
+
+            svc.setSystemPrompt(modelData.systemPrompt)
+            modelData.chatTemplate?.let { svc.setChatTemplate(it) }
+
+            _currentModel.value = modelData
+            onLoaded(LoadState.OnLoaded(modelData))
+            Result.success(Unit)
+        } catch (t: Throwable) {
+            onLoaded(LoadState.Error(t.message ?: "Load failed"))
+            Result.failure(t)
+        }
+    }
+
+    suspend fun loadVLModels(
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val svc = service ?: run {
+            onLoaded(LoadState.Error("Service not bound"))
+            return@withContext
+        }
+
+        val pathJson = JSONObject(modelData.modelPath)
+        val generatorPath = pathJson.getString("genModelPath")
+        val vlModelsPath = pathJson.getString("vlModelPath")
+
+        if (!File(generatorPath).exists()) {
+            onLoaded(LoadState.Error("Generator model not found"))
+            return@withContext
+        }
+        if (!File(vlModelsPath).exists()) {
+            onLoaded(LoadState.Error("VL model not found"))
+            return@withContext
+        }
+
+        val threads = min(Runtime.getRuntime().availableProcessors(), 8)
+
+        val textOk = svc.loadTextGenerationModel(
+            generatorPath,
+            threads,
+            0,
+            true,
+            modelData.ctxSize,
+            modelData.temp,
+            modelData.topK,
+            modelData.topP,
+            modelData.minP
+        )
+
+        if (!textOk) {
+            onLoaded(LoadState.Error("Text model load failed"))
+            return@withContext
+        }
+
+        val vlOk = svc.loadMultimodalProjector(vlModelsPath, threads)
+        if (!vlOk) {
+            onLoaded(LoadState.Error("VL model load failed"))
+            return@withContext
+        }
+
+        _currentModel.value = modelData
+        onLoaded(LoadState.OnLoaded(modelData))
+    }
+
+    suspend fun loadEmbeddingModel(
+        modelData: ModelData, onLoaded: (LoadState) -> Unit
+    ) = withContext(Dispatchers.IO) {
+        val svc = service ?: run {
+            onLoaded(LoadState.Error("Service not bound"))
+            return@withContext
+        }
+
+        if (!File(modelData.modelPath).exists()) {
+            onLoaded(LoadState.Error("Embedding model not found"))
+            return@withContext
+        }
+
+        val threads = min(Runtime.getRuntime().availableProcessors(), 8)
+        val ok = svc.loadEmbedModel(modelData.modelPath, threads, 512)
+
+        if (!ok) {
+            onLoaded(LoadState.Error("Embedding model load failed"))
+            return@withContext
+        }
+
+        onLoaded(LoadState.OnLoaded(modelData))
+    }
+
+    //endregion
+
+    //region Model Unloading
+
+    fun unloadGenerationModel() {
+        service?.unloadTextGenerationModel()
         _currentModel.value = ModelData()
     }
 
-    fun setChatTemplate(template: String) {
-        val svc = service ?: return
-        svc.setChatTemplate(template)
+    fun unloadVLModel() {
+        service?.let {
+            it.unloadTextGenerationModel()
+            it.unloadMultimodalProjector()
+        }
+        _currentModel.value = ModelData()
     }
+
+    fun unloadEmbeddingModel() {
+        service?.unLoadEmbeddingModel()
+        _currentModel.value = ModelData()
+    }
+
+    //endregion
+
+    //region Model Info
+    fun getModelInfo(): String? {
+        return service?.modelInfo
+    }
+    //endregion
+
+    //region Text Generation
 
     suspend fun generateStreaming(
         prompt: String,
@@ -217,15 +342,10 @@ object ModelManager {
                 )
             }
 
-            else -> {
-                throw IllegalStateException("Unknown provider: ${model.providerName}")
-            }
+            else -> throw IllegalStateException("Unknown provider: ${model.providerName}")
         }
     }
 
-    /**
-     * Generate using OpenRouter API
-     */
     private suspend fun generateOpenRouter(
         modelId: String,
         prompt: String,
@@ -235,15 +355,13 @@ object ModelManager {
         onToolCalled: (String, String) -> Unit,
         onToken: (String) -> Unit
     ): String {
-        val executor = openRouterExecutor
-            ?: throw IllegalStateException("OpenRouter not configured. Call configureOpenRouter() first.")
+        val executor =
+            openRouterExecutor ?: throw IllegalStateException("OpenRouter not configured")
 
         isGenerating.value = true
-
-        try {
+        return try {
             val normalized = ToolJsonUtils.normalizeSpec(toolJson)
-
-            val result = executor.generateStreaming(
+            executor.generateStreaming(
                 modelId = modelId,
                 prompt = prompt,
                 systemPrompt = systemPrompt,
@@ -251,17 +369,12 @@ object ModelManager {
                 toolsJson = if (toolJson.isNotEmpty()) normalized else null,
                 onToken = onToken,
                 onToolCall = onToolCalled
-            )
-
-            return result.getOrThrow()
+            ).getOrThrow()
         } finally {
             isGenerating.value = false
         }
     }
 
-    /**
-     * Generate using local GGUF model via queue system
-     */
     private suspend fun generateGGUF(
         prompt: String,
         gen: GenerationParams,
@@ -269,114 +382,53 @@ object ModelManager {
         onToolCalled: (String, String) -> Unit,
         onToken: (String) -> Unit
     ): String {
-        val def = CompletableDeferred<String>()
+        val deferred = CompletableDeferred<String>()
         val normalized = ToolJsonUtils.normalizeSpec(toolJson)
         val deduped = ToolJsonUtils.maybeDedup(normalized)
 
-        Log.d("GGUF", "Sending request to queue \n $normalized \n $deduped ")
         queue.send(
-            Request.Streaming(
+            GenerationRequest.Streaming(
                 prompt = prompt,
                 gen = gen,
                 onToken = onToken,
                 toolJson = if (toolJson.isNotEmpty()) deduped else "",
                 onToolCalled = onToolCalled,
-                completer = def
+                completer = deferred
             )
         )
-        return def.await()
+        return deferred.await()
     }
 
     fun stopGeneration() {
         val model = _currentModel.value
         when (model.providerName) {
-            ModelProvider.OpenRouter.toString() -> {
-                openRouterExecutor?.stopGeneration()
-            }
-
+            ModelProvider.OpenRouter.toString() -> openRouterExecutor?.stopGeneration()
             ModelProvider.LocalGGUF.toString() -> {
-                service?.stopGeneration()
+                service?.stopTextGeneration()
             }
         }
         isGenerating.value = false
     }
 
-    fun setSystemPrompt(prompt: String) {
-        val model = _currentModel.value
+    //endregion
 
-        when (model.providerName) {
-            ModelProvider.LocalGGUF.toString() -> {
-                service?.setSystemPrompt(prompt)
-            }
-            // OpenRouter system prompt is set per-request, no action needed
-        }
-
-        // Update current model
-        _currentModel.value = model.copy(systemPrompt = prompt)
+    //region Embedding-Generation
+    suspend fun generateEmbeddings(input: String): FloatArray = withContext(Dispatchers.IO) {
+        service ?: return@withContext FloatArray(0)
+        return@withContext service!!.embed(input)
     }
+    //endregion
 
-    fun shutdown() {
-        // Graceful shutdown of the internal queue + background worker
-        queue.close()
-        processorJob?.cancel()
-        stopGeneration()
-        unloadModel()
-
-        // Cancel dispatchers & executor
-        genDispatcher.cancel()
-        genExecutor.shutdown()
-
-        // Stop OpenRouter (if it was configured)
-        openRouterExecutor = null
-
-        // Now unbind the AIDL service
-        shutdownService()
-
-        Log.i(TAG, "ModelManager shut down")
-    }
-
-    /**
-     * Explicitly bind the `GenerationService`.
-     * This is equivalent to the `init(context)` logic that was previously
-     * executed only once.
-     *
-     * @param context the context that will be kept until `shutdownService()` is called
-     */
-    fun startService(context: Context) {
-        context.bindService(
-            Intent(context, GenerationService::class.java), connection, Context.BIND_AUTO_CREATE
-        )
-        serviceBoundContext = context.applicationContext   // keep a weak reference
-    }
-
-    /**
-     * Unbind a connected `GenerationService`.
-     * If the service was never bound this is a no‑op.
-     */
-    fun shutdownService() {
-        val ctx = serviceBoundContext ?: return
-        try {
-            ctx.unbindService(connection)
-        } catch (e: IllegalArgumentException) {
-            // Service was already unbound – ignore
-        }
-        service = null
-        serviceBoundContext = null
-    }
-
-    fun isModelLoaded(): Boolean {
-        return _currentModel.value.modelName != ""
-    }
+    //region Generation Queue Processor
 
     private fun startProcessor() {
         processorJob?.cancel()
-        processorJob = scope.launch {
-            Log.d(TAG, "Processor started on ${Thread.currentThread().name}")
-            queue.consumeEach { req ->
+        processorJob = scope.launch(genDispatcher) {
+            queue.consumeAsFlow().collect { req ->
                 try {
                     isGenerating.value = true
                     when (req) {
-                        is Request.Streaming -> handleStreaming(req)
+                        is GenerationRequest.Streaming -> handleStreaming(req)
                     }
                 } catch (t: Throwable) {
                     Log.e(TAG, "Generation error", t)
@@ -387,33 +439,78 @@ object ModelManager {
         }
     }
 
-    private fun handleStreaming(r: Request.Streaming) {
+    private fun handleStreaming(req: GenerationRequest.Streaming) {
         val svc = service ?: run {
-            r.completer.completeExceptionally(RuntimeException("Service not bound"))
+            req.completer.completeExceptionally(RuntimeException("Service not bound"))
             return
         }
 
-        svc.generate(
-            r.prompt, r.gen.maxTokens, r.toolJson.toString(), object : IGenerationCallback.Stub() {
-                var acc = StringBuilder()
+        svc.generateText(
+            req.prompt, req.gen.maxTokens, req.toolJson ?: "", object : IGenerationCallback.Stub() {
+                private val acc = StringBuilder()
+
                 override fun onToken(token: String) {
-                    r.onToken(token)
+                    req.onToken(token)
                     acc.append(token)
                 }
 
                 override fun onToolCall(name: String, args: String) {
-                    r.onToolCalled(name, args)
+                    req.onToolCalled(name, args)
                 }
 
                 override fun onDone() {
-                    r.completer.complete(acc.toString())
+                    req.completer.complete(acc.toString())
                 }
 
                 override fun onError(error: String) {
-                    r.completer.completeExceptionally(RuntimeException(error))
+                    req.completer.completeExceptionally(RuntimeException(error))
                 }
             })
     }
+
+    //endregion
+
+    //region State Management
+
+    suspend fun getStateSize(): Long = withContext(Dispatchers.IO) {
+        service?.stateSize ?: 0L
+    }
+
+    suspend fun getStateData(): ByteArray? = withContext(Dispatchers.IO) {
+        service?.stateData
+    }
+
+    suspend fun loadStateData(state: ByteArray): Boolean = withContext(Dispatchers.IO) {
+        service?.loadStateData(state) ?: false
+    }
+
+    suspend fun saveStateFile(filePath: String): Boolean = withContext(Dispatchers.IO) {
+        service?.saveStateFile(filePath) ?: false
+    }
+
+    suspend fun loadStateFile(filePath: String): Boolean = withContext(Dispatchers.IO) {
+        service?.loadStateFile(filePath) ?: false
+    }
+
+    //endregion
+
+    //region Configuration
+
+    fun setSystemPrompt(prompt: String) {
+        val model = _currentModel.value
+        when (model.providerName) {
+            ModelProvider.LocalGGUF.toString() -> service?.setSystemPrompt(prompt)
+        }
+        _currentModel.value = model.copy(systemPrompt = prompt)
+    }
+
+    fun setChatTemplate(template: String) {
+        service?.setChatTemplate(template)
+    }
+
+    //endregion
+
+    //region Database Operations
 
     fun observeModels(): Flow<List<ModelData>> {
         ensureDaoInitialized()
@@ -455,17 +552,46 @@ object ModelManager {
         dao.getAllModels().firstOrNull() ?: emptyList()
     }
 
-    suspend fun getTTSModels(): ModelData? = withContext(Dispatchers.IO) {
+    suspend fun getTTSModel(): ModelData? = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
         dao.getTTSModel()
     }
 
-    suspend fun getSTTModels(): ModelData? = withContext(Dispatchers.IO) {
+    suspend fun getSTTModel(): ModelData? = withContext(Dispatchers.IO) {
         ensureDaoInitialized()
         dao.getSTTModel()
     }
 
-    private sealed interface Request {
+    private fun ensureDaoInitialized() {
+        check(initGuard.get()) { "ModelManager.init(context) must be called first" }
+    }
+
+    //endregion
+
+    //region Lifecycle
+
+    fun isModelLoaded(): Boolean = _currentModel.value.modelName.isNotEmpty()
+
+    fun shutdown() {
+        queue.close()
+        processorJob?.cancel()
+        stopGeneration()
+        unloadGenerationModel()
+
+        genDispatcher.cancel()
+        genExecutor.shutdown()
+
+        openRouterExecutor = null
+        unbindService()
+
+        Log.i(TAG, "ModelManager shutdown complete")
+    }
+
+    //endregion
+
+    //region Internal Types
+
+    private sealed interface GenerationRequest {
         data class Streaming(
             val prompt: String,
             val gen: GenerationParams,
@@ -473,7 +599,7 @@ object ModelManager {
             val toolJson: String?,
             val onToolCalled: (String, String) -> Unit,
             val completer: CompletableDeferred<String>
-        ) : Request
+        ) : GenerationRequest
     }
 
     private object ToolJsonUtils {
@@ -483,6 +609,7 @@ object ModelManager {
 
         fun normalizeSpec(spec: String?): String? {
             if (spec.isNullOrBlank()) return null
+
             val root: JSONArray = try {
                 when (spec.trimStart().firstOrNull()) {
                     '[' -> JSONArray(spec)
@@ -490,7 +617,7 @@ object ModelManager {
                     else -> return null
                 }
             } catch (t: Throwable) {
-                Log.e(TAG, "Invalid tool spec JSON", t)
+                Log.e(TAG, "Invalid tool JSON", t)
                 return null
             }
 
@@ -498,23 +625,24 @@ object ModelManager {
                 val item = root.optJSONObject(i) ?: continue
                 val func = item.optJSONObject("function") ?: continue
 
+                // Truncate description
                 func.optString("description").takeIf { it.length > MAX_DESC }?.let {
                     func.put("description", it.take(MAX_DESC))
                 }
 
+                // Normalize required array
                 val params = func.optJSONObject("parameters") ?: continue
                 val required = params.opt("required")
                 if (required != null && required !is JSONArray) {
                     val arr = JSONArray()
                     when (required) {
                         is String -> arr.put(required)
-                        is Iterable<*> -> required.forEach { k ->
-                            if (k is String) arr.put(k)
-                        }
+                        is Iterable<*> -> required.forEach { if (it is String) arr.put(it) }
                     }
                     params.put("required", arr)
                 }
 
+                // Sort properties
                 val props = params.optJSONObject("properties") ?: continue
                 val ordered = JSONObject()
                 props.keys().asSequence().sorted().forEach { key ->
@@ -525,7 +653,7 @@ object ModelManager {
 
             val txt = root.toString()
             if (txt.toByteArray().size > MAX_SPEC_BYTES) {
-                Log.w(TAG, "Tool spec too big – dropping descriptions")
+                Log.w(TAG, "Tool spec too large, dropping descriptions")
                 for (i in 0 until root.length()) {
                     root.optJSONObject(i)?.optJSONObject("function")?.remove("description")
                 }
@@ -535,12 +663,14 @@ object ModelManager {
         }
 
         fun maybeDedup(spec: String?): String? {
-            if (spec == null) return spec
-            val h = spec.hashCode()
-            return if (lastHash == h) null else {
-                lastHash = h
+            if (spec == null) return null
+            val hash = spec.hashCode()
+            return if (lastHash == hash) null else {
+                lastHash = hash
                 spec
             }
         }
     }
+
+    //endregion
 }

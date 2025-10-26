@@ -4,8 +4,6 @@ import android.util.Log
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
-import com.mp.ai_core.NativeLib
-import com.mp.data_hub_lib.manager.DataHubManager
 import com.mp.data_hub_lib.model.DataSetModel
 import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.Dispatchers
@@ -107,22 +105,20 @@ object RAGManager {
      * @return JSONObject with "success" or "error"
      */
     suspend fun ensureGenerationModelReady(
-        currentModel: ModelData,
-        onStateUpdate: (LoadState) -> Unit = {}
+        currentModel: ModelData, onStateUpdate: (LoadState) -> Unit = {}
     ): JSONObject = withContext(Dispatchers.IO) {
         return@withContext try {
             Log.d(TAG, "Releasing embedding model and loading generation model...")
             Log.d(TAG, "Current model: ${currentModel.modelName}")
 
             // Release embedding model instance
-            val generationLib = NativeLib.getGenerationInstance()
-            generationLib.nativeRelease()
+            ModelManager.unloadEmbeddingModel()
 
             // Brief delay to ensure clean state
             delay(MODEL_SWITCH_DELAY_MS)
 
             // Load generation model
-            val result = ModelManager.loadModelAwait(currentModel) { loadState ->
+            val result = ModelManager.loadGenerationModel(currentModel) { loadState ->
                 onStateUpdate(loadState)
                 when (loadState) {
                     is LoadState.OnLoaded -> {
@@ -161,7 +157,7 @@ object RAGManager {
         query: String, topK: Int
     ): Pair<RagResult?, String?> = suspendCancellableCoroutine { continuation ->
         try {
-            ModelManager.unloadModel().let {
+            ModelManager.unloadGenerationModel().let {
                 DataHubManager.runRAG(query = query, topK = topK) { ragResult, ragError ->
                     if (continuation.isActive) {
                         continuation.resume(ragResult to ragError)
@@ -213,8 +209,8 @@ object RAGManager {
             }
 
             val context = ragData.docs.filter { it.text.isNotBlank() }.mapIndexed { index, doc ->
-                    "[Doc ${index + 1}] ${doc.text.trim()}"
-                }.joinToString("\n\n")
+                "[Doc ${index + 1}] ${doc.text.trim()}"
+            }.joinToString("\n\n")
 
             Log.d(TAG, "Extracted ${ragData.docs.size} documents, ${context.length} chars")
             context
