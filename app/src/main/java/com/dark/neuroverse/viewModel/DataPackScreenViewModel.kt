@@ -61,7 +61,7 @@ class DataPackScreenViewModel : ViewModel() {
     fun installDataPack(dataPack: DataPack, context: Context) {
         updateUiState(dataPack) { it.copy(isDownloading = true, progress = 0f) }
 
-        val file = File(context.filesDir, "data-packs/${dataPack.name}.vecx")
+        val file = File(context.filesDir, "data-packs/${dataPack.name.replace(" ","-")}.vecx")
         file.parentFile?.mkdirs()
 
         viewModelScope.launch {

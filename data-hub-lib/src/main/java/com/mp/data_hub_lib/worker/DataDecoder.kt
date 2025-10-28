@@ -40,6 +40,9 @@ object BrainDecoder {
             return emptyList()
         }
         return docs.map { doc ->
+            Log.d("BrainDecoder", "doc0 sample: ${docs[0].embedding.take(5)}")
+            Log.d("RAG", "query embedding sample: ${queryEmbedding.take(5).joinToString()}")
+
             val similarity = cosineSimilarity(doc.embedding.toFloatArray(), queryEmbedding)
             Doc(doc.text, similarity)
         }.sortedByDescending { it.similarity }.take(topK)

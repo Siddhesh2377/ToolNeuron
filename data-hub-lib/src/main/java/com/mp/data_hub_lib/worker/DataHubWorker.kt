@@ -1,6 +1,7 @@
 package com.mp.data_hub_lib.worker
 
 import android.content.Context
+import android.util.Log
 import com.mp.data_hub_lib.DataNativeLib
 import com.mp.data_hub_lib.db.DataHubDAO
 import com.mp.data_hub_lib.db.DataHubDatabase
@@ -45,44 +46,63 @@ class DataHubWorker(
     fun installDataPack(srcFile: File, key: String, onResult: (Boolean) -> Unit = {}) {
         coroutineScope.launch {
             try {
+                Log.d("DataPack", "Starting installation for ${srcFile.name}")
+
                 // Ensure base folder exists
                 val baseDir = File(context.filesDir, "dataHub").apply { mkdirs() }
+                Log.d("DataPack", "Base directory ready at: ${baseDir.absolutePath}")
 
                 // Target path for this data pack
                 val root = File(baseDir, srcFile.name)
+                Log.d("DataPack", "Target path set to: ${root.absolutePath}")
 
                 // Copy (overwrite if exists)
+                Log.d("DataPack", "Copying file...")
                 srcFile.copyTo(root, overwrite = true)
+                Log.d("DataPack", "File copied successfully")
 
                 // Load encrypted vecx
+                Log.d("DataPack", "Loading vecx with key... $key")
                 val ok = dataNativeLib.loadVecx(root.absolutePath, key)
                 if (!ok) {
+                    Log.e("DataPack", "Vecx load failed for ${root.name}")
                     onResult(false)
                     return@launch
                 }
+                Log.d("DataPack", "Vecx loaded successfully")
 
                 // Load manifest
+                Log.d("DataPack", "Loading manifest...")
                 val manifest = dataNativeLib.loadManifest() ?: run {
+                    Log.e("DataPack", "Manifest load failed")
                     onResult(false)
                     return@launch
                 }
+                Log.d("DataPack", "Manifest loaded: name=${manifest.name}, author=${manifest.author}")
 
                 // Build model
+                val docCount = getDocumentCount()
+                Log.d("DataPack", "Document count: $docCount")
+
                 val model = DataSetModel(
                     modelName = manifest.name,
                     modelDescription = manifest.description,
                     modelPath = root.absolutePath,
                     modelAuthor = manifest.author,
                     modelCreated = manifest.issued,
-                    documentCount = getDocumentCount()
+                    documentCount = docCount
                 )
 
                 // Insert or overwrite
+                Log.d("DataPack", "Inserting model into database...")
                 dataHubDAO.insertModel(model)
+                Log.d("DataPack", "Model inserted successfully: ${model.modelName}")
+
                 onResult(true)
+                Log.d("DataPack", "Installation completed successfully")
 
             } catch (e: Exception) {
-                println("Failed to install model: ${e.message}")
+                Log.e("DataPack", "Failed to install model: ${e.message}", e)
                 onResult(false)
             }
         }
