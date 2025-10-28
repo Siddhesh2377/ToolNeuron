@@ -61,11 +61,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
+import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.ui.theme.NeuroVerseTheme
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
-import com.mp.ai_core.NativeLib
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -99,8 +100,7 @@ class ModelLoadingActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelLoadingScreen(
-    incomingPath: String?,
-    viewModel: ModelScreenViewModel = viewModel()
+    incomingPath: String?, viewModel: ModelScreenViewModel = viewModel()
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
@@ -123,7 +123,7 @@ fun ModelLoadingScreen(
         viewModel.addModel(model)
         try {
             Toast.makeText(context, "Model saved", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception){
+        } catch (e: Exception) {
             Log.e("ModelLoadingScreen", "Error showing toast: ${e.message}")
         }
         context.startActivity(Intent(context, MainActivity::class.java))
@@ -142,27 +142,17 @@ fun ModelLoadingScreen(
         loadError = null
         infoJson = null
         withContext(Dispatchers.IO) {
-            val native = NativeLib.getGenerationInstance()
-            val ok = native.initModel(
-                path = f.absolutePath,
-                threads = maxOf(1, Runtime.getRuntime().availableProcessors() / 2),
-                gpuLayers = -1,
-                useMMAP = true,
-                useMLOCK = false,
-                ctxSize = 512,
-                temp = 0.7f,
-                topK = 20,
-                topP = 0.9f,
-                minP = 0f
-            )
-            if (!ok) {
-                withContext(Dispatchers.Main) {
-                    loading = false
-                    loadError = "Failed to load model."
-                }
-                return@withContext
-            }
-            val raw = runCatching { native.nativeGetModelInfo() }.getOrElse { "" }
+            ModelManager.loadGenerationModel(
+                ModelData(
+                    modelName = f.name,
+                    modelPath = f.absolutePath,
+                    providerName = ModelProvider.LocalGGUF.toString()
+                ), onLoaded = {
+                    if (it !is LoadState.OnLoaded) {
+                        return@loadGenerationModel
+                    }
+                })
+            val raw = runCatching { ModelManager.getModelInfo() ?: "" }.getOrElse { "" }
             val parsed = runCatching { JSONObject(raw) }.getOrNull()
             withContext(Dispatchers.Main) {
                 infoJson = parsed
@@ -171,8 +161,6 @@ fun ModelLoadingScreen(
             }
         }
     }
-
-    val core = infoJson?.getJSONObject("core")
 
     Scaffold(
         topBar = {
@@ -196,8 +184,7 @@ fun ModelLoadingScreen(
                 ) { (f, isLoading, info) ->
                     when {
                         f == null -> MissingPathCard(
-                            shape = cardShape,
-                            onClose = { activity?.finish() })
+                            shape = cardShape, onClose = { activity?.finish() })
 
                         isLoading -> LoadingCard(shape = cardShape)
                         else -> DetailsCard(
@@ -306,8 +293,7 @@ private fun LoadingCard(shape: RoundedCornerShape) {
             LinearWavyProgressIndicator(modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(10.dp))
             Text(
-                "Reading model file & collecting info…",
-                style = MaterialTheme.typography.bodyMedium
+                "Reading model file & collecting info…", style = MaterialTheme.typography.bodyMedium
             )
         }
     }

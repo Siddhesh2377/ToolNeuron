@@ -19,10 +19,9 @@ android {
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-        externalNativeBuild {
-            cmake {
-                cppFlags("")
-            }
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
     }
 
@@ -55,7 +54,7 @@ android {
 
 dependencies {
     implementation(":ai-core-release@aar")
-    implementation(files(":libsodium-1.0.20.0@aar"))
+    implementation(":libsodium-1.0.20.0@aar")
     implementation(libs.zip4j)
     implementation(libs.gson)
     implementation(libs.androidx.room.runtime)

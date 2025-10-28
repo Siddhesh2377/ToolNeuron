@@ -51,7 +51,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.model.DataSetSelectionState
-import com.mp.data_hub_lib.manager.DataHubManager
+import com.dark.neuroverse.worker.DataHubManager
 import com.mp.data_hub_lib.model.DataSetModel
 import kotlinx.coroutines.launch
 

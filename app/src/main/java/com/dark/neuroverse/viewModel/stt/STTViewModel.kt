@@ -1,32 +1,19 @@
 package com.dark.neuroverse.viewModel.stt
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mp.ai_core.stt.STTStatus
-import com.mp.ai_core.stt.SherpaSTTManager
-import com.mp.ai_core.stt.TranscriptionResult
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import com.dark.ai_module.model.ModelData
+import com.dark.ai_module.model.ModelType
+import com.dark.ai_module.workers.AudioManager
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.io.File
 
-/**
- * ViewModel for managing Speech-to-Text operations.
- * Provides reactive state management and clean separation of concerns.
- */
 class STTViewModel : ViewModel() {
 
     companion object {
         private const val TAG = "STTViewModel"
-        private const val DEFAULT_MODEL_TYPE = 2
         private const val DEFAULT_SAMPLE_RATE = 16000
     }
 
@@ -36,40 +23,36 @@ class STTViewModel : ViewModel() {
 
     // Transcription history
     private val _transcriptionHistory = MutableStateFlow<List<TranscriptionItem>>(emptyList())
-    val transcriptionHistory: StateFlow<List<TranscriptionItem>> =
-        _transcriptionHistory.asStateFlow()
+    val transcriptionHistory: StateFlow<List<TranscriptionItem>> = _transcriptionHistory.asStateFlow()
 
-    // Events (single-time events like errors, success messages)
+    // Events
     private val _events = MutableSharedFlow<STTEvent>(extraBufferCapacity = 1)
     val events: SharedFlow<STTEvent> = _events.asSharedFlow()
 
-    // Current model info
-    private val _modelInfo = MutableStateFlow<ModelInfo?>(null)
-    val modelInfo: StateFlow<ModelInfo?> = _modelInfo.asStateFlow()
+    // Model info from AudioManager
+    val currentModel: StateFlow<ModelData?> = AudioManager.sttModel
+    val isProcessing: StateFlow<Boolean> = AudioManager.isSttProcessing
 
     init {
-        // Observe manager status
+        // Observe AudioManager state
         viewModelScope.launch {
-            while (true) {
-                val status = SherpaSTTManager.status
+            combine(
+                AudioManager.sttModel,
+                AudioManager.isSttProcessing
+            ) { model, processing ->
                 _uiState.update {
                     it.copy(
-                        status = status,
-                        isReady = SherpaSTTManager.isReady,
-                        activeStreams = SherpaSTTManager.activeStreamCount
+                        isReady = model != null && AudioManager.isSttReady(),
+                        isTranscribing = processing,
+                        activeStreams = AudioManager.getActiveStreamCount()
                     )
                 }
-                kotlinx.coroutines.delay(500) // Poll every 500ms
-            }
+            }.collect()
         }
     }
 
-    /**
-     * Initialize the STT engine
-     */
-    fun initialize(
-        modelDir: String, modelType: Int = DEFAULT_MODEL_TYPE, numThreads: Int = 2
-    ) {
+    // Initialize STT model
+    fun initialize(modelData: ModelData) {
         if (_uiState.value.isInitializing) {
             Log.w(TAG, "Already initializing")
             return
@@ -79,20 +62,17 @@ class STTViewModel : ViewModel() {
             _uiState.update { it.copy(isInitializing = true, error = null) }
 
             try {
-                val result = SherpaSTTManager.initialize(modelDir, modelType, null, numThreads)
+                val result = AudioManager.loadSttModel(modelData)
 
                 result.onSuccess {
                     Log.i(TAG, "STT initialized successfully")
                     _uiState.update {
                         it.copy(
-                            isInitializing = false, isReady = true, status = STTStatus.READY
+                            isInitializing = false,
+                            isReady = true,
+                            status = STTStatus.READY
                         )
                     }
-
-                    _modelInfo.value = ModelInfo(
-                        type = modelType, numThreads = numThreads, name = getModelName(modelType)
-                    )
-
                     _events.emit(STTEvent.InitializationSuccess)
                 }
 
@@ -112,7 +92,9 @@ class STTViewModel : ViewModel() {
                 Log.e(TAG, "Unexpected error during initialization", e)
                 _uiState.update {
                     it.copy(
-                        isInitializing = false, error = e.message, status = STTStatus.ERROR
+                        isInitializing = false,
+                        error = e.message,
+                        status = STTStatus.ERROR
                     )
                 }
                 _events.emit(STTEvent.InitializationFailed(e.message ?: "Unexpected error"))
@@ -120,12 +102,8 @@ class STTViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Transcribe audio from file
-     */
-    fun transcribeFile(
-        filePath: String, sampleRate: Int = DEFAULT_SAMPLE_RATE
-    ) {
+    // Transcribe audio from file
+    fun transcribeFile(filePath: String, sampleRate: Int = DEFAULT_SAMPLE_RATE) {
         if (_uiState.value.isTranscribing) {
             Log.w(TAG, "Already transcribing")
             return
@@ -139,12 +117,14 @@ class STTViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update {
                 it.copy(
-                    isTranscribing = true, currentTranscription = "", error = null
+                    isTranscribing = true,
+                    currentTranscription = "",
+                    error = null
                 )
             }
 
             try {
-                val result = SherpaSTTManager.transcribeFile(filePath, sampleRate)
+                val result = AudioManager.transcribeFile(filePath, sampleRate)
 
                 result.onSuccess { text ->
                     val cleanText = text.trim()
@@ -157,11 +137,10 @@ class STTViewModel : ViewModel() {
                         )
                     }
 
-                    // Add to history
                     addToHistory(
                         text = cleanText,
                         source = "File: ${File(filePath).name}",
-                        duration = 0 // Could calculate from audio file
+                        duration = 0
                     )
 
                     if (cleanText.isEmpty()) {
@@ -175,7 +154,8 @@ class STTViewModel : ViewModel() {
                     Log.e(TAG, "Transcription failed", error)
                     _uiState.update {
                         it.copy(
-                            isTranscribing = false, error = error.message
+                            isTranscribing = false,
+                            error = error.message
                         )
                     }
                     _events.emit(STTEvent.TranscriptionFailed(error.message ?: "Unknown error"))
@@ -184,7 +164,8 @@ class STTViewModel : ViewModel() {
                 Log.e(TAG, "Unexpected error during transcription", e)
                 _uiState.update {
                     it.copy(
-                        isTranscribing = false, error = e.message
+                        isTranscribing = false,
+                        error = e.message
                     )
                 }
                 _events.emit(STTEvent.Error(e.message ?: "Unexpected error"))
@@ -192,12 +173,8 @@ class STTViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Transcribe audio samples directly
-     */
-    fun transcribeSamples(
-        samples: FloatArray, sampleRate: Int = DEFAULT_SAMPLE_RATE
-    ) {
+    // Transcribe audio samples directly
+    fun transcribeSamples(samples: FloatArray, sampleRate: Int = DEFAULT_SAMPLE_RATE) {
         if (_uiState.value.isTranscribing) {
             Log.w(TAG, "Already transcribing")
             return
@@ -212,7 +189,7 @@ class STTViewModel : ViewModel() {
             _uiState.update { it.copy(isTranscribing = true, error = null) }
 
             try {
-                val result = SherpaSTTManager.transcribeSamples(samples, sampleRate)
+                val result = AudioManager.transcribeSamples(samples, sampleRate)
 
                 result.onSuccess { text ->
                     val cleanText = text.trim()
@@ -226,7 +203,9 @@ class STTViewModel : ViewModel() {
                     }
 
                     addToHistory(
-                        text = cleanText, source = "Recording", duration = samples.size / sampleRate
+                        text = cleanText,
+                        source = "Recording",
+                        duration = samples.size / sampleRate
                     )
 
                     if (cleanText.isEmpty()) {
@@ -239,56 +218,8 @@ class STTViewModel : ViewModel() {
                 result.onFailure { error ->
                     _uiState.update {
                         it.copy(
-                            isTranscribing = false, error = error.message
-                        )
-                    }
-                    _events.emit(STTEvent.TranscriptionFailed(error.message ?: "Unknown error"))
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isTranscribing = false, error = e.message
-                    )
-                }
-                _events.emit(STTEvent.Error(e.message ?: "Unexpected error"))
-            }
-        }
-    }
-
-    /**
-     * Get detailed transcription with timestamps
-     */
-    fun transcribeDetailed(
-        filePath: String, sampleRate: Int = DEFAULT_SAMPLE_RATE
-    ) {
-        if (_uiState.value.isTranscribing) return
-        if (!_uiState.value.isReady) {
-            _events.tryEmit(STTEvent.Error("STT not initialized"))
-            return
-        }
-
-        viewModelScope.launch {
-            _uiState.update { it.copy(isTranscribing = true, error = null) }
-
-            try {
-                val result = SherpaSTTManager.transcribeDetailed(filePath, sampleRate)
-
-                result.onSuccess { detailedResult ->
-                    _uiState.update {
-                        it.copy(
                             isTranscribing = false,
-                            currentTranscription = detailedResult.text.trim(),
-                            lastTranscriptionTime = System.currentTimeMillis()
-                        )
-                    }
-
-                    _events.emit(STTEvent.DetailedTranscriptionSuccess(detailedResult))
-                }
-
-                result.onFailure { error ->
-                    _uiState.update {
-                        it.copy(
-                            isTranscribing = false, error = error.message
+                            error = error.message
                         )
                     }
                     _events.emit(STTEvent.TranscriptionFailed(error.message ?: "Unknown error"))
@@ -296,7 +227,8 @@ class STTViewModel : ViewModel() {
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(
-                        isTranscribing = false, error = e.message
+                        isTranscribing = false,
+                        error = e.message
                     )
                 }
                 _events.emit(STTEvent.Error(e.message ?: "Unexpected error"))
@@ -304,27 +236,35 @@ class STTViewModel : ViewModel() {
         }
     }
 
-    /**
-     * Clear current transcription
-     */
+    // Get available STT models
+    suspend fun getAvailableModels(): List<ModelData> {
+        return AudioManager.getSttModels()
+    }
+
+    // Switch to different model
+    fun switchModel(modelData: ModelData) {
+        viewModelScope.launch {
+            AudioManager.unloadSttModel()
+            initialize(modelData)
+        }
+    }
+
+    // Clear current transcription
     fun clearTranscription() {
         _uiState.update {
             it.copy(
-                currentTranscription = "", error = null
+                currentTranscription = "",
+                error = null
             )
         }
     }
 
-    /**
-     * Clear error
-     */
+    // Clear error
     fun clearError() {
         _uiState.update { it.copy(error = null) }
     }
 
-    /**
-     * Add transcription to history
-     */
+    // Add transcription to history
     private fun addToHistory(text: String, source: String, duration: Int) {
         if (text.isBlank()) return
 
@@ -337,64 +277,36 @@ class STTViewModel : ViewModel() {
         )
 
         _transcriptionHistory.update { history ->
-            (listOf(item) + history).take(50) // Keep last 50 items
+            (listOf(item) + history).take(50)
         }
     }
 
-    /**
-     * Clear history
-     */
+    // Clear history
     fun clearHistory() {
         _transcriptionHistory.value = emptyList()
     }
 
-    /**
-     * Delete history item
-     */
+    // Delete history item
     fun deleteHistoryItem(id: Long) {
         _transcriptionHistory.update { history ->
             history.filter { it.id != id }
         }
     }
 
-    /**
-     * Get available models
-     */
-    fun getAvailableModels(): List<com.mp.ai_core.stt.ModelInfo> {
-        return SherpaSTTManager.getAvailableModels()
-    }
-
-    /**
-     * Switch to different model
-     */
-    fun switchModel(modelDir: String, modelType: Int, numThreads: Int = 2) {
-        viewModelScope.launch {
-            // Release current model
-            SherpaSTTManager.release()
-
-            // Initialize with new model
-            initialize(modelDir, modelType, numThreads)
-        }
-    }
-
-    /**
-     * Release resources
-     */
+    // Release resources
     fun release() {
-        viewModelScope.launch(Dispatchers.IO) {
-            SherpaSTTManager.release()
+        viewModelScope.launch {
+            AudioManager.unloadSttModel()
             _uiState.update {
                 it.copy(
-                    isReady = false, status = STTStatus.UNINITIALIZED
+                    isReady = false,
+                    status = STTStatus.UNINITIALIZED
                 )
             }
-            _modelInfo.value = null
         }
     }
 
-    /**
-     * Get statistics
-     */
+    // Get statistics
     fun getStatistics(): STTStatistics {
         val history = _transcriptionHistory.value
         return STTStatistics(
@@ -403,25 +315,12 @@ class STTViewModel : ViewModel() {
             averageLength = if (history.isNotEmpty()) {
                 history.sumOf { it.text.length } / history.size
             } else 0,
-            totalDuration = history.sumOf { it.durationSeconds })
+            totalDuration = history.sumOf { it.durationSeconds }
+        )
     }
-
-    private fun getModelName(type: Int): String {
-        return when (type) {
-            0 -> "Paraformer Chinese"
-            1 -> "Zipformer English Multi-dataset"
-            2 -> "Whisper Tiny English"
-            3 -> "Whisper Base English"
-            4 -> "Zipformer Chinese Wenetspeech"
-            else -> "Model $type"
-        }
-    }
-
 }
 
-/**
- * UI State for STT
- */
+// UI State
 data class STTUiState(
     val isInitializing: Boolean = false,
     val isReady: Boolean = false,
@@ -433,9 +332,7 @@ data class STTUiState(
     val lastTranscriptionTime: Long = 0
 )
 
-/**
- * Transcription history item
- */
+// Transcription history item
 data class TranscriptionItem(
     val id: Long,
     val text: String,
@@ -444,16 +341,7 @@ data class TranscriptionItem(
     val durationSeconds: Int
 )
 
-/**
- * Model information
- */
-data class ModelInfo(
-    val type: Int, val numThreads: Int, val name: String
-)
-
-/**
- * Statistics
- */
+// Statistics
 data class STTStatistics(
     val totalTranscriptions: Int,
     val totalWords: Int,
@@ -461,16 +349,21 @@ data class STTStatistics(
     val totalDuration: Int
 )
 
-/**
- * One-time events
- */
+// Status enum
+enum class STTStatus {
+    UNINITIALIZED,
+    INITIALIZING,
+    READY,
+    PROCESSING,
+    ERROR
+}
+
+// Events
 sealed class STTEvent {
     object InitializationSuccess : STTEvent()
     data class InitializationFailed(val message: String) : STTEvent()
     data class TranscriptionSuccess(val text: String) : STTEvent()
     data class TranscriptionFailed(val message: String) : STTEvent()
-    data class DetailedTranscriptionSuccess(val result: TranscriptionResult) : STTEvent()
     object NoSpeechDetected : STTEvent()
-
     data class Error(val message: String) : STTEvent()
 }

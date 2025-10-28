@@ -120,7 +120,7 @@ fun ChatSettingsScreen(modelName: String) {
                 coroutineScope.launch {
                     // Persist changes
                     ModelManager.updateModel(model).let {
-                        ModelManager.loadModelAwait(model){
+                        ModelManager.loadGenerationModel(model){
                             Log.d("ChatSettings", "Model updated")
                             (context as? Activity)?.finish()
                         }

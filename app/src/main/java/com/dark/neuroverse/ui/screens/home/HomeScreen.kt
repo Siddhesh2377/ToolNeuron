@@ -78,7 +78,6 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
-import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModelFactory
 import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import kotlinx.coroutines.CoroutineScope
@@ -93,7 +92,7 @@ fun HomeScreen(
     chatScreenViewModel: ChatScreenViewModel = viewModel(
         factory = ChattingViewModelFactory(LocalContext.current)
     ),
-    ttsViewModel: TTSViewModel = viewModel(factory = TTSViewModelFactory(LocalContext.current)),
+    ttsViewModel: TTSViewModel = viewModel(),
     onDataHubClick: () -> Unit,
     onPluginStoreClick: () -> Unit,
     onModelsClick: () -> Unit

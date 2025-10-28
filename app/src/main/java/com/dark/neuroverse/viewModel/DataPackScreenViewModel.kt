@@ -8,7 +8,7 @@ import com.dark.ai_module.workers.downloadFile
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.DataPack
 import com.google.firebase.firestore.FirebaseFirestore
-import com.mp.data_hub_lib.manager.DataHubManager
+import com.dark.neuroverse.worker.DataHubManager
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow

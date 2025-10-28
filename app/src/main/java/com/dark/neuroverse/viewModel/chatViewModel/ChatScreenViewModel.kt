@@ -9,7 +9,6 @@ import com.dark.ai_module.data.ModelsList
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
-import com.dark.ai_module.workers.ModelManager.service
 import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
@@ -137,14 +136,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Toggle off if same model selected
             if (selectedModel.value.id == model.id) {
                 Log.d(TAG, "Unselecting model")
-                ModelManager.unloadModel()
+                ModelManager.unloadGenerationModel()
                 selectedModel.value = ModelData()
                 return@launch
             }
 
             UIStateManager.toggleStateModelLoading(true)
             try {
-                ModelManager.unloadModel()
+                ModelManager.unloadGenerationModel()
 
                 // Set appropriate system prompt
                 val systemPrompt = if (ToolCallingManager.isToolSelected()) {
@@ -153,7 +152,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                     ModelsList.defaultSystemPrompt
                 }
 
-                ModelManager.loadModelAwait(
+                ModelManager.loadGenerationModel(
                     modelData = model.copy(systemPrompt = systemPrompt)
                 ) { state ->
                     _modelLoadingState.value = state
@@ -169,14 +168,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             } finally {
                 UIStateManager.toggleStateModelLoading(false)
             }
-        }
-    }
-
-    fun unloadModel() {
-        viewModelScope.launch {
-            ModelManager.unloadModel()
-            selectedModel.value = ModelData()
-            Log.d(TAG, "Model unloaded")
         }
     }
     //endregion
@@ -407,9 +398,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         // Switch model if needed
         if (selectedModel.value.id != model.id) {
             UIStateManager.toggleSwitchingModels(true)
-            ModelManager.unloadModel()
+            ModelManager.unloadGenerationModel()
 
-            ModelManager.loadModelAwait(
+            ModelManager.loadGenerationModel(
                 modelData = model.copy(
                     systemPrompt = "You are a helpful assistant that improves message clarity and accuracy.",
                     chatTemplate = ModelsList.defaultChatTemplate
@@ -528,14 +519,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Switch to summarization model if needed
             if (needsModelSwitch) {
                 UIStateManager.toggleSwitchingModels(true)
-                ModelManager.unloadModel()
+                ModelManager.unloadGenerationModel()
 
                 val summarizationModel = originalModel.copy(
                     systemPrompt = ModelsList.toolSummarizationSystemPrompt,
                     chatTemplate = ModelsList.toolSummarizationChatTemplate
                 )
 
-                ModelManager.loadModelAwait(
+                ModelManager.loadGenerationModel(
                     modelData = summarizationModel
                 ) { state ->
                     _modelLoadingState.value = state
@@ -570,9 +561,9 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Restore original model if we switched
             if (needsModelSwitch) {
                 UIStateManager.toggleSwitchingModels(true)
-                ModelManager.unloadModel()
+                ModelManager.unloadGenerationModel()
 
-                ModelManager.loadModelAwait(
+                ModelManager.loadGenerationModel(
                     modelData = originalModel
                 ) { state ->
                     _modelLoadingState.value = state
@@ -594,8 +585,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             // Try to restore original model on error
             if (needsModelSwitch && originalModel.id.isNotEmpty()) {
                 try {
-                    ModelManager.unloadModel()
-                    ModelManager.loadModelAwait(originalModel) { state ->
+                    ModelManager.unloadGenerationModel()
+                    ModelManager.loadGenerationModel(originalModel) { state ->
                         _modelLoadingState.value = state
                         if (state is LoadState.OnLoaded) {
                             selectedModel.value = originalModel
@@ -663,40 +654,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
                 UIStateManager.setStateError("Batch summarization failed", cause = e)
             }
         }
-    }
-    //endregion
-
-    //region Continue Generation
-    suspend fun continueGenerating(message: Message) {
-        try {
-            // Try to load saved model state
-            val root = UserDataManager.getRootNode()
-            if (ModelStateHelper.hasModelState(root, chatId.value)) {
-                val stateInfo = ModelStateHelper.getModelState(root, chatId.value)
-                if (stateInfo != null) {
-                    val success = service?.loadStateFile(stateInfo.stateFilePath)
-                    if (success == true) {
-                        Log.i(TAG, "Model state loaded: ${stateInfo.size / 1024} KB")
-                    } else {
-                        Log.w(TAG, "Failed to load model state")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading model state", e)
-        }
-
-        // Continue streaming
-        TextGenerationWorker.streamAndRender(
-            prompt = message.text,
-            appContext = appContext,
-            enableTools = message.tool != null,
-            messageId = message.id,
-            isRegeneration = false,
-            existingMessages = messages.value
-        )
-
-        saveCurrentChat()
     }
     //endregion
 

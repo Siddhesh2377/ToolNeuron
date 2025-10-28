@@ -74,7 +74,7 @@ import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.stt.STTEvent
 import com.dark.neuroverse.viewModel.stt.STTViewModel
 import com.dark.plugins.model.Tools
-import com.mp.data_hub_lib.manager.DataHubManager
+import com.dark.neuroverse.worker.DataHubManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -102,11 +102,13 @@ fun ChatInputWithDataHubDialog(
     val datasets by DataHubManager.installedDataSets.collectAsState()
 
     LaunchedEffect(Unit) {
-        val modelDir = ModelManager.getSTTModels() ?: return@LaunchedEffect
+        val modelDir = ModelManager.getSTTModel() ?: return@LaunchedEffect
 
         CoroutineScope(Dispatchers.IO).launch {
             sttViewModel.initialize(
-                modelDir = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny",
+                modelDir.copy(
+                    modelPath = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny"
+                )
             )
         }
     }

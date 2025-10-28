@@ -364,8 +364,7 @@ fun RagResultCard(rag: RagResult) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { ragExpanded = !ragExpanded }
-            ) {
+                    .clickable { ragExpanded = !ragExpanded }) {
                 Text(
                     text = "RAG Result (${rag.docs.size} docs)",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
@@ -383,7 +382,12 @@ fun RagResultCard(rag: RagResult) {
                     // Stats
                     val stats = rag.stats
                     Text(
-                        text = "Stats → Docs: ${stats.tokenCount}, Time: ${stats.totalTime}ms, TPS: ${String.format("%.2f", stats.tokensPerSecond)}",
+                        text = "Stats → Docs: ${stats.tokenCount}, Time: ${stats.totalTime}ms, TPS: ${
+                            String.format(
+                                "%.2f",
+                                stats.tokensPerSecond
+                            )
+                        }",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.tertiary,
                         modifier = Modifier
@@ -401,7 +405,9 @@ fun RagResultCard(rag: RagResult) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp))
+                                .background(
+                                    MaterialTheme.colorScheme.surface, RoundedCornerShape(6.dp)
+                                )
                                 .padding(8.dp)
                                 .padding(vertical = 4.dp)
                         ) {
@@ -513,6 +519,8 @@ private fun ChatMessageActions(
                 )
             }
 
+            val context = LocalContext.current
+
             Icon(
                 painter = painterResource(if (isPlayingAudio) R.drawable.stop else R.drawable.speaker),
                 contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
@@ -523,7 +531,7 @@ private fun ChatMessageActions(
                         if (isPlayingAudio) ttsViewModel.stopPlayback()
                         else scope.launch(Dispatchers.IO) {
                             val normalized = ttsViewModel.normalizeText(message.text)
-                            ttsViewModel.generateAndPlayAudio(normalized)
+                            ttsViewModel.generateAndPlayAudio(normalized, context)
                         }
                     })
         }
@@ -713,7 +721,7 @@ private fun ToolChatUI(
                             } else {
                                 scope.launch(Dispatchers.IO) {
                                     val normalizer = ttsViewModel.normalizeText(message.text)
-                                    ttsViewModel.generateAndPlayAudio(normalizer)
+                                    ttsViewModel.generateAndPlayAudio(normalizer, context)
                                 }
                             }
                         })

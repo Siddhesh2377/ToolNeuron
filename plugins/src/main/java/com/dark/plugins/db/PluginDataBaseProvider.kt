@@ -9,7 +9,7 @@ import com.dark.plugins.model.InstalledPlugin
 import com.dark.plugins.model.PluginTypeConverters
 
 
-@Database(entities = [InstalledPlugin::class], version = 1, exportSchema = true)
+@Database(entities = [InstalledPlugin::class], version = 1, exportSchema = false)
 @TypeConverters(PluginTypeConverters::class)
 abstract class PluginDataBaseProvider : RoomDatabase() {
     abstract fun getInstalledPluginDao(): PluginLocalDBDao
