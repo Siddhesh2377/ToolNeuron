@@ -54,8 +54,8 @@ object TextGenerationWorker {
     private val _lastDecodingMs = MutableStateFlow<Long?>(null)
     val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
 
-    private val _decodingMetrics = MutableSharedFlow<DecodingMetrics>(extraBufferCapacity = 8)
-    val decodingMetrics: SharedFlow<DecodingMetrics> = _decodingMetrics.asSharedFlow()
+    private val _decodingMetrics = MutableStateFlow(DecodingMetrics())
+    val decodingMetrics: StateFlow<DecodingMetrics> = _decodingMetrics.asStateFlow()
 
     // Streaming state
     private var currentStreamingState: StreamingState? = null
@@ -77,9 +77,11 @@ object TextGenerationWorker {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
         _currentMsgId.value = messageId
-        Log.d(TAG, "RAG :: $ragResult")
 
         UIStateManager.setStateDecoding(messageId, startTimeNs)
+        if (enableTools){
+            UIStateManager.setStateDecodingTool()
+        }
         currentStreamingState = StreamingState(messageId = messageId)
         startBatchedUIUpdates(messageId)
 
@@ -95,10 +97,9 @@ object TextGenerationWorker {
                 thought = finalThought,
                 isFinal = true,
                 ragResult = ragResult,
-                codeCanvas = codeCanvases // ⚡ IMPORTANT: save the extracted code
+                codeCanvas = codeCanvases
             )
 
-            // Generate title if no thought (normal conversation)
             ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
 
             UserDataManager.refreshChatListFromDisk {
@@ -107,7 +108,6 @@ object TextGenerationWorker {
 
             currentStreamingState = null
         }
-
 
         try {
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
@@ -118,31 +118,27 @@ object TextGenerationWorker {
             } else ""
 
             ModelManager.generateStreaming(
-                prompt = fullPrompt,
-                gen = GenerationParams(
-                    maxTokens = ModelManager.currentModel.value.maxTokens
-                ),
-                toolJson = toolJson,
-                onToken = { token ->
-                    if (!firstTokenReceived) {
-                        firstTokenReceived = true
-                        val firstTokenTimeNs = System.nanoTime()
-                        emitDecodingMetrics(
-                            type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
-                            startTimeNs = startTimeNs,
-                            firstTokenTimeNs = firstTokenTimeNs,
-                            messageId = messageId
-                        )
-                        UIStateManager.setStateGenerating(messageId, isFirstToken = true)
-                    }
+                prompt = fullPrompt, gen = GenerationParams(
+                maxTokens = ModelManager.currentModel.value.maxTokens
+            ), toolJson = toolJson, onToken = { token ->
+                if (!firstTokenReceived) {
+                    firstTokenReceived = true
+                    val firstTokenTimeNs = System.nanoTime()
+                    emitDecodingMetrics(
+                        type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
+                        startTimeNs = startTimeNs,
+                        firstTokenTimeNs = firstTokenTimeNs,
+                        messageId = messageId
+                    )
+                    UIStateManager.setStateGenerating(messageId, isFirstToken = true)
+                }
 
-                    currentStreamingState?.let { state ->
-                        addTokenToBatch(token, state)
-                    }
-                },
-                onToolCalled = { toolName, argsJson ->
-                    handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
-                })
+                currentStreamingState?.let { state ->
+                    addTokenToBatch(token, state)
+                }
+            }, onToolCalled = { toolName, argsJson ->
+                handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
+            })
 
             // Process final output
             currentStreamingState?.let { state ->
@@ -184,12 +180,14 @@ object TextGenerationWorker {
      * Handles tool execution during streaming.
      */
     private fun handleToolExecution(
-        appContext: Context, toolName: String, argsJson: String, messageId: String, onToolExecution: (String) -> Unit
+        appContext: Context,
+        toolName: String,
+        argsJson: String,
+        messageId: String,
+        onToolExecution: (String) -> Unit
     ) {
         workerScope.launch {
             try {
-                UIStateManager.setStateExecutingTool(toolName, messageId)
-
                 ToolCallingManager.executeTool(
                     appContext, toolName, argsJson
                 ) { result ->
@@ -207,6 +205,7 @@ object TextGenerationWorker {
                                 )
                                 onToolExecution("error")
                             } else {
+                                UIStateManager.setStateExecutingTool(toolName, messageId)
                                 Log.d(TAG, "Tool executed successfully")
                                 onToolExecution("success")
                             }
@@ -232,6 +231,8 @@ object TextGenerationWorker {
                     toolError = e.message ?: "Tool execution failed",
                     isFinal = true
                 )
+                UIStateManager.setStateError(e.message ?: "Tool execution failed")
+            } finally {
                 UIStateManager.setStateIdle()
             }
         }
@@ -249,8 +250,8 @@ object TextGenerationWorker {
         // Get the last AI-generated code if any
         val lastAICode =
             existingMessages.lastOrNull { it.role == Role.Assistant && it.codeCanvas?.isNotEmpty() == true }?.codeCanvas?.joinToString(
-                    "\n"
-                ) { it.code } // assuming CodeCanvas has 'content' field
+                "\n"
+            ) { it.code } // assuming CodeCanvas has 'content' field
 
         return buildString {
             if (conversationHistory.isNotBlank()) {
@@ -377,11 +378,13 @@ object TextGenerationWorker {
         val metrics = DecodingMetrics(
             type = type,
             chatId = ChatManager.currentChatId.value,
-            modelId = messageId,
+            modelName = ModelManager.currentModel.value.modelName,
             startedAtNs = startTimeNs,
             firstTokenAtNs = firstTokenTimeNs,
             durationMs = durationMs
         )
+
+
 
         _decodingMetrics.tryEmit(metrics)
     }

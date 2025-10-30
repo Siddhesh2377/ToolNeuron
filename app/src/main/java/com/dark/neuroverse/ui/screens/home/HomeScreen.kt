@@ -457,7 +457,7 @@ private fun BottomBar(
 
     // Derive generation state from unified UI state
     val isGenerating = when (uiState) {
-        is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> true
+        is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.DecodingTool, is ChatUiState.ExecutingTool -> true
         else -> false
     }
 

@@ -32,26 +32,27 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Token
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Surface
@@ -87,6 +88,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.neuroverse.R
 import com.dark.neuroverse.model.ChatUiState
+import com.dark.neuroverse.model.DecodingMetrics
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.ToolOutput
@@ -98,6 +100,8 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
+import com.dark.neuroverse.worker.UIStateManager
+import com.dark.neuroverse.worker.UIStateManager.isGenerating
 import com.dark.plugins.manager.PluginManager
 import com.mp.data_hub_lib.model.RagResult
 import kotlinx.coroutines.CoroutineScope
@@ -114,7 +118,6 @@ fun ChatBubble(
 ) {
     val isUser = message.role == Role.User
     val isWaitingForFirstToken = viewModel.isMessageWaitingForFirstToken(message.id, message.text)
-    val isThisMessageExecutingTool = viewModel.isMessageExecutingTool(message.id)
 
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -148,7 +151,6 @@ fun ChatBubble(
                     message = message,
                     viewModel = viewModel,
                     ttsViewModel = ttsViewModel,
-                    isDecoding = isThisMessageExecutingTool,
                     onMessageDelete = {
                         viewModel.deleteMessage(message.id)
                     })
@@ -277,6 +279,7 @@ private fun RegularChatUI(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val decodingMetrics = message.decodingMetrics
 
     // TTS states
     val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
@@ -297,6 +300,8 @@ private fun RegularChatUI(
             .fillMaxWidth()
             .padding(vertical = rDP(4.dp))
     ) {
+
+
         // Main message content
         Crossfade(isStreaming, label = "content-transition") { streaming ->
             if (streaming) {
@@ -311,6 +316,19 @@ private fun RegularChatUI(
                     text = message.text,
                     color = MaterialTheme.colorScheme.onSurface,
                     style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+
+        if (decodingMetrics.durationMs.toInt() != 0){
+            Spacer(Modifier.height(rDP(3.dp)))
+
+            decodingMetrics.let { metrics ->
+                Spacer(Modifier.height(rDP(6.dp)))
+                Text(
+                    text = "Decoded with \n${metrics.modelName} in ${metrics.durationMs} ms",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
                 )
             }
         }
@@ -571,93 +589,34 @@ private fun ChatMessageActions(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun ToolChatUI(
+fun ToolChatUI(
     message: Message,
-    isDecoding: Boolean,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
     onMessageDelete: (String) -> Unit = {}
 ) {
-    val actionIconSize = rDP(14.dp)
-    val clipboardManager = LocalClipboard.current
     val context = LocalContext.current
+    val clipboardManager = LocalClipboard.current
     val scope = rememberCoroutineScope()
-
-    // Track if tool is executing
-    val isExecutingTool = viewModel.isMessageExecutingTool(message.id)
-    val isGenerating by viewModel.isGenerating.collectAsState()
-
-    // ✅ Collect state properly
-    val isPlayingAudio by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
-    val audioProgress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
-    val isInitialized by ttsViewModel.isInitialized.collectAsStateWithLifecycle()
-
+    val decodingMetrics = message.decodingMetrics
+    val uiState = UIStateManager.uiState.collectAsStateWithLifecycle()
+    val isPlaying by ttsViewModel.isPlaying.collectAsStateWithLifecycle()
+    val progress by ttsViewModel.audioProgress.collectAsStateWithLifecycle()
+    val initialized by ttsViewModel.isInitialized.collectAsStateWithLifecycle()
 
     Column {
-        // Tool identifier tag
         AssistTag(message.tool?.toolName ?: "Unknown Tool")
         Spacer(Modifier.height(rDP(6.dp)))
 
-        when {
-            // Show loader when tool is being called/executed
-            isDecoding || isExecutingTool -> {
-                ToolExecutionLoader(
-                    toolName = message.tool?.toolName ?: "Tool", isExecutingTool = isExecutingTool
-                )
-            }
-
-            // Show tool output when available
-            else -> {
-                val toolOutput = message.tool?.toolOutput
-                val out = remember(toolOutput) {
-                    try {
-                        val outputString = toolOutput?.output ?: ""
-
-                        when {
-                            outputString.isBlank() -> {
-                                JSONObject().apply {
-                                    put("err", "Tool not executed yet")
-                                }
-                            }
-
-                            else -> {
-                                JSONObject(outputString)
-                            }
-                        }
-                    } catch (e: Exception) {
-                        Log.e("ToolChatUI", "Parse error: ${e.message}", e)
-                        JSONObject().apply {
-                            put("err", "Failed to parse: ${e.message}")
-                        }
-                    }
-                }
-
-                when (message.tool?.toolOutput == null) {
-                    true -> {
-                        Card(elevation = CardDefaults.cardElevation(rDP(0.dp))) {
-                            Text(
-                                text = "Err",
-                                fontSize = rSp(14.sp),
-                                color = Color(0xFF64748B),
-                                modifier = Modifier.padding(rDP(8.dp))
-                            )
-                        }
-                    }
-
-                    false -> {
-                        // Tool output available
-                        ToolOutputToggle(
-                            toolOutput = message.tool.toolOutput,
-                            out = out,
-                            messageId = message.id,
-                            viewModel = viewModel,
-                            isGenerating = isGenerating
-                        )
-                    }
-                }
-            }
-        }
+        // Handles both decoding + output
+        ToolUIContent(
+            uiState = uiState.value,
+            message = message,
+            viewModel = viewModel,
+            isGenerating = isGenerating()
+        )
 
         Spacer(Modifier.height(rDP(12.dp)))
 
@@ -667,364 +626,326 @@ private fun ToolChatUI(
             style = MaterialTheme.typography.bodyMedium
         )
 
+        if (decodingMetrics.durationMs.toInt() != 0){
+            Spacer(Modifier.height(rDP(3.dp)))
+
+            decodingMetrics.let { metrics ->
+                Spacer(Modifier.height(rDP(6.dp)))
+                Text(
+                    text = "Decoded with \n${metrics.modelName} in ${metrics.durationMs} ms",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
+                )
+            }
+        }
+
         Spacer(Modifier.height(rDP(12.dp)))
 
         Row(
             horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Copy button
+            val iconSize = rDP(14.dp)
+
+            // Copy
             Icon(
                 painter = painterResource(R.drawable.copy),
-                contentDescription = "Copy text",
+                contentDescription = "Copy",
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
-                    .size(actionIconSize)
+                    .size(iconSize)
                     .clickable {
                         scope.launch {
                             clipboardManager.setClipEntry(
                                 ClipEntry(ClipData.newPlainText("message", message.text))
                             )
                         }
-                        Toast.makeText(
-                            context, "Copied to clipboard!", Toast.LENGTH_SHORT
-                        ).show()
-                    })
+                        Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                    }
+            )
 
+            // TTS button with progress
             Box(contentAlignment = Alignment.Center) {
-                // Show progress indicator if playing
-                if (isPlayingAudio && audioProgress > 0f) {
+                if (isPlaying && progress > 0f) {
                     CircularProgressIndicator(
-                        progress = { audioProgress },
-                        modifier = Modifier.size(actionIconSize + 4.dp),
+                        progress = { progress },
+                        modifier = Modifier.size(iconSize + 4.dp),
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f),
-                        strokeWidth = 2.dp,
-                        trackColor = ProgressIndicatorDefaults.circularIndeterminateTrackColor,
-                        strokeCap = ProgressIndicatorDefaults.CircularDeterminateStrokeCap,
+                        strokeWidth = 2.dp
                     )
                 }
-
                 Icon(
                     painter = painterResource(
-                        if (isPlayingAudio) R.drawable.stop else R.drawable.speaker
+                        if (isPlaying) R.drawable.stop else R.drawable.speaker
                     ),
-                    contentDescription = if (isPlayingAudio) "Stop audio" else "Play audio",
+                    contentDescription = null,
                     tint = MaterialTheme.colorScheme.primary.copy(
-                        alpha = if (isInitialized) 0.7f else 0.3f
+                        alpha = if (initialized) 0.7f else 0.3f
                     ),
                     modifier = Modifier
-                        .size(actionIconSize)
-                        .clickable(enabled = isInitialized) {
-                            if (isPlayingAudio) {
-                                ttsViewModel.stopPlayback()
-                            } else {
-                                scope.launch(Dispatchers.IO) {
-                                    val normalizer = ttsViewModel.normalizeText(message.text)
-                                    ttsViewModel.generateAndPlayAudio(normalizer, context)
-                                }
+                        .size(iconSize)
+                        .clickable(enabled = initialized) {
+                            if (isPlaying) ttsViewModel.stopPlayback()
+                            else scope.launch(Dispatchers.IO) {
+                                val normalized = ttsViewModel.normalizeText(message.text)
+                                ttsViewModel.generateAndPlayAudio(normalized, context)
                             }
-                        })
+                        }
+                )
             }
 
-            // Share button
+            // Share
             Icon(
                 imageVector = Icons.Rounded.Share,
                 contentDescription = "Share",
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
-                    .size(actionIconSize)
+                    .size(iconSize)
                     .clickable {
-                        val shareIntent = Intent().apply {
-                            action = Intent.ACTION_SEND
+                        val shareIntent = Intent(Intent.ACTION_SEND).apply {
                             putExtra(Intent.EXTRA_TEXT, message.text)
                             type = "text/plain"
                         }
-                        context.startActivity(
-                            Intent.createChooser(shareIntent, "Share message")
-                        )
-                    })
+                        context.startActivity(Intent.createChooser(shareIntent, "Share message"))
+                    }
+            )
 
-            // Delete button
+            // Delete
             Icon(
                 Icons.Rounded.DeleteOutline,
                 contentDescription = "Delete",
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 modifier = Modifier
-                    .size(actionIconSize)
-                    .clickable { onMessageDelete(message.id) })
-        }
-    }
-}
-
-@Composable
-fun ToolExecutionLoader(
-    toolName: String, isExecutingTool: Boolean
-) {
-    val infiniteTransition = rememberInfiniteTransition(label = "toolLoader")
-
-    val shimmerX by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
-            tween(1200, easing = LinearEasing), RepeatMode.Restart
-        ), label = "shimmerFloat"
-    )
-
-    val dotAnimation by infiniteTransition.animateFloat(
-        initialValue = 0f, targetValue = 3f, animationSpec = infiniteRepeatable(
-            tween(1000, easing = LinearEasing), RepeatMode.Restart
-        ), label = "dots"
-    )
-
-    val shimmerBrush = Brush.linearGradient(
-        colors = listOf(
-            Coral.copy(alpha = 0.3f), Coral.copy(alpha = 0.8f), Coral.copy(alpha = 0.3f)
-        ), start = Offset.Zero, end = Offset(1000f * shimmerX, 0f)
-    )
-
-    Card(
-        modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        ), elevation = CardDefaults.cardElevation(rDP(2.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-        ) {
-            // Status indicator
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-            ) {
-                // Animated pulsing circle
-                Box(
-                    modifier = Modifier
-                        .size(rDP(8.dp))
-                        .clip(CircleShape)
-                        .background(Coral)
-                        .drawWithContent {
-                            drawContent()
-                            drawCircle(
-                                brush = shimmerBrush, alpha = 0.6f, blendMode = BlendMode.SrcOver
-                            )
-                        })
-
-                Text(
-                    text = if (isExecutingTool) "Executing $toolName" else "Preparing $toolName",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold
-                )
-
-                // Animated dots
-                Text(
-                    text = ".".repeat(dotAnimation.toInt() + 1),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Coral,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.width(rDP(24.dp))
-                )
-            }
-
-            // Progress bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(rDP(4.dp))
-                    .clip(RoundedCornerShape(rDP(2.dp)))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .fillMaxWidth()
-                        .drawWithContent {
-                            drawContent()
-                            drawRect(
-                                brush = shimmerBrush, blendMode = BlendMode.SrcOver
-                            )
-                        })
-            }
-
-            // Helper text
-            Text(
-                text = if (isExecutingTool) "Processing request..." else "Generating tool call...",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    .size(iconSize)
+                    .clickable { onMessageDelete(message.id) }
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ToolOutputToggle(
-    toolOutput: ToolOutput,
-    out: JSONObject,
-    messageId: String,
+private fun ToolUIContent(
+    uiState: ChatUiState,
+    message: Message,
     viewModel: ChatScreenViewModel,
     isGenerating: Boolean
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val runningPlugin = PluginManager.activePlugin.collectAsState().value
 
-    val shimmerX by rememberInfiniteTransition(label = "shimmer").animateFloat(
-        initialValue = 0f, targetValue = 1f, animationSpec = infiniteRepeatable(
-            tween(1200, easing = LinearEasing), RepeatMode.Restart
-        ), label = "shimmerFloat"
-    )
+    val showActualTool = message.tool?.toolOutput?.output?.isNotBlank()
 
-    val shimmerBrush = Brush.linearGradient(
-        colors = listOf(
-            Coral.copy(alpha = 0.25f), Coral, Coral.copy(alpha = 0.25f)
-        ), start = Offset.Zero, end = Offset(1000f * shimmerX + 1f, 0f)
-    )
-
-    Column(
-        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-    ) {
-        // Toggle Button with Action Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Show Output Toggle
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .clip(RoundedCornerShape(rDP(5.dp)))
-                    .border(
-                        1.dp,
-                        MaterialTheme.colorScheme.outlineVariant,
-                        RoundedCornerShape(rDP(5.dp))
-                    )
-                    .drawWithContent {
-                        drawContent()
-                        drawRect(
-                            brush = shimmerBrush, alpha = 0.25f, blendMode = BlendMode.SrcOver
+    Crossfade(targetState = uiState) { state ->
+        when (state) {
+            is ChatUiState.DecodingTool -> {
+                // Loading UI
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(rDP(10.dp)))
+                        .background(
+                            Brush.linearGradient(
+                                listOf(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.03f)
+                                )
+                            )
+                        )
+                        .border(
+                            1.dp,
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+                            RoundedCornerShape(rDP(10.dp))
+                        )
+                        .padding(horizontal = rDP(14.dp), vertical = rDP(10.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDP(10.dp))
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Token,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(rDP(16.dp))
+                        )
+                        Text(
+                            "Decoding the input...",
+                            color = MaterialTheme.colorScheme.primary,
+                            fontSize = rSp(13.sp),
+                            fontFamily = FontFamily.Monospace,
+                            fontWeight = FontWeight.Medium
                         )
                     }
-                    .clickable { expanded = !expanded }
-                    .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = if (expanded) "Hide Tool Output" else "Show Tool Output",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Icon(
-                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                        contentDescription = if (expanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(rDP(20.dp))
+                    LinearWavyProgressIndicator(
+                        Modifier.fillMaxWidth().height(rDP(4.dp))
                     )
                 }
             }
 
-            // Summarize Button
-            if (!out.has("err")) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(rDP(5.dp)))
-                        .background(
-                            if (isGenerating) MaterialTheme.colorScheme.surfaceVariant
-                            else Coral.copy(alpha = 0.1f)
-                        )
-                        .clickable(enabled = !isGenerating) {
-                            viewModel.summarizeToolOutput(messageId)
+            else -> {
+                val output = remember(message.tool?.toolOutput) {
+                    runCatching {
+                        val text = message.tool?.toolOutput?.output ?: ""
+                        when {
+                            text.isBlank() -> JSONObject().put("err", "Tool not executed yet")
+                            else -> JSONObject(text)
                         }
-                        .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                    }.getOrElse {
+                        JSONObject().put("err", "Failed to parse: ${it.message}")
+                    }
+                }
+
+                var expanded by remember { mutableStateOf(false) }
+
+                Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
+                    // Toggle + Summarize Row
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Crossfade(targetState = isGenerating) {
-                            when (it) {
-                                true -> {
-                                    CircularProgressIndicator(modifier = Modifier.size(rDP(16.dp)))
-                                }
+                        // Toggle
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .clip(RoundedCornerShape(rDP(5.dp)))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outlineVariant,
+                                    RoundedCornerShape(rDP(5.dp))
+                                )
+                                .clickable { expanded = !expanded }
+                                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    if (expanded) "Hide Tool Output" else "Show Tool Output",
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    style = MaterialTheme.typography.titleMedium
+                                )
+                                Icon(
+                                    if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(rDP(20.dp))
+                                )
+                            }
+                        }
 
-                                false -> {
-                                    Icon(
-                                        imageVector = Icons.Default.AutoAwesome,
-                                        contentDescription = "Summarize",
-                                        tint = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                            alpha = 0.5f
+                        // Summarize Button
+                        if (!output.has("err")) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(rDP(5.dp)))
+                                    .background(
+                                        if (isGenerating)
+                                            MaterialTheme.colorScheme.surfaceVariant
+                                        else Coral.copy(alpha = 0.1f)
+                                    )
+                                    .clickable(enabled = !isGenerating) {
+                                        viewModel.summarizeToolOutput(message.id)
+                                    }
+                                    .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (isGenerating)
+                                        CircularProgressIndicator(Modifier.size(rDP(16.dp)))
+                                    else
+                                        Icon(
+                                            Icons.Default.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = Coral,
+                                            modifier = Modifier.size(rDP(16.dp))
                                         )
+
+                                    Text(
+                                        if (isGenerating) "Summarizing..." else "Summarize",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        color = if (isGenerating)
+                                            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                                         else Coral,
-                                        modifier = Modifier.size(rDP(16.dp))
+                                        fontWeight = FontWeight.SemiBold
                                     )
                                 }
                             }
                         }
-                        Crossfade(targetState = if (isGenerating) "Summarizing..." else "Summarize") {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = if (isGenerating) MaterialTheme.colorScheme.onSurfaceVariant.copy(
-                                    alpha = 0.5f
-                                )
-                                else Coral,
-                                fontWeight = FontWeight.SemiBold
-                            )
+                    }
+
+                    // Expand Output Section
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = expandVertically() + fadeIn(),
+                        exit = shrinkVertically() + fadeOut()
+                    ) {
+                        when {
+                            output.has("err") -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    )
+                                ) {
+                                    Text(
+                                        output.getString("err"),
+                                        color = Color(0xFFEF4444),
+                                        fontSize = rSp(12.sp),
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(rDP(16.dp))
+                                    )
+                                }
+                            }
+
+                            uiState is ChatUiState.ExecutingTool -> {
+                                Card { runningPlugin?.api?.AppContent() }
+                            }
+
+                            uiState is ChatUiState.Error -> {
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.errorContainer
+                                    )
+                                ) {
+                                    Text(
+                                        (uiState as ChatUiState.Error).message,
+                                        color = Color(0xFFEF4444),
+                                        fontSize = rSp(12.sp),
+                                        fontFamily = FontFamily.Monospace,
+                                        fontWeight = FontWeight.Bold,
+                                        modifier = Modifier.padding(rDP(16.dp))
+                                    )
+                                }
+                            }
+
+                            else -> {
+                                Card {
+                                    if (runningPlugin == null) {
+                                        LaunchedEffect(message.tool?.toolOutput?.pluginName) {
+                                            try {
+                                                withContext(Dispatchers.IO) {
+                                                    PluginManager.runPlugin(
+                                                        context,
+                                                        message.tool?.toolOutput?.pluginName ?: ""
+                                                    )
+                                                }
+                                            } catch (e: Exception) {
+                                                Log.e("ToolOutput", "Plugin launch failed", e)
+                                            }
+                                        }
+                                    } else runningPlugin.api?.ToolPreviewContent(output.toString())
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-
-        // Animated expansion for Tool Output
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            ToolOutputContent(toolOutput = toolOutput, out = out)
-        }
-    }
-}
-
-@Composable
-fun ToolOutputContent(
-    modifier: Modifier = Modifier, toolOutput: ToolOutput, out: JSONObject
-) {
-    val runningPlugin = PluginManager.activePlugin.collectAsState().value
-
-    if (out.has("err")) {
-        Card(
-            elevation = CardDefaults.cardElevation(rDP(0.dp)),
-            colors = CardDefaults.cardColors(containerColor = Color.White)
-        ) {
-            Box(modifier = Modifier.padding(vertical = rDP(16.dp), horizontal = rDP(34.dp))) {
-                Text(
-                    text = out.getString("err"),
-                    color = Color(0xFFEF4444),
-                    fontSize = rSp(12.sp),
-                    lineHeight = rSp(18.sp),
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    } else {
-        Card(modifier = modifier) {
-            if (runningPlugin == null) {
-                val context = LocalContext.current
-                val pluginName = toolOutput.pluginName
-                LaunchedEffect(pluginName) {
-                    try {
-                        withContext(Dispatchers.IO) {
-                            PluginManager.runPlugin(context, pluginName)
-                        }
-                    } catch (e: Exception) {
-                        Log.e("ToolOutputContent", "Error launching plugin: $pluginName", e)
-                    }
-                }
-            } else {
-                runningPlugin.api?.ToolPreviewContent(toolOutput.output)
             }
         }
     }

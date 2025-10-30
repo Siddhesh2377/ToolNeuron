@@ -7,6 +7,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatList
 import com.dark.neuroverse.model.CodeCanvas
+import com.dark.neuroverse.model.DecodingMetrics
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
@@ -118,6 +119,7 @@ object ChatManager {
                     Log.d(TAG, "Updating existing chat node: ${existingNode.id}")
                     existingNode.data.content = jsonData.toString()
                 }
+
                 messages.isNotEmpty() -> {
                     Log.d(TAG, "Creating new chat node")
                     val newNode = addNewChat(rootNode, jsonData)
@@ -245,8 +247,11 @@ object ChatManager {
         Log.d(TAG, "Message deleted: $messageId")
     }
 
+// Update the updateStreamingMessage function in ChatManager.kt
+
     /**
      * Updates a streaming message with new text/thought.
+     * ✅ Improved handling for tool messages and empty text
      */
     fun updateStreamingMessage(
         messageId: String,
@@ -255,7 +260,7 @@ object ChatManager {
         toolError: String? = null,
         isFinal: Boolean = false,
         ragResult: RagResult? = null,
-        codeCanvas: List<CodeCanvas>? = null // make nullable for optional updates
+        codeCanvas: List<CodeCanvas>? = null
     ) {
         _messages.update { messages ->
             messages.mapIndexed { index, message ->
@@ -267,38 +272,46 @@ object ChatManager {
                         message.id
                     }
 
-                    // Handle tool calling error
+                    // ✅ Handle tool calling error
                     if (toolError != null && message.role == Role.Tool) {
                         return@mapIndexed message.copy(
-                            id = finalId,
-                            text = text.ifBlank { "Tool execution failed" },
-                            thought = thought,
-                            tool = message.tool?.copy(
-                                toolPreview = "Error: $toolError",
-                                toolOutput = ToolOutput(
+                            id = finalId, text = "", // ✅ Don't show "Error: Empty text received"
+                            thought = thought, tool = message.tool?.copy(
+                                toolPreview = "Error: $toolError", toolOutput = ToolOutput(
                                     pluginName = message.tool.toolName,
                                     output = JSONObject().apply {
                                         put("error", toolError)
                                         put("ok", false)
                                     }.toString()
                                 )
-                            ),
-                            codeCanvas = codeCanvas ?: message.codeCanvas // ⚡ save canvases
+                            ), codeCanvas = codeCanvas ?: message.codeCanvas
                         )
                     }
 
-                    // Handle empty text error
-                    if (isFinal && text.isBlank()) {
+                    // ✅ For tool messages, empty text is acceptable (will be filled by summary or remain empty)
+                    if (isFinal && text.isBlank() && message.role == Role.Tool && toolError == null) {
+                        // Tool executed successfully but no summary yet
                         return@mapIndexed message.copy(
                             id = finalId,
-                            text = "Error: Empty text received",
+                            text = "", // Will be filled by summarization if user requests it
                             thought = thought,
                             ragResult = ragResult,
                             codeCanvas = codeCanvas ?: message.codeCanvas
                         )
                     }
 
-                    // Normal update
+                    // ✅ Handle empty text error for non-tool messages
+                    if (isFinal && text.isBlank() && message.role != Role.Tool) {
+                        return@mapIndexed message.copy(
+                            id = finalId,
+                            text = "Error: Empty response received",
+                            thought = thought,
+                            ragResult = ragResult,
+                            codeCanvas = codeCanvas ?: message.codeCanvas
+                        )
+                    }
+
+                    // ✅ Normal update
                     return@mapIndexed message.copy(
                         id = finalId,
                         text = text,
@@ -318,18 +331,25 @@ object ChatManager {
         }
     }
 
-
     /**
-     * Updates tool preview for a message.
+     * ✅ NEW: Updates tool preview with retry verification
      */
-    fun updateToolPreview(messageId: String, toolOutput: ToolOutput) {
+    fun updateToolPreview(messageId: String, toolOutput: ToolOutput): Boolean {
+        var updateSuccess = false
 
         _messages.update { messages ->
             messages.map { message ->
-                Log.d(TAG, "List Of Available Messages: ${message.id}")
                 if (message.id == messageId) {
-                    val pretty = JSONObject(toolOutput.output).toString(2)
-                    Log.d(TAG, "Tool preview updated: $pretty")
+                    val pretty = try {
+                        JSONObject(toolOutput.output).toString(2)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Failed to prettify tool output", e)
+                        toolOutput.output
+                    }
+
+                    Log.d(TAG, "Tool preview updated for message: $messageId")
+                    updateSuccess = true
+
                     message.copy(
                         tool = RunningTool(
                             toolName = toolOutput.pluginName,
@@ -338,12 +358,16 @@ object ChatManager {
                         )
                     )
                 } else {
-                    Log.e(TAG, "Tool preview not updated for message: $messageId")
                     message
                 }
             }
         }
-        Log.d(TAG, "Tool message: $_messages updated")
+
+        if (!updateSuccess) {
+            Log.e(TAG, "Failed to update tool preview for message: $messageId")
+        }
+
+        return updateSuccess
     }
 
     /**
@@ -515,5 +539,17 @@ object ChatManager {
      */
     fun hasUnsavedChanges(): Boolean {
         return _messages.value.isNotEmpty() && _currentChatID.value.isEmpty()
+    }
+
+    fun updateDecodingMetrix(decodingMetrics:DecodingMetrics, messageId: String) {
+        _messages.update { messages ->
+            messages.map { message ->
+                if (message.id == messageId) {
+                    message.copy(decodingMetrics = decodingMetrics)
+                } else {
+                    message
+                }
+            }
+        }
     }
 }
