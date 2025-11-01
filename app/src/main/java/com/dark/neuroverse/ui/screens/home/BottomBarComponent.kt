@@ -72,6 +72,10 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.ui.components.FuturisticNeuralAnimation
+import com.dark.neuroverse.ui.components.NeuralAnimationConfig
+import com.dark.neuroverse.ui.components.NeuralNetworkState
+import com.dark.neuroverse.ui.components.NeuralThemes
 import com.dark.neuroverse.ui.theme.CyberViolet
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
@@ -272,7 +276,7 @@ fun ChatInputBar(
 
             ToolsAndModelRow(
                 inputEnabled = inputEnabled,
-                isToolCalling = ModelManager.currentModel.value.isToolCalling,
+                isToolCalling = ModelManager.currentModel.collectAsState().value.isToolCalling,
                 showToolsList = showToolsList,
                 selectedTools = selectedTools,
                 isRag = isRag,
@@ -495,6 +499,15 @@ private fun InputRow(
             .padding(end = rDP(18.dp)),
         verticalAlignment = Alignment.CenterVertically
     ) {
+        // Neural Animation with theme based on state
+        val currentTheme = when {
+            isRecording -> NeuralThemes.CoralDawn
+            isTranscribing -> NeuralThemes.ArcticTeal
+            isGenerating -> NeuralThemes.CrimsonBlood
+            !inputEnabled -> NeuralThemes.SageGarden
+            else -> NeuralThemes.ArcticDawn
+        }
+
         TextField(
             value = value,
             onValueChange = onValueChange,
@@ -509,7 +522,9 @@ private fun InputRow(
                         isTranscribing -> "Transcribing..."
                         inputEnabled -> "Say Anything…"
                         else -> "Processing..."
-                    }, color = SlateGrey, fontSize = rSp(14.sp)
+                    },
+                    color = SlateGrey,
+                    fontSize = rSp(14.sp)
                 )
             },
             colors = TextFieldDefaults.colors(
@@ -521,23 +536,36 @@ private fun InputRow(
                 cursorColor = MaterialTheme.colorScheme.primary
             ),
             textStyle = LocalTextStyle.current.copy(
-                color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
+                color = MaterialTheme.colorScheme.primary,
+                fontSize = rSp(15.sp)
             )
         )
 
         Spacer(Modifier.width(rDP(4.dp)))
 
-        STTButton(
-            isRecording = isRecording,
-            isProcessing = isTranscribing,
-            isReady = sttReady,
-            onClick = onSTTClick
+        FuturisticNeuralAnimation(
+            config = currentTheme.copy(
+                initialLayers = 3,
+                initialNeuronCount = 24,
+                starCount = 0
+            ),
+            modifier = Modifier
+                .size(rDP(36.dp))
+                .clip(CircleShape)
         )
+//        STTButton(
+//            isRecording = isRecording,
+//            isProcessing = isTranscribing,
+//            isReady = sttReady,
+//            onClick = onSTTClick
+//        )
 
         Spacer(Modifier.width(rDP(8.dp)))
 
         SendButton(
-            inputEnabled = inputEnabled, isGenerating = isGenerating, onSend = onSend
+            inputEnabled = inputEnabled,
+            isGenerating = isGenerating,
+            onSend = onSend
         )
     }
 }
