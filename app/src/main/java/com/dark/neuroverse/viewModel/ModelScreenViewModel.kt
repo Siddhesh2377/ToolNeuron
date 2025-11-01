@@ -123,18 +123,6 @@ class ModelScreenViewModel : ViewModel() {
         }
     }
 
-    fun removeOpenRouterModel(modelId: String) {
-        _openRouterInstalledModels.update { it -> it.filter { it.id != modelId } }
-
-        viewModelScope.launch {
-            try {
-                ModelManager.removeModel(modelId)
-            } catch (e: Exception) {
-                Log.e("OpenRouter", "Removing $modelId failed: ${e.message}")
-            }
-        }
-    }
-
     /* ----------------------------------------------------------- *//* 3️⃣  Fetch *available* OpenRouter models from API           *//* ----------------------------------------------------------- */
     fun fetchAvailableModels() = viewModelScope.launch(Dispatchers.IO) {
         try {

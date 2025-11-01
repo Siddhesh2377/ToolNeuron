@@ -121,66 +121,91 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
+// OPTIMIZATION 1: Extract stable message state to prevent unnecessary recompositions
+private data class MessageDisplayState(
+    val isUser: Boolean,
+    val isWaitingForFirstToken: Boolean,
+    val isCurrentlyStreaming: Boolean,
+    val hasThought: Boolean
+)
+
 @Composable
 fun ChatBubble(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
 ) {
-    val isUser = message.role == Role.User
-    val isWaitingForFirstToken = remember(message.id, message.text) {
-        derivedStateOf { viewModel.isMessageWaitingForFirstToken(message.id, message.text) }
-    }.value
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // OPTIMIZATION: Compute display state once and make it stable
+    val displayState = remember(message.id, message.role, message.text, message.thought, uiState) {
+        val isStreaming = when (uiState) {
+            is ChatUiState.DecodingStream -> (uiState as ChatUiState.DecodingStream).messageId == message.id
+            is ChatUiState.Generating -> (uiState as ChatUiState.Generating).messageId == message.id
+            else -> false
+        }
+
+        MessageDisplayState(
+            isUser = message.role == Role.User,
+            isWaitingForFirstToken = message.text.isEmpty() && isStreaming,
+            isCurrentlyStreaming = isStreaming,
+            hasThought = !message.thought.isNullOrBlank()
+        )
+    }
+
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         visible = true
     }
+
     AnimatedVisibility(
-        visible = visible, enter = slideInVertically(
-        initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(
-        initialScale = 0.8f, animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
-        )
-    ), exit = fadeOut() + scaleOut()) {
+        visible = visible,
+        enter = slideInVertically(initialOffsetY = { it / 2 }) + fadeIn() + scaleIn(
+            initialScale = 0.8f,
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMedium
+            )
+        ),
+        exit = fadeOut() + scaleOut()
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = if (isUser) Arrangement.End else Arrangement.Start
+            horizontalArrangement = if (displayState.isUser) Arrangement.End else Arrangement.Start
         ) {
             Column {
-                val showThinking = !isUser && !message.thought.isNullOrBlank()
-                if (showThinking) {
+                if (displayState.hasThought && !displayState.isUser) {
                     ThinkingChatUI(message)
                     Spacer(Modifier.height(rDP(8.dp)))
                 }
 
-                AnimatedContent(
-                    targetState = message.role to isWaitingForFirstToken, transitionSpec = {
-                        fadeIn(tween(150)) togetherWith fadeOut(tween(150))
-                    }, label = "message-content"
-                ) { (role, waiting) ->
-                    when (role) {
-                        Role.User -> UserChatUI(
-                            message = message, onMessageDelete = { viewModel.deleteMessage(it) })
+                // OPTIMIZATION: Removed nested AnimatedContent - directly switch based on role
+                when (message.role) {
+                    Role.User -> UserChatUI(
+                        message = message,
+                        onMessageDelete = { viewModel.deleteMessage(it) }
+                    )
 
-                        Role.Assistant -> {
-                            if (waiting) {
-                                DecodingPlaceholder()
-                            } else {
-                                RegularChatUI(
-                                    message = message,
-                                    viewModel = viewModel,
-                                    ttsViewModel = ttsViewModel,
-                                )
-                            }
+                    Role.Assistant -> {
+                        if (displayState.isWaitingForFirstToken) {
+                            DecodingPlaceholder()
+                        } else {
+                            RegularChatUI(
+                                message = message,
+                                viewModel = viewModel,
+                                ttsViewModel = ttsViewModel,
+                                isStreaming = displayState.isCurrentlyStreaming
+                            )
                         }
-
-                        Role.Tool -> ToolChatUI(
-                            message = message,
-                            viewModel = viewModel,
-                            ttsViewModel = ttsViewModel,
-                            onMessageDelete = { viewModel.deleteMessage(message.id) })
                     }
+
+                    Role.Tool -> ToolChatUI(
+                        message = message,
+                        viewModel = viewModel,
+                        ttsViewModel = ttsViewModel,
+                        onMessageDelete = { viewModel.deleteMessage(message.id) }
+                    )
                 }
             }
         }
@@ -198,10 +223,13 @@ private fun DecodingPlaceholder() {
     ) {
         val infiniteTransition = rememberInfiniteTransition(label = "decoding")
         val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f, targetValue = 1f, animationSpec = infiniteRepeatable(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
                 animation = tween(800, easing = FastOutSlowInEasing),
                 repeatMode = RepeatMode.Reverse
-            ), label = "alpha"
+            ),
+            label = "alpha"
         )
 
         Text(
@@ -215,7 +243,8 @@ private fun DecodingPlaceholder() {
 
 @Composable
 private fun UserChatUI(
-    message: Message, onMessageDelete: (String) -> Unit
+    message: Message,
+    onMessageDelete: (String) -> Unit
 ) {
     val radius = with(LocalDensity.current) { rDP(12.dp) }
     val corner = RoundedCornerShape(radius)
@@ -224,7 +253,8 @@ private fun UserChatUI(
     val scope = rememberCoroutineScope()
 
     Column(
-        modifier = Modifier.widthIn(max = rDP(240.dp)), horizontalAlignment = Alignment.End
+        modifier = Modifier.widthIn(max = rDP(240.dp)),
+        horizontalAlignment = Alignment.End
     ) {
         Text(
             modifier = Modifier
@@ -240,15 +270,16 @@ private fun UserChatUI(
 
         MessageActionRow(
             onCopy = {
-            scope.launch {
-                clipboardManager.setClipEntry(
-                    ClipEntry(ClipData.newPlainText("message", message.text))
-                )
-                Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
-            }
-        },
+                scope.launch {
+                    clipboardManager.setClipEntry(
+                        ClipEntry(ClipData.newPlainText("message", message.text))
+                    )
+                    Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
+                }
+            },
             onShare = { shareText(context, message.text) },
-            onDelete = { onMessageDelete(message.id) })
+            onDelete = { onMessageDelete(message.id) }
+        )
     }
 }
 
@@ -258,6 +289,7 @@ private fun RegularChatUI(
     message: Message,
     viewModel: ChatScreenViewModel,
     ttsViewModel: TTSViewModel,
+    isStreaming: Boolean // OPTIMIZATION: Pass computed state instead of recalculating
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -268,75 +300,29 @@ private fun RegularChatUI(
 
     var showRegenerateDialog by rememberSaveable { mutableStateOf(false) }
 
-    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val isStreaming = remember(uiState, message.id) {
-        derivedStateOf {
-            when (uiState) {
-                is ChatUiState.DecodingStream -> (uiState as ChatUiState.DecodingStream).messageId == message.id
-                is ChatUiState.Generating -> (uiState as ChatUiState.Generating).messageId == message.id
-                else -> false
-            }
-        }
-    }.value
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = rDP(4.dp))
     ) {
-        Crossfade(
-            targetState = uiState,
-            animationSpec = tween(200),
-            label = "content-transition"
-        ) { state ->
-            when (state) {
-                is ChatUiState.DecodingStream -> {
-                    if (state.messageId == message.id) {
-                        // Show stage-specific UI
-                        DecodingStageLayout(stage = state.stage)
-                    } else {
-                        MarkdownText(
-                            text = message.text,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-                is ChatUiState.Generating -> {
-                    if (state.messageId == message.id) {
-                        // Smooth transition from Decoding to visible text
-                        AnimatedContent(
-                            targetState = message.text.isNotEmpty(),
-                            transitionSpec = {
-                                fadeIn(tween(300)) togetherWith fadeOut(tween(150))
-                            }
-                        ) { hasText ->
-                            if (hasText) {
-                                Text(
-                                    text = message.text,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-                            } else {
-                                DecodingStageLayout(stage = DecodingStage.Decoding)
-                            }
-                        }
-                    } else {
-                        MarkdownText(
-                            text = message.text,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                }
-                else -> {
-                    MarkdownText(
-                        text = message.text,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                }
+        // OPTIMIZATION: Remove Crossfade - directly render based on streaming state
+        if (isStreaming && message.text.isEmpty()) {
+            DecodingStageLayout(stage = DecodingStage.Decoding)
+        } else {
+            // OPTIMIZATION: Only use MarkdownText when needed, plain Text for streaming
+            if (isStreaming) {
+                Text(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                MarkdownText(
+                    text = message.text,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }
         }
 
@@ -358,26 +344,29 @@ private fun RegularChatUI(
             audioProgress = audioProgress,
             isInitialized = isInitialized,
             onRegenerateClick = { showRegenerateDialog = true },
-            onDeleteClick = { viewModel.deleteMessage(message.id) })
+            onDeleteClick = { viewModel.deleteMessage(message.id) }
+        )
     }
 
     if (showRegenerateDialog) {
         RegenerateModelPickerDialog(
-            viewModel = viewModel, messageId = message.id
+            viewModel = viewModel,
+            messageId = message.id
         ) { showRegenerateDialog = false }
     }
 }
 
 @Composable
 private fun DecodingMetricsDisplay(metrics: com.dark.neuroverse.model.DecodingMetrics) {
-    if (metrics.durationMs.toInt() != 0) {
-        Spacer(Modifier.height(rDP(9.dp)))
-        Text(
-            text = "Decoded with\n${metrics.modelName} in ${metrics.durationMs} ms",
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
-        )
-    }
+    // OPTIMIZATION: Only render if metrics exist
+    if (metrics.durationMs.toInt() == 0) return
+
+    Spacer(Modifier.height(rDP(9.dp)))
+    Text(
+        text = "Decoded with\n${metrics.modelName} in ${metrics.durationMs} ms",
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(0.7f)
+    )
 }
 
 @SuppressLint("DefaultLocale")
@@ -406,7 +395,8 @@ fun RagResultCard(rag: RagResult) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { ragExpanded = !ragExpanded }) {
+                    .clickable { ragExpanded = !ragExpanded }
+            ) {
                 Text(
                     text = "RAG Result (${rag.docs.size} docs)",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Medium),
@@ -487,13 +477,15 @@ private fun ThinkingChatUI(message: Message) {
             spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium)
         ) + slideOutVertically(targetOffsetY = { -it / 6 })
     ) {
-        Box(modifier = Modifier
-            .fillMaxWidth()
-            .clickable { showThinkingText = !showThinkingText }
-            .clip(RoundedCornerShape(rDP(8.dp)))
-            .background(Color(0xFF0F172A))
-            .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
-            .animateContentSize(tween(180, easing = FastOutSlowInEasing))) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { showThinkingText = !showThinkingText }
+                .clip(RoundedCornerShape(rDP(8.dp)))
+                .background(Color(0xFF0F172A))
+                .border(rDP(1.dp), Color(0xFF334155), RoundedCornerShape(rDP(8.dp)))
+                .animateContentSize(tween(180, easing = FastOutSlowInEasing))
+        ) {
             Text(
                 text = if (showThinkingText) "Thought:\n${message.thought}" else "Thinking... (tap to expand)",
                 modifier = Modifier.padding(rDP(8.dp)),
@@ -508,7 +500,9 @@ private fun ThinkingChatUI(message: Message) {
 
 @Composable
 private fun MessageActionRow(
-    onCopy: () -> Unit, onShare: () -> Unit, onDelete: () -> Unit
+    onCopy: () -> Unit,
+    onShare: () -> Unit,
+    onDelete: () -> Unit
 ) {
     val iconSize = rDP(14.dp)
 
@@ -554,14 +548,17 @@ private fun AssistantMessageActions(
         verticalAlignment = Alignment.CenterVertically
     ) {
         ActionIcon(
-            painter = painterResource(R.drawable.copy), contentDescription = "Copy", onClick = {
+            painter = painterResource(R.drawable.copy),
+            contentDescription = "Copy",
+            onClick = {
                 scope.launch {
                     clipboardManager.setClipEntry(
                         ClipEntry(ClipData.newPlainText("message", message.text))
                     )
                     Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
                 }
-            }, iconSize = iconSize
+            },
+            iconSize = iconSize
         )
 
         TTSActionButton(
@@ -578,7 +575,8 @@ private fun AssistantMessageActions(
                         ttsViewModel.generateAndPlayAudio(normalized, context)
                     }
                 }
-            })
+            }
+        )
 
         ActionIcon(
             painter = painterResource(R.drawable.regen),
@@ -617,7 +615,8 @@ private fun ActionIcon(
         tint = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.7f else 0.3f),
         modifier = Modifier
             .size(iconSize)
-            .clickable(enabled = enabled) { onClick() })
+            .clickable(enabled = enabled) { onClick() }
+    )
 }
 
 @Composable
@@ -634,12 +633,17 @@ private fun ActionIcon(
         tint = MaterialTheme.colorScheme.primary.copy(alpha = if (enabled) 0.7f else 0.3f),
         modifier = Modifier
             .size(iconSize)
-            .clickable(enabled = enabled) { onClick() })
+            .clickable(enabled = enabled) { onClick() }
+    )
 }
 
 @Composable
 private fun TTSActionButton(
-    isPlaying: Boolean, progress: Float, isInitialized: Boolean, iconSize: Dp, onClick: () -> Unit
+    isPlaying: Boolean,
+    progress: Float,
+    isInitialized: Boolean,
+    iconSize: Dp,
+    onClick: () -> Unit
 ) {
     Box(contentAlignment = Alignment.Center) {
         if (isPlaying && progress > 0f) {
@@ -658,7 +662,8 @@ private fun TTSActionButton(
             tint = MaterialTheme.colorScheme.primary.copy(alpha = if (isInitialized) 0.7f else 0.3f),
             modifier = Modifier
                 .size(iconSize)
-                .clickable(enabled = isInitialized) { onClick() })
+                .clickable(enabled = isInitialized) { onClick() }
+        )
     }
 }
 
@@ -671,7 +676,6 @@ fun ToolChatUI(
     onMessageDelete: (String) -> Unit
 ) {
     val context = LocalContext.current
-    LocalClipboard.current
     val scope = rememberCoroutineScope()
 
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
@@ -710,7 +714,8 @@ fun ToolChatUI(
             isPlaying = isPlaying,
             progress = progress,
             initialized = initialized,
-            onDeleteClick = { onMessageDelete(message.id) })
+            onDeleteClick = { onMessageDelete(message.id) }
+        )
     }
 }
 
@@ -733,14 +738,17 @@ private fun ToolMessageActions(
         verticalAlignment = Alignment.CenterVertically
     ) {
         ActionIcon(
-            painter = painterResource(R.drawable.copy), contentDescription = "Copy", onClick = {
+            painter = painterResource(R.drawable.copy),
+            contentDescription = "Copy",
+            onClick = {
                 scope.launch {
                     clipboardManager.setClipEntry(
                         ClipEntry(ClipData.newPlainText("message", message.text))
                     )
                     Toast.makeText(context, "Copied to clipboard!", Toast.LENGTH_SHORT).show()
                 }
-            }, iconSize = iconSize
+            },
+            iconSize = iconSize
         )
 
         TTSActionButton(
@@ -757,7 +765,8 @@ private fun ToolMessageActions(
                         ttsViewModel.generateAndPlayAudio(normalized, context)
                     }
                 }
-            })
+            }
+        )
 
         ActionIcon(
             imageVector = Icons.Rounded.Share,
@@ -836,25 +845,25 @@ private fun DecodingStageLayout(stage: DecodingStage) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ToolUIContent(
-    uiState: ChatUiState, message: Message, viewModel: ChatScreenViewModel, isGenerating: Boolean
+    uiState: ChatUiState,
+    message: Message,
+    viewModel: ChatScreenViewModel,
+    isGenerating: Boolean
 ) {
     val context = LocalContext.current
     val runningPlugin by PluginManager.activePlugin.collectAsState()
 
-    Crossfade(
-        targetState = uiState, animationSpec = tween(200), label = "tool-state"
-    ) { state ->
-        when (state) {
-            is ChatUiState.DecodingTool -> DecodingToolUI()
-            else -> ToolOutputUI(
-                message = message,
-                uiState = state,
-                viewModel = viewModel,
-                isGenerating = isGenerating,
-                runningPlugin = runningPlugin,
-                context = context
-            )
-        }
+    // OPTIMIZATION: Remove Crossfade - direct conditional rendering
+    when (uiState) {
+        is ChatUiState.DecodingTool -> DecodingToolUI()
+        else -> ToolOutputUI(
+            message = message,
+            uiState = uiState,
+            viewModel = viewModel,
+            isGenerating = isGenerating,
+            runningPlugin = runningPlugin,
+            context = context
+        )
     }
 }
 
@@ -931,7 +940,8 @@ private fun ToolOutputUI(
             hasError = output.has("err"),
             isGenerating = isGenerating,
             onToggleExpand = { expanded = !expanded },
-            onSummarize = { viewModel.summarizeToolOutput(message.id) })
+            onSummarize = { viewModel.summarizeToolOutput(message.id) }
+        )
 
         AnimatedVisibility(
             visible = expanded,
@@ -967,10 +977,13 @@ private fun ToolOutputHeader(
                 .weight(1f)
                 .clip(RoundedCornerShape(rDP(5.dp)))
                 .border(
-                    1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(rDP(5.dp))
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant,
+                    RoundedCornerShape(rDP(5.dp))
                 )
                 .clickable { onToggleExpand() }
-                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+        ) {
             Row(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
@@ -999,7 +1012,8 @@ private fun ToolOutputHeader(
                         else Coral.copy(alpha = 0.1f)
                     )
                     .clickable(enabled = !isGenerating) { onSummarize() }
-                    .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))) {
+                    .padding(horizontal = rDP(12.dp), vertical = rDP(6.dp))
+            ) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
                     verticalAlignment = Alignment.CenterVertically
@@ -1084,7 +1098,8 @@ private fun ToolOutputContent(
                         runCatching {
                             withContext(Dispatchers.IO) {
                                 PluginManager.runPlugin(
-                                    context, message.tool?.toolOutput?.pluginName ?: ""
+                                    context,
+                                    message.tool?.toolOutput?.pluginName ?: ""
                                 )
                             }
                         }.onFailure { e ->
@@ -1167,7 +1182,7 @@ fun EmptyStateContent(uiState: ChatUiState) {
 
             else -> {
                 Text(
-                    text = "Ready to chat! Ask me anything. \uD83D\uDE0A \nToolNeuron",
+                    text = "Ready to chat! Ask me anything. 😊 \nToolNeuron",
                     color = SlateGrey,
                     fontSize = rSp(16.sp),
                     fontFamily = FontFamily.Serif,

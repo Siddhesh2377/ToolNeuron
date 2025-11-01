@@ -816,7 +816,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                             openRouterInstalled.forEach { modelId ->
                                 OpenRouterModelItem(
                                     modelId = modelId,
-                                    onDelete = { viewModel.removeOpenRouterModel(modelId.id) })
+                                    onDelete = { viewModel.removeModel(modelId.name) })
                             }
                         }
                     }
