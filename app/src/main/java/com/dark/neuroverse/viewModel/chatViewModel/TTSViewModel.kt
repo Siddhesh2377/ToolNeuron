@@ -112,6 +112,7 @@ class TTSViewModel() : ViewModel() {
                 track.play()
 
                 val startTime = TimeSource.Monotonic.markNow()
+                Log.d(TAG, "Generating audio from SID : $speakerId")
 
                 AudioManager.generateTts(text, speakerId, onAudioChunk = { chunk ->
                     generatedAudio += chunk
@@ -121,7 +122,7 @@ class TTSViewModel() : ViewModel() {
                     _audioProgress.value = currentSampleIndex.toFloat() / totalSamples
                 })
 
-                val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+                val ttsInfo = JSONObject(AudioManager.getAudioInfo()).getJSONObject("tts")
                 val audioDuration =
                     ttsInfo.let { totalSamples / it.getInt("sample_rate").toFloat() }
                 val elapsed = startTime.elapsedNow().inWholeMilliseconds.toFloat() / 1000
@@ -214,7 +215,7 @@ class TTSViewModel() : ViewModel() {
     }
 
     private fun initAudioTrack() {
-        val ttsInfo = JSONObject(AudioManager.getAudioInfo())
+        val ttsInfo = JSONObject(AudioManager.getAudioInfo()).getJSONObject("tts")
         val sampleRate = ttsInfo.getInt("sample_rate")
 
 

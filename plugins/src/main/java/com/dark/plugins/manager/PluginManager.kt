@@ -44,11 +44,9 @@ object PluginManager {
 
     // Cached tools list that updates when plugins change
     val toolsList: StateFlow<List<Pair<String, List<Tools>>>> =
-        PluginOps.installedPlugins
-            .map { plugins ->
+        PluginOps.installedPlugins.map { plugins ->
                 plugins.map { it.pluginName to it.tools }
-            }
-            .stateIn(scope, SharingStarted.Eagerly, emptyList())
+            }.stateIn(scope, SharingStarted.Eagerly, emptyList())
 
     // Initialization
 
@@ -65,7 +63,10 @@ object PluginManager {
 
             // Install default plugins asynchronously - don't block initialization
             scope.launch {
-                PluginOps.installFromAssets(context, arrayOf("web-searching-plugin.zip"))
+                PluginOps.installFromAssets(
+                    context,
+                    arrayOf("web-searching-plugin.zip", "util-plugin-plugin.zip")
+                )
                 Log.d(TAG, "Default plugins installation initiated")
             }
 
@@ -89,11 +90,9 @@ object PluginManager {
     suspend fun runPlugin(context: Context, name: String): LoadedPlugin = pluginMutex.withLock {
         stopCurrentPluginUnsafe()
 
-        val pluginPath = installedPlugins.value
-            .find { it.pluginName == name }?.pluginPath
+        val pluginPath = installedPlugins.value.find { it.pluginName == name }?.pluginPath
             ?: return LoadedPlugin(
-                null, null, null, null,
-                IllegalArgumentException("Plugin not installed: $name")
+                null, null, null, null, IllegalArgumentException("Plugin not installed: $name")
             )
 
         val loaded = PluginOps.loadPluginFromFile(File(pluginPath), context)
@@ -110,8 +109,13 @@ object PluginManager {
             } catch (e: Exception) {
                 Log.e(TAG, "Plugin execution error: $name", e)
             } finally {
-                runCatching { api.onDestroy() }
-                    .onFailure { Log.e(TAG, "onDestroy failed: $name", it) }
+                runCatching { api.onDestroy() }.onFailure {
+                        Log.e(
+                            TAG,
+                            "onDestroy failed: $name",
+                            it
+                        )
+                    }
             }
         }
 
@@ -146,13 +150,12 @@ object PluginManager {
         }
     }
 
-    fun getViewModelStoreOwner(): ViewModelStoreOwner =
-        object : ViewModelStoreOwner {
-            override val viewModelStore: ViewModelStore
-                get() = pluginViewModelStore ?: ViewModelStore().also {
-                    pluginViewModelStore = it
-                }
-        }
+    fun getViewModelStoreOwner(): ViewModelStoreOwner = object : ViewModelStoreOwner {
+        override val viewModelStore: ViewModelStore
+            get() = pluginViewModelStore ?: ViewModelStore().also {
+                pluginViewModelStore = it
+            }
+    }
 
     private fun clearViewModelStore() {
         pluginViewModelStore?.clear()

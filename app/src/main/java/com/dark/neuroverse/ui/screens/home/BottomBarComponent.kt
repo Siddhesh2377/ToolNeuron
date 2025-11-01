@@ -1,11 +1,18 @@
 package com.dark.neuroverse.ui.screens.home
 
-
+import android.Manifest
 import android.annotation.SuppressLint
+import android.content.Context
+import android.content.pm.PackageManager
 import android.util.Log
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.ActivityResultLauncher
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -63,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
@@ -73,14 +81,15 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.stt.STTEvent
 import com.dark.neuroverse.viewModel.stt.STTViewModel
-import com.dark.plugins.model.Tools
 import com.dark.neuroverse.worker.DataHubManager
+import com.dark.plugins.model.Tools
+import com.mp.data_hub_lib.model.DataSetModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,12 +112,9 @@ fun ChatInputWithDataHubDialog(
 
     LaunchedEffect(Unit) {
         val modelDir = ModelManager.getSTTModel() ?: return@LaunchedEffect
-
-        CoroutineScope(Dispatchers.IO).launch {
+        launch(Dispatchers.IO) {
             sttViewModel.initialize(
-                modelDir.copy(
-                    modelPath = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny"
-                )
+                modelDir.copy(modelPath = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny")
             )
         }
     }
@@ -119,9 +125,9 @@ fun ChatInputWithDataHubDialog(
         selectedTools = selectedTools,
         onToolSelected = onToolSelected,
         onValueChange = onValueChange,
-        onRag = {
-            onRag(it)
-            if (it) showDialog = true
+        onRag = { ragEnabled ->
+            onRag(ragEnabled)
+            if (ragEnabled) showDialog = true
         },
         onSend = onSend,
         onToolRemoved = onToolRemoved,
@@ -130,86 +136,87 @@ fun ChatInputWithDataHubDialog(
         sttViewModel = sttViewModel
     )
 
+
     if (showDialog) {
-        AlertDialog(
-            onDismissRequest = { showDialog = false },
-            title = { Text("Select Dataset") },
-            text = {
-                if (datasets.isEmpty()) {
-                    Text("No datasets installed", color = Color.Gray)
-                } else {
-                    LazyColumn {
-                        items(datasets) { dataset ->
-                            val isSelected = currentDataset?.modelName == dataset.modelName
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(vertical = 4.dp)
-                                    .clickable {
-                                        val isAlreadySelected =
-                                            currentDataset?.modelName == dataset.modelName
-                                        if (isAlreadySelected) {
-                                            DataHubManager.clearCurrentDataSet() // add this function
-                                        } else {
-                                            DataHubManager.setCurrentDataSet(dataset) { success ->
-                                                if (!success) Log.e(
-                                                    "DataHub", "Failed to set dataset"
-                                                )
-                                            }
-                                        }
-                                    }, colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.background
-                                )
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Column {
-                                        Text(
-                                            dataset.modelName,
-                                            style = MaterialTheme.typography.bodyLarge
-                                        )
-                                        if (dataset.modelDescription.isNotBlank()) {
-                                            Text(
-                                                dataset.modelDescription,
-                                                color = Color.Gray,
-                                                style = MaterialTheme.typography.bodySmall
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(Modifier.weight(1f))
-
-                                    if (isSelected) {
-                                        Icon(
-                                            Icons.Rounded.Check,
-                                            contentDescription = "Selected",
-                                            tint = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                }
-            },
-            confirmButton = {},
-            dismissButton = {
-                TextButton(onClick = { showDialog = false }) {
-                    Text("Cancel")
-                }
-            })
+        DatasetSelectionDialog(
+            datasets = datasets,
+            currentDataset = currentDataset,
+            onDismiss = { showDialog = false })
     }
 }
 
+@Composable
+private fun DatasetSelectionDialog(
+    datasets: List<DataSetModel>, currentDataset: DataSetModel?, onDismiss: () -> Unit
+) {
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Select Dataset") }, text = {
+        if (datasets.isEmpty()) {
+            Text("No datasets installed", color = Color.Gray)
+        } else {
+            LazyColumn {
+                items(datasets) { dataset ->
+                    DatasetItem(
+                        dataset = dataset,
+                        isSelected = currentDataset?.modelName == dataset.modelName
+                    )
+                }
+            }
+        }
+    }, confirmButton = {}, dismissButton = {
+        TextButton(onClick = onDismiss) {
+            Text("Cancel")
+        }
+    })
+}
+
+@Composable
+private fun DatasetItem(dataset: DataSetModel, isSelected: Boolean) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable {
+                if (isSelected) {
+                    DataHubManager.clearCurrentDataSet()
+                } else {
+                    DataHubManager.setCurrentDataSet(dataset) { success ->
+                        if (!success) Log.e("DataHub", "Failed to set dataset")
+                    }
+                }
+            }, colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.background
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(dataset.modelName, style = MaterialTheme.typography.bodyLarge)
+                if (dataset.modelDescription.isNotBlank()) {
+                    Text(
+                        dataset.modelDescription,
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+
+            if (isSelected) {
+                Icon(
+                    Icons.Rounded.Check,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
-@SuppressLint("StateFlowValueCalledInComposition", "MissingPermission")
+@SuppressLint("MissingPermission")
 @Composable
 fun ChatInputBar(
     value: String,
@@ -222,58 +229,55 @@ fun ChatInputBar(
     onToolRemoved: (Tools) -> Unit,
     isGenerating: Boolean,
     inputEnabled: Boolean,
-    sttViewModel: STTViewModel // Add this parameter
+    sttViewModel: STTViewModel
 ) {
     var showToolsList by remember { mutableStateOf(false) }
     var isRag by remember { mutableStateOf(false) }
     var isRecording by remember { mutableStateOf(false) }
-    var recordingJob: Job? by remember { mutableStateOf(null) }
+    val stopRecordingFlag = remember { AtomicBoolean(false) }
 
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val sttUiState by sttViewModel.uiState.collectAsState()
 
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        val message =
+            if (granted) "Microphone permission granted" else "Microphone permission denied"
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+    }
+
+    // Auto toggle RAG when tools are selected/unselected
+    LaunchedEffect(selectedTools) {
+        val shouldEnableRag = selectedTools.isNotEmpty()
+        if (shouldEnableRag != isRag) {
+            isRag = shouldEnableRag
+            onRag(isRag)
+        }
+    }
+
     // Handle STT events
     LaunchedEffect(Unit) {
         sttViewModel.events.collect { event ->
-            when (event) {
-                is STTEvent.TranscriptionSuccess -> {
-                    // Update the text field with transcription
-                    onValueChange(value + " " + event.text)
-                    Toast.makeText(context, "Transcribed! ${event.text}", Toast.LENGTH_SHORT).show()
-                }
-
-                is STTEvent.TranscriptionFailed -> {
-                    Toast.makeText(
-                        context,
-                        "Transcription failed: ${event.message}",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
-
-                is STTEvent.NoSpeechDetected -> {
-                    Toast.makeText(context, "No speech detected", Toast.LENGTH_SHORT).show()
-                }
-
-                is STTEvent.Error -> {
-                    Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
-                }
-
-                else -> {}
-            }
+            handleSTTEvent(event, context, value, onValueChange)
         }
     }
 
     Column(
         modifier = Modifier
             .imePadding()
+            .animateContentSize(
+                animationSpec = spring(
+                    Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow
+                )
+            )
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.secondary.copy(0.1f)),
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         Column(Modifier.navigationBarsPadding()) {
-            // Tools list
-            AnimatedVisibility(visible = showToolsList) {
+            if (showToolsList) {
                 ToolsList(
                     tools = tools, onToolSelected = {
                         onToolSelected(it)
@@ -281,222 +285,326 @@ fun ChatInputBar(
                     })
             }
 
-            // Tool selection and model button row
-            Row(
-                modifier = Modifier
-                    .padding(top = rDP(16.dp))
-                    .padding(horizontal = rDP(16.dp))
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-            ) {
-                Button(
-                    onClick = {
-                        if (inputEnabled) {
-                            showToolsList = !showToolsList
-                        }
-                    },
-                    enabled = ModelManager.currentModel.value.isToolCalling,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
-                        contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
-                    ),
-                    shape = RoundedCornerShape(rDP(8.dp))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-                    ) {
-                        Icon(painterResource(R.drawable.tools), contentDescription = "Tools")
-                        Text(text = "Tools", fontSize = rSp(14.sp))
+            ToolsAndModelRow(
+                inputEnabled = inputEnabled,
+                isToolCalling = ModelManager.currentModel.collectAsState().value.isToolCalling,
+                showToolsList = showToolsList,
+                selectedTools = selectedTools,
+                isRag = isRag,
+                onToolsClick = { if (inputEnabled) showToolsList = !showToolsList },
+                onToolRemoved = onToolRemoved,
+                onRagToggle = {
+                    // Optional: only allow manual disabling
+                    if (inputEnabled && selectedTools.isEmpty()) {
+                        isRag = !isRag
+                        onRag(isRag)
+                    }
+                })
+
+            InputRow(
+                value = value,
+                onValueChange = onValueChange,
+                inputEnabled = inputEnabled,
+                isRecording = isRecording,
+                isTranscribing = sttUiState.isTranscribing,
+                isGenerating = isGenerating,
+                sttReady = sttUiState.isReady,
+                onSTTClick = {
+                    handleSTTButtonClick(
+                        context = context,
+                        sttReady = sttUiState.isReady,
+                        isRecording = isRecording,
+                        stopRecordingFlag = stopRecordingFlag,
+                        permissionLauncher = permissionLauncher,
+                        onRecordingStateChange = { isRecording = it },
+                        sttViewModel = sttViewModel,
+                        scope = scope
+                    )
+                },
+                onSend = {
+                    if (ModelManager.isModelLoaded()) {
+                        onSend()
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Model is not loaded..! \nPlease Load Model..!",
+                            Toast.LENGTH_LONG
+                        ).show()
+                    }
+                })
+        }
+    }
+}
+
+
+private fun handleSTTButtonClick(
+    context: Context,
+    sttReady: Boolean,
+    isRecording: Boolean,
+    stopRecordingFlag: AtomicBoolean,
+    permissionLauncher: ActivityResultLauncher<String>,
+    onRecordingStateChange: (Boolean) -> Unit,
+    sttViewModel: STTViewModel,
+    scope: CoroutineScope
+) {
+    if (!sttReady) {
+        Toast.makeText(context, "STT not initialized", Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val hasPermission = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+
+    if (!hasPermission) {
+        permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+        return
+    }
+
+    if (isRecording) {
+        // Signal to stop recording
+        stopRecordingFlag.set(true)
+        onRecordingStateChange(false)
+    } else {
+        // Start recording
+        stopRecordingFlag.set(false)
+        onRecordingStateChange(true)
+
+        scope.launch(Dispatchers.IO) {
+            try {
+                val audioFile = recordAudioUntilStopped(context) { stopRecordingFlag.get() }
+
+                // Check if we have valid audio
+                if (audioFile.exists() && audioFile.length() > 1000) {
+                    withContext(Dispatchers.Main) {
+                        Log.d("ChatInputBar", "Starting transcription: ${audioFile.absolutePath}")
+                        sttViewModel.transcribeFile(audioFile.absolutePath)
+                    }
+                } else {
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(context, "Recording too short or empty", Toast.LENGTH_SHORT)
+                            .show()
                     }
                 }
-
-                // Selected tools chips
-                LazyRow(
-                    modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
-                ) {
-                    items(selectedTools, key = { it.toolName }) { tool ->
-                        ToolChip(
-                            tool = tool,
-                            onRemove = { onToolRemoved(tool) },
-                            modifier = Modifier.animateItem()
-                        )
-                    }
+            } catch (_: CancellationException) {
+                Log.d("ChatInputBar", "Recording cancelled")
+            } catch (e: Exception) {
+                Log.e("ChatInputBar", "Recording error", e)
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Recording error: ${e.message}", Toast.LENGTH_SHORT)
+                        .show()
                 }
-
-                // RAG toggle button
-                IconButton(
-                    onClick = {
-                        if (inputEnabled) {
-                            isRag = !isRag
-                            onRag(isRag)
-                        }
-                    },
-                    enabled = inputEnabled,
-                    modifier = Modifier.size(rDP(36.dp)),
-                    shape = RoundedCornerShape(rDP(8.dp)),
-                    colors = IconButtonDefaults.iconButtonColors(
-                        containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
-                        contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
-                    )
-                ) {
-                    Icon(
-                        painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG"
-                    )
-                }
-            }
-
-            // Input row
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = rDP(8.dp))
-                    .padding(bottom = rDP(4.dp))
-                    .padding(end = rDP(18.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    enabled = inputEnabled && !isRecording,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = rDP(6.dp)),
-                    placeholder = {
-                        Text(
-                            text = when {
-                                isRecording -> "Recording..."
-                                sttUiState.isTranscribing -> "Transcribing..."
-                                inputEnabled -> "Say Anything…"
-                                else -> "Processing..."
-                            }, color = SlateGrey, fontSize = rSp(14.sp)
-                        )
-                    },
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = Color.Transparent,
-                        unfocusedContainerColor = Color.Transparent,
-                        disabledContainerColor = Color.Transparent,
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        cursorColor = MaterialTheme.colorScheme.primary
-                    ),
-                    textStyle = LocalTextStyle.current.copy(
-                        color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
-                    )
-                )
-
-                Spacer(Modifier.width(rDP(4.dp)))
-
-                STTButton(
-                    isRecording = isRecording,
-                    isProcessing = sttUiState.isTranscribing,
-                    isReady = sttUiState.isReady,
-                    onClick = {
-                        if (!sttUiState.isReady) {
-                            Toast.makeText(context, "STT not initialized", Toast.LENGTH_SHORT)
-                                .show()
-                            return@STTButton
-                        }
-
-                        if (isRecording) {
-                            // Stop recording - just set flag, don't cancel job
-                            isRecording = false
-                            // Job will complete naturally and transcribe
-                        } else {
-                            // Start recording
-                            isRecording = true
-                            recordingJob = scope.launch(Dispatchers.IO) {
-                                var audioFile: File? = null
-                                try {
-                                    audioFile = recordAudioUntilStopped(context) {
-                                        // Check if we should stop
-                                        !isRecording
-                                    }
-
-                                    withContext(Dispatchers.Main) {
-                                        Log.d(
-                                            "ChatInputBar",
-                                            "Starting transcription for: ${audioFile.absolutePath}"
-                                        )
-                                        sttViewModel.transcribeFile(audioFile.absolutePath)
-                                    }
-                                } catch (e: kotlinx.coroutines.CancellationException) {
-                                    Log.d("ChatInputBar", "Recording cancelled")
-                                    withContext(Dispatchers.Main) {
-                                        isRecording = false
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("ChatInputBar", "Recording error", e)
-                                    withContext(Dispatchers.Main) {
-                                        Toast.makeText(
-                                            context,
-                                            "Recording error: ${e.message}",
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        isRecording = false
-                                    }
-                                } finally {
-                                    recordingJob = null
-                                }
-                            }
-                        }
-                    })
-
-                Spacer(Modifier.width(rDP(8.dp)))
-
-                Box(
-                    modifier = Modifier
-                        .size(rDP(36.dp))
-                        .clip(CircleShape)
-                        .background(
-                            if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
-                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
-                        )
-                        .clickable(enabled = inputEnabled || isGenerating) {
-                            if (ModelManager.isModelLoaded()) {
-                                onSend()
-                            } else {
-                                Toast.makeText(
-                                    context,
-                                    "Model is not loaded..! \nPlease Load Model..!",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }, contentAlignment = Alignment.Center
-                ) {
-                    when {
-                        isGenerating -> {
-                            Icon(
-                                Icons.Rounded.Stop,
-                                modifier = Modifier.padding(rDP(8.dp)),
-                                contentDescription = "Stop",
-                                tint = MaterialTheme.colorScheme.background
-                            )
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDP(28.dp)),
-                                trackColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
-                                color = MaterialTheme.colorScheme.background
-                            )
-                        }
-
-                        else -> {
-                            Icon(
-                                painterResource(R.drawable.send_chat),
-                                modifier = Modifier.padding(rDP(8.dp)),
-                                contentDescription = "Send",
-                                tint = if (inputEnabled) MaterialTheme.colorScheme.background
-                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                            )
-                        }
-                    }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    onRecordingStateChange(false)
                 }
             }
         }
     }
 }
 
+private fun handleSTTEvent(
+    event: STTEvent, context: Context, currentValue: String, onValueChange: (String) -> Unit
+) {
+    when (event) {
+        is STTEvent.TranscriptionSuccess -> {
+            val newText = if (currentValue.isBlank()) event.text else "$currentValue ${event.text}"
+            onValueChange(newText)
+            Toast.makeText(context, "Transcribed! ${event.text}", Toast.LENGTH_SHORT).show()
+        }
+
+        is STTEvent.TranscriptionFailed -> {
+            Toast.makeText(context, "Transcription failed: ${event.message}", Toast.LENGTH_SHORT)
+                .show()
+        }
+
+        is STTEvent.NoSpeechDetected -> {
+            Toast.makeText(context, "No speech detected", Toast.LENGTH_SHORT).show()
+        }
+
+        is STTEvent.Error -> {
+            Toast.makeText(context, event.message, Toast.LENGTH_SHORT).show()
+        }
+
+        else -> {}
+    }
+}
+
+@Composable
+private fun ToolsAndModelRow(
+    inputEnabled: Boolean,
+    isToolCalling: Boolean,
+    showToolsList: Boolean,
+    selectedTools: List<Tools>,
+    isRag: Boolean,
+    onToolsClick: () -> Unit,
+    onToolRemoved: (Tools) -> Unit,
+    onRagToggle: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .padding(top = rDP(16.dp))
+            .padding(horizontal = rDP(16.dp))
+            .fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+    ) {
+        Button(
+            onClick = onToolsClick, enabled = isToolCalling, colors = ButtonDefaults.buttonColors(
+                containerColor = if (showToolsList) SkyBlue else MaterialTheme.colorScheme.background,
+                contentColor = if (showToolsList) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.primary,
+            ), shape = RoundedCornerShape(rDP(8.dp))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            ) {
+                Icon(painterResource(R.drawable.tools), contentDescription = "Tools")
+                Text(text = "Tools", fontSize = rSp(14.sp))
+            }
+        }
+
+        LazyRow(
+            modifier = Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))
+        ) {
+            items(selectedTools, key = { it.toolName }) { tool ->
+                ToolChip(
+                    tool = tool,
+                    onRemove = { onToolRemoved(tool) },
+                    modifier = Modifier.animateItem()
+                )
+            }
+        }
+
+        IconButton(
+            onClick = onRagToggle,
+            enabled = inputEnabled,
+            modifier = Modifier.size(rDP(36.dp)),
+            shape = RoundedCornerShape(rDP(8.dp)),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = if (isRag) CyberViolet.copy(0.2f) else MaterialTheme.colorScheme.background,
+                contentColor = if (isRag) CyberViolet else MaterialTheme.colorScheme.primary,
+            )
+        ) {
+            Icon(painterResource(R.drawable.database_zap), contentDescription = "Toggle RAG")
+        }
+    }
+}
+
+@Composable
+private fun InputRow(
+    value: String,
+    onValueChange: (String) -> Unit,
+    inputEnabled: Boolean,
+    isRecording: Boolean,
+    isTranscribing: Boolean,
+    isGenerating: Boolean,
+    sttReady: Boolean,
+    onSTTClick: () -> Unit,
+    onSend: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = rDP(200.dp))
+            .padding(vertical = rDP(8.dp))
+            .padding(bottom = rDP(4.dp))
+            .padding(end = rDP(18.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+
+
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            enabled = inputEnabled && !isRecording,
+            modifier = Modifier
+                .weight(1f)
+                .padding(horizontal = rDP(6.dp)),
+            placeholder = {
+                Text(
+                    text = when {
+                        isRecording -> "Recording..."
+                        isTranscribing -> "Transcribing..."
+                        inputEnabled -> "Say Anything…"
+                        else -> "Processing..."
+                    }, color = SlateGrey, fontSize = rSp(14.sp)
+                )
+            },
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                disabledContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                cursorColor = MaterialTheme.colorScheme.primary
+            ),
+            textStyle = LocalTextStyle.current.copy(
+                color = MaterialTheme.colorScheme.primary, fontSize = rSp(15.sp)
+            )
+        )
+
+        Spacer(Modifier.width(rDP(4.dp)))
+
+
+        STTButton(
+            isRecording = isRecording,
+            isProcessing = isTranscribing,
+            isReady = sttReady,
+            onClick = onSTTClick
+        )
+
+        Spacer(Modifier.width(rDP(8.dp)))
+
+        SendButton(
+            inputEnabled = inputEnabled, isGenerating = isGenerating, onSend = onSend
+        )
+    }
+}
+
+@Composable
+private fun SendButton(
+    inputEnabled: Boolean, isGenerating: Boolean, onSend: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(rDP(36.dp))
+            .clip(CircleShape)
+            .background(
+                if (inputEnabled || isGenerating) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
+            )
+            .clickable(enabled = inputEnabled || isGenerating) {
+                onSend()
+            }, contentAlignment = Alignment.Center
+    ) {
+        when {
+            isGenerating -> {
+                Icon(
+                    Icons.Rounded.Stop,
+                    modifier = Modifier.padding(rDP(8.dp)),
+                    contentDescription = "Stop",
+                    tint = MaterialTheme.colorScheme.background
+                )
+                CircularProgressIndicator(
+                    modifier = Modifier.size(rDP(28.dp)),
+                    trackColor = MaterialTheme.colorScheme.background.copy(alpha = 0.3f),
+                    color = MaterialTheme.colorScheme.background
+                )
+            }
+
+            else -> {
+                Icon(
+                    painterResource(R.drawable.send_chat),
+                    modifier = Modifier.padding(rDP(8.dp)),
+                    contentDescription = "Send",
+                    tint = if (inputEnabled) MaterialTheme.colorScheme.background
+                    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                )
+            }
+        }
+    }
+}
 
 @Composable
 private fun ToolChip(
@@ -524,7 +632,7 @@ fun ToolsList(
     onToolSelected: (Pair<String, Tools>) -> Unit
 ) {
     LazyColumn(
-        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
+        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(200.dp)),
         contentPadding = PaddingValues(vertical = rDP(8.dp))
     ) {
         tools.forEach { (pluginName, toolList) ->

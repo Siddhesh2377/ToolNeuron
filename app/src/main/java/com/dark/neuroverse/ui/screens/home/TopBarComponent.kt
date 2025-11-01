@@ -201,7 +201,10 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                                 ModelDialogItem(
                                     model = model,
                                     isSelected = isSelected,
-                                    onSelect = { viewModel.selectModel(it) })
+                                    onSelect = {
+                                        showDialog = false
+                                        viewModel.selectModel(it)
+                                    })
                             }
                         }
 

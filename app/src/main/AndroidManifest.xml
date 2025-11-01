@@ -94,6 +94,16 @@
 
         </activity>
 
+
+        <activity
+            android:name=".activity.ModelActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize">
+
+        </activity>
+
         <activity
             android:name=".activity.DatahubActivity"
             android:exported="true"

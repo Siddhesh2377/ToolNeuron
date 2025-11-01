@@ -1,5 +1,7 @@
 package com.dark.neuroverse.model
 
+import kotlinx.serialization.Serializer
+
 data class StreamingState(
     val messageId: String,
     val visibleBuffer: StringBuilder = StringBuilder(),
@@ -20,39 +22,23 @@ sealed class ChatUiState {
     ) : ChatUiState()
 
     data class Generating(
-        val messageId: String,
-        val isFirstToken: Boolean = false
+        val messageId: String, val isFirstToken: Boolean = false
     ) : ChatUiState()
 
     data class DecodingStream(
-        val messageId: String,
-        val startTimeNs: Long
+        val messageId: String, val startTimeNs: Long,  val stage: DecodingStage = DecodingStage.Decoding
     ) : ChatUiState()
 
     data class ExecutingTool(
         val toolName: String,
-        val messageId: String
+        val messageId: String,
     ) : ChatUiState()
 
     data class Error(
-        val message: String,
-        val isRetryable: Boolean = true,
-        val cause: Throwable? = null
+        val message: String, val isRetryable: Boolean = true, val cause: Throwable? = null
     ) : ChatUiState()
 
     data object GeneratingTitle : ChatUiState()
+
+    data object DecodingTool : ChatUiState()
 }
-
-/**
- * Decoding metrics for performance tracking
- */
-data class DecodingMetrics(
-    val type: DecodeType,
-    val chatId: String,
-    val modelId: String,
-    val startedAtNs: Long,
-    val firstTokenAtNs: Long,
-    val durationMs: Long
-)
-
-enum class DecodeType { NORMAL, REGENERATE }

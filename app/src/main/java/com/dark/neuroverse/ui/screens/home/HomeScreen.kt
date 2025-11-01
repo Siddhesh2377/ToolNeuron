@@ -78,6 +78,7 @@ import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.viewModel.chatViewModel.ChatScreenViewModel
 import com.dark.neuroverse.viewModel.chatViewModel.ChattingViewModelFactory
 import com.dark.neuroverse.viewModel.chatViewModel.TTSViewModel
+import com.dark.neuroverse.worker.ChatManager
 import com.dark.neuroverse.worker.ToolCallingManager
 import com.dark.neuroverse.worker.UIStateManager
 import kotlinx.coroutines.CoroutineScope
@@ -105,63 +106,42 @@ fun HomeScreen(
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val isDialog by chatScreenViewModel.isDialogSelected.collectAsStateWithLifecycle()
 
-    // Token rate state (throttled updates)
-    var tokenCount by remember { mutableIntStateOf(0) }
-    var lastTokenUpdate by remember { mutableLongStateOf(0L) }
-    var tkPerSecond by remember { mutableIntStateOf(0) }
-    var lastDisplayUpdate by remember { mutableLongStateOf(0L) }
+    // OPTIMIZATION: Token rate calculation moved to separate remember block to prevent excessive recompositions
+    val tokenRateState = remember { TokenRateState() }
 
-    // Snackbar host for errors - positioned at TOP
+    // OPTIMIZATION: Only update token rate when in streaming state
+    LaunchedEffect(uiState) {
+        if (uiState is ChatUiState.DecodingStream) {
+            tokenRateState.onTokenReceived()
+        } else {
+            tokenRateState.reset()
+        }
+    }
+
     val snackbarHostState = remember { SnackbarHostState() }
+    val chatTitle by ChatManager.currentChatTitle.collectAsStateWithLifecycle()
+
+    LaunchedEffect(chatTitle) {
+        chatScreenViewModel.saveCurrentChat()
+    }
 
     // Handle error states with top snackbar
     LaunchedEffect(uiState) {
-        when (val state = uiState) {
-            is ChatUiState.Error -> {
-                // Show error at top with action
-                val message = state.message.ifBlank { "Unknown error" }
-                val actionLabel = if (state.isRetryable) "Retry" else null
+        if (uiState is ChatUiState.Error) {
+            val state = uiState as ChatUiState.Error
+            val message = state.message.ifBlank { "Unknown error" }
+            val actionLabel = if (state.isRetryable) "Retry" else null
 
-                scope.launch {
-                    val result = snackbarHostState.showSnackbar(
-                        message = message,
-                        actionLabel = actionLabel,
-                        duration = if (state.isRetryable) SnackbarDuration.Long
-                        else SnackbarDuration.Short
-                    )
+            scope.launch {
+                val result = snackbarHostState.showSnackbar(
+                    message = message,
+                    actionLabel = actionLabel,
+                    duration = if (state.isRetryable) SnackbarDuration.Long
+                    else SnackbarDuration.Short
+                )
 
-                    if (result == SnackbarResult.ActionPerformed && state.isRetryable) {
-                        // Dismiss error and allow retry
-                        UIStateManager.setStateIdle()
-                    }
-                }
-            }
-
-            is ChatUiState.DecodingStream -> {
-                // Token counting occurs only while decoding stream
-                tokenCount++
-                val currentTime = System.currentTimeMillis()
-
-                // initialize lastTokenUpdate when first token arrives
-                if (lastTokenUpdate == 0L) lastTokenUpdate = currentTime
-
-                // Throttle display updates to every 100ms
-                if (currentTime - lastDisplayUpdate > 100) {
-                    val elapsedTime = currentTime - lastTokenUpdate
-                    if (elapsedTime > 0L) {
-                        tkPerSecond = (tokenCount * 1000L / elapsedTime).toInt()
-                    }
-                    lastDisplayUpdate = currentTime
-                }
-            }
-
-            else -> {
-                // Reset counters when generation stops
-                if (tokenCount > 0) {
-                    tokenCount = 0
-                    lastTokenUpdate = 0L
-                    tkPerSecond = 0
-                    lastDisplayUpdate = 0L
+                if (result == SnackbarResult.ActionPerformed && state.isRetryable) {
+                    UIStateManager.setStateIdle()
                 }
             }
         }
@@ -178,7 +158,6 @@ fun HomeScreen(
         }
     }
 
-    // System back -> close app
     BackHandler {
         if (context is Activity) {
             Log.d("HomeScreen", "Closing the app and removing the task...")
@@ -186,16 +165,15 @@ fun HomeScreen(
         }
     }
 
-    // Hide keyboard when drawer opens
-    val imm =
-        LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+    val imm = LocalContext.current.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
     val token = LocalView.current.windowToken
     LaunchedEffect(drawerState.isOpen) {
         if (drawerState.isOpen) imm.hideSoftInputFromWindow(token, 0)
     }
 
     ModalNavigationDrawer(
-        drawerState = drawerState, drawerContent = {
+        drawerState = drawerState,
+        drawerContent = {
             ModalDrawerSheet(drawerState) {
                 SettingsDrawerContent(
                     modifier = Modifier,
@@ -205,105 +183,161 @@ fun HomeScreen(
                     onNewChatClick = { chatScreenViewModel.newChat() },
                     onDataHubClick = { onDataHubClick() },
                     onPluginStoreClick = { onPluginStoreClick() },
-                    onModelsClick = { onModelsClick() })
+                    onModelsClick = { onModelsClick() }
+                )
             }
-        }) {
+        }
+    ) {
         Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp), topBar = {
-            Column {
-                TopBar(
-                    chatScreenViewModel,
+                .blur(if (drawerState.isOpen || isDialog) 10.dp else 0.dp),
+            topBar = {
+                TopBarSection(
+                    chatScreenViewModel = chatScreenViewModel,
                     onMenu = { scope.launch { drawerState.open() } },
                     onLeftMenu = {
                         if (ModelManager.currentModel.value.modelName.isBlank()) {
-                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG)
-                                .show()
+                            Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
                         } else {
                             context.startActivity(
                                 Intent(context, ModelPropEditorActivity::class.java).apply {
-                                    putExtra(
-                                        "modelName", ModelManager.currentModel.value.modelName
-                                    )
-                                })
-                        }
-                    })
-
-                ModelLoadProgressBar(loadState = modelState)
-                TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
-
-                // Global loading indicator for UI state
-                AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
-                    Column {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (uiState is ChatUiState.Loading) {
-                            Text(
-                                text = (uiState as ChatUiState.Loading).message,
-                                modifier = Modifier.padding(
-                                    horizontal = 16.dp, vertical = 4.dp
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    putExtra("modelName", ModelManager.currentModel.value.modelName)
+                                }
                             )
                         }
-                    }
-                }
-
-                AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
-                    Column {
-                        LinearProgressIndicator(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.secondary
-                        )
-                        Text(
-                            text = "Generating title…",
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // Token rate display
-                AnimatedVisibility(visible = uiState is ChatUiState.DecodingStream && tkPerSecond > 0) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(MaterialTheme.colorScheme.surface)
-                            .padding(horizontal = 16.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = "Tokens/s: $tkPerSecond",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                // TOP ERROR SNACKBAR - Positioned right below TopBar
-                TopErrorSnackbar(snackbarHostState = snackbarHostState)
+                    },
+                    modelState = modelState,
+                    ttsViewModel = ttsViewModel,
+                    uiState = uiState,
+                    tokenRateState = tokenRateState,
+                    snackbarHostState = snackbarHostState
+                )
+            },
+            bottomBar = {
+                BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
             }
-        }, bottomBar = {
-            BottomBar(viewModel = chatScreenViewModel, uiState = uiState)
-        }) { innerPadding ->
+        ) { innerPadding ->
             BodyContent(innerPadding, chatScreenViewModel, ttsViewModel)
         }
     }
 }
 
-/**
- * Top-positioned error snackbar with dismiss action
- */
+// OPTIMIZATION: Separate TopBar section to prevent full screen recomposition
+@Composable
+private fun TopBarSection(
+    chatScreenViewModel: ChatScreenViewModel,
+    onMenu: () -> Unit,
+    onLeftMenu: () -> Unit,
+    modelState: com.dark.ai_module.model.LoadState,
+    ttsViewModel: TTSViewModel,
+    uiState: ChatUiState,
+    tokenRateState: TokenRateState,
+    snackbarHostState: SnackbarHostState
+) {
+    Column {
+        TopBar(chatScreenViewModel, onMenu = onMenu, onLeftMenu = onLeftMenu)
+        ModelLoadProgressBar(loadState = modelState)
+        TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
+
+        // Global loading indicator
+        AnimatedVisibility(visible = uiState is ChatUiState.Loading) {
+            Column {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (uiState is ChatUiState.Loading) {
+                    Text(
+                        text = uiState.message,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        AnimatedVisibility(visible = uiState is ChatUiState.GeneratingTitle) {
+            Column {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.secondary
+                )
+                Text(
+                    text = "Generating title…",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // OPTIMIZATION: Token rate display with throttled updates
+        AnimatedVisibility(
+            visible = uiState is ChatUiState.DecodingStream && tokenRateState.tokensPerSecond > 0
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = "Tokens/s: ${tokenRateState.tokensPerSecond}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        TopErrorSnackbar(snackbarHostState = snackbarHostState)
+    }
+}
+
+// OPTIMIZATION: Extracted token rate state to prevent recomposition
+class TokenRateState {
+    var tokenCount by mutableIntStateOf(0)
+        private set
+    var lastTokenUpdate by mutableLongStateOf(0L)
+        private set
+    var tokensPerSecond by mutableIntStateOf(0)
+        private set
+    var lastDisplayUpdate by mutableLongStateOf(0L)
+        private set
+
+    fun onTokenReceived() {
+        tokenCount++
+        val currentTime = System.currentTimeMillis()
+
+        if (lastTokenUpdate == 0L) lastTokenUpdate = currentTime
+
+        // Throttle display updates to every 100ms
+        if (currentTime - lastDisplayUpdate > 100) {
+            val elapsedTime = currentTime - lastTokenUpdate
+            if (elapsedTime > 0L) {
+                tokensPerSecond = (tokenCount * 1000L / elapsedTime).toInt()
+            }
+            lastDisplayUpdate = currentTime
+        }
+    }
+
+    fun reset() {
+        if (tokenCount > 0) {
+            tokenCount = 0
+            lastTokenUpdate = 0L
+            tokensPerSecond = 0
+            lastDisplayUpdate = 0L
+        }
+    }
+}
+
 @Composable
 fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
     SnackbarHost(
-        hostState = snackbarHostState, modifier = Modifier.fillMaxWidth()
+        hostState = snackbarHostState,
+        modifier = Modifier.fillMaxWidth()
     ) { data ->
-        // Custom snackbar design for errors
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -321,7 +355,6 @@ fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Error icon and message
                 Row(
                     modifier = Modifier.weight(1f),
                     horizontalArrangement = Arrangement.spacedBy(rDP(12.dp)),
@@ -350,7 +383,8 @@ fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
                 }
 
                 IconButton(
-                    onClick = { data.dismiss() }, modifier = Modifier.size(rDP(32.dp))
+                    onClick = { data.dismiss() },
+                    modifier = Modifier.size(rDP(32.dp))
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Close,
@@ -363,15 +397,17 @@ fun TopErrorSnackbar(snackbarHostState: SnackbarHostState) {
     }
 }
 
-// Keep the rest of your code unchanged
 @Composable
 fun BodyContent(
-    innerPadding: PaddingValues, viewModel: ChatScreenViewModel, ttsViewModel: TTSViewModel
+    innerPadding: PaddingValues,
+    viewModel: ChatScreenViewModel,
+    ttsViewModel: TTSViewModel
 ) {
     val messages by viewModel.messages.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var userScrolled by remember { mutableStateOf(false) }
 
+    // OPTIMIZATION: Use remember with proper keys to prevent recalculation
     val isAtBottom by remember {
         derivedStateOf {
             val info = listState.layoutInfo
@@ -381,6 +417,7 @@ fun BodyContent(
         }
     }
 
+    // OPTIMIZATION: Scroll only on new messages, not on message updates
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty() && !userScrolled) {
             listState.scrollToItem(messages.lastIndex)
@@ -403,16 +440,26 @@ fun BodyContent(
         if (messages.isEmpty()) {
             EmptyStateContent(viewModel.uiState.collectAsStateWithLifecycle().value)
         } else {
+            // OPTIMIZATION: Use stable keys for LazyColumn items
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
                 contentPadding = PaddingValues(
-                    bottom = rDP(96.dp), top = rDP(8.dp), start = rDP(24.dp), end = rDP(24.dp)
+                    bottom = rDP(96.dp),
+                    top = rDP(8.dp),
+                    start = rDP(24.dp),
+                    end = rDP(24.dp)
                 )
             ) {
-                items(items = messages, key = { it.id }, contentType = { it.role }) { message ->
+                items(
+                    items = messages,
+                    key = { it.id }, // CRITICAL: Stable keys prevent full recomposition
+                    contentType = { it.role }
+                ) { message ->
                     ChatBubble(
-                        message = message, viewModel = viewModel, ttsViewModel = ttsViewModel
+                        message = message,
+                        viewModel = viewModel,
+                        ttsViewModel = ttsViewModel
                     )
                     Spacer(Modifier.height(rDP(12.dp)))
                 }
@@ -439,7 +486,8 @@ fun BodyContent(
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Icon(
-                    imageVector = Icons.Rounded.ArrowDownward, contentDescription = "Jump to bottom"
+                    imageVector = Icons.Rounded.ArrowDownward,
+                    contentDescription = "Jump to bottom"
                 )
             }
         }
@@ -448,24 +496,31 @@ fun BodyContent(
 
 @Composable
 private fun BottomBar(
-    viewModel: ChatScreenViewModel, uiState: ChatUiState
+    viewModel: ChatScreenViewModel,
+    uiState: ChatUiState
 ) {
     ToolCallingManager.refreshToolList()
     var input by remember { mutableStateOf("") }
     val tools by ToolCallingManager.toolList.collectAsStateWithLifecycle()
     val selectedTools by ToolCallingManager.selectedTool.collectAsStateWithLifecycle()
 
-    // Derive generation state from unified UI state
-    val isGenerating = when (uiState) {
-        is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> true
-        else -> false
+    // OPTIMIZATION: Compute generation state once
+    val isGenerating = remember(uiState) {
+        uiState is ChatUiState.Generating ||
+                uiState is ChatUiState.DecodingStream ||
+                uiState is ChatUiState.DecodingTool ||
+                uiState is ChatUiState.ExecutingTool
     }
 
-    // Determine if input should be disabled
-    val inputEnabled = when (uiState) {
-        is ChatUiState.Loading, is ChatUiState.Generating, is ChatUiState.DecodingStream, is ChatUiState.ExecutingTool -> false
-        is ChatUiState.Error -> uiState.isRetryable
-        else -> true
+    val inputEnabled = remember(uiState) {
+        when (uiState) {
+            is ChatUiState.Loading,
+            is ChatUiState.Generating,
+            is ChatUiState.DecodingStream,
+            is ChatUiState.ExecutingTool -> false
+            is ChatUiState.Error -> uiState.isRetryable
+            else -> true
+        }
     }
 
     ChatInputWithDataHubDialog(
@@ -486,6 +541,6 @@ private fun BottomBar(
                     input = ""
                 }
             }
-        })
+        }
+    )
 }
-

@@ -8,6 +8,7 @@ import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.model.CodeCanvas
 import com.dark.neuroverse.model.DecodeType
 import com.dark.neuroverse.model.DecodingMetrics
+import com.dark.neuroverse.model.DecodingStage
 import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.StreamingState
@@ -54,8 +55,8 @@ object TextGenerationWorker {
     private val _lastDecodingMs = MutableStateFlow<Long?>(null)
     val lastDecodingMs: StateFlow<Long?> = _lastDecodingMs.asStateFlow()
 
-    private val _decodingMetrics = MutableSharedFlow<DecodingMetrics>(extraBufferCapacity = 8)
-    val decodingMetrics: SharedFlow<DecodingMetrics> = _decodingMetrics.asSharedFlow()
+    private val _decodingMetrics = MutableStateFlow(DecodingMetrics())
+    val decodingMetrics: StateFlow<DecodingMetrics> = _decodingMetrics.asStateFlow()
 
     // Streaming state
     private var currentStreamingState: StreamingState? = null
@@ -77,14 +78,26 @@ object TextGenerationWorker {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
         _currentMsgId.value = messageId
-        Log.d(TAG, "RAG :: $ragResult")
 
-        UIStateManager.setStateDecoding(messageId, startTimeNs)
+        // STAGE 1: Preparing Prompt
+        UIStateManager.setStateDecodingStage(
+            messageId,
+            DecodingStage.PreparingPrompt,
+            startTimeNs
+        )
+
+        if (enableTools) {
+            UIStateManager.setStateDecodingTool()
+        }
+
         currentStreamingState = StreamingState(messageId = messageId)
-        startBatchedUIUpdates(messageId)
 
         suspend fun finalizeMessage(text: String, thought: String?) {
             batchingJob?.cancel()
+
+            // STAGE 5: Rendering
+            UIStateManager.updateDecodingStage(DecodingStage.Rendering)
+            delay(100) // Brief visual feedback
 
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
             val codeCanvases = extractCodeCanvases(text)
@@ -95,27 +108,40 @@ object TextGenerationWorker {
                 thought = finalThought,
                 isFinal = true,
                 ragResult = ragResult,
-                codeCanvas = codeCanvases // ⚡ IMPORTANT: save the extracted code
+                codeCanvas = codeCanvases
             )
 
-            // Generate title if no thought (normal conversation)
-            ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
-
-            UserDataManager.refreshChatListFromDisk {
-                Log.e(TAG, "Error refreshing chat list")
+            // Launch these off the critical path
+            CoroutineScope(Dispatchers.IO).launch {
+                ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
+                UserDataManager.refreshChatListFromDisk {
+                    Log.e(TAG, "Error refreshing chat list")
+                }
             }
 
             currentStreamingState = null
         }
 
-
         try {
+            // STAGE 2: Encoding Input
+            UIStateManager.updateDecodingStage(DecodingStage.EncodingInput)
+            delay(50) // Give UI time to update
+
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
             val toolJson = if (enableTools) {
                 ToolCallingManager.toolDefinitionBuilder(
                     ToolCallingManager.getSelectedTool()
                 ).toString()
             } else ""
+
+            // STAGE 3: Loading Model (if not already loaded)
+            if (!ModelManager.isModelLoaded()) {
+                UIStateManager.updateDecodingStage(DecodingStage.LoadingModel)
+            }
+
+            // STAGE 4: Decoding
+            UIStateManager.updateDecodingStage(DecodingStage.Decoding)
+            startBatchedUIUpdates(messageId)
 
             ModelManager.generateStreaming(
                 prompt = fullPrompt,
@@ -142,7 +168,8 @@ object TextGenerationWorker {
                 },
                 onToolCalled = { toolName, argsJson ->
                     handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
-                })
+                }
+            )
 
             // Process final output
             currentStreamingState?.let { state ->
@@ -159,7 +186,9 @@ object TextGenerationWorker {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
             }
             throw e
         } catch (e: Exception) {
@@ -167,11 +196,15 @@ object TextGenerationWorker {
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
-                    state.visibleBuffer.toString(), state.thoughtBuffer.toString().ifBlank { null })
+                    state.visibleBuffer.toString(),
+                    state.thoughtBuffer.toString().ifBlank { null }
+                )
             }
         } finally {
-            UserDataManager.refreshChatListFromDisk {
-                Log.e(TAG, "Error refreshing chat list")
+            CoroutineScope(Dispatchers.IO).launch {
+                UserDataManager.refreshChatListFromDisk {
+                    Log.e(TAG, "Error refreshing chat list")
+                }
             }
             _currentMsgId.value = ""
             if (UIStateManager.uiState.value !is ChatUiState.ExecutingTool) {
@@ -184,12 +217,14 @@ object TextGenerationWorker {
      * Handles tool execution during streaming.
      */
     private fun handleToolExecution(
-        appContext: Context, toolName: String, argsJson: String, messageId: String, onToolExecution: (String) -> Unit
+        appContext: Context,
+        toolName: String,
+        argsJson: String,
+        messageId: String,
+        onToolExecution: (String) -> Unit
     ) {
         workerScope.launch {
             try {
-                UIStateManager.setStateExecutingTool(toolName, messageId)
-
                 ToolCallingManager.executeTool(
                     appContext, toolName, argsJson
                 ) { result ->
@@ -207,6 +242,7 @@ object TextGenerationWorker {
                                 )
                                 onToolExecution("error")
                             } else {
+                                UIStateManager.setStateExecutingTool(toolName, messageId)
                                 Log.d(TAG, "Tool executed successfully")
                                 onToolExecution("success")
                             }
@@ -232,6 +268,8 @@ object TextGenerationWorker {
                     toolError = e.message ?: "Tool execution failed",
                     isFinal = true
                 )
+                UIStateManager.setStateError(e.message ?: "Tool execution failed")
+            } finally {
                 UIStateManager.setStateIdle()
             }
         }
@@ -249,8 +287,8 @@ object TextGenerationWorker {
         // Get the last AI-generated code if any
         val lastAICode =
             existingMessages.lastOrNull { it.role == Role.Assistant && it.codeCanvas?.isNotEmpty() == true }?.codeCanvas?.joinToString(
-                    "\n"
-                ) { it.code } // assuming CodeCanvas has 'content' field
+                "\n"
+            ) { it.code } // assuming CodeCanvas has 'content' field
 
         return buildString {
             if (conversationHistory.isNotBlank()) {
@@ -377,11 +415,13 @@ object TextGenerationWorker {
         val metrics = DecodingMetrics(
             type = type,
             chatId = ChatManager.currentChatId.value,
-            modelId = messageId,
+            modelName = ModelManager.currentModel.value.modelName,
             startedAtNs = startTimeNs,
             firstTokenAtNs = firstTokenTimeNs,
             durationMs = durationMs
         )
+
+
 
         _decodingMetrics.tryEmit(metrics)
     }

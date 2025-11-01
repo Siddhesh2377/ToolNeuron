@@ -39,7 +39,24 @@ data class Message(
     val tool: RunningTool? = null,
     val ragResult: RagResult? = null,
     val codeCanvas: List<CodeCanvas>? = null,
+    val decodingMetrics: DecodingMetrics = DecodingMetrics()
 )
+
+/**
+ * Decoding metrics for performance tracking
+ */
+@Serializable
+data class DecodingMetrics(
+    val type: DecodeType = DecodeType.NORMAL,
+    val chatId: String = "",
+    val modelName: String = "",
+    val startedAtNs: Long = 0,
+    val firstTokenAtNs: Long = 0,
+    val durationMs: Long = 0
+)
+
+@Serializable
+enum class DecodeType { NORMAL, REGENERATE }
 
 @Serializable
 data class CodeCanvas(

@@ -21,6 +21,7 @@ import androidx.core.view.WindowCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.ai_module.workers.AudioManager
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.Screen
@@ -152,11 +153,7 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Model.route) {
-                            ModelsScreen {
-                                navController.navigate(Screen.Home.route) {
-                                    popUpTo(Screen.Model.route) { inclusive = true }
-                                }
-                            }
+                            ModelsScreen()
                         }
 
                         composable(Screen.Home.route) {
@@ -283,6 +280,7 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
         ModelManager.shutdown()
+        AudioManager.shutdown()
     }
 
     override fun onStop() {

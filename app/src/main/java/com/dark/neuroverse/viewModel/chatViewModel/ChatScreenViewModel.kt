@@ -14,7 +14,6 @@ import com.dark.neuroverse.model.Message
 import com.dark.neuroverse.model.Role
 import com.dark.neuroverse.model.RunningTool
 import com.dark.neuroverse.model.ToolOutput
-import com.dark.neuroverse.userdata.helpers.ModelStateHelper
 import com.dark.neuroverse.worker.ChatManager
 import com.dark.neuroverse.worker.RAGManager
 import com.dark.neuroverse.worker.TextGenerationWorker
@@ -30,6 +29,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
@@ -119,7 +119,7 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    suspend fun refreshModelList(){
+    suspend fun refreshModelList() {
         modelList.value = ModelManager.getAllModels()
     }
     //endregion
@@ -338,9 +338,14 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             isRegeneration = false,
             existingMessages = messages.value,
             ragResult = ragResult,
-            onToolExecution = { result ->
+            onToolExecution = { _ ->
                 saveCurrentChat()
             })
+
+        ChatManager.updateDecodingMetrix(
+            decodingMetrics.value, messageId = messageId
+        )
+
 
         // CRITICAL: Save and refresh chat list after streaming completes
         saveCurrentChat()
@@ -392,7 +397,11 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
 
         // Clear existing message
         ChatManager.updateStreamingMessage(
-            messageId = messageId, text = "", thought = null, isFinal = false, ragResult = ragResult,
+            messageId = messageId,
+            text = "",
+            thought = null,
+            isFinal = false,
+            ragResult = ragResult,
         )
 
         // Switch model if needed
@@ -666,18 +675,20 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     }
 
     fun saveCurrentChat() {
-        viewModelScope.launch {
-            try {
-                ChatManager.saveChat(
-                    messages = messages.value,
-                    chatTitle = chatTitle.value,
-                    chatId = chatId.value,
-                    rootNode = UserDataManager.getRootNode(),
-                    appContext = appContext
-                )
-                Log.d(TAG, "Chat saved successfully")
-            } catch (e: Exception) {
-                Log.e(TAG, "Error saving chat", e)
+        if (chatTitle.value != "") {
+            viewModelScope.launch {
+                try {
+                    ChatManager.saveChat(
+                        messages = messages.value,
+                        chatTitle = chatTitle.value,
+                        chatId = chatId.value,
+                        rootNode = UserDataManager.getRootNode(),
+                        appContext = appContext
+                    )
+                    Log.d(TAG, "Chat saved successfully")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error saving chat", e)
+                }
             }
         }
     }
@@ -688,11 +699,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         }
     }
 
-    fun isMessageExecutingTool(messageId: String): Boolean {
-        return uiState.value.let { state ->
-            state is ChatUiState.ExecutingTool && state.messageId == messageId
-        }
-    }
 
     fun setIsDialogOpen(show: Boolean) {
         _isDialogSelected.value = show

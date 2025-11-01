@@ -7,7 +7,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -59,7 +61,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -183,6 +187,9 @@ private fun PluginCard(
         }
     }
 
+    val haptic = LocalHapticFeedback.current
+
+
     var showAdvanced by remember { mutableStateOf(false) }
     val chevron by animateFloatAsState(
         targetValue = if (showAdvanced) 180f else 0f,
@@ -193,7 +200,11 @@ private fun PluginCard(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(animationSpec = tween(250))
+            .animateContentSize(
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow
+                )
+            )
             .clip(RoundedCornerShape(16.dp)),
         colors = CardDefaults.cardColors(containerColor = colors.secondary.copy(0.1f))
     ) {
@@ -232,7 +243,10 @@ private fun PluginCard(
 
             // Actions Row with animated Run/Stop
             Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                TextButton(onClick = {
+                    showAdvanced = !showAdvanced
+                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+                }) {
                     Icon(
                         Icons.Default.ExpandMore,
                         contentDescription = null,
