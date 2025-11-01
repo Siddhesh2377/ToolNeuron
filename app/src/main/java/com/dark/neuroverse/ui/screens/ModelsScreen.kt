@@ -2,11 +2,11 @@ package com.dark.neuroverse.ui.screens
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.Spring.DampingRatioMediumBouncy
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -17,6 +17,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -43,9 +45,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.twotone.BreakfastDining
+import androidx.compose.material.icons.outlined.QuestionMark
 import androidx.compose.material.icons.twotone.CheckCircle
-import androidx.compose.material.icons.twotone.Cloud
 import androidx.compose.material.icons.twotone.CloudOff
 import androidx.compose.material.icons.twotone.Delete
 import androidx.compose.material.icons.twotone.FileOpen
@@ -54,7 +55,6 @@ import androidx.compose.material.icons.twotone.Info
 import androidx.compose.material.icons.twotone.Inventory
 import androidx.compose.material.icons.twotone.Key
 import androidx.compose.material.icons.twotone.Link
-import androidx.compose.material.icons.twotone.QuestionMark
 import androidx.compose.material.icons.twotone.Search
 import androidx.compose.material.icons.twotone.SearchOff
 import androidx.compose.material3.AlertDialog
@@ -80,7 +80,6 @@ import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedIconButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.ProgressIndicatorDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -101,14 +100,15 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -124,7 +124,6 @@ import com.dark.ai_module.model.toModelData
 import com.dark.neuroverse.R
 import com.dark.neuroverse.activity.GgufPickerActivity
 import com.dark.neuroverse.model.DownloadState
-import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
@@ -139,7 +138,7 @@ private enum class ModelCategory(
     OPENROUTER("OpenRouter", "OPR", R.drawable.open_router), STT(
         "Speech-to-Text", "STT", R.drawable.stt_models
     ),
-    TTS("Text-to-Speech", "TSS", R.drawable.tts_models), INSTALLED(
+    TTS("Text-to-Speech", "TTS", R.drawable.tts_models), INSTALLED(
         "Installed", "INM", R.drawable.installed_models
     )
 }
@@ -153,14 +152,11 @@ fun ModelsScreen() {
     val radius = rDP(18.dp)
 
     var selectedCategory by remember { mutableIntStateOf(0) }
+    val haptic = LocalHapticFeedback.current
 
     Scaffold(
         floatingActionButton = {
-            AnimatedVisibility(
-                visible = selectedCategory != ModelCategory.OPENROUTER.ordinal,
-                enter = scaleIn(spring(Spring.DampingRatioMediumBouncy)) + fadeIn(),
-                exit = scaleOut(spring(Spring.DampingRatioMediumBouncy)) + fadeOut()
-            ) {
+            if (selectedCategory == ModelCategory.TEXT.ordinal) {
                 FloatingActionButton(
                     onClick = {
                         context.startActivity(Intent(context, GgufPickerActivity::class.java))
@@ -182,7 +178,10 @@ fun ModelsScreen() {
             // Navigation Rail
             EnhancedNavigationRail(
                 selectedCategory = selectedCategory,
-                onCategorySelected = { selectedCategory = it },
+                onCategorySelected = {
+                    selectedCategory = it
+                    haptic.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                },
             )
 
             // Main Content
@@ -197,26 +196,23 @@ fun ModelsScreen() {
             ) {
                 AnimatedContent(
                     targetState = selectedCategory, transitionSpec = {
-                        (slideIntoContainer(
-                            towards = AnimatedContentTransitionScope.SlideDirection.Down,
-                            animationSpec = spring(
-
-                                dampingRatio = Spring.DampingRatioLowBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
-                        ) { it } + fadeIn(tween(300))).togetherWith(
-                            slideOutOfContainer(
-                            towards = AnimatedContentTransitionScope.SlideDirection.Up,
+                        (slideInVertically(
                             animationSpec = spring(
                                 dampingRatio = Spring.DampingRatioLowBouncy,
                                 stiffness = Spring.StiffnessLow
                             )
-                        ) { -it } + fadeOut(tween(300)))
+                        ) { it } + fadeIn()).togetherWith(
+                            slideOutVertically(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioLowBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        ) { -it } + fadeOut())
                     }, label = "category_transition"
                 ) { category ->
                     when (category) {
                         ModelCategory.TEXT.ordinal -> MarketplaceList(viewModel, "Text")
-                        ModelCategory.VLM.ordinal -> MarketplaceList(viewModel, "VLM")
+                        ModelCategory.VLM.ordinal -> ComingSoonScreen("VL-Models")
                         ModelCategory.OPENROUTER.ordinal -> OpenRouterTab(viewModel)
                         ModelCategory.STT.ordinal -> ComingSoonScreen("Speech-to-Text")
                         ModelCategory.TTS.ordinal -> ComingSoonScreen("Text-to-Speech")
@@ -263,8 +259,7 @@ private fun EnhancedNavigationRail(
                 val selected = selectedCategory == index
                 val scale by animateFloatAsState(
                     targetValue = if (selected) 1.05f else 1f, animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
+                        DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
                     )
                 )
 
@@ -281,14 +276,13 @@ private fun EnhancedNavigationRail(
                                     else Color.Transparent,
                                     shape = MaterialShapes.Cookie7Sided.toShape()
                                 )
+                                .scale(scale)
                                 .padding(rDP(8.dp))
                         ) {
                             Icon(
                                 painter = painterResource(category.icon),
                                 contentDescription = category.label,
-                                modifier = Modifier
-                                    .size(rDP(24.dp))
-                                    .scale(scale),
+                                modifier = Modifier.size(rDP(24.dp)),
                                 tint = if (selected) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onBackground
                             )
@@ -363,7 +357,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String)
             )
         }
 
-        items(models, key = { it.modelName }) { modelData ->
+        items(models, key = { it.modelUrl.toString() }) { modelData ->
             val state = downloadStates[modelData.modelUrl.toString()] ?: DownloadState()
             EnhancedModelCard(
                 modelData = modelData,
@@ -376,7 +370,7 @@ private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String)
     }
 }
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun EnhancedModelCard(
     modelData: ModelData,
@@ -400,7 +394,7 @@ fun EnhancedModelCard(
 
     val cardElevation by animateDpAsState(
         targetValue = if (isExpanded) rDP(8.dp) else rDP(2.dp),
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+        animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
     // --------------------------------------------------------------
@@ -421,47 +415,48 @@ fun EnhancedModelCard(
             verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
         ) {
             // Header ------------------------------------------------
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Text(
                         modelData.modelName, style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold, fontSize = rSp(20.sp)
                         ), maxLines = 2, overflow = TextOverflow.Ellipsis
                     )
-                    AnimatedVisibility(visible = isExpanded) {
-                        Text(
-                            "Tap to collapse details",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
-                            modifier = Modifier.padding(top = rDP(4.dp))
-                        )
-                    }
-                }
 
-                if (isInstalled) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        modifier = Modifier.size(rDP(40.dp))
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
+                    if (isInstalled) {
+                        IconButton(
+                            onClick = {
+                                isExpanded = !isExpanded
+                            },
+                            shape = MaterialShapes.Square.toShape(),
+                            colors = IconButtonDefaults.outlinedIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.secondary.copy(0.2f),
+                                contentColor = MaterialTheme.colorScheme.secondary
+                            )
+                        ) {
                             Icon(
-                                Icons.TwoTone.QuestionMark,
+                                Icons.Outlined.QuestionMark,
                                 contentDescription = "Installed",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier
-                                    .size(rDP(24.dp))
-                                    .clickable {
-                                        isExpanded = !isExpanded
-                                    })
+                                modifier = Modifier.size(rDP(24.dp))
+                            )
                         }
                     }
                 }
+
+                AnimatedVisibility(visible = isExpanded) {
+                    Text(
+                        "Tap to collapse details",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                        modifier = Modifier.padding(top = rDP(4.dp))
+                    )
+                }
             }
+
 
             // Specs pills -------------------------------------------
 
@@ -494,32 +489,23 @@ fun EnhancedModelCard(
 
             // Progress bar -------------------------------------------
 
-            AnimatedVisibility(
-                visible = isDownloading,
-                enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
-                exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Top)
-            ) {
+            if (isDownloading) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Downloading…", style = MaterialTheme.typography.labelMedium)
-                        Text(
-                            "${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    val pct = (progress * 100).toInt()
+                    Text("Downloading…", style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        "$pct %",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                     LinearProgressIndicator(
                         progress = { progress },
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(rDP(8.dp))
-                            .clip(RoundedCornerShape(rDP(8.dp))),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                        strokeCap = ProgressIndicatorDefaults.LinearStrokeCap
+                            .clip(RoundedCornerShape(rDP(8.dp)))
                     )
                 }
             }
@@ -543,8 +529,8 @@ fun EnhancedModelCard(
                     modifier = Modifier.weight(1f),
                     colors = if (!isInstalled) ButtonDefaults.buttonColors()
                     else ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                        containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                        contentColor = MaterialTheme.colorScheme.primary
                     ),
                     shape = RoundedCornerShape(rDP(16.dp))
                 ) {
@@ -572,7 +558,8 @@ fun EnhancedModelCard(
                             viewModel.removeModel(modelData.modelName)
                             isInstalled = false
                         },
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
+                        shape = MaterialShapes.Square.toShape(),
+                        border = BorderStroke(0.dp, Color.Unspecified),
                         colors = IconButtonDefaults.outlinedIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer
                         )
@@ -893,75 +880,40 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun OpenRouterModelItem(
     modelId: OpenRouterModel, onDelete: () -> Unit
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f, animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
-        )
-    )
-
-    Surface(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .scale(scale),
-        shape = RoundedCornerShape(rDP(16.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        tonalElevation = rDP(2.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(rDP(16.dp)))
+            .padding(horizontal = rDP(16.dp), vertical = rDP(10.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(16.dp)),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = CircleShape,
-                    color = SkyBlue.copy(alpha = 0.2f),
-                    modifier = Modifier.size(rDP(40.dp))
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.TwoTone.Cloud,
-                            contentDescription = null,
-                            tint = SkyBlue,
-                            modifier = Modifier.size(rDP(22.dp))
-                        )
-                    }
-                }
-                Spacer(Modifier.width(rDP(12.dp)))
-                Text(
-                    modelId.name, style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ), maxLines = 1, overflow = TextOverflow.Ellipsis
-                )
-            }
+        Text(
+            modelId.name, style = MaterialTheme.typography.bodyLarge.copy(
+                fontWeight = FontWeight.SemiBold
+            ), maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f)
+        )
 
-            OutlinedIconButton(
-                onClick = {
-                    isPressed = true
-                    onDelete()
-                },
-                border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                colors = IconButtonDefaults.outlinedIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                )
-            ) {
-                Icon(
-                    Icons.TwoTone.Delete,
-                    contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(rDP(20.dp))
-                )
-            }
+        IconButton(
+            onClick = {
+                onDelete()
+            },
+            shape = MaterialShapes.Square.toShape(),
+            colors = IconButtonDefaults.iconButtonColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+            )
+        ) {
+            Icon(
+                Icons.TwoTone.Delete,
+                contentDescription = "Remove",
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(rDP(20.dp))
+            )
         }
     }
 }
@@ -1047,12 +999,12 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
     val backgroundColor by animateColorAsState(
         if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
         else MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+        animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f, animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+            dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
         )
     )
 
@@ -1230,8 +1182,8 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
 
     AnimatedVisibility(
         visible = showModelDialog,
-        enter = fadeIn(spring(Spring.DampingRatioHighBouncy)) + scaleIn(spring(Spring.DampingRatioHighBouncy)),
-        exit = fadeOut(spring(Spring.DampingRatioHighBouncy)) + scaleOut(spring(Spring.DampingRatioHighBouncy))
+        enter = fadeIn(),
+        exit = fadeOut()
     ) {
         FileDetailDialog(
             model = selectedModel ?: ModelData(),
@@ -1243,6 +1195,7 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun InstalledModelCard(
     model: ModelData, onDelete: () -> Unit, onInfo: () -> Unit
@@ -1251,7 +1204,7 @@ private fun InstalledModelCard(
 
     val cardElevation by animateDpAsState(
         targetValue = if (isExpanded) rDP(8.dp) else rDP(2.dp),
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+        animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
     Card(
@@ -1285,10 +1238,10 @@ private fun InstalledModelCard(
                 )
 
                 Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    OutlinedIconButton(
+                    IconButton (
                         onClick = onInfo,
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary),
-                        colors = IconButtonDefaults.outlinedIconButtonColors(
+                        shape = MaterialShapes.Square.toShape(),
+                        colors = IconButtonDefaults.iconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primaryContainer,
                         )
                     ) {
@@ -1299,10 +1252,10 @@ private fun InstalledModelCard(
                         )
                     }
 
-                    OutlinedIconButton(
+                    IconButton(
                         onClick = onDelete,
-                        border = BorderStroke(2.dp, MaterialTheme.colorScheme.error),
-                        colors = IconButtonDefaults.outlinedIconButtonColors(
+                        shape = MaterialShapes.Square.toShape(),
+                        colors = IconButtonDefaults.iconButtonColors(
                             containerColor = MaterialTheme.colorScheme.errorContainer,
                         )
                     ) {
