@@ -185,7 +185,11 @@ object ModelManager {
                 modelData.temp,
                 modelData.topK,
                 modelData.topP,
-                modelData.minP
+                modelData.minP,
+                modelData.mirostat,
+                modelData.mirostatTau,
+                modelData.mirostatEta,
+                modelData.seed,
             )
 
             if (!ok) {
@@ -237,7 +241,11 @@ object ModelManager {
             modelData.temp,
             modelData.topK,
             modelData.topP,
-            modelData.minP
+            modelData.minP,
+            modelData.mirostat,
+            modelData.mirostatTau,
+            modelData.mirostatEta,
+            modelData.seed,
         )
 
         if (!textOk) {

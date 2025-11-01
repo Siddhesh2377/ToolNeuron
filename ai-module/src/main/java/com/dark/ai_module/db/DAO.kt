@@ -42,7 +42,7 @@ interface ModelDAO {
 }
 
 @Database(
-    entities = [ModelData::class], version = 2, exportSchema = false
+    entities = [ModelData::class], version = 3, exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun ModelDAO(): ModelDAO
