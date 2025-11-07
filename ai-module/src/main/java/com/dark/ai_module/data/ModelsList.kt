@@ -7,6 +7,78 @@ import java.io.File
 
 object ModelsList {
 
+    // ────────────────────────────────────────────────────────────────
+    // GEMMA-STYLE PROMPTS
+    // ────────────────────────────────────────────────────────────────
+
+    val gemmaChatTemplate = """
+        <start_of_turn>system
+        You are Gemma, a friendly and factual AI assistant. Keep responses clear and conversational.
+        <end_of_turn>
+        
+        {%- for m in messages -%}
+        <start_of_turn>{{ m['role'] }}
+        {{ m['content'] }}
+        <end_of_turn>
+        {%- endfor -%}
+        
+        <start_of_turn>assistant
+        """.trimIndent()
+
+    val gemmaSystemPrompt = """
+        You are Gemma, a helpful and factual AI assistant created by Google DeepMind.
+        Follow instructions carefully, cite facts when relevant, and avoid hallucinations.
+    """.trimIndent()
+
+    // ────────────────────────────────────────────────────────────────
+    // GEMMA TOOL-CALLING PROMPTS
+    // ────────────────────────────────────────────────────────────────
+
+    val gemmaToolCallingSystemPrompt = """
+        You are Gemma, a structured function-calling assistant.
+        When tools are available, respond ONLY with a JSON object in this format:
+
+        {
+          "tool_calls": [{
+            "name": "toolName",
+            "arguments": {
+              "param1": "value1",
+              "param2": "value2"
+            }
+          }]
+        }
+
+        RULES:
+        1. Only emit valid JSON. No commentary or explanations.
+        2. Never include text outside the JSON.
+        3. If no tool fits, respond normally as a helpful assistant.
+    """.trimIndent()
+
+    val gemmaToolCallingChatTemplate = """
+        <start_of_turn>system
+        You are Gemma, a structured function-calling assistant.
+        Follow the provided grammar strictly and only emit valid JSON when tools are available.
+        <end_of_turn>
+
+        {%- if gbnf is defined and gbnf|length > 0 -%}
+        <start_of_turn>system
+        The next assistant message MUST follow this grammar:
+        <GBNF>
+        {{ gbnf }}
+        </GBNF>
+        <end_of_turn>
+        {%- endif -%}
+
+        {%- for m in messages -%}
+        <start_of_turn>{{ m['role'] }}
+        {{ m['content'] }}
+        <end_of_turn>
+        {%- endfor -%}
+
+        <start_of_turn>assistant
+        """.trimIndent()
+
+
     // Chat template with params + optional GBNF block.
     val defaultChatTemplate = """
         <|im_start|>system
@@ -128,6 +200,19 @@ object ModelsList {
             systemPrompt = defaultSystemPrompt
         )
 
+
+        val qwen_human_like = ModelData(
+            modelName = "Human-Like-Qwen2.5-1.5B-Instruct-GGUF",
+            providerName = ModelProvider.LocalGGUF.toString(),
+            modelPath = File(modelsDir, "Human-Like-Qwen2.5-1.5B-Instruct-GGUF.gguf").absolutePath,
+            modelUrl = "https://huggingface.co/mradermacher/Human-Like-Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Human-Like-Qwen2.5-1.5B-Instruct.Q2_K.gguf?download=true",
+            ctxSize = 8_192,
+            isToolCalling = false,
+            isImported = false,
+            chatTemplate = defaultChatTemplate,
+            systemPrompt = defaultSystemPrompt
+        )
+
         val lucy128K = ModelData(
             modelName = "Lucy‑128k‑GGUF",
             providerName = ModelProvider.LocalGGUF.toString(),
@@ -140,6 +225,18 @@ object ModelsList {
             systemPrompt = defaultSystemPrompt
         )
 
-        return listOf(kodifyNano, lucy128K)
+        val gemma_3b = ModelData(
+            modelName = "Gemma-3-1b-it-GGUF",
+            providerName = ModelProvider.LocalGGUF.toString(),
+            modelPath = File(modelsDir, "Gemma-3-1b-it-GGUF.gguf").absolutePath,
+            modelUrl = "https://huggingface.co/second-state/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q3_K_S.gguf?download=true",
+            ctxSize = 8_192,
+            isToolCalling = false,
+            isImported = false,
+            chatTemplate = gemmaChatTemplate,
+            systemPrompt = gemmaSystemPrompt
+        )
+
+        return listOf(qwen_human_like, kodifyNano, gemma_3b, lucy128K)
     }
 }

@@ -33,6 +33,10 @@ object ModelInstaller {
                     context, name, url, fileName, modelType, onProgress, onComplete, onError
                 )
 
+                ModelProvider.HuggingFace -> installLocalGGUFModel(
+                    context, name, url, fileName, modelType, onProgress, onComplete, onError
+                )
+
                 ModelProvider.SherpaONNX -> installSherpaModel(
                     context, name, url, fileName, modelType, onProgress, onComplete, onError
                 )

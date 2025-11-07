@@ -77,6 +77,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         WindowCompat.setDecorFitsSystemWindows(window, false)
+        ModelManager.init(applicationContext)
 
         setContent {
             val navController = rememberNavController()

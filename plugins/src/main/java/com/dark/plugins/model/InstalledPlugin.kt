@@ -17,4 +17,5 @@ data class InstalledPlugin(
     val mainClass: String = "",
     val pluginVersion: String = "",    // optional, if present in manifest (not enforced)
     val tools: List<Tools> = emptyList(),
+    val shaCode: String,
 )

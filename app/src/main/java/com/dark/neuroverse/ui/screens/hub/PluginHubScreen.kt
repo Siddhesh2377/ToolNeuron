@@ -34,6 +34,8 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.twotone.CloudDownload
+import androidx.compose.material.icons.twotone.Folder
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -45,15 +47,19 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -76,6 +82,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.neuroverse.activity.MainActivity
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.rDP
+import com.dark.neuroverse.viewModel.OnlinePluginUiState
 import com.dark.neuroverse.viewModel.PluginStoreScreenViewModel
 import com.dark.plugins.model.InstalledPlugin
 import com.dark.plugins.model.PluginManifest
@@ -92,6 +99,10 @@ fun PluginHubScreen(
     val context = LocalContext.current
 
     val installed by viewModel.installedPlugins.collectAsStateWithLifecycle(emptyList())
+    val onlinePlugins by viewModel.onlinePlugins.collectAsStateWithLifecycle()
+
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("Installed", "Online Store")
 
     val addLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(), onResult = { uri ->
@@ -101,76 +112,164 @@ fun PluginHubScreen(
             }
         })
 
-    Scaffold(topBar = {
-        TopAppBar(
-            title = {
-            Text(
-                "Plugin Store",
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold)
-            )
-        }, actions = {
-            Button(
-                onClick = {
-                    val intent = Intent(context, MainActivity::class.java).apply {
-                        putExtra("nav", true)
-                    }
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.padding(end = rDP(12.dp)),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Icon(Icons.Outlined.Home, "Home")
-                Spacer(Modifier.width(rDP(3.dp)))
-                Text("Home")
-            }
-        }, scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
-        )
-    }, floatingActionButton = {
-        FloatingActionButton(
-            onClick = {
-                addLauncher.launch(
-                    arrayOf(
-                        "application/zip",
-                        "application/java-archive",
-                        "application/vnd.android.package-archive",
-                        "*/*"
+    // Load online plugins when switching to that tab
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 1) {
+            viewModel.loadOnlinePlugins()
+        }
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Text(
+                        "Plugin Store",
+                        style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold)
                     )
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary
-        ) { Icon(Icons.Default.Add, contentDescription = "Add plugin from file") }
-    }) { inner ->
-        Box(
+                },
+                actions = {
+                    Button(
+                        onClick = {
+                            val intent = Intent(context, MainActivity::class.java).apply {
+                                putExtra("nav", true)
+                            }
+                            context.startActivity(intent)
+                        },
+                        modifier = Modifier.padding(end = rDP(12.dp)),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(Icons.Outlined.Home, "Home")
+                        Spacer(Modifier.width(rDP(3.dp)))
+                        Text("Home")
+                    }
+                },
+                scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior(rememberTopAppBarState())
+            )
+        },
+        floatingActionButton = {
+            // Only show FAB on Installed tab
+            if (selectedTab == 0) {
+                FloatingActionButton(
+                    onClick = {
+                        addLauncher.launch(
+                            arrayOf(
+                                "application/zip",
+                                "application/java-archive",
+                                "application/vnd.android.package-archive",
+                                "*/*"
+                            )
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add plugin from file")
+                }
+            }
+        }
+    ) { inner ->
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(inner)
         ) {
-            if (installed.isEmpty()) {
-                EmptyState(onSeed = { addLauncher.launch(arrayOf("*/*")) })
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(rDP(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                ) {
-                    items(installed, key = { it.pluginPath }) { plugin ->
-
-                        PluginCard(
-                            plugin = plugin, onDelete = {
-                                viewModel.uninstallPlugin(plugin.pluginName)
-                                Toast.makeText(context, "Plugin uninstalled..!", Toast.LENGTH_SHORT)
-                                    .show()
-                            })
-                    }
-                    item { Spacer(Modifier.height(rDP(56.dp))) }
+            // Tab Row
+            PrimaryTabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                tabs.forEachIndexed { index, title ->
+                    Tab(
+                        selected = selectedTab == index,
+                        onClick = { selectedTab = index },
+                        text = { Text(title) },
+                        icon = {
+                            Icon(
+                                imageVector = if (index == 0) Icons.TwoTone.Folder else Icons.TwoTone.CloudDownload,
+                                contentDescription = null
+                            )
+                        }
+                    )
                 }
+            }
 
+            // Tab Content
+            Box(modifier = Modifier.fillMaxSize()) {
+                when (selectedTab) {
+                    0 -> InstalledPluginsTab(
+                        installed = installed,
+                        viewModel = viewModel,
+                        onSeedPlugins = { addLauncher.launch(arrayOf("*/*")) }
+                    )
+                    1 -> OnlinePluginStoreTab(
+                        plugins = onlinePlugins
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun InstalledPluginsTab(
+    installed: List<InstalledPlugin>,
+    viewModel: PluginStoreScreenViewModel,
+    onSeedPlugins: () -> Unit
+) {
+    val context = LocalContext.current
+
+    if (installed.isEmpty()) {
+        EmptyState(onSeed = onSeedPlugins)
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(rDP(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
+        ) {
+            items(installed, key = { it.pluginPath }) { plugin ->
+                PluginCard(
+                    plugin = plugin,
+                    onDelete = {
+                        viewModel.uninstallPlugin(plugin.pluginName)
+                        Toast.makeText(context, "Plugin uninstalled!", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
+            item { Spacer(Modifier.height(rDP(56.dp))) }
+        }
+    }
+}
+
+@Composable
+private fun OnlinePluginStoreTab(
+    plugins: List<OnlinePluginUiState>,
+) {
+
+    if (plugins.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    "No plugins available",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Spacer(Modifier.height(8.dp))
+                Text(
+                    "Check back later for new plugins",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        }
+    } else {
+        OnlinePluginStoreScreen()
     }
 }
 

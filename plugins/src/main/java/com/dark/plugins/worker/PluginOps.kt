@@ -22,6 +22,7 @@ import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.security.MessageDigest
 import java.util.zip.ZipInputStream
 
 internal object PluginOps {
@@ -118,11 +119,24 @@ internal object PluginOps {
             pluginPath = destFile.absolutePath,
             mainClass = manifest.mainClass,
             pluginVersion = manifest.version,
-            tools = manifest.tools
+            tools = manifest.tools,
+            shaCode = getFileSha256(destFile)
         )
 
         dao.insertPlugin(plugin)
         Log.i(TAG, "Plugin installed: ${manifest.name} v${manifest.version}, ${manifest.tools.size} tool(s)")
+    }
+
+    fun getFileSha256(file: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buffer = ByteArray(8192)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     fun loadPluginFromFile(file: File, context: Context): LoadedPlugin {

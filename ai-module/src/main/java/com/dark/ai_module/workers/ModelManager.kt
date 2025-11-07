@@ -86,8 +86,8 @@ object ModelManager {
     fun init(context: Context) {
         if (initGuard.compareAndSet(false, true)) {
             dao = DatabaseProvider.getDatabase(context).ModelDAO()
-            bindService(context)
         }
+        bindService(context)
     }
 
     fun configureOpenRouter(apiKey: String, baseUrl: String = "https://openrouter.ai/api/v1") {

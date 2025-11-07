@@ -61,15 +61,6 @@ object PluginManager {
 
             PluginOps.init(dao)
 
-            // Install default plugins asynchronously - don't block initialization
-            scope.launch {
-                PluginOps.installFromAssets(
-                    context,
-                    arrayOf("web-searching-plugin.zip", "util-plugin-plugin.zip")
-                )
-                Log.d(TAG, "Default plugins installation initiated")
-            }
-
             isInitialized = true
             Log.d(TAG, "PluginManager initialized")
         }
