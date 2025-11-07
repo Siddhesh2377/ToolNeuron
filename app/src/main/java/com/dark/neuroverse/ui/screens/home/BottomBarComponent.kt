@@ -114,7 +114,7 @@ fun ChatInputWithDataHubDialog(
         val modelDir = ModelManager.getSTTModel() ?: return@LaunchedEffect
         launch(Dispatchers.IO) {
             sttViewModel.initialize(
-                modelDir.copy(modelPath = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny")
+                modelDir
             )
         }
     }

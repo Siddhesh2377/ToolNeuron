@@ -395,12 +395,17 @@ object ModelManager {
         val normalized = ToolJsonUtils.normalizeSpec(toolJson)
         val deduped = ToolJsonUtils.maybeDedup(normalized)
 
+        Log.e("GGUF", "Tool JSON: $toolJson")
+
+        Log.e("GGUF", "Deduped: $deduped && $normalized")
+        Log.e("GGUF", "${toolJson.isNotEmpty()}")
+
         queue.send(
             GenerationRequest.Streaming(
                 prompt = prompt,
                 gen = gen,
                 onToken = onToken,
-                toolJson = if (toolJson.isNotEmpty()) deduped else "",
+                toolJson = if (toolJson.isEmpty()) "" else deduped.toString(),
                 onToolCalled = onToolCalled,
                 completer = deferred
             )
@@ -458,7 +463,7 @@ object ModelManager {
         }
 
         svc.generateText(
-            req.prompt, req.gen.maxTokens, req.toolJson ?: "", object : IGenerationCallback.Stub() {
+            req.prompt, req.gen.maxTokens, req.toolJson, object : IGenerationCallback.Stub() {
                 private val acc = StringBuilder()
 
                 override fun onToken(token: String) {
@@ -618,7 +623,7 @@ object ModelManager {
             val prompt: String,
             val gen: GenerationParams,
             val onToken: (String) -> Unit,
-            val toolJson: String?,
+            val toolJson: String,
             val onToolCalled: (String, String) -> Unit,
             val completer: CompletableDeferred<String>
         ) : GenerationRequest
@@ -687,7 +692,7 @@ object ModelManager {
         fun maybeDedup(spec: String?): String? {
             if (spec == null) return null
             val hash = spec.hashCode()
-            return if (lastHash == hash) null else {
+            return if (lastHash == hash) spec else {
                 lastHash = hash
                 spec
             }

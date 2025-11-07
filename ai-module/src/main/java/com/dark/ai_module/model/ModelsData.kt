@@ -82,7 +82,8 @@ data class GenerationParams(val maxTokens: Int = 2048)
 
 enum class ModelProvider {
     OpenRouter,
-    LocalGGUF
+    LocalGGUF,
+    SherpaONNX
 }
 
 enum class ModelType {

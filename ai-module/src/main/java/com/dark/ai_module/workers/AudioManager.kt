@@ -133,10 +133,10 @@ object AudioManager {
         }
 
         try {
-            val modelDir = "${modelData.modelPath}/kokoro-en-v0_19"
+            val modelDir = modelData.modelPath
             val modelName = "model.onnx"
             val voices = "voices.bin"
-            val dataDir = "${modelData.modelPath}/kokoro-en-v0_19/espeak-ng-data"
+            val dataDir = "${modelData.modelPath}/espeak-ng-data"
 
             val ok = svc.initializeTts(modelDir, modelName, voices, dataDir)
             if (!ok) {
@@ -206,7 +206,7 @@ object AudioManager {
         val modelFile = File(modelData.modelPath)
         if (!modelFile.exists()) {
             return@withContext Result.failure(
-                IllegalArgumentException("Model not found: ${modelFile.absolutePath}")
+                IllegalArgumentException("Model not found: ${modelFile.absolutePath} | ${modelData.modelPath}")
             )
         }
 

@@ -546,7 +546,7 @@ private fun ComingSoonScreen(modelType: ModelType) {
 // Helper functions to get model lists by type
 private fun getVLMModelList(context: Context): List<ModelData> {
     File(context.filesDir, "models")
-    // Add VLM models here when available
+
     return emptyList()
 }
 
@@ -556,10 +556,10 @@ private fun getSTTModelList(context: Context): List<ModelData> {
 
     return listOf(
         ModelData(
-            modelName = "Whisper-EN-Tiny",
+            modelName = "Whisper-EN-Small",
             providerName = ModelProvider.LocalGGUF.toString(),
             modelType = ModelType.STT,
-            modelPath = File(modelsDir, "whisper-tiny-en").absolutePath,
+            modelPath = modelsDir.absolutePath,
             modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
             ctxSize = 448,
             isImported = false
@@ -573,10 +573,10 @@ private fun getTTSModelList(context: Context): List<ModelData> {
 
     return listOf(
         ModelData(
-            modelName = "Kokoro-TTS-EN-v0.19",
+            modelName = "KOR0-TTS-0.19-M",
             providerName = ModelProvider.LocalGGUF.toString(),
             modelType = ModelType.TTS,
-            modelPath = File(modelsDir, "kokoro-en-v0_19").absolutePath,
+            modelPath = modelsDir.absolutePath,
             modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
             ctxSize = 512,
             isImported = false
