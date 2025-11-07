@@ -1,31 +1,19 @@
 package com.dark.neuroverse.viewModel.setupScreen
 
 import android.app.Application
-import androidx.datastore.core.use
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.ai_module.workers.downloadFile
-import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.model.ModelProvider
+import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.ModelManager
+import com.dark.neuroverse.worker.ModelInstaller
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
-import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
-import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
-import java.io.BufferedInputStream
-import java.io.BufferedOutputStream
-import java.util.zip.ZipInputStream
-import kotlin.io.use
-import kotlin.use
 
 data class ModelDownloadState(
     val name: String,
@@ -55,7 +43,6 @@ data class SetupScreenState(
 )
 
 
-
 class SetupViewModel(
     application: Application,
 ) : AndroidViewModel(application) {
@@ -78,39 +65,31 @@ class SetupViewModel(
         setupModelsForOption(option)
     }
 
-    private fun updateExtractionProgress(index: Int, progress: Float) {
-        _state.update { currentState ->
-            val updatedModels = currentState.models.toMutableList()
-            updatedModels[index] = updatedModels[index].copy(extractionProgress = progress)
-            currentState.copy(models = updatedModels)
-        }
-    }
-
     private fun setupModelsForOption(option: Int) {
         val models = when (option) {
             0 -> {
                 // Text only
                 listOf(
                     ModelDownloadState(
-                        name = "Lucy-LLM :: 128K",
+                        name = "Qwen-LLM :: 0.5B",
                         description = "Quick To Reply, But Less Accurate",
-                        downloadUrl = "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
-                        fileName = "lucy_128k-Q3_K_S.gguf",
+                        downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true",
+                        fileName = "qwen2.5-0.5b-Q3_K_S.gguf",
                         modelType = ModelType.TEXT
                     )
                 )
             }
+
             1 -> {
                 // Text + STT
                 listOf(
                     ModelDownloadState(
-                        name = "Lucy-LLM :: 128K",
+                        name = "Qwen-LLM :: 0.5B",
                         description = "Quick To Reply, But Less Accurate",
-                        downloadUrl = "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
-                        fileName = "lucy_128k-Q3_K_S.gguf",
+                        downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true",
+                        fileName = "qwen2.5-0.5b-Q3_K_S.gguf",
                         modelType = ModelType.TEXT
-                    ),
-                    ModelDownloadState(
+                    ), ModelDownloadState(
                         name = "Whisper-EN-Small",
                         description = "A STT Model With 90% Accuracy",
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
@@ -119,17 +98,17 @@ class SetupViewModel(
                     )
                 )
             }
+
             2 -> {
                 // Text + TTS
                 listOf(
                     ModelDownloadState(
-                        name = "Lucy-LLM :: 128K",
+                        name = "Qwen-LLM :: 0.5B",
                         description = "Quick To Reply, But Less Accurate",
-                        downloadUrl = "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
-                        fileName = "lucy_128k-Q3_K_S.gguf",
+                        downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true",
+                        fileName = "qwen2.5-0.5b-Q3_K_S.gguf",
                         modelType = ModelType.TEXT
-                    ),
-                    ModelDownloadState(
+                    ), ModelDownloadState(
                         name = "KOR0-TTS-0.19-M",
                         description = "Quick To Reply, But Less Accurate",
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
@@ -138,24 +117,23 @@ class SetupViewModel(
                     )
                 )
             }
+
             3 -> {
                 // Text + STT + TTS
                 listOf(
                     ModelDownloadState(
-                        name = "Lucy-LLM :: 128K",
+                        name = "Qwen-LLM :: 0.5B",
                         description = "Quick To Reply, But Less Accurate",
-                        downloadUrl = "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
-                        fileName = "lucy_128k-Q3_K_S.gguf",
+                        downloadUrl = "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_0.gguf?download=true",
+                        fileName = "qwen2.5-0.5b-Q3_K_S.gguf",
                         modelType = ModelType.TEXT
-                    ),
-                    ModelDownloadState(
+                    ), ModelDownloadState(
                         name = "Whisper-EN-Small",
                         description = "A STT Model With 90% Accuracy",
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
                         fileName = "whisper-en-smallzip",
                         modelType = ModelType.STT
-                    ),
-                    ModelDownloadState(
+                    ), ModelDownloadState(
                         name = "KOR0-TTS-0.19-M",
                         description = "Quick To Reply, But Less Accurate",
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
@@ -174,8 +152,7 @@ class SetupViewModel(
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
                         fileName = "whisper-en-smallzip",
                         modelType = ModelType.STT
-                    ),
-                    ModelDownloadState(
+                    ), ModelDownloadState(
                         name = "KOR0-TTS-0.19-M",
                         description = "Quick To Reply, But Less Accurate",
                         downloadUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
@@ -184,6 +161,7 @@ class SetupViewModel(
                     )
                 )
             }
+
             else -> emptyList() // Skip option
         }
 
@@ -207,8 +185,7 @@ class SetupViewModel(
                 if (existingModel) {
                     updateModelStatus(index, DownloadStatus.Completed, 1f)
                 } else {
-                    val outputFile = File(modelsDirectory, model.fileName)
-                    downloadModel(index, model, outputFile)
+                    downloadModel(index, model)
                 }
             }
 
@@ -217,148 +194,53 @@ class SetupViewModel(
         }
     }
 
-    private suspend fun downloadModel(index: Int, model: ModelDownloadState, outputFile: File) {
-        // Update status to downloading
+    private fun downloadModel(index: Int, model: ModelDownloadState) {
         updateModelStatus(index, DownloadStatus.Downloading, 0f)
 
-        downloadFile(
-            fileUrl = model.downloadUrl,
-            outputFile = outputFile,
-            onProgress = { progress ->
-                updateModelProgress(index, progress)
-            },
-            onComplete = {
-                viewModelScope.launch {
-                    // Handle extraction for TTS/STT models
-                    if (model.modelType == ModelType.TTS || model.modelType == ModelType.STT) {
-                        updateModelStatus(index, DownloadStatus.Extracting, 1f)
-                        extractAndSaveModel(index, model, outputFile)
-                    } else {
-                        // For TEXT models, save directly
-                        saveModelToDatabase(model, outputFile.absolutePath)
-                        updateModelStatus(index, DownloadStatus.Completed, 1f)
-                    }
+        val provider = when {
+            model.downloadUrl.endsWith(".zip") -> ModelProvider.SherpaONNX
+            model.downloadUrl.contains(".gguf") -> ModelProvider.LocalGGUF
+            else -> ModelProvider.OpenRouter
+        }
+
+        viewModelScope.launch(Dispatchers.IO) {
+            ModelInstaller.installModel(
+                context = getApplication(),
+                name = model.name,
+                url = model.downloadUrl,
+                fileName = model.fileName,
+                provider = provider,
+                modelType = model.modelType,
+                onProgress = { progress ->
+                    updateModelProgress(index, progress)
+                },
+                onComplete = {
+
+                    updateModelStatus(index, DownloadStatus.Completed, 1f)
                     checkAllDownloadsComplete()
-                }
-            },
-            onError = { exception ->
-                updateModelStatus(
-                    index,
-                    DownloadStatus.Failed(exception.message ?: "Unknown error"),
-                    0f,
-                    exception.message
-                )
-                checkAllDownloadsComplete()
-            }
-        )
-    }
 
-    private suspend fun extractAndSaveModel(
-        index: Int,
-        model: ModelDownloadState,
-        archiveFile: File
-    ) = withContext(Dispatchers.IO) {
-        try {
-            val extractDir = when (model.modelType) {
-                ModelType.TTS -> File(ttsDirectory, model.name.replace(" ", "_").replace("::", ""))
-                ModelType.STT -> File(sttDirectory, model.name.replace(" ", "_").replace("::", ""))
-                else -> modelsDirectory
-            }
+                },
+                onError = { exception ->
 
-            if (!extractDir.exists()) extractDir.mkdirs()
+                    updateModelStatus(
+                        index,
+                        DownloadStatus.Failed(exception.message ?: "Unknown error"),
+                        0f,
+                        exception.message
+                    )
+                    checkAllDownloadsComplete()
 
-            // Get total size for progress calculation
-            val totalSize = archiveFile.length()
-            var processedBytes = 0L
-            var lastProgressUpdate = 0L
-
-            // Extract zip archive with optimizations
-            ZipInputStream(BufferedInputStream(FileInputStream(archiveFile), 65536)).use { zipIn ->
-                var entry = zipIn.nextEntry
-                while (entry != null) {
-                    val outputFile = File(extractDir, entry.name)
-
-                    if (entry.isDirectory) {
-                        outputFile.mkdirs()
-                    } else {
-                        outputFile.parentFile?.mkdirs()
-                        BufferedOutputStream(FileOutputStream(outputFile), 65536).use { fos ->
-                            val buffer = ByteArray(65536) // Increased buffer size
-                            var bytesRead: Int
-                            while (zipIn.read(buffer).also { bytesRead = it } != -1) {
-                                fos.write(buffer, 0, bytesRead)
-                                processedBytes += bytesRead
-
-                                // Throttle UI updates - only update every 100KB or 5%
-                                val shouldUpdate = processedBytes - lastProgressUpdate > 102400 || // 100KB
-                                        (processedBytes.toFloat() / totalSize - lastProgressUpdate.toFloat() / totalSize) > 0.05f // 5%
-
-                                if (shouldUpdate) {
-                                    lastProgressUpdate = processedBytes
-                                    val progress = (processedBytes.toFloat() / totalSize).coerceIn(0f, 1f)
-                                    withContext(Dispatchers.Main) {
-                                        updateExtractionProgress(index, progress)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    zipIn.closeEntry()
-                    entry = zipIn.nextEntry
-                }
-            }
-
-            // Final progress update
-            withContext(Dispatchers.Main) {
-                updateExtractionProgress(index, 1f)
-            }
-
-            // Delete the archive file after extraction
-            archiveFile.delete()
-
-            // Save model to database with extracted directory path
-            saveModelToDatabase(model, extractDir.absolutePath)
-
-            withContext(Dispatchers.Main) {
-                updateModelStatus(index, DownloadStatus.Completed, 1f)
-            }
-        } catch (e: Exception) {
-            withContext(Dispatchers.Main) {
-                updateModelStatus(
-                    index,
-                    DownloadStatus.Failed(e.message ?: "Extraction failed"),
-                    0f,
-                    e.message
-                )
-            }
+                })
         }
     }
 
-    private suspend fun saveModelToDatabase(model: ModelDownloadState, filePath: String) {
-        val modelData = ModelData(
-            modelName = model.name,
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelType = model.modelType,
-            modelPath = filePath,
-            modelUrl = model.downloadUrl,
-            isImported = true
-        )
-
-        ModelManager.addModel(modelData)
-    }
-
     private fun updateModelStatus(
-        index: Int,
-        status: DownloadStatus,
-        progress: Float,
-        error: String? = null
+        index: Int, status: DownloadStatus, progress: Float, error: String? = null
     ) {
         _state.update { currentState ->
             val updatedModels = currentState.models.toMutableList()
             updatedModels[index] = updatedModels[index].copy(
-                status = status,
-                progress = progress,
-                error = error
+                status = status, progress = progress, error = error
             )
             currentState.copy(models = updatedModels)
         }
@@ -379,8 +261,7 @@ class SetupViewModel(
 
         _state.update {
             it.copy(
-                isDownloading = !allComplete,
-                allDownloadsComplete = allComplete && !hasFailures
+                isDownloading = !allComplete, allDownloadsComplete = allComplete && !hasFailures
             )
         }
     }
@@ -391,8 +272,7 @@ class SetupViewModel(
 
             models.forEachIndexed { index, model ->
                 if (model.status is DownloadStatus.Failed) {
-                    val outputFile = File(modelsDirectory, model.fileName)
-                    downloadModel(index, model, outputFile)
+                    downloadModel(index, model)
                 }
             }
         }
@@ -401,17 +281,7 @@ class SetupViewModel(
     fun retryDownload(index: Int) {
         viewModelScope.launch {
             val model = _state.value.models[index]
-            val outputFile = File(modelsDirectory, model.fileName)
-            downloadModel(index, model, outputFile)
+            downloadModel(index, model)
         }
-    }
-
-    fun cancelDownloads() {
-        // Cancel all ongoing downloads
-        _state.update { it.copy(isDownloading = false) }
-    }
-
-    fun getModelFilePath(fileName: String): String {
-        return File(modelsDirectory, fileName).absolutePath
     }
 }

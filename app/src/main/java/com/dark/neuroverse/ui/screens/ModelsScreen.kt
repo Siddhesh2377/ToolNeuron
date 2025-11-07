@@ -1,5 +1,6 @@
 package com.dark.neuroverse.ui.screens
 
+import android.content.Context
 import android.content.Intent
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -9,6 +10,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.Spring.DampingRatioMediumBouncy
+import androidx.compose.animation.core.Spring.DampingRatioNoBouncy
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -19,9 +21,11 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +39,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,6 +66,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -73,6 +79,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MaterialTheme.colorScheme
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.NavigationRailItemDefaults
@@ -82,6 +89,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -95,14 +103,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -110,11 +120,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.data.ModelsList.getModelList
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelProvider
+import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.model.OpenRouterModel
 import com.dark.ai_module.model.toModelData
 import com.dark.neuroverse.R
@@ -123,6 +135,8 @@ import com.dark.neuroverse.model.DownloadState
 import com.dark.neuroverse.ui.theme.rDP
 import com.dark.neuroverse.ui.theme.rSp
 import com.dark.neuroverse.viewModel.ModelScreenViewModel
+import kotlinx.coroutines.delay
+import java.io.File
 
 // Navigation Rail Categories
 private enum class ModelCategory(
@@ -139,67 +153,198 @@ private enum class ModelCategory(
     )
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun ModelsScreen() {
+fun ModelsScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val viewModel: ModelScreenViewModel = viewModel()
-
-    val radius = rDP(18.dp)
-
-    var selectedCategory by remember { mutableIntStateOf(0) }
     val haptic = LocalHapticFeedback.current
 
-    Scaffold(
-        floatingActionButton = {
-            if (selectedCategory == ModelCategory.TEXT.ordinal) {
-                FloatingActionButton(
-                    onClick = {
-                        context.startActivity(Intent(context, GgufPickerActivity::class.java))
-                    },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(8.dp)
-                ) {
-                    Icon(
-                        Icons.TwoTone.FileOpen, contentDescription = "Import Model"
+    var selectedCategory by remember { mutableIntStateOf(0) }
+    var isRailVisible by remember { mutableStateOf(false) }
+
+    val railWidth = 88.dp
+    val density = LocalDensity.current
+    val railWidthPx = with(density) { railWidth.toPx() }
+
+    // Smooth offset animation for rail
+    val railOffsetX by animateDpAsState(
+        targetValue = if (isRailVisible) 0.dp else -railWidth, animationSpec = spring(
+            dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+        ), label = "rail_offset"
+    )
+
+    // Content offset animation
+    val contentOffsetX by animateDpAsState(
+        targetValue = if (isRailVisible) railWidth else 0.dp, animationSpec = spring(
+            dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+        ), label = "content_offset"
+    )
+
+    // Corner radius animation for main content
+    val cornerRadius by animateDpAsState(
+        targetValue = if (isRailVisible) 16.dp else 0.dp, animationSpec = spring(
+            dampingRatio = DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
+        ), label = "corner_radius"
+    )
+
+    // Scrim alpha for backdrop when rail is open
+    val scrimAlpha by animateFloatAsState(
+        targetValue = if (isRailVisible) 0.3f else 0f,
+        animationSpec = tween(300),
+        label = "scrim_alpha"
+    )
+
+    Scaffold(topBar = {
+        CenterAlignedTopAppBar(
+            title = {
+            Column (horizontalAlignment = Alignment.CenterHorizontally){
+                Text(
+                    text = ModelCategory.entries[selectedCategory].label,
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        fontWeight = FontWeight.Bold
+                    )
+                )
+                Crossfade(if (isRailVisible) "Check Out More Models" else "Swipe To Right") {
+                    Text(
+                        text = it, style = MaterialTheme.typography.titleMedium
                     )
                 }
             }
-        }) { innerPadding ->
-        Row(
+        }, navigationIcon = {
+            IconButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                    onBack()
+                },
+                shape = RoundedCornerShape(rDP(8.dp)),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = colorScheme.secondary.copy(0.1f),
+                    contentColor = colorScheme.secondary
+                )
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.next),
+                    modifier = Modifier.rotate(-180f),
+                    contentDescription = "Back"
+                )
+            }
+        }, colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = colorScheme.surface
+        )
+        )
+    }, floatingActionButton = {
+        if (selectedCategory == ModelCategory.TEXT.ordinal) {
+            FloatingActionButton(
+                onClick = {
+                    context.startActivity(Intent(context, GgufPickerActivity::class.java))
+                },
+                containerColor = colorScheme.primaryContainer,
+                elevation = FloatingActionButtonDefaults.elevation(8.dp)
+            ) {
+                Icon(Icons.TwoTone.FileOpen, contentDescription = "Import Model")
+            }
+        }
+    }) { innerPadding ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // Navigation Rail
+            // Navigation Rail (slides from left) - Independent of TopBar
             EnhancedNavigationRail(
                 selectedCategory = selectedCategory,
                 onCategorySelected = {
                     selectedCategory = it
                     haptic.performHapticFeedback(HapticFeedbackType.ToggleOn)
+                    isRailVisible = false
                 },
+                modifier = Modifier
+                    .width(railWidth)
+                    .fillMaxHeight()
+                    .offset(x = railOffsetX)
+                    .zIndex(3f)
             )
 
-            // Main Content
+            // Main Content Area
             Box(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .background(
-                        MaterialTheme.colorScheme.surfaceContainer,
-                        RoundedCornerShape(topStart = radius, bottomStart = radius)
+                    .fillMaxSize()
+                    .offset(x = contentOffsetX)
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = cornerRadius, bottomStart = cornerRadius
+                        )
                     )
-            ) {
-                Crossfade(selectedCategory, label = "category_transition") {
-                    when (it) {
-                        ModelCategory.TEXT.ordinal -> MarketplaceList(viewModel, "Text")
-                        ModelCategory.VLM.ordinal -> ComingSoonScreen("VL-Models")
-                        ModelCategory.OPENROUTER.ordinal -> OpenRouterTab(viewModel)
-                        ModelCategory.STT.ordinal -> ComingSoonScreen("Speech-to-Text")
-                        ModelCategory.TTS.ordinal -> ComingSoonScreen("Text-to-Speech")
-                        ModelCategory.INSTALLED.ordinal -> InstalledList(viewModel)
+                    .background(colorScheme.surfaceContainer)
+                    .zIndex(2f)
+                    .pointerInput(Unit) {
+                        detectHorizontalDragGestures(onDragStart = {}, onDragEnd = {
+                            railWidthPx * 0.4f
+                        }, onHorizontalDrag = { change, dragAmount ->
+                            change.consume()
+                            val swipeThreshold = 50f
+                            when {
+                                dragAmount > swipeThreshold && !isRailVisible -> {
+                                    isRailVisible = true
+                                    haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                                }
+
+                                dragAmount < -swipeThreshold && isRailVisible -> {
+                                    isRailVisible = false
+                                    haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                                }
+                            }
+                        })
+                    }) {
+                // Edge indicator
+                if (!isRailVisible) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.CenterStart)
+                            .width(4.dp)
+                            .height(60.dp)
+                            .background(
+                                colorScheme.primary.copy(alpha = 0.3f),
+                                RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp)
+                            )
+                    )
+                }
+
+                // Content with crossfade
+                Crossfade(
+                    targetState = selectedCategory,
+                    animationSpec = tween(300),
+                    label = "category_transition"
+                ) { category ->
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (category) {
+                            ModelCategory.TEXT.ordinal -> MarketplaceList(viewModel, ModelType.TEXT)
+                            ModelCategory.VLM.ordinal -> MarketplaceList(viewModel, ModelType.VLM)
+                            ModelCategory.OPENROUTER.ordinal -> OpenRouterTab(viewModel)
+                            ModelCategory.STT.ordinal -> MarketplaceList(viewModel, ModelType.STT)
+                            ModelCategory.TTS.ordinal -> MarketplaceList(viewModel, ModelType.TTS)
+                            ModelCategory.INSTALLED.ordinal -> InstalledList(viewModel)
+                        }
                     }
                 }
+            }
+
+            // Scrim overlay
+            if (isRailVisible) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .offset(x = contentOffsetX)
+                        .background(Color.Black.copy(alpha = scrimAlpha))
+                        .zIndex(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null
+                        ) {
+                            isRailVisible = false
+                            haptic.performHapticFeedback(HapticFeedbackType.GestureEnd)
+                        })
             }
         }
     }
@@ -208,87 +353,169 @@ fun ModelsScreen() {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun EnhancedNavigationRail(
-    selectedCategory: Int, onCategorySelected: (Int) -> Unit
+    selectedCategory: Int, onCategorySelected: (Int) -> Unit, modifier: Modifier = Modifier
 ) {
     NavigationRail(
-        containerColor = MaterialTheme.colorScheme.background, header = {
+        modifier = modifier, containerColor = colorScheme.surface, header = {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(vertical = rDP(16.dp))
+                modifier = Modifier.padding(vertical = 16.dp)
             ) {
-                Icon(
-                    painter = painterResource(R.drawable.ai_model),
-                    contentDescription = null,
-                    modifier = Modifier.size(rDP(32.dp)),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.height(rDP(8.dp)))
+                Surface(
+                    shape = MaterialTheme.shapes.medium,
+                    color = colorScheme.primaryContainer,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            painter = painterResource(R.drawable.ai_model),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp),
+                            tint = colorScheme.primary
+                        )
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "Models",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = colorScheme.onSurface
                 )
             }
         }) {
         Column(
-            modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.Top,
+            modifier = Modifier
+                .fillMaxHeight()
+                .padding(vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp, Alignment.Top),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.height(rDP(12.dp)))
             ModelCategory.entries.forEachIndexed { index, category ->
                 val selected = selectedCategory == index
-                val scale by animateFloatAsState(
-                    targetValue = if (selected) 1.05f else 1f, animationSpec = spring(
-                        DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
-                    )
-                )
+                var visible by remember { mutableStateOf(false) }
 
-                NavigationRailItem(
-                    selected = selected,
-                    onClick = { onCategorySelected(index) },
-                    icon = {
-                        Box(
-                            contentAlignment = Alignment.Center, modifier = Modifier
-                                .background(
-                                    color = if (selected) MaterialTheme.colorScheme.primary.copy(
-                                        alpha = 0.15f
-                                    )
-                                    else Color.Transparent,
-                                    shape = MaterialShapes.Cookie7Sided.toShape()
-                                )
-                                .scale(scale)
-                                .padding(rDP(8.dp))
-                        ) {
-                            Icon(
-                                painter = painterResource(category.icon),
-                                contentDescription = category.label,
-                                modifier = Modifier.size(rDP(24.dp)),
-                                tint = if (selected) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.onBackground
-                            )
-                        }
-                    },
-                    label = {
-                        Text(
-                            category.shortLabel, style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
-                            )
+                LaunchedEffect(Unit) {
+                    delay(index * 50L)
+                    visible = true
+                }
+
+                AnimatedVisibility(
+                    visible = visible, enter = fadeIn(tween(300)) + slideInHorizontally(
+                        initialOffsetX = { -it }, animationSpec = spring(
+                            dampingRatio = DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
                         )
-                    },
-                    modifier = Modifier.padding(vertical = rDP(4.dp)),
-                    colors = NavigationRailItemDefaults.colors(
-                        indicatorColor = Color.Transparent
                     )
-                )
+                ) {
+                    NavigationRailItemExpressive(
+                        selected = selected,
+                        onClick = { onCategorySelected(index) },
+                        category = category
+                    )
+                }
             }
         }
     }
+}
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NavigationRailItemExpressive(
+    selected: Boolean, onClick: () -> Unit, category: ModelCategory
+) {
+    val scale by animateFloatAsState(
+        targetValue = if (selected) 1.08f else 1f, animationSpec = spring(
+            dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+        ), label = "scale"
+    )
+
+    val iconSize by animateDpAsState(
+        targetValue = if (selected) 28.dp else 24.dp, animationSpec = spring(
+            dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium
+        ), label = "icon_size"
+    )
+
+    NavigationRailItem(
+        selected = selected, onClick = onClick, icon = {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(56.dp)
+                .scale(scale)
+                .background(
+                    color = if (selected) {
+                        colorScheme.primaryContainer
+                    } else {
+                        Color.Transparent
+                    }, shape = MaterialShapes.Cookie7Sided.toShape()
+                )
+        ) {
+            Icon(
+                painter = painterResource(category.icon),
+                contentDescription = category.label,
+                modifier = Modifier.size(iconSize),
+                tint = if (selected) {
+                    colorScheme.primary
+                } else {
+                    colorScheme.onSurfaceVariant
+                }
+            )
+        }
+    }, label = {
+        Text(
+            text = category.shortLabel, style = MaterialTheme.typography.labelSmall.copy(
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal
+            ), color = if (selected) {
+                colorScheme.onSurface
+            } else {
+                colorScheme.onSurfaceVariant
+            }
+        )
+    }, colors = NavigationRailItemDefaults.colors(
+        indicatorColor = Color.Transparent
+    )
+    )
 }
 
 @Composable
-private fun ComingSoonScreen(featureName: String) {
+private fun MarketplaceList(viewModel: ModelScreenViewModel, modelType: ModelType) {
+    val context = LocalContext.current
+    val downloadStates by viewModel.downloadStates.collectAsState()
+
+    // Get models based on type
+    val models = when (modelType) {
+        ModelType.TEXT -> remember { getModelList(context) }
+        ModelType.VLM -> remember { getVLMModelList(context) }
+        ModelType.STT -> remember { getSTTModelList(context) }
+        ModelType.TTS -> remember { getTTSModelList(context) }
+        else -> emptyList()
+    }
+
+    if (models.isEmpty()) {
+        ComingSoonScreen(modelType)
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(rDP(20.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
+        ) {
+            items(models, key = { it.modelUrl.toString() }) { modelData ->
+                val state = downloadStates[modelData.modelUrl.toString()] ?: DownloadState()
+                EnhancedModelCard(
+                    modelData = modelData,
+                    isDownloading = state.isDownloading,
+                    progress = state.progress,
+                    onDownloadComplete = state.isComplete,
+                    viewModel = viewModel,
+                    onDownload = { viewModel.startDownload(modelData, context) })
+            }
+        }
+    }
+}
+
+@Composable
+private fun ComingSoonScreen(modelType: ModelType) {
     Box(
         modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
@@ -300,55 +527,61 @@ private fun ComingSoonScreen(featureName: String) {
                 Icons.TwoTone.GraphicEq,
                 contentDescription = null,
                 modifier = Modifier.size(rDP(64.dp)),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                tint = colorScheme.primary.copy(alpha = 0.6f)
             )
             Text(
-                "$featureName Models",
+                "Coming Soon!",
                 style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                "Coming Soon!",
+                "No models available yet",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                color = colorScheme.onSurface.copy(alpha = 0.6f)
             )
         }
     }
 }
 
-@Composable
-private fun MarketplaceList(viewModel: ModelScreenViewModel, filterType: String) {
-    val context = LocalContext.current
-    val models = remember { getModelList(context) }
-    val downloadStates by viewModel.downloadStates.collectAsState()
+// Helper functions to get model lists by type
+private fun getVLMModelList(context: Context): List<ModelData> {
+    File(context.filesDir, "models")
 
-    // Filter models based on type (you'll need to add type field to ModelData)
-    // For now, showing all models
+    return emptyList()
+}
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDP(20.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
-    ) {
-        item {
-            Text(
-                "$filterType Models", style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
-                ), modifier = Modifier.padding(bottom = rDP(8.dp))
-            )
-        }
+private fun getSTTModelList(context: Context): List<ModelData> {
+    val modelsDir = File(context.filesDir, "models/stt")
+    if (!modelsDir.exists()) modelsDir.mkdirs()
 
-        items(models, key = { it.modelUrl.toString() }) { modelData ->
-            val state = downloadStates[modelData.modelUrl.toString()] ?: DownloadState()
-            EnhancedModelCard(
-                modelData = modelData,
-                isDownloading = state.isDownloading,
-                progress = state.progress,
-                onDownloadComplete = state.isComplete,
-                viewModel = viewModel,
-                onDownload = { viewModel.startDownload(modelData, context) })
-        }
-    }
+    return listOf(
+        ModelData(
+            modelName = "Whisper-EN-Small",
+            providerName = ModelProvider.LocalGGUF.toString(),
+            modelType = ModelType.STT,
+            modelPath = modelsDir.absolutePath,
+            modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
+            ctxSize = 448,
+            isImported = false
+        )
+    )
+}
+
+private fun getTTSModelList(context: Context): List<ModelData> {
+    val modelsDir = File(context.filesDir, "models/tts")
+    if (!modelsDir.exists()) modelsDir.mkdirs()
+
+    return listOf(
+        ModelData(
+            modelName = "KOR0-TTS-0.19-M",
+            providerName = ModelProvider.LocalGGUF.toString(),
+            modelType = ModelType.TTS,
+            modelPath = modelsDir.absolutePath,
+            modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
+            ctxSize = 512,
+            isImported = false
+        )
+    )
 }
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -361,31 +594,30 @@ fun EnhancedModelCard(
     viewModel: ModelScreenViewModel,
     onDownload: () -> Unit = {}
 ) {
-    var isInstalled by remember { mutableStateOf(false) } // Track installation status
-    var isExpanded by remember { mutableStateOf(false) } // Track details visibility
+    var isInstalled by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
 
-    // Check installation when model changes
     LaunchedEffect(modelData.modelName) {
         viewModel.checkIfInstalled(modelData.modelName) {
             isInstalled = it
         }
     }
-    // Update flag when download finishes
-    LaunchedEffect(onDownloadComplete) { if (onDownloadComplete) isInstalled = true }
+
+    LaunchedEffect(onDownloadComplete) {
+        if (onDownloadComplete) isInstalled = true
+    }
 
     val cardElevation by animateDpAsState(
         targetValue = if (isExpanded) rDP(8.dp) else rDP(2.dp),
         animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
-    // --------------------------------------------------------------
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(rDP(20.dp))),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = colorScheme.surfaceBright
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
@@ -395,7 +627,7 @@ fun EnhancedModelCard(
                 .padding(rDP(20.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
         ) {
-            // Header ------------------------------------------------
+            // Header
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -410,13 +642,11 @@ fun EnhancedModelCard(
 
                     if (isInstalled) {
                         IconButton(
-                            onClick = {
-                                isExpanded = !isExpanded
-                            },
+                            onClick = { isExpanded = !isExpanded },
                             shape = MaterialShapes.Square.toShape(),
                             colors = IconButtonDefaults.outlinedIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.secondary.copy(0.2f),
-                                contentColor = MaterialTheme.colorScheme.secondary
+                                containerColor = colorScheme.secondary.copy(0.2f),
+                                contentColor = colorScheme.secondary
                             )
                         ) {
                             Icon(
@@ -432,15 +662,13 @@ fun EnhancedModelCard(
                     Text(
                         "Tap to collapse details",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = .6f),
+                        color = colorScheme.onSurface.copy(alpha = .6f),
                         modifier = Modifier.padding(top = rDP(4.dp))
                     )
                 }
             }
 
-
-            // Specs pills -------------------------------------------
-
+            // Specs pills
             FlowRow(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
@@ -453,8 +681,7 @@ fun EnhancedModelCard(
                 )
             }
 
-            // Detail section -----------------------------------------
-
+            // Detail section
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = fadeIn() + expandVertically(expandFrom = Alignment.Top),
@@ -468,21 +695,20 @@ fun EnhancedModelCard(
                 }
             }
 
-            // Progress bar -------------------------------------------
-
+            // Progress bar
             if (isDownloading) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
                     val pct = (progress * 100).toInt()
                     Text("Downloading…", style = MaterialTheme.typography.labelMedium)
                     Text(
-                        "$pct %",
+                        "$pct %",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold
                     )
                     LinearProgressIndicator(
                         progress = { progress },
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        color = colorScheme.primary,
+                        trackColor = colorScheme.surfaceVariant,
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(rDP(8.dp))
@@ -491,8 +717,7 @@ fun EnhancedModelCard(
                 }
             }
 
-            // Action buttons -----------------------------------------
-
+            // Action buttons
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(rDP(12.dp))
@@ -510,8 +735,8 @@ fun EnhancedModelCard(
                     modifier = Modifier.weight(1f),
                     colors = if (!isInstalled) ButtonDefaults.buttonColors()
                     else ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                        containerColor = colorScheme.primary.copy(0.1f),
+                        contentColor = colorScheme.primary
                     ),
                     shape = RoundedCornerShape(rDP(16.dp))
                 ) {
@@ -542,13 +767,13 @@ fun EnhancedModelCard(
                         shape = MaterialShapes.Square.toShape(),
                         border = BorderStroke(0.dp, Color.Unspecified),
                         colors = IconButtonDefaults.outlinedIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
+                            containerColor = colorScheme.errorContainer
                         )
                     ) {
                         Icon(
                             Icons.TwoTone.Delete,
                             contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = colorScheme.error,
                             modifier = Modifier.size(rDP(20.dp))
                         )
                     }
@@ -562,18 +787,14 @@ fun EnhancedModelCard(
 private fun AnimatedPill(
     text: String, isHighlighted: Boolean = false
 ) {
-    // Background – highlighted pill uses the primary colour with a light alpha,
-    // normal pill uses the surface variant colour.
     val backgroundColor by animateColorAsState(
-        targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        else MaterialTheme.colorScheme.surfaceVariant, animationSpec = tween(300)
+        targetValue = if (isHighlighted) colorScheme.primary.copy(alpha = 0.12f)
+        else colorScheme.surfaceVariant, animationSpec = tween(300)
     )
 
-    // Text – highlighted pill uses the primary colour,
-    // normal pill uses the on‑surface‑variant colour.
     val textColor by animateColorAsState(
-        targetValue = if (isHighlighted) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.onSurfaceVariant, animationSpec = tween(300)
+        targetValue = if (isHighlighted) colorScheme.primary
+        else colorScheme.onSurfaceVariant, animationSpec = tween(300)
     )
 
     Surface(
@@ -594,7 +815,7 @@ private fun DetailRow(label: String, value: String) {
     ) {
         Text(
             label, style = MaterialTheme.typography.bodyMedium.copy(
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                color = colorScheme.onSurface.copy(alpha = 0.7f)
             )
         )
         Text(
@@ -635,19 +856,11 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
         contentPadding = PaddingValues(rDP(20.dp)),
         verticalArrangement = Arrangement.spacedBy(rDP(20.dp))
     ) {
-        item {
-            Text(
-                "OpenRouter Configuration", style = MaterialTheme.typography.headlineMedium.copy(
-                    fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
-                ), modifier = Modifier.padding(bottom = rDP(8.dp))
-            )
-        }
-
         // API Configuration Card
         item {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = colorScheme.surfaceContainerHigh
                 ),
                 shape = RoundedCornerShape(rDP(20.dp)),
                 elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
@@ -662,7 +875,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         Icon(
                             Icons.TwoTone.Key,
                             contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
+                            tint = colorScheme.primary,
                             modifier = Modifier.size(rDP(24.dp))
                         )
                         Spacer(Modifier.width(rDP(12.dp)))
@@ -752,7 +965,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
         item {
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+                    containerColor = colorScheme.surfaceContainerHigh
                 ),
                 shape = RoundedCornerShape(rDP(20.dp)),
                 elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp))
@@ -772,7 +985,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                             Icon(
                                 Icons.TwoTone.CheckCircle,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
+                                tint = colorScheme.primary,
                                 modifier = Modifier.size(rDP(24.dp))
                             )
                             Spacer(Modifier.width(rDP(12.dp)))
@@ -788,7 +1001,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                         AnimatedVisibility(visible = openRouterInstalled.isNotEmpty()) {
                             Surface(
                                 shape = RoundedCornerShape(rDP(20.dp)),
-                                color = MaterialTheme.colorScheme.primaryContainer
+                                color = colorScheme.primaryContainer
                             ) {
                                 Text(
                                     "${openRouterInstalled.size}",
@@ -796,7 +1009,7 @@ private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
                                         horizontal = rDP(12.dp), vertical = rDP(6.dp)
                                     ),
                                     style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    color = colorScheme.onPrimaryContainer,
                                     fontWeight = FontWeight.Bold
                                 )
                             }
@@ -869,7 +1082,7 @@ private fun OpenRouterModelItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(rDP(16.dp)))
+            .background(colorScheme.surfaceVariant, RoundedCornerShape(rDP(16.dp)))
             .padding(horizontal = rDP(16.dp), vertical = rDP(10.dp)),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -886,13 +1099,13 @@ private fun OpenRouterModelItem(
             },
             shape = MaterialShapes.Square.toShape(),
             colors = IconButtonDefaults.iconButtonColors(
-                containerColor = MaterialTheme.colorScheme.errorContainer,
+                containerColor = colorScheme.errorContainer,
             )
         ) {
             Icon(
                 Icons.TwoTone.Delete,
                 contentDescription = "Remove",
-                tint = MaterialTheme.colorScheme.error,
+                tint = colorScheme.error,
                 modifier = Modifier.size(rDP(20.dp))
             )
         }
@@ -931,7 +1144,6 @@ private fun ModelPickerDialog(
                 .heightIn(max = rDP(520.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
         ) {
-            // Search Field
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
@@ -946,7 +1158,6 @@ private fun ModelPickerDialog(
 
             HorizontalDivider(modifier = Modifier.alpha(0.3f))
 
-            // Empty State
             if (filteredModels.isEmpty()) {
                 EmptyStateCard(
                     icon = Icons.TwoTone.SearchOff,
@@ -978,8 +1189,8 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
     var isPressed by remember { mutableStateOf(false) }
 
     val backgroundColor by animateColorAsState(
-        if (isPressed) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
-        else MaterialTheme.colorScheme.surfaceVariant,
+        if (isPressed) colorScheme.primary.copy(alpha = 0.12f)
+        else colorScheme.surfaceVariant,
         animationSpec = spring(dampingRatio = DampingRatioMediumBouncy)
     )
 
@@ -1010,7 +1221,6 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
                 .padding(rDP(16.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
         ) {
-            // Model Name Row
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -1033,12 +1243,12 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
                     if (model.supportsTools) {
                         Surface(
                             shape = RoundedCornerShape(rDP(8.dp)),
-                            color = MaterialTheme.colorScheme.secondaryContainer
+                            color = colorScheme.secondaryContainer
                         ) {
                             Icon(
                                 painter = painterResource(R.drawable.hammer),
                                 contentDescription = "Supports Tools",
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                tint = colorScheme.onSecondaryContainer,
                                 modifier = Modifier
                                     .padding(rDP(6.dp))
                                     .size(rDP(16.dp))
@@ -1048,24 +1258,23 @@ private fun ModelListItem(model: OpenRouterModel, onClick: () -> Unit) {
                     Icon(
                         imageVector = Icons.Filled.Add,
                         contentDescription = "Add Model",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = colorScheme.primary,
                         modifier = Modifier.size(rDP(22.dp))
                     )
                 }
             }
 
-            // Details
             Column(verticalArrangement = Arrangement.spacedBy(rDP(4.dp))) {
                 Text(
                     text = "Context: ${model.ctxSize} tokens",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = colorScheme.onSurfaceVariant
                     )
                 )
                 Text(
                     text = "Temp: ${model.temperature} • Top-P: ${model.topP}",
                     style = MaterialTheme.typography.bodySmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = colorScheme.onSurfaceVariant
                     )
                 )
             }
@@ -1086,7 +1295,7 @@ private fun EmptyStateCard(
     ) {
         Surface(
             shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
+            color = colorScheme.surfaceVariant,
             modifier = Modifier.size(rDP(80.dp))
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -1094,7 +1303,7 @@ private fun EmptyStateCard(
                     icon,
                     contentDescription = null,
                     modifier = Modifier.size(rDP(40.dp)),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    tint = colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }
         }
@@ -1104,21 +1313,18 @@ private fun EmptyStateCard(
             overflow = TextOverflow.Clip,
             textAlign = TextAlign.Justify,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            color = colorScheme.onSurface.copy(alpha = 0.7f)
         )
         Text(
             subtitle,
             style = MaterialTheme.typography.bodyMedium,
             overflow = TextOverflow.Clip,
             textAlign = TextAlign.Justify,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+            color = colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-// INSTALLED MODELS TAB
-// ═══════════════════════════════════════════════════════════════════════════
 @Composable
 private fun InstalledList(viewModel: ModelScreenViewModel) {
     val installed by viewModel.models.collectAsState()
@@ -1139,14 +1345,6 @@ private fun InstalledList(viewModel: ModelScreenViewModel) {
             contentPadding = PaddingValues(rDP(20.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
         ) {
-            item {
-                Text(
-                    "Installed Models", style = MaterialTheme.typography.headlineMedium.copy(
-                        fontWeight = FontWeight.Bold, fontFamily = FontFamily.Serif
-                    ), modifier = Modifier.padding(bottom = rDP(8.dp))
-                )
-            }
-
             items(installed, key = { it.id }) { model ->
                 InstalledModelCard(
                     model = model, onDelete = { viewModel.removeModel(model.modelName) })
@@ -1178,7 +1376,7 @@ private fun InstalledModelCard(
                 )
             )
             .clip(RoundedCornerShape(rDP(20.dp))), colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+            containerColor = colorScheme.surfaceContainerHigh
         ), elevation = CardDefaults.cardElevation(defaultElevation = cardElevation)
     ) {
         Column(
@@ -1187,7 +1385,6 @@ private fun InstalledModelCard(
                 .padding(rDP(20.dp)),
             verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
         ) {
-            // Header Row
             Row(
                 Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
@@ -1211,13 +1408,13 @@ private fun InstalledModelCard(
                         },
                         shape = MaterialShapes.Square.toShape(),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            containerColor = colorScheme.primaryContainer,
                         )
                     ) {
                         Icon(
                             imageVector = Icons.TwoTone.Info,
                             contentDescription = "Model Info",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            tint = colorScheme.onPrimaryContainer
                         )
                     }
 
@@ -1225,19 +1422,18 @@ private fun InstalledModelCard(
                         onClick = onDelete,
                         shape = MaterialShapes.Square.toShape(),
                         colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer,
+                            containerColor = colorScheme.errorContainer,
                         )
                     ) {
                         Icon(
                             Icons.TwoTone.Delete,
                             contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.error,
+                            tint = colorScheme.error,
                             modifier = Modifier.size(rDP(20.dp))
                         )
                     }
                 }
             }
-
 
             AnimatedPill(
                 text = if (model.providerName == ModelProvider.LocalGGUF.toString()) "Local Model"
@@ -1245,12 +1441,8 @@ private fun InstalledModelCard(
                 isHighlighted = model.providerName == ModelProvider.LocalGGUF.toString()
             )
 
-
-            // Expandable Details
             AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn(),
-                exit = fadeOut()
+                visible = isExpanded, enter = fadeIn(), exit = fadeOut()
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(rDP(12.dp))) {
                     HorizontalDivider(modifier = Modifier.alpha(0.3f))

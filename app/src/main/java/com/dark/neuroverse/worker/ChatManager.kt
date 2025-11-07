@@ -2,8 +2,6 @@ package com.dark.neuroverse.worker
 
 import android.content.Context
 import android.util.Log
-import com.dark.ai_module.data.ModelsList
-import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.BuildConfig
 import com.dark.neuroverse.model.ChatList
 import com.dark.neuroverse.model.CodeCanvas
@@ -431,65 +429,7 @@ object ChatManager {
      */
     private suspend fun generateTitleWithAI(userMessage: String): String =
         withContext(Dispatchers.IO) {
-            return@withContext try {
-                // Save original system prompt to restore later
-                val originalSystemPrompt = ModelManager.currentModel.value.systemPrompt
-                val originalChatTemplate = ModelManager.currentModel.value.chatTemplate
-
-                val titlePrompt = """
-                Generate a concise, descriptive title (3-6 words) for this conversation.
-                Rules:
-                - Be specific and descriptive
-                - Use title case
-                - No quotes or punctuation at the end
-                - Capture the main topic or question
-                - Keep it under 50 characters
-                
-                User: $userMessage
-                
-                Title:
-            """.trimIndent()
-
-                // Configure for title generation
-                ModelManager.setSystemPrompt("You are a title generator. Output only the title, nothing else.")
-                ModelManager.setChatTemplate(ModelsList.defaultChatTemplate)
-
-                // Generate title with token limit
-                val titleBuilder = StringBuilder()
-                var tokenCount = 0
-                val maxTokens = 15
-
-                ModelManager.generateStreaming(
-                    prompt = titlePrompt,
-                    toolJson = "",
-                    onToken = { token ->
-                        if (tokenCount < maxTokens) {
-                            titleBuilder.append(token)
-                            tokenCount++
-                        }
-                    },
-                    onToolCalled = { _, _ -> })
-
-                // Restore original configuration
-                ModelManager.setSystemPrompt(originalSystemPrompt)
-                ModelManager.setChatTemplate(originalChatTemplate ?: "")
-
-                // Clean and validate the generated title
-                val rawTitle = titleBuilder.toString().trim()
-                val cleanTitle = cleanTitleString(rawTitle)
-
-                if (cleanTitle.isBlank() || cleanTitle.length < 3) {
-                    return@withContext generateTitleFromText(userMessage)
-                }
-
-                Log.d(TAG, "AI-generated title: $cleanTitle")
-                cleanTitle
-
-            } catch (e: Exception) {
-                Log.e(TAG, "AI title generation failed, using fallback", e)
-                // Fallback to simple extraction
-                return@withContext generateTitleFromText(userMessage)
-            }
+            return@withContext generateTitleFromText(userMessage)
         }
 
     /**
@@ -541,7 +481,7 @@ object ChatManager {
         return _messages.value.isNotEmpty() && _currentChatID.value.isEmpty()
     }
 
-    fun updateDecodingMetrix(decodingMetrics:DecodingMetrics, messageId: String) {
+    fun updateDecodingMetrix(decodingMetrics: DecodingMetrics, messageId: String) {
         _messages.update { messages ->
             messages.map { message ->
                 if (message.id == messageId) {

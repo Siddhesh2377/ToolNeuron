@@ -153,7 +153,9 @@ class MainActivity : ComponentActivity() {
                         }
 
                         composable(Screen.Model.route) {
-                            ModelsScreen()
+                            ModelsScreen{
+                                navController.popBackStack()
+                            }
                         }
 
                         composable(Screen.Home.route) {

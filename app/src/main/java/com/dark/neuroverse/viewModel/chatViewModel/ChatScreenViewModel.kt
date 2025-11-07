@@ -276,6 +276,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             )
         )
 
+        Log.d(TAG, "Is Tool Selected: $isTool")
+
         // Handle RAG if enabled
         if (_isRag.value) {
             handleRAGRequest(input, isTool, messageId)
@@ -345,7 +347,6 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
         ChatManager.updateDecodingMetrix(
             decodingMetrics.value, messageId = messageId
         )
-
 
         // CRITICAL: Save and refresh chat list after streaming completes
         saveCurrentChat()
@@ -516,9 +517,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
     ) {
         // Save current model configuration
         val originalModel = selectedModel.value
-        val needsModelSwitch =
-            originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
-
+        val needsModelSwitch = originalModel.systemPrompt != ModelsList.toolSummarizationSystemPrompt
+        ToolCallingManager.unSelectTool()
         // Clear existing message text (prepare for streaming)
         ChatManager.updateStreamingMessage(
             messageId = messageId, text = "", thought = null, isFinal = false
@@ -607,6 +607,8 @@ class ChatScreenViewModel(private val appContext: Context) : ViewModel() {
             }
 
             throw e
+        }finally {
+            ToolCallingManager.selectTool()
         }
     }
 

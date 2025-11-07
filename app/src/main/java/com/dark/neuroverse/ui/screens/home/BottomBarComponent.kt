@@ -9,10 +9,8 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -74,6 +72,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.R
+import com.dark.neuroverse.ui.components.FuturisticNeuralAnimation
+import com.dark.neuroverse.ui.components.NeuralThemes
 import com.dark.neuroverse.ui.theme.CyberViolet
 import com.dark.neuroverse.ui.theme.SkyBlue
 import com.dark.neuroverse.ui.theme.SlateGrey
@@ -114,7 +114,7 @@ fun ChatInputWithDataHubDialog(
         val modelDir = ModelManager.getSTTModel() ?: return@LaunchedEffect
         launch(Dispatchers.IO) {
             sttViewModel.initialize(
-                modelDir.copy(modelPath = "${modelDir.modelPath}/sherpa-onnx-whisper-tiny")
+                modelDir
             )
         }
     }
@@ -193,7 +193,7 @@ private fun DatasetItem(dataset: DataSetModel, isSelected: Boolean) {
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Column(Modifier.weight(1f)) {
+            Column {
                 Text(dataset.modelName, style = MaterialTheme.typography.bodyLarge)
                 if (dataset.modelDescription.isNotBlank()) {
                     Text(
@@ -203,6 +203,8 @@ private fun DatasetItem(dataset: DataSetModel, isSelected: Boolean) {
                     )
                 }
             }
+
+            Spacer(Modifier.weight(1f))
 
             if (isSelected) {
                 Icon(
@@ -248,15 +250,6 @@ fun ChatInputBar(
         Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
     }
 
-    // Auto toggle RAG when tools are selected/unselected
-    LaunchedEffect(selectedTools) {
-        val shouldEnableRag = selectedTools.isNotEmpty()
-        if (shouldEnableRag != isRag) {
-            isRag = shouldEnableRag
-            onRag(isRag)
-        }
-    }
-
     // Handle STT events
     LaunchedEffect(Unit) {
         sttViewModel.events.collect { event ->
@@ -267,17 +260,12 @@ fun ChatInputBar(
     Column(
         modifier = Modifier
             .imePadding()
-            .animateContentSize(
-                animationSpec = spring(
-                    Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessLow
-                )
-            )
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.secondary.copy(0.1f)),
         verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
         Column(Modifier.navigationBarsPadding()) {
-            if (showToolsList) {
+            AnimatedVisibility(visible = showToolsList) {
                 ToolsList(
                     tools = tools, onToolSelected = {
                         onToolSelected(it)
@@ -294,8 +282,7 @@ fun ChatInputBar(
                 onToolsClick = { if (inputEnabled) showToolsList = !showToolsList },
                 onToolRemoved = onToolRemoved,
                 onRagToggle = {
-                    // Optional: only allow manual disabling
-                    if (inputEnabled && selectedTools.isEmpty()) {
+                    if (inputEnabled) {
                         isRag = !isRag
                         onRag(isRag)
                     }
@@ -335,7 +322,6 @@ fun ChatInputBar(
         }
     }
 }
-
 
 private fun handleSTTButtonClick(
     context: Context,
@@ -632,7 +618,7 @@ fun ToolsList(
     onToolSelected: (Pair<String, Tools>) -> Unit
 ) {
     LazyColumn(
-        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(200.dp)),
+        modifier = modifier.heightIn(min = rDP(100.dp), max = rDP(300.dp)),
         contentPadding = PaddingValues(vertical = rDP(8.dp))
     ) {
         tools.forEach { (pluginName, toolList) ->

@@ -70,6 +70,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.workers.ModelManager
 import com.dark.neuroverse.activity.ModelPropEditorActivity
+import com.dark.neuroverse.activity.TempActivity
 import com.dark.neuroverse.model.ChatUiState
 import com.dark.neuroverse.ui.components.ModelLoadProgressBar
 import com.dark.neuroverse.ui.components.TTSPlaybackBarCompact
@@ -201,7 +202,7 @@ fun HomeScreen(
                             Toast.makeText(context, "Load a Model First!..", Toast.LENGTH_LONG).show()
                         } else {
                             context.startActivity(
-                                Intent(context, ModelPropEditorActivity::class.java).apply {
+                                Intent(context, TempActivity::class.java).apply {
                                     putExtra("modelName", ModelManager.currentModel.value.modelName)
                                 }
                             )

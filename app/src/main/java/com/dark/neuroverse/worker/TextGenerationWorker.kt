@@ -134,6 +134,8 @@ object TextGenerationWorker {
                 ).toString()
             } else ""
 
+            Log.d("TextGenerationWorker", "Tool JSON : $toolJson")
+
             // STAGE 3: Loading Model (if not already loaded)
             if (!ModelManager.isModelLoaded()) {
                 UIStateManager.updateDecodingStage(DecodingStage.LoadingModel)

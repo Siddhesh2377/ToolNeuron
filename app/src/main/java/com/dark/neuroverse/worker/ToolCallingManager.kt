@@ -42,6 +42,11 @@ object ToolCallingManager {
         Log.d(TAG, "Selected tool: ${tool.second.toolName}")
     }
 
+    fun selectTool() {
+        ModelManager.setSystemPrompt(ModelsList.toolCallingSystemPrompt)
+        ModelManager.setChatTemplate(ModelsList.toolCallingChatTemplate)
+    }
+
     fun unSelectTool() {
         val wasSelected = _selectedTool.value.first.isNotEmpty()
         _selectedTool.value = "" to Tools()
@@ -109,9 +114,6 @@ object ToolCallingManager {
 
             ToolRunner.run(pluginResult, appContext, repairedToolCall) { result ->
                 try {
-                    ModelManager.setSystemPrompt(ModelsList.defaultSystemPrompt)
-                    ModelManager.setChatTemplate(ModelsList.defaultChatTemplate)
-
                     if (result.has("error")) {
                         val errorMsg = result.getString("error")
                         Log.e(TAG, "Tool execution error: $errorMsg")
