@@ -122,6 +122,15 @@
 
         </activity>
 
+        <activity
+            android:name=".activity.LoggerActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize">
+
+        </activity>
+
 
         <provider
             android:name="androidx.core.content.FileProvider"

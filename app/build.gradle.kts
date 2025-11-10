@@ -14,15 +14,15 @@ plugins {
 val localPropertiesFile = rootProject.file("local.properties")
 
 android {
-    namespace = "com.dark.neuroverse"
+    namespace = "com.dark.tool_neuron"
     compileSdk = 36
 
     defaultConfig {
         applicationId = "com.dark.neurov"
         minSdk = 31
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3-beta"
+        versionCode = 5
+        versionName = "5.0-beta"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
@@ -34,7 +34,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -59,12 +59,6 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
-        }
-        resources {
-            excludes += arrayOf(
-                "META-INF/INDEX.LIST",
-                "META-INF/io.netty.versions.properties"
-            )
         }
     }
 

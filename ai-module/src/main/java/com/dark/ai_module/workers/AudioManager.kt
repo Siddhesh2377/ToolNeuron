@@ -101,7 +101,6 @@ object AudioManager {
     private class AudioServiceConnection : ServiceConnection {
         override fun onServiceConnected(name: ComponentName, binder: IBinder?) {
             service = IAudioService.Stub.asInterface(binder)
-            Log.i(TAG, "AudioService connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName) {

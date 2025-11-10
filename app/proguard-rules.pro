@@ -1,42 +1,54 @@
 # -- Keep all NeuroVerse model classes and their full members --
--keep class com.dark.neuroverse.model.** { *; }
--keep class com.dark.neuroverse.activity.** { *; }
--keep class com.dark.neuroverse.viewModel.** { *; }
--keep class com.dark.neuroverse.ui.** { *; }
-
-# -- General, keep all native and JNI-related classes --
--keep class * extends java.lang.Exception
--keep class * extends java.lang.Throwable
-
-
-# --- Keep plugin API fully intact for reflection ---
+-keep class com.dark.tool_neuron.model.** { *; }
+-keep class com.dark.tool_neuron.activity.** { *; }
+-keep class com.dark.tool_neuron.viewModel.** { *; }
+-keep class com.dark.tool_neuron.ui.** { *; }
 -keep class com.dark.plugins.api.** { *; }
 
-# Keep the ComposePlugin interface and its method names
--keep interface com.dark.plugins.api.ComposePlugin { *; }
-
-# Keep method signatures for all classes implementing ComposePlugin
--keepclassmembers class * implements com.dark.plugins.api.ComposePlugin {
-    @androidx.compose.runtime.Composable <methods>;
-    public *** content(...);
-}
-
-# Keep PluginApi and its subclasses completely
--keep class com.dark.plugins.api.PluginApi { *; }
--keep class * extends com.dark.plugins.api.PluginApi { *; }
-
-# Keep Kotlin metadata (needed to preserve annotations & method info)
--keep class kotlin.Metadata { *; }
--keepattributes *Annotation*,InnerClasses,EnclosingMethod,Signature
-
-# Don't strip Compose @Composable methods in any class
+# Keep Composable functions
 -keepclassmembers class ** {
     @androidx.compose.runtime.Composable *;
 }
 
-# Keep @Keep annotated classes/members
+# Keep classes with @Keep annotation
 -keep @androidx.annotation.Keep class * { *; }
-# Keep all PluginApi subclasses and their Context constructors
--keep class * extends com.dark.plugins.api.PluginApi {
-    public <init>(android.content.Context);
+
+# Keep AI module classes
+-keep class com.dark.ai_module.model.** { *; }
+
+# Keep AI core classes (from AAR)
+-keep class com.mp.ai_core.audio.stt.** { *; }
+-keep class com.mp.ai_core.audio.tts.** { *; }
+-keep class com.mp.ai_core.helpers.** { *; }
+-keep class com.mp.ai_core.services.** { *; }
+-keep class com.mp.ai_core.** { *; }
+
+# ============================================
+# Keep sherpa-onnx classes (CRITICAL - ADD THIS!)
+# ============================================
+-keep class com.k2fsa.sherpa.onnx.** { *; }
+
+# Keep Kotlin data classes for sherpa-onnx
+-keepclassmembers class com.k2fsa.sherpa.onnx.** {
+    <init>(...);
+    *** component*();
+    *** copy(...);
 }
+
+# Keep Kotlin top-level functions (like getFeatureConfig)
+-keep class com.k2fsa.sherpa.onnx.**Kt { *; }
+
+# Keep native methods (sherpa-onnx uses JNI)
+-keepclasseswithmembernames class com.k2fsa.sherpa.onnx.** {
+    native <methods>;
+}
+
+# Keep all fields and methods in sherpa-onnx classes
+-keepclassmembers class com.k2fsa.sherpa.onnx.** {
+    public *;
+    private *;
+    protected *;
+}
+
+# Prevent obfuscation of sherpa-onnx classes
+-keepnames class com.k2fsa.sherpa.onnx.** { *; }

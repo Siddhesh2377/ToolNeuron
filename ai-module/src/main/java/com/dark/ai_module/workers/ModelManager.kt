@@ -84,10 +84,10 @@ object ModelManager {
     //region Initialization
 
     fun init(context: Context) {
+        bindService(context)
         if (initGuard.compareAndSet(false, true)) {
             dao = DatabaseProvider.getDatabase(context).ModelDAO()
         }
-        bindService(context)
     }
 
     fun configureOpenRouter(apiKey: String, baseUrl: String = "https://openrouter.ai/api/v1") {
