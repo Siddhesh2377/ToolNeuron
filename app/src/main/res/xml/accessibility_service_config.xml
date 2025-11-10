@@ -5,4 +5,4 @@
     android:canRequestFilterKeyEvents="true"
     android:isAccessibilityTool="true"
     android:notificationTimeout="100"
-    android:settingsActivity="com.dark.neuroverse.SettingsActivity" />
+    android:settingsActivity="tool_neuron.SettingsActivity" />

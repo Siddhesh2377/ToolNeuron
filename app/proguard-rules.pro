@@ -1,8 +1,8 @@
 # -- Keep all NeuroVerse model classes and their full members --
--keep class com.dark.neuroverse.model.** { *; }
--keep class com.dark.neuroverse.activity.** { *; }
--keep class com.dark.neuroverse.viewModel.** { *; }
--keep class com.dark.neuroverse.ui.** { *; }
+-keep class com.dark.tool_neuron.model.** { *; }
+-keep class com.dark.tool_neuron.activity.** { *; }
+-keep class com.dark.tool_neuron.viewModel.** { *; }
+-keep class com.dark.tool_neuron.ui.** { *; }
 -keep class com.dark.plugins.api.** { *; }
 
 # Keep Composable functions

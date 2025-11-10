@@ -14,7 +14,7 @@ plugins {
 val localPropertiesFile = rootProject.file("local.properties")
 
 android {
-    namespace = "com.dark.neuroverse"
+    namespace = "com.dark.tool_neuron"
     compileSdk = 36
 
     defaultConfig {
