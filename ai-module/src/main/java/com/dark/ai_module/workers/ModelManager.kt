@@ -66,7 +66,8 @@ object ModelManager {
     val isGenerating = MutableStateFlow(false)
 
     // Generation Queue
-    private val queue = Channel<GenerationRequest>(capacity = 64)
+    private var queue = Channel<GenerationRequest>(capacity = 64)
+    private val queueLock = Any()
     private var processorJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val genExecutor = Executors.newSingleThreadExecutor { r ->
@@ -391,14 +392,12 @@ object ModelManager {
         onToolCalled: (String, String) -> Unit,
         onToken: (String) -> Unit
     ): String {
+        // ✅ Ensure queue is open
+        ensureQueueOpen()
+
         val deferred = CompletableDeferred<String>()
         val normalized = ToolJsonUtils.normalizeSpec(toolJson)
         val deduped = ToolJsonUtils.maybeDedup(normalized)
-
-        Log.e("GGUF", "Tool JSON: $toolJson")
-
-        Log.e("GGUF", "Deduped: $deduped && $normalized")
-        Log.e("GGUF", "${toolJson.isNotEmpty()}")
 
         queue.send(
             GenerationRequest.Streaming(
@@ -441,17 +440,24 @@ object ModelManager {
     private fun startProcessor() {
         processorJob?.cancel()
         processorJob = scope.launch(genDispatcher) {
-            queue.consumeAsFlow().collect { req ->
-                try {
-                    isGenerating.value = true
-                    when (req) {
-                        is GenerationRequest.Streaming -> handleStreaming(req)
+            try {
+                queue.consumeAsFlow().collect { req ->
+                    try {
+                        isGenerating.value = true
+                        when (req) {
+                            is GenerationRequest.Streaming -> handleStreaming(req)
+                        }
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Generation error", t)
+                        if (req is GenerationRequest.Streaming) {
+                            req.completer.completeExceptionally(t)
+                        }
+                    } finally {
+                        isGenerating.value = false
                     }
-                } catch (t: Throwable) {
-                    Log.e(TAG, "Generation error", t)
-                } finally {
-                    isGenerating.value = false
                 }
+            } catch (e: Exception) {
+                Log.e(TAG, "Processor error", e)
             }
         }
     }
@@ -598,9 +604,16 @@ object ModelManager {
     //region Lifecycle
 
     fun isModelLoaded(): Boolean = _currentModel.value.modelName.isNotEmpty()
-
+    private fun ensureQueueOpen() {
+        synchronized(queueLock) {
+            if (queue.isClosedForSend) {
+                Log.w(TAG, "Queue was closed, recreating...")
+                queue = Channel(capacity = 64)
+                startProcessor()  // Restart the processor
+            }
+        }
+    }
     fun shutdown() {
-        queue.close()
         processorJob?.cancel()
         stopGeneration()
         unloadGenerationModel()
@@ -612,6 +625,12 @@ object ModelManager {
         unbindService()
 
         Log.i(TAG, "ModelManager shutdown complete")
+    }
+
+    fun destroy() {
+        shutdown()
+        queue.close()  // Only close when truly destroying
+        scope.cancel()
     }
 
     //endregion
