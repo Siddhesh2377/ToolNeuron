@@ -10,6 +10,7 @@ import com.dark.tool_neuron.util.initOpenRouterFromPrefs
 import com.dark.tool_neuron.worker.ChatManager
 import com.dark.tool_neuron.worker.UserDataManager
 import com.dark.plugins.manager.PluginManager
+import com.dark.tool_neuron.logger.AppLogger.measureLogAndTime
 import com.dark.tool_neuron.worker.DataHubManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,63 +66,36 @@ class NVApplication : Application() {
 
     private suspend fun initializeManagers(root: NeuronNode) {
         // ChatManager
-        measureAndLog(root, "ChatManager") {
+        measureLogAndTime(root, "ChatManager") {
             ChatManager.refreshChats()
         }
 
         // ModelManager
-        measureAndLog(root, "ModelManager") {
+        measureLogAndTime(root, "ModelManager") {
             ModelManager.init(applicationContext)
         }
 
         // AudioManager
-        measureAndLog(root, "AudioManager") {
+        measureLogAndTime(root, "AudioManager") {
             AudioManager.init(applicationContext)
         }
 
         // PluginManager
-        measureAndLog(root, "PluginManager") {
+        measureLogAndTime(root, "PluginManager") {
             PluginManager.init(applicationContext)
         }
 
         // DataHubManager
-        measureAndLog(root, "DataHubManager") {
+        measureLogAndTime(root, "DataHubManager") {
             DataHubManager.init(applicationContext)
         }
 
         // OpenRouter
-        measureAndLog(root, "OpenRouter") {
+        measureLogAndTime(root, "OpenRouter") {
             initOpenRouterFromPrefs(applicationContext)
         }
 
         AppLogger.info(root, "All managers initialized successfully")
-    }
-
-    private inline fun measureAndLog(
-        root: NeuronNode,
-        name: String,
-        block: () -> Unit
-    ) {
-        try {
-            val duration = measureTimeMillis {
-                block()
-            }
-
-            AppLogger.info(
-                root = root,
-                message = "$name initialized",
-                details = mapOf("duration" to "${duration}ms")
-            )
-        } catch (e: Exception) {
-            AppLogger.error(
-                root = root,
-                message = "$name initialization failed",
-                details = mapOf(
-                    "error" to e.message.toString(),
-                    "type" to e.javaClass.simpleName
-                )
-            )
-        }
     }
 
     override fun onLowMemory() {

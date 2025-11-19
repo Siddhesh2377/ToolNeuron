@@ -9,6 +9,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.system.measureTimeMillis
 
 /**
  * Simple logging system that stores logs in brain file
@@ -25,6 +26,33 @@ object AppLogger {
     /**
      * Get or create the logs node
      */
+
+    inline fun measureLogAndTime(
+        root: NeuronNode,
+        name: String,
+        block: () -> Unit
+    ) {
+        try {
+            val duration = measureTimeMillis {
+                block()
+            }
+
+            AppLogger.info(
+                root = root,
+                message = "$name initialized",
+                details = mapOf("duration" to "${duration}ms")
+            )
+        } catch (e: Exception) {
+            AppLogger.error(
+                root = root,
+                message = "$name initialization failed",
+                details = mapOf(
+                    "error" to e.message.toString(),
+                    "type" to e.javaClass.simpleName
+                )
+            )
+        }
+    }
     private fun getLogsNode(root: NeuronNode): NeuronNode {
         val tree = NeuronTree(root)
         return tree.getNodeDirectOrNull(LOGS_NODE_ID) ?: run {

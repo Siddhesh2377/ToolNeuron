@@ -12,7 +12,7 @@
 [versions]
 
 # ▶ Toolchain / Plugins
-agp = "8.13.0"                       # Android Gradle Plugin
+agp = "8.13.1"                       # Android Gradle Plugin
 kotlin = "2.2.20"                    # Kotlin language version
 ksp = "2.2.20-2.0.3"                  # Kotlin Symbol Processing plugin
 

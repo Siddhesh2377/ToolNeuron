@@ -191,6 +191,7 @@ object TextGenerationWorker {
             }
             throw e
         } catch (e: Exception) {
+            Log.e(TAG, "Streaming failed", e)
             UIStateManager.setStateError("Streaming failed", cause = e)
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
