@@ -1,331 +1,241 @@
+<div align="center">
+
 # ToolNeuron
+### Your AI Hub in Your Pocket
 
-**Your AI Hub in Your Pocket 🤖✨**
+[![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/NeuroVerse/releases)
+[![Latest Release](https://img.shields.io/badge/Release-Beta_5.1-blue?logo=github)](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
+[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
+[![Discord](https://img.shields.io/badge/Join-Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
-ToolNeuron is the ultimate **AI-native mobile ecosystem** for Android. Whether you're a casual user, developer, or AI enthusiast, it brings **all your AI models—online or offline—into a single, privacy-focused app**. Run, extend, and interact with AI like never before.
+**A privacy-focused mobile ecosystem for AI inference** — Run offline models locally or connect to 100+ cloud models. No subscriptions. No data harvesting. Complete control.
 
----
+[**Download Beta 5.1**](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [**Join Discord**](https://discord.gg/mVPwHDhrAP) • [**Documentation**](https://github.com/Siddhesh2377/NeuroVerse/wiki)
 
-<p align="center">
-  <img src="https://img.shields.io/badge/Platform-Android_14%2B-informational" />
-  <img src="https://img.shields.io/badge/Built%20With-Kotlin%20%7C%20Jetpack%20Compose-purple" />
-  <a href="#license"><img src="https://img.shields.io/badge/License-Apache_2.0-green" /></a>
-  <a href="https://discord.gg/mVPwHDhrAP"><img src="https://img.shields.io/badge/Discord-Join%20ToolNeuron-5865F2?logo=discord&logoColor=white"/></a>
-</p>
-
----
-
-## What is ToolNeuron? 🧠
-
-ToolNeuron is your **AI hub on Android**:
-
-* Run **offline GGUF models** directly on your phone—no internet needed.
-* Connect to **any model via OpenRouter**—just paste your API key and play! Access hundreds of models, both censored and uncensored.
-* **Coming soon:** Support for TFLite, ONNX, BIN, TUFF, and other offline formats.
-* **100% privacy-focused**: All offline models run locally—your data never leaves your device.
-* **Dynamic plugins** and **DataHub** to supercharge your AI experience.
-
-**Think of it as an AI operating layer for your pocket 🌟**
+</div>
 
 ---
 
-## ScreenShots
-<img  height="500" alt="Screenshot_20251108-123350" src="https://github.com/user-attachments/assets/4054fb05-a241-4acf-bb01-ab29ac68298a" />
-<img  height="500" alt="Screenshot_20251108-123410" src="https://github.com/user-attachments/assets/79750cbb-446c-4e8e-84e3-a3dc5403cdf7" />
-<img  height="500" alt="Screenshot_20251108-123421" src="https://github.com/user-attachments/assets/b4076e75-bf0a-4f27-9aaa-dbb7340de618" />
-<img  height="500" alt="Screenshot_20251108-123433" src="https://github.com/user-attachments/assets/b0c8df9c-3cc3-4dd2-a060-1d21a42412ad" />
-<img  height="500" alt="Screenshot_20251108-123444" src="https://github.com/user-attachments/assets/0db0f7ef-e3ea-4035-a691-5ce184f8c491" />
+## 🎯 What is ToolNeuron?
 
-## Why Choose ToolNeuron? 🚀
+ToolNeuron is an open-source Android application that brings enterprise-grade AI capabilities to your smartphone. It bridges the gap between **privacy** (limited offline apps) and **power** (cloud-dependent platforms) through a hybrid architecture that puts you in control.
 
-### For Everyone 👥
-* **Chat with AI** about anything—get answers, advice, or creative ideas
-* **Access 100+ models** via OpenRouter—GPT-4, Claude, Llama, uncensored models, and more
-* **11 premium TTS voices**—choose between American and British, male and female narrators [ OFFLINE ]
-* **No subscriptions** for offline models—run AI completely free
-* **Switch between models** mid-conversation to get the best responses
-* **100% private**—your conversations stay on your device with offline & Online models
-
-### For Creators & Professionals 💼
-* **Code generation** with syntax highlighting and live preview
-* **Data analysis** with tables and structured outputs
-* **Document processing** with web search and scraping plugins
-* **Save and export** your AI conversations and generated code
-
-### For Developers 👨‍💻
-* **Bring your own models**—import GGUF files from device storage
-* **API flexibility**—connect to any OpenAI-compatible endpoint
-* **Plugin system**—extend functionality without app updates
-* **Dynamic theming**—beautiful Material You design that adapts to your system
+**Run AI Your Way:**
+- **🔒 Privacy Mode:** Execute quantized GGUF models entirely on-device using `llama.cpp`. Your data never leaves your phone.
+- **⚡ Power Mode:** Connect to 100+ premium models (GPT-4, Claude 3.5, Llama 3, Gemini) via OpenRouter for complex tasks.
+- **🔄 Hybrid Intelligence:** Seamlessly switch between modes mid-conversation while preserving context.
 
 ---
 
-## Key Features 🌟
+## ✨ Key Features
 
-### 🤖 Powerful AI Chat
-- **Dual Mode:** Switch between offline and online models instantly
-- **Smart Streaming:** Real-time responses as AI generates them
-- **Context Aware:** AI remembers your conversation history
-- **Message Actions:** Copy, share, regenerate, or delete messages
+### 🧠 Dual Inference Engine
+- **Local Execution:** Run GGUF models offline with zero latency
+- **Cloud Orchestration:** Access 100+ models through a unified OpenRouter API
+- **Smart Streaming:** Real-time token generation with intelligent context management
 
-### 🎙️ Text-to-Speech (TTS)
-- **11 premium voices** to choose from—find your perfect narrator
-  - **American Female:** AF (Standard), Bella (Warm), Nicole (Professional), Sarah (Clear), Sky (Energetic)
-  - **American Male:** Adam (Standard), Michael (Professional)
-  - **British Female:** Emma (Elegant), Isabella (Refined)
-  - **British Male:** George (Distinguished), Lewis (Clear)
-- **Real-time audio generation** as you read AI responses
-- **Easy voice switching** in Settings—preview and select your favorite
-- **Progress tracking** with smooth playback controls
-- **Completely offline**—no cloud, no limits, no cost
+### 🎙️ Premium Offline TTS
+- **11 Professional Voices:** 5 American Female, 2 American Male, 2 British Female, 2 British Male
+- **Powered by Sherpa-ONNX:** Runs entirely on CPU/NPU with zero network calls
+- **Zero Latency:** Instant voice synthesis with no cloud dependencies
 
-### 🎤 Speech-to-Text *(Coming Soon)*
-- **Voice input** for hands-free AI interaction
-- **Real-time transcription** as you speak
-- **Multi-language support** for global users
-- **Offline capable**—works without internet
+### 🔌 Extensible Plugin System
+- **Web Search:** Real-time information retrieval
+- **Web Scraper:** Extract and inject context from any URL
+- **DataHub:** Mount JSON/text datasets to dynamically enhance model knowledge
+- **Coming Soon:** Code execution, image processing, document analysis
 
-### 🎨 Dynamic Theming
-- **Material You design** that matches your Android theme
-- **Beautiful animations** and smooth transitions
-- **Light and dark modes** with system integration
-- **Customizable colors** to match your style
-
-### 💻 Code & Data Canvas
-- **Syntax highlighting** for generated code
-- **Live preview** for supported formats
-- **Copy with one tap** for quick use
-- **Export to files** (coming soon)
-- **Table rendering** for structured data
-
-### 🛠️ Powerful Plugins
-- **Web Search:** Let AI search the internet for current information
-- **Web Scraper:** Extract data from websites
-- **Document Viewer:** View and interact with files
-- **More coming:** Image processing, PDF tools, and custom plugins
-
-### 📊 DataHub Integration
-- **Attach datasets** to enhance AI knowledge
-- **Dynamic context** for specialized tasks
-- **Personal knowledge base** that travels with you
-- **No retraining needed**—instant knowledge injection
+### 💾 Advanced Context Management
+- **Conversation Persistence:** Full chat history retention
+- **Dynamic Datasets:** Attach custom knowledge bases without model retraining
+- **Context Preservation:** Switch models mid-conversation without losing context
 
 ---
 
-## Preview 📸
+## 📸 Screenshots
 
-<p align="center">
-  <img src="https://github.com/user-attachments/assets/f4d2c28a-a297-4c08-83e5-391f8bd82d89" width="220" alt="Chat Interface">
-  <img src="https://github.com/user-attachments/assets/257022d7-8d3b-42a3-97c7-589d8f09fa47" width="220" alt="Model Selection">
-  <img src="https://github.com/user-attachments/assets/4be156dd-cc55-4eb0-9d89-790f8f11db1e" width="220" alt="Code Canvas">
-  <img src="https://github.com/user-attachments/assets/2e1c4065-14bb-411b-9021-fc4071a04318" width="220" alt="Settings">
-</p>
-
----
-
-## Get Started in 3 Steps 📲
-
-### 1️⃣ Download & Install
-* **[Download Latest APK](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)**
-* Install on Android 14+ (no Play Store account needed)
-
-### 2️⃣ Choose Your AI
-**Option A: Use OpenRouter** (access hundreds of models)
-- Open ToolNeuron → Settings → Add OpenRouter API Key
-- Get your free API key from [OpenRouter](https://openrouter.ai/)
-- **Access any model:** GPT-4, Claude, Llama, Gemini, and more
-- **Censored or uncensored**—your choice, your freedom
-- Start chatting immediately with unlimited model options
-
-**Option B: Download Offline Models** (most private)
-- Download GGUF models from [HuggingFace](https://huggingface.co/)
-- Import via Settings → Local Models
-- Chat completely offline—no internet needed
-- 100% private—your conversations never leave your device
-
-### 3️⃣ Start Creating
-- Open **AI Chat** and start a conversation
-- Use **TTS** to listen to responses
-- Try **plugins** like Web Search for enhanced capabilities
-- **Switch models** anytime to compare responses
+<div align="center">
+  <table>
+    <tr>
+      <td align="center"><b>Chat Interface</b><br/>Multi-modal conversations</td>
+      <td align="center"><b>Model Hub</b><br/>100+ models at your fingertips</td>
+      <td align="center"><b>Code Canvas</b><br/>Syntax highlighting & export</td>
+      <td align="center"><b>DataHub</b><br/>Dynamic context injection</td>
+    </tr>
+    <tr>
+      <td><img src="https://github.com/user-attachments/assets/f4d2c28a-a297-4c08-83e5-391f8bd82d89" width="200" alt="Chat Interface"></td>
+      <td><img src="https://github.com/user-attachments/assets/257022d7-8d3b-42a3-97c7-589d8f09fa47" width="200" alt="Model Selection"></td>
+      <td><img src="https://github.com/user-attachments/assets/4be156dd-cc55-4eb0-9d89-790f8f11db1e" width="200" alt="Code Canvas"></td>
+      <td><img src="https://github.com/user-attachments/assets/2e1c4065-14bb-411b-9021-fc4071a04318" width="200" alt="Settings"></td>
+    </tr>
+  </table>
+</div>
 
 ---
 
-## What Makes ToolNeuron Different? 💎
+## 🆚 Why Choose ToolNeuron?
 
-| Feature | ToolNeuron | Other AI Apps |
-|---------|------------|---------------|
-| **Offline Models** | ✅ Full GGUF support | ❌ Cloud only |
-| **OpenRouter Integration** | ✅ Access 100+ models | ❌ Single provider |
-| **Uncensored Models** | ✅ Full freedom | ❌ Restricted content |
-| **Privacy** | ✅ 100% local processing | ❌ Data sent to servers |
-| **Model Switching** | ✅ Switch anytime | ❌ Locked to one model |
-| **TTS Voices** | ✅ 11 premium voices | ❌ Basic or cloud TTS |
-| **Voice Customization** | ✅ Easy settings panel | ❌ Limited options |
-| **Plugins** | ✅ Extensible system | ❌ Fixed features |
-| **DataHub** | ✅ Dynamic knowledge | ❌ Static training data |
-| **Cost** | ✅ Free offline models | 💰 Subscription required |
-| **Open Source** | ✅ Community-driven | ❌ Closed source |
+| Feature | ToolNeuron | Traditional AI Apps |
+|:--------|:----------:|:-------------------:|
+| **Offline GGUF Models** | ✅ Native Support | ❌ Cloud Only |
+| **Model Freedom** | ✅ 100+ Options | ❌ Vendor Lock-in |
+| **Content Policy** | ✅ Uncensored | ❌ Heavy Filtering |
+| **Privacy Architecture** | ✅ Local-First | ❌ Server Logging |
+| **Offline TTS** | ✅ 11 Premium Voices | ❌ Cloud Dependencies |
+| **Pricing** | ✅ Free (BYOK/Model) | 💰 $20-60/month |
+| **Open Source** | ✅ Apache 2.0 | ❌ Proprietary |
 
 ---
 
-## Use Cases 🎯
+## 🚀 Quick Start
 
-### 📚 Students & Learners
-- Get homework help with detailed explanations
-- Learn to code with interactive tutorials
-- Practice languages with conversation
-- Research topics with web search plugin
+### Installation
 
-### 💼 Professionals
-- Draft emails and documents
-- Analyze data and generate reports
-- Code assistance for developers
-- Quick information lookup
+#### Method 1: Install APK (Recommended)
+1. Download the latest release from [**GitHub Releases**](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
+2. Install `ToolNeuron-Beta-5.1.apk` on Android 8.0+ (Android 14+ recommended)
+3. Grant necessary permissions when prompted
 
-### ✍️ Content Creators
-- Generate blog post ideas
-- Write social media content
-- Brainstorm creative concepts
-- Edit and refine your writing
+#### Method 2: Build from Source
+```bash
+# Clone repository
+git clone https://github.com/Siddhesh2377/NeuroVerse.git
+cd NeuroVerse
 
-### 🔒 Privacy-Conscious Users
-- Chat completely offline
-- No accounts or logins required
-- Your data never leaves your device
-- Open source for transparency
+# Open in Android Studio (Ladybug or newer)
+# Sync Gradle dependencies
+./gradlew assembleDebug
 
----
+# Install on connected device
+./gradlew installDebug
+```
 
-## Coming Soon 🔮
+### Initial Setup
 
-### 🗓️ Q1 2026
-* ✅ **Advanced TTS** with multiple voices
-* 🔄 **Speech-to-Text (STT)** for voice input
-* 🔄 **Code export** to files
+**Option A: Privacy Mode (Offline)**
+1. Download a GGUF model from [HuggingFace](https://huggingface.co/models) (e.g., `Llama-3-8B-Q4_K_M.gguf`)
+2. Open ToolNeuron → **Settings** → **Local Models** → **Import Model**
+3. Select your downloaded GGUF file
+4. Start chatting completely offline
 
-### 🗓️ Q2 2026
-* **TFLite & ONNX** model support
-* **Image generation** with Stable Diffusion
-* **Advanced memory system** for context retention
-* **Plugin marketplace** for community extensions
-* 
-### 🗓️ Q3 2026
-* **Multi-modal models** (text + images)
-* **Cross-device sync** (optional cloud backup)
-* **Desktop companion** for Windows/Mac/Linux
-* **Voice cloning** for personalized TTS
+**Option B: Power Mode (Cloud)**
+1. Generate an API key at [OpenRouter.ai](https://openrouter.ai)
+2. Open ToolNeuron → **Settings** → **API Configuration**
+3. Paste your OpenRouter API key
+4. Access 100+ models instantly
 
 ---
 
-## System Requirements 📱
+## 💻 System Requirements
 
 ### Minimum
-- Android 8.0+ (API 26)
-- 4GB RAM
-- 2GB free storage
+- **OS:** Android 8.0+ (API 26)
+- **RAM:** 4GB
+- **Storage:** 2GB free space
+- **Use Case:** Cloud models only
 
-### Recommended
-- Android 14+
-- 8GB+ RAM
-- 5GB+ free storage (for offline models)
-- Snapdragon 8 Gen 1 or equivalent
-
-### For Best Performance
-- Android 14+
-- 12GB+ RAM
-- GPU with Vulkan support
-- 10GB+ storage for multiple models
+### Recommended (Local Inference)
+- **OS:** Android 14+
+- **RAM:** 8GB+
+- **Processor:** Snapdragon 8 Gen 1 or equivalent
+- **Storage:** 5GB+ (for local models)
+- **NPU:** Optional but improves performance
 
 ---
 
-## FAQ ❓
+## 🗺️ Development Roadmap
 
-**Q: Is ToolNeuron free?**
-A: Yes! Offline models are 100% free. Online APIs may have costs depending on your provider.
+### Q1 2026: Sensory Integration
+- [ ] **Advanced TTS:** Multi-voice conversation simulation
+- [ ] **Speech-to-Text:** Offline voice input via Whisper/Sherpa
+- [ ] **Export System:** Save conversations, code snippets, and DataHub configs
 
-**Q: Do I need an account?**
-A: No! Use offline models without any registration.
+### Q2 2026: Universal Runtime
+- [ ] **Format Expansion:** Native TFLite & ONNX execution
+- [ ] **Image Generation:** On-device Stable Diffusion (quantized)
+- [ ] **Vector Memory:** Long-term context retention using embeddings
 
-**Q: How is my privacy protected?**
-A: Offline models run entirely on your device. Your conversations never leave your phone.
-
-**Q: Can I use my own API keys?**
-A: Absolutely! Use any OpenAI-compatible API endpoint.
-
-**Q: Which models are supported?**
-A: Currently GGUF format for offline. For online, access 100+ models via OpenRouter including GPT-4, Claude, Llama, Gemini, and many uncensored options. Coming soon: TFLite, ONNX, BIN, TUFF.
-
-**Q: How many TTS voices are available?**
-A: 11 premium voices! 5 American female, 2 American male, 2 British female, and 2 British male voices. Switch anytime in Settings.
-
-**Q: Does TTS work offline?**
-A: Yes! All 11 voices run completely on-device with no internet required.
-
-**Q: Can I use uncensored models?**
-A: Absolutely! With OpenRouter, you have full access to both censored and uncensored models. Your choice, your freedom.
-
-**Q: Can I use multiple models?**
-A: Yes! Switch between models mid-conversation.
-
-**Q: How do I report bugs?**
-A: Join our [Discord](https://discord.gg/mVPwHDhrAP) or open an issue on [GitHub](https://github.com/Siddhesh2377/NeuroVerse).
+### Q3 2026: Ecosystem Maturity
+- [ ] **Multi-Modal Models:** Vision capabilities (LLaVA, GPT-4V)
+- [ ] **Cross-Device Sync:** Desktop companion apps (Windows/Linux)
+- [ ] **Plugin Marketplace:** Community-contributed extensions
 
 ---
 
-## Community & Support 🌍
+## 🏗️ Architecture
 
-### Join the Community
-* 💬 **Discord:** [Join ToolNeuron](https://discord.gg/mVPwHDhrAP)
-* 🐙 **GitHub:** [Source Code & Issues](https://github.com/Siddhesh2377/NeuroVerse)
-* 📧 **Email:** support@toolneuron.dev (coming soon)
+ToolNeuron is built with modern Android architecture principles:
 
-### Get Help
-* **Discord Support Channel** for quick questions
-* **GitHub Issues** for bug reports
-* **Documentation Wiki** for guides and tutorials (coming soon)
-
-### Contribute
-* ⭐ **Star the repo** to show support
-* 🐛 **Report bugs** to help us improve
-* 💡 **Suggest features** we should add
-* 🔌 **Build plugins** to extend functionality
+- **Language:** Kotlin
+- **UI Framework:** Jetpack Compose
+- **Local Inference:** `llama.cpp` (C++ with JNI bindings)
+- **TTS Engine:** Sherpa-ONNX
+- **API Layer:** Retrofit + OkHttp
+- **Database:** Room (SQLite)
+- **Async Operations:** Kotlin Coroutines + Flow
 
 ---
 
-## Credits 🙏
+## 🤝 Contributing
 
-**Built with love by the ToolNeuron Team**
+We welcome contributions from the community! Here's how you can help:
 
-Special thanks to:
-- **Llama.cpp** for offline inference
-- **Sherpa-ONNX** for TTS engine
-- **OpenRouter** for API routing
-- **Android community** for inspiration
-- **Our amazing users** for feedback and support
+1. **Fork** the repository
+2. Create a **feature branch** (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes (`git commit -m 'Add AmazingFeature'`)
+4. **Push** to the branch (`git push origin feature/AmazingFeature`)
+5. Open a **Pull Request**
+
+**Areas we need help:**
+- 🐛 Bug reports and fixes
+- 📝 Documentation improvements
+- 🌍 Translations (i18n)
+- 🧪 Testing on various Android devices
+- ✨ Feature suggestions and implementations
 
 ---
 
-## License 📜
+## 📄 License
 
-**Apache 2.0** © Siddhesh2377
+Distributed under the **Apache 2.0 License**. See [`LICENSE`](LICENSE) for more information.
 
-Free to use, modify, and distribute. See [LICENSE](LICENSE) for details.
+This means you can:
+- ✅ Use commercially
+- ✅ Modify and distribute
+- ✅ Use privately
+- ✅ Patent use
+
+With conditions:
+- 📋 License and copyright notice
+- 📝 State changes made to code
+
+---
+
+## 🙏 Acknowledgments
+
+ToolNeuron stands on the shoulders of giants:
+
+- **[llama.cpp](https://github.com/ggerganov/llama.cpp)** — The backbone of efficient local inference
+- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — Powering our premium offline TTS
+- **[OpenRouter](https://openrouter.ai)** — Unified API gateway to 100+ models
+- **[Jetpack Compose](https://developer.android.com/jetpack/compose)** — Modern Android UI toolkit
+
+---
+
+## 📞 Support & Community
+
+- **Discord:** [Join our community](https://discord.gg/mVPwHDhrAP) for support and discussions
+- **Issues:** [Report bugs or request features](https://github.com/Siddhesh2377/NeuroVerse/issues)
+- **Discussions:** [Ask questions and share ideas](https://github.com/Siddhesh2377/NeuroVerse/discussions)
 
 ---
 
 <div align="center">
 
-### Ready to Transform Your AI Experience?
+### ⭐ Star this project if you find it useful!
 
-**[Download ToolNeuron Now →](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)**
+**Built with ❤️ by [Siddhesh2377](https://github.com/Siddhesh2377) and the Open Source Community**
 
-*AI in your pocket. Private. Powerful. Yours. ⚡*
-
----
-
-Made with ❤️ for the AI community
-
-[Discord](https://discord.gg/mVPwHDhrAP) • [GitHub](https://github.com/Siddhesh2377/NeuroVerse) • [Releases](https://github.com/Siddhesh2377/NeuroVerse/releases)
+[Report Bug](https://github.com/Siddhesh2377/NeuroVerse/issues) • [Request Feature](https://github.com/Siddhesh2377/NeuroVerse/issues) • [View Releases](https://github.com/Siddhesh2377/NeuroVerse/releases)
 
 </div>

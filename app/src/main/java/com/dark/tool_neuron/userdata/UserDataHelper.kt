@@ -34,7 +34,15 @@ fun getDefaultBrainStructure(): NeuronTree {
         )
     )
 
-    tree.addChild(root.id, chatHistory, memoryHistory, modelState, systemLogs)
+    val savedTTS = NeuronNode(
+        id = "savedTTS",
+        data = NodeData(
+            content = "",
+            type = NodeType.OPERATOR
+        )
+    )
+
+    tree.addChild(root.id, chatHistory, memoryHistory, modelState, systemLogs, savedTTS)
 
     // Memory categories
     createNewMemory(root, MemoryDataTags.Family, JSONObject())

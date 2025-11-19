@@ -557,6 +557,7 @@ private fun AssistantMessageActions(
             iconSize = iconSize
         )
 
+// In your AssistantMessageActions composable, modify the TTS button:
         TTSActionButton(
             isPlaying = isPlayingAudio,
             progress = audioProgress,
@@ -567,8 +568,23 @@ private fun AssistantMessageActions(
                     ttsViewModel.stopPlayback()
                 } else {
                     scope.launch(Dispatchers.IO) {
-                        val normalized = ttsViewModel.normalizeText(message.text)
-                        ttsViewModel.generateAndPlayAudio(normalized, context)
+                        // Try to replay saved audio first
+                        val replayed = ttsViewModel.playAgainFromMessage(
+                            context = context,
+                            messageId = message.id,
+                            currentText = message.text
+                        )
+
+                        // If no saved audio or speaker changed, generate new
+                        if (!replayed) {
+                            val normalized = ttsViewModel.normalizeText(message.text)
+                            ttsViewModel.generateAndPlayAudio(
+                                text = normalized,
+                                context = context,
+                                autoSave = true,
+                                messageId = message.id // Pass message ID for future saves
+                            )
+                        }
                     }
                 }
             }
@@ -747,6 +763,7 @@ private fun ToolMessageActions(
             iconSize = iconSize
         )
 
+        // In your AssistantMessageActions composable, modify the TTS button:
         TTSActionButton(
             isPlaying = isPlaying,
             progress = progress,
@@ -757,8 +774,23 @@ private fun ToolMessageActions(
                     ttsViewModel.stopPlayback()
                 } else {
                     scope.launch(Dispatchers.IO) {
-                        val normalized = ttsViewModel.normalizeText(message.text)
-                        ttsViewModel.generateAndPlayAudio(normalized, context)
+                        // Try to replay saved audio first
+                        val replayed = ttsViewModel.playAgainFromMessage(
+                            context = context,
+                            messageId = message.id,
+                            currentText = message.text
+                        )
+
+                        // If no saved audio or speaker changed, generate new
+                        if (!replayed) {
+                            val normalized = ttsViewModel.normalizeText(message.text)
+                            ttsViewModel.generateAndPlayAudio(
+                                text = normalized,
+                                context = context,
+                                autoSave = true,
+                                messageId = message.id // Pass message ID for future saves
+                            )
+                        }
                     }
                 }
             }
