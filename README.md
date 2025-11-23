@@ -5,6 +5,8 @@
 ### Enterprise-Grade AI Inference for Mobile Devices
 
 [![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
+[![APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
+
 [![Latest Release](https://img.shields.io/badge/Release-Beta_5.1-blue?logo=github)](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Join-Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
@@ -13,7 +15,9 @@
 
 **A privacy-focused mobile ecosystem for AI inference.** Run offline models locally or connect to 100+ cloud models. No subscriptions. No data harvesting. Complete control.
 
-[Download on APKPure](https://apkpure.com/p/com.dark.neurov) • [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
+[![Get it on APKPure](https://img.shields.io/badge/Get_it_on-APKPure-01C853?style=for-the-badge&logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
+ 
+  [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
 
 </div>
 
