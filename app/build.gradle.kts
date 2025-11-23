@@ -78,7 +78,7 @@ android {
         //CORE
         implementation(libs.kotlin.stdlib)
         implementation(libs.androidx.lifecycle.viewmodel.ktx)
-        implementation("org.apache.commons:commons-compress:1.28.0")
+        implementation(libs.commons.compress)
         coreLibraryDesugaring(libs.desugar.jdk.libs)
 
         //LIBS
