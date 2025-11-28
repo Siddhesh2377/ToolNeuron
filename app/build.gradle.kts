@@ -10,6 +10,7 @@ plugins {
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.gms.services)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.crashlytics)
 }
 val localPropertiesFile = rootProject.file("local.properties")
 
@@ -21,8 +22,8 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0-alpha"
+        versionCode = 2
+        versionName = "1.1-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
@@ -66,6 +67,7 @@ android {
         //FIREBASE
         implementation(platform(libs.firebase.bom))
         implementation(libs.firebase.firestore.ktx)
+        implementation(libs.firebase.crashlytics)
         implementation(libs.firebase.database)
 
         //NET
