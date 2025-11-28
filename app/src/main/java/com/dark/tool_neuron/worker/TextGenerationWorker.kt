@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.dark.ai_module.model.GenerationParams
 import com.dark.ai_module.workers.ModelManager
+import com.dark.tool_neuron.logger.AppLogger
 import com.dark.tool_neuron.model.ChatUiState
 import com.dark.tool_neuron.model.CodeCanvas
 import com.dark.tool_neuron.model.DecodeType
@@ -74,7 +75,23 @@ object TextGenerationWorker {
     ) {
         val startTimeNs = System.nanoTime()
         var firstTokenReceived = false
+        var totalTokens = 0
         _currentMsgId.value = messageId
+
+        val root = UserDataManager.getRootNode()
+
+        // Log generation start
+        AppLogger.info(
+            root = root,
+            message = "Text generation started",
+            details = mapOf(
+                "messageId" to messageId,
+                "isRegeneration" to isRegeneration,
+                "enableTools" to enableTools,
+                "promptLength" to prompt.length,
+                "historyCount" to existingMessages.size
+            )
+        )
 
         // STAGE 1: Preparing Prompt
         UIStateManager.setStateDecodingStage(
@@ -85,6 +102,7 @@ object TextGenerationWorker {
 
         if (enableTools) {
             UIStateManager.setStateDecodingTool()
+            AppLogger.info(root, "Tools enabled for generation")
         }
 
         currentStreamingState = StreamingState(messageId = messageId)
@@ -94,7 +112,7 @@ object TextGenerationWorker {
 
             // STAGE 5: Rendering
             UIStateManager.updateDecodingStage(DecodingStage.Rendering)
-            delay(100) // Brief visual feedback
+            delay(100)
 
             val finalThought = thought?.take(MAX_THOUGHT_SAVE_CHARS)
             val codeCanvases = extractCodeCanvases(text)
@@ -108,7 +126,25 @@ object TextGenerationWorker {
                 codeCanvas = codeCanvases
             )
 
-            // Launch these off the critical path
+            // Log completion
+            val totalDurationMs = (System.nanoTime() - startTimeNs) / 1_000_000
+            AppLogger.info(
+                root = root,
+                message = "Text generation completed",
+                details = mapOf(
+                    "messageId" to messageId,
+                    "totalDurationMs" to totalDurationMs,
+                    "totalTokens" to totalTokens,
+                    "outputLength" to text.length,
+                    "hasThought" to (finalThought != null),
+                    "codeBlocks" to codeCanvases.size,
+                    "tokensPerSecond" to if (totalDurationMs > 0) {
+                        String.format("%.2f", (totalTokens * 1000.0) / totalDurationMs)
+                    } else "N/A"
+                )
+            )
+
+            // Launch off critical path
             CoroutineScope(Dispatchers.IO).launch {
                 ChatManager.generateTitleIfNeeded(useAI = finalThought == null)
                 UserDataManager.refreshChatListFromDisk {
@@ -122,7 +158,7 @@ object TextGenerationWorker {
         try {
             // STAGE 2: Encoding Input
             UIStateManager.updateDecodingStage(DecodingStage.EncodingInput)
-            delay(50) // Give UI time to update
+            delay(50)
 
             val fullPrompt = buildFullPrompt(prompt, existingMessages)
             val toolJson = if (enableTools) {
@@ -136,6 +172,7 @@ object TextGenerationWorker {
             // STAGE 3: Loading Model (if not already loaded)
             if (!ModelManager.isModelLoaded()) {
                 UIStateManager.updateDecodingStage(DecodingStage.LoadingModel)
+                AppLogger.info(root, "Loading model for generation")
             }
 
             // STAGE 4: Decoding
@@ -149,15 +186,29 @@ object TextGenerationWorker {
                 ),
                 toolJson = toolJson,
                 onToken = { token ->
+                    totalTokens++
+
                     if (!firstTokenReceived) {
                         firstTokenReceived = true
                         val firstTokenTimeNs = System.nanoTime()
+                        val ttftMs = (firstTokenTimeNs - startTimeNs) / 1_000_000
+
                         emitDecodingMetrics(
                             type = if (isRegeneration) DecodeType.REGENERATE else DecodeType.NORMAL,
                             startTimeNs = startTimeNs,
                             firstTokenTimeNs = firstTokenTimeNs,
                             messageId = messageId
                         )
+
+                        AppLogger.info(
+                            root = root,
+                            message = "First token received",
+                            details = mapOf(
+                                "messageId" to messageId,
+                                "ttftMs" to ttftMs
+                            )
+                        )
+
                         UIStateManager.setStateGenerating(messageId, isFirstToken = true)
                     }
 
@@ -166,6 +217,15 @@ object TextGenerationWorker {
                     }
                 },
                 onToolCalled = { toolName, argsJson ->
+                    AppLogger.info(
+                        root = root,
+                        message = "Tool called during generation",
+                        details = mapOf(
+                            "messageId" to messageId,
+                            "toolName" to toolName,
+                            "argsLength" to argsJson.length
+                        )
+                    )
                     handleToolExecution(appContext, toolName, argsJson, messageId, onToolExecution)
                 }
             )
@@ -182,6 +242,17 @@ object TextGenerationWorker {
 
         } catch (e: CancellationException) {
             Log.d(TAG, "Streaming cancelled")
+
+            AppLogger.warn(
+                root = root,
+                message = "Text generation cancelled",
+                details = mapOf(
+                    "messageId" to messageId,
+                    "tokensGenerated" to totalTokens,
+                    "partialLength" to (currentStreamingState?.visibleBuffer?.length ?: 0)
+                )
+            )
+
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
                 finalizeMessage(
@@ -190,8 +261,21 @@ object TextGenerationWorker {
                 )
             }
             throw e
+
         } catch (e: Exception) {
             Log.e(TAG, "Streaming failed", e)
+
+            AppLogger.error(
+                root = root,
+                message = "Text generation failed",
+                details = mapOf(
+                    "messageId" to messageId,
+                    "error" to (e.message ?: "Unknown error"),
+                    "errorType" to e.javaClass.simpleName,
+                    "tokensGenerated" to totalTokens
+                )
+            )
+
             UIStateManager.setStateError("Streaming failed", cause = e)
             batchingJob?.cancel()
             currentStreamingState?.let { state ->
@@ -223,6 +307,8 @@ object TextGenerationWorker {
         messageId: String,
         onToolExecution: (String) -> Unit
     ) {
+        val root = UserDataManager.getRootNode()
+
         workerScope.launch {
             try {
                 ToolCallingManager.executeTool(
@@ -234,6 +320,16 @@ object TextGenerationWorker {
                                 val errorMsg = result.getString("error")
                                 Log.e(TAG, "Tool execution error: $errorMsg")
 
+                                AppLogger.error(
+                                    root = root,
+                                    message = "Tool execution error",
+                                    details = mapOf(
+                                        "messageId" to messageId,
+                                        "toolName" to toolName,
+                                        "error" to errorMsg
+                                    )
+                                )
+
                                 ChatManager.updateStreamingMessage(
                                     messageId = messageId,
                                     text = "",
@@ -244,10 +340,32 @@ object TextGenerationWorker {
                             } else {
                                 UIStateManager.setStateExecutingTool(toolName, messageId)
                                 Log.d(TAG, "Tool executed successfully")
+
+                                AppLogger.info(
+                                    root = root,
+                                    message = "Tool executed successfully",
+                                    details = mapOf(
+                                        "messageId" to messageId,
+                                        "toolName" to toolName
+                                    )
+                                )
+
                                 onToolExecution("success")
                             }
                         } catch (e: Exception) {
                             Log.e(TAG, "Error processing tool result", e)
+
+                            AppLogger.error(
+                                root = root,
+                                message = "Error processing tool result",
+                                details = mapOf(
+                                    "messageId" to messageId,
+                                    "toolName" to toolName,
+                                    "error" to (e.message ?: "Unknown error"),
+                                    "errorType" to e.javaClass.simpleName
+                                )
+                            )
+
                             ChatManager.updateStreamingMessage(
                                 messageId = messageId,
                                 text = "",
@@ -262,6 +380,18 @@ object TextGenerationWorker {
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Tool execution failed", e)
+
+                AppLogger.error(
+                    root = root,
+                    message = "Tool execution failed",
+                    details = mapOf(
+                        "messageId" to messageId,
+                        "toolName" to toolName,
+                        "error" to (e.message ?: "Unknown error"),
+                        "errorType" to e.javaClass.simpleName
+                    )
+                )
+
                 ChatManager.updateStreamingMessage(
                     messageId = messageId,
                     text = "",
@@ -288,7 +418,7 @@ object TextGenerationWorker {
         val lastAICode =
             existingMessages.lastOrNull { it.role == Role.Assistant && it.codeCanvas?.isNotEmpty() == true }?.codeCanvas?.joinToString(
                 "\n"
-            ) { it.code } // assuming CodeCanvas has 'content' field
+            ) { it.code }
 
         return buildString {
             if (conversationHistory.isNotBlank()) {
@@ -306,7 +436,6 @@ object TextGenerationWorker {
             append("User: $prompt")
         }
     }
-
 
     /**
      * Adds token to appropriate buffer based on thinking tags.
@@ -421,17 +550,11 @@ object TextGenerationWorker {
             durationMs = durationMs
         )
 
-
-
         _decodingMetrics.tryEmit(metrics)
     }
 
     /**
      * Extracts code blocks from a text and converts them into CodeCanvas objects.
-     * Example code block:
-     * ```kotlin
-     * val x = 5
-     * ```
      */
     private fun extractCodeCanvases(input: String): List<CodeCanvas> {
         val codeRegex = Regex("(?s)```(\\w+)?\\n(.*?)```")
@@ -446,12 +569,20 @@ object TextGenerationWorker {
      * Stops current generation and cleans up resources.
      */
     fun stopGeneration() {
+        val root = UserDataManager.getRootNode()
+        val currentMsgId = _currentMsgId.value
+
+        AppLogger.info(
+            root = root,
+            message = "Generation stop requested",
+            details = mapOf("messageId" to currentMsgId)
+        )
+
         currentGenerationJob?.cancel()
         batchingJob?.cancel()
         ModelManager.stopGeneration()
 
         // Handle incomplete messages
-        val currentMsgId = _currentMsgId.value
         if (currentMsgId.isNotEmpty()) {
             val currentMessage = ChatManager.getCurrentMessageById(currentMsgId)
 

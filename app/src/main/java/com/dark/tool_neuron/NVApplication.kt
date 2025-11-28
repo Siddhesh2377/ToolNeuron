@@ -20,7 +20,6 @@ import kotlin.system.measureTimeMillis
 
 class NVApplication : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val TAG = "NVApplication"
 
     override fun onCreate() {
         super.onCreate()

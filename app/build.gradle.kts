@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
     alias(libs.plugins.gms.services)
-    kotlin("plugin.serialization") version "2.1.21"
+    alias(libs.plugins.kotlin.serialization)
 }
 val localPropertiesFile = rootProject.file("local.properties")
 
@@ -18,11 +18,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dark.neurov"
+        applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 5
-        versionName = "5.0-beta"
+        versionCode = 1
+        versionName = "1.0-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
