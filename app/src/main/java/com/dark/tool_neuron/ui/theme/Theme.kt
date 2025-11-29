@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.TextUnitType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.min
@@ -21,13 +22,31 @@ import kotlin.math.min
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
-fun rDP(baseDp: Dp, designWidth: Float = 360f): Dp {
+fun rDP(
+    baseDp: Dp,
+    designWidth: Float = 360f,
+    minDp: Dp? = null,
+    maxDp: Dp? = null
+): Dp {
     val config = LocalConfiguration.current
     val screenWidthDp = config.screenWidthDp.toFloat()
+
+    // Prevent division by zero and handle edge cases
+    if (designWidth <= 0f || screenWidthDp <= 0f) return baseDp
+
     val scaleFactor = screenWidthDp / designWidth
-    return (baseDp.value * scaleFactor).dp
+
+    // Apply scaling with optional clamping
+    var scaledValue = baseDp.value * scaleFactor
+
+    // Clamp to min/max if provided
+    minDp?.let { scaledValue = maxOf(scaledValue, it.value) }
+    maxDp?.let { scaledValue = minOf(scaledValue, it.value) }
+
+    return scaledValue.dp
 }
 
+@SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
 fun rSp(
     baseSp: TextUnit,
@@ -36,24 +55,40 @@ fun rSp(
     maxSp: TextUnit? = null,
     respectFontScale: Boolean = true
 ): TextUnit {
+    // Handle non-SP units gracefully
+    if (baseSp.type != TextUnitType.Sp) return baseSp
+
     val config = LocalConfiguration.current
     val density = LocalDensity.current
     val screenWidthDp = config.screenWidthDp.toFloat()
+
+    // Prevent division by zero and handle edge cases
+    if (designWidth <= 0f || screenWidthDp <= 0f) return baseSp
+
     val scale = screenWidthDp / designWidth
 
-    // scaled value (still in sp units)
-    var v = baseSp.value * scale
+    // Scaled value (still in sp units)
+    var scaledValue = baseSp.value * scale
 
-    // if you want to IGNORE accessibility fontScale (rare), neutralize it:
+    // If you want to IGNORE accessibility fontScale (rare), neutralize it
     if (!respectFontScale) {
-        v /= density.fontScale.coerceAtLeast(0.001f)
+        val fontScale = density.fontScale.coerceAtLeast(0.001f)
+        scaledValue /= fontScale
     }
 
-    // clamp if provided
-    minSp?.let { v = maxOf(v, it.value) }
-    maxSp?.let { v = min(v, maxSp.value) }
+    // Clamp if provided - fixed: use minOf instead of min for consistency
+    minSp?.let {
+        if (it.type == TextUnitType.Sp) {
+            scaledValue = maxOf(scaledValue, it.value)
+        }
+    }
+    maxSp?.let {
+        if (it.type == TextUnitType.Sp) {
+            scaledValue = minOf(scaledValue, it.value)
+        }
+    }
 
-    return v.sp
+    return scaledValue.sp
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)

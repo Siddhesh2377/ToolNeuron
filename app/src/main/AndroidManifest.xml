@@ -159,6 +159,19 @@
             android:permission="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
             android:stopWithTask="false" />
 
+        <service
+            android:name=".service.ModelDownloadService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:label="Model Download Service">
+
+            <!-- Optional: Service metadata -->
+            <meta-data
+                android:name="android.service.action.FOREGROUND_SERVICE"
+                android:value="true" />
+        </service>
+
     </application>
 
 </manifest>
