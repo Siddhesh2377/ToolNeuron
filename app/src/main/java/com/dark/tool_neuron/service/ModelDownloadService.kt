@@ -226,7 +226,7 @@ class ModelDownloadService : Service() {
 
             // Download complete - persist to database
             val savedModel = modelData.copy(
-                modelUrl = outputFile.absolutePath, isImported = false
+                modelPath = outputFile.absolutePath, isImported = false
             )
 
             ModelManager.addModel(savedModel)
