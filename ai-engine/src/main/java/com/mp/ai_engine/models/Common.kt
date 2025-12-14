@@ -1,7 +1,7 @@
 package com.mp.ai_engine.models
 
 enum class ModelType {
-    TEXT, VLM, EMBEDDING, TTS, STT, IMAGE_GEN
+    TEXT, VLM, EMBEDDING, TTS, STT, IMAGE_GEN, NONE
 }
 
 enum class Architecture {

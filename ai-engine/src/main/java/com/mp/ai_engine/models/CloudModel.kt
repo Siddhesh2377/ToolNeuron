@@ -7,11 +7,11 @@ import java.io.File
 
 @Serializable
 data class CloudModel(
-    val modelName: String,
-    val modelDescription: String,
-    val providerName: String,
-    val modelType: ModelType,
-    val modelFileSize: String,
+    val modelName: String = "",
+    val modelDescription: String = "",
+    val providerName: String = "",
+    val modelType: ModelType = ModelType.NONE,
+    val modelFileSize: String = "",
     val metaData: Map<String, String> = emptyMap()
 )
 

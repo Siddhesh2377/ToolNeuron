@@ -24,13 +24,11 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.ui.screens.hub.DataHubScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDP
-import com.google.firebase.FirebaseApp
 
 class DatahubActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        FirebaseApp.initializeApp(this)
         enableEdgeToEdge()
         setContent {
             NeuroVerseTheme {

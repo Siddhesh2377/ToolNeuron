@@ -67,10 +67,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDP
+import com.mp.ai_engine.models.ModelProvider
 import kotlinx.coroutines.launch
 
 class ModelPropEditorActivity : ComponentActivity() {
@@ -318,8 +318,8 @@ fun ModelContent(
                     description = "Maximum response length",
                     value = model.maxTokens.toFloat(),
                     onValueChange = { onModelChange(model.copy(maxTokens = it.toInt())) },
-                    valueRange = if (model.providerName == ModelProvider.OpenRouter.toString()) 1f..80192f else 1f..16096f,
-                    steps = if (model.providerName == ModelProvider.OpenRouter.toString()) 79 else 15
+                    valueRange = if (model.providerName == ModelProvider.OPEN_ROUTER.toString()) 1f..80192f else 1f..16096f,
+                    steps = if (model.providerName == ModelProvider.OPEN_ROUTER.toString()) 79 else 15
                 )
             }
         }

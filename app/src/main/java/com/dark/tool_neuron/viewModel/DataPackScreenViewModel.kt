@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.workers.downloadFile
 import com.dark.tool_neuron.BuildConfig
 import com.dark.tool_neuron.model.DataPack
-import com.google.firebase.firestore.FirebaseFirestore
 import com.dark.tool_neuron.worker.DataHubManager
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,28 +26,11 @@ class DataPackScreenViewModel : ViewModel() {
     private val _packs = MutableStateFlow<List<DataPackUiState>>(emptyList())
     val packs = _packs.asStateFlow()
 
-    private val db = FirebaseFirestore.getInstance()
-
     fun loadDataPacks() {
         Log.d("DataPackScreenViewModel", "${DataHubManager.installedDataSets.value}")
 
         viewModelScope.launch {
-            db.collection("data-packs")
-                .get()
-                .addOnSuccessListener { result ->
-                    val packs = result.documents.mapNotNull { doc ->
-                        doc.toObject(DataPack::class.java)
-                    }.map { pack ->
-                        DataPackUiState(
-                            dataPack = pack,
-                            isInstalled = isDownloaded(pack)
-                        )
-                    }
-                    _packs.value = packs
-                }
-                .addOnFailureListener { e ->
-                    Log.w("FirestoreDB", "Error fetching data packs", e)
-                }
+
         }
     }
 

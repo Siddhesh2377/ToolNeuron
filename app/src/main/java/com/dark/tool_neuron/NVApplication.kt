@@ -12,6 +12,7 @@ import com.dark.tool_neuron.worker.UserDataManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.tool_neuron.logger.AppLogger.measureLogAndTime
 import com.dark.tool_neuron.worker.DataHubManager
+import com.mp.ai_engine.workers.installer.ModelInstaller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -23,6 +24,8 @@ class NVApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+
+        ModelInstaller.initialize(applicationContext)
 
         appScope.launch {
             // Get root node first

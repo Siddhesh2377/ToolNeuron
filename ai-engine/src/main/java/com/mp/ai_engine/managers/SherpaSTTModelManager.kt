@@ -23,7 +23,7 @@ object SherpaSTTModelManager{
     }
 
     suspend fun addModel(model: SherpaSTTDatabaseModel): Result<Unit> = runCatching {
-        if (dao.existsByModelId(model.id)) {
+        if (dao.exists(model.id)) {
             throw IllegalStateException("Model with name '${model.modelName}' already exists")
         }
         dao.insert(model)

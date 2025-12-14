@@ -131,6 +131,15 @@
 
         </activity>
 
+        <activity
+            android:name=".activity.ScrapActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize">
+
+        </activity>
+
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -160,7 +169,7 @@
             android:stopWithTask="false" />
 
         <service
-            android:name=".service.ModelDownloadService"
+            android:name="com.mp.ai_engine.service.ModelDownloadService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync"

@@ -11,7 +11,6 @@ import com.dark.ai_module.workers.downloadFile
 import com.dark.tool_neuron.model.OnlinePlugin
 import com.dark.plugins.manager.PluginManager
 import com.dark.plugins.model.InstalledPlugin
-import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -42,8 +41,6 @@ class PluginStoreScreenViewModel : ViewModel() {
     private val _onlinePlugins = MutableStateFlow<List<OnlinePluginUiState>>(emptyList())
     val onlinePlugins = _onlinePlugins.asStateFlow()
 
-    private val db = FirebaseFirestore.getInstance()
-
     fun installFromUri(context: Context, uri: Uri) {
         val fileName = uri.getDisplayName(context)
             ?: "plugin-${System.currentTimeMillis()}.zip"
@@ -73,22 +70,22 @@ class PluginStoreScreenViewModel : ViewModel() {
 
     fun loadOnlinePlugins() {
         viewModelScope.launch {
-            db.collection("plugin-packs")
-                .get()
-                .addOnSuccessListener { result ->
-                    val plugins = result.documents.mapNotNull { doc ->
-                        doc.toObject(OnlinePlugin::class.java)
-                    }.map { plugin ->
-                        OnlinePluginUiState(
-                            onlinePlugin = plugin,
-                            isInstalled = isPluginInstalled(plugin.sha)
-                        )
-                    }
-                    _onlinePlugins.value = plugins
-                }
-                .addOnFailureListener { e ->
-                    Log.w("FirestoreDB", "Error fetching online plugins", e)
-                }
+//            db.collection("plugin-packs")
+//                .get()
+//                .addOnSuccessListener { result ->
+//                    val plugins = result.documents.mapNotNull { doc ->
+//                        doc.toObject(OnlinePlugin::class.java)
+//                    }.map { plugin ->
+//                        OnlinePluginUiState(
+//                            onlinePlugin = plugin,
+//                            isInstalled = isPluginInstalled(plugin.sha)
+//                        )
+//                    }
+//                    _onlinePlugins.value = plugins
+//                }
+//                .addOnFailureListener { e ->
+//                    Log.w("FirestoreDB", "Error fetching online plugins", e)
+//                }
         }
     }
 

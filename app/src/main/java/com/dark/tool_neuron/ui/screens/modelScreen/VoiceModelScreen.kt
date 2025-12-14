@@ -69,12 +69,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.DownloadState
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
+import com.mp.ai_engine.models.ModelProvider
 import java.io.File
 
 @Composable
@@ -679,7 +679,7 @@ private fun getSTTModelList(context: Context): List<ModelData> {
     return listOf(
         ModelData(
             modelName = "Whisper-EN-Small",
-            providerName = ModelProvider.SherpaONNX.toString(),
+            providerName = ModelProvider.SHERPA.toString(),
             modelType = ModelType.STT,
             modelPath = modelsDir.absolutePath,
             modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
@@ -696,7 +696,7 @@ private fun getTTSModelList(context: Context): List<ModelData> {
     return listOf(
         ModelData(
             modelName = "KOR0-TTS-0.19-M",
-            providerName = ModelProvider.SherpaONNX.toString(),
+            providerName = ModelProvider.SHERPA.toString(),
             modelType = ModelType.TTS,
             modelPath = modelsDir.absolutePath,
             modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",

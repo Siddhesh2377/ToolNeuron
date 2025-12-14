@@ -57,10 +57,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
+import com.mp.ai_engine.models.ModelProvider
 
 @Composable
 fun InstalledModelsTab(viewModel: ModelScreenViewModel) {
@@ -135,7 +135,7 @@ private fun InstalledModelCard(model: ModelData, onRemove: () -> Unit) {
                     ) {
                         ProviderChip(
                             provider = model.providerName,
-                            isLocal = model.providerName == ModelProvider.LocalGGUF.toString()
+                            isLocal = model.providerName == ModelProvider.GGUF.toString()
                         )
                     }
                 }
@@ -305,7 +305,7 @@ private fun InstalledModelCard(model: ModelData, onRemove: () -> Unit) {
                     }
 
                     // Model Path Info
-                    if (model.modelPath.isNotEmpty() && model.providerName == ModelProvider.LocalGGUF.toString()) {
+                    if (model.modelPath.isNotEmpty() && model.providerName == ModelProvider.GGUF.toString()) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()

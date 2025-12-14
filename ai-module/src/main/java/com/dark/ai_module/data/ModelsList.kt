@@ -2,7 +2,6 @@ package com.dark.ai_module.data
 
 import android.content.Context
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import java.io.File
 
 object ModelsList {
@@ -181,62 +180,4 @@ object ModelsList {
         <|im_start|>assistant
         <|im_end|>
         """.trimIndent()
-
-    fun getModelList(context: Context): List<ModelData> {
-        val modelsDir = File(context.filesDir, "models")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
-
-        // Path to the locally‑stored file is the *modelsDir* + filename
-        // URL is the download location in the marketplace.
-        val kodifyNano = ModelData(
-            modelName = "Kodify‑Nano‑GGUF",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelPath = File(modelsDir, "Kodify‑Nano‑GGUF.gguf").absolutePath,
-            modelUrl = "https://huggingface.co/MTSAIR/Kodify-Nano-GGUF/resolve/main/Kodify_Nano_q4_k_s.gguf?download=true",
-            ctxSize = 8_192,
-            isToolCalling = true,
-            isImported = false,
-            chatTemplate = defaultChatTemplate,
-            systemPrompt = defaultSystemPrompt
-        )
-
-
-        val qwen_human_like = ModelData(
-            modelName = "Human-Like-Qwen2.5-1.5B-Instruct-GGUF",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelPath = File(modelsDir, "Human-Like-Qwen2.5-1.5B-Instruct-GGUF.gguf").absolutePath,
-            modelUrl = "https://huggingface.co/mradermacher/Human-Like-Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Human-Like-Qwen2.5-1.5B-Instruct.Q2_K.gguf?download=true",
-            ctxSize = 8_192,
-            isToolCalling = false,
-            isImported = false,
-            chatTemplate = defaultChatTemplate,
-            systemPrompt = defaultSystemPrompt
-        )
-
-        val lucy128K = ModelData(
-            modelName = "Lucy‑128k‑GGUF",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelPath = File(modelsDir, "Lucy‑128k‑GGUF.gguf").absolutePath,
-            modelUrl = "https://huggingface.co/Menlo/Lucy-128k-gguf/resolve/main/lucy_128k-Q3_K_S.gguf?download=true",
-            ctxSize = 8_192,
-            isToolCalling = true,
-            isImported = false,
-            chatTemplate = defaultChatTemplate,
-            systemPrompt = defaultSystemPrompt
-        )
-
-        val gemma_3b = ModelData(
-            modelName = "Gemma-3-1b-it-GGUF",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelPath = File(modelsDir, "Gemma-3-1b-it-GGUF.gguf").absolutePath,
-            modelUrl = "https://huggingface.co/second-state/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q3_K_S.gguf?download=true",
-            ctxSize = 8_192,
-            isToolCalling = false,
-            isImported = false,
-            chatTemplate = gemmaChatTemplate,
-            systemPrompt = gemmaSystemPrompt
-        )
-
-        return listOf(qwen_human_like, kodifyNano, gemma_3b, lucy128K)
-    }
 }

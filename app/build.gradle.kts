@@ -78,6 +78,7 @@ android {
 
         //LIBS
         implementation(project(":plugin-api"))
+        implementation(project(":ai-engine"))
         implementation(":ai-core-release@aar")
 
         //PROJECTS

@@ -4,14 +4,12 @@ import android.content.Context
 import com.dark.ai_module.db.DatabaseProvider
 import com.dark.ai_module.db.ModelDAO
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.BufferedInputStream
 import java.io.BufferedOutputStream
@@ -60,9 +58,7 @@ object ModelInstallationManager {
         }
     }
 
-    /* ========================================================================= */
-    /* PUBLIC API                                                                */
-    /* ========================================================================= */
+    /* ========================================================================= *//* PUBLIC API                                                                *//* ========================================================================= */
 
     /**
      * Download a model from URL
@@ -72,8 +68,7 @@ object ModelInstallationManager {
      * @return Downloaded file path on success, null on failure
      */
     suspend fun downloadModel(
-        modelData: ModelData,
-        onProgress: ((Float) -> Unit)? = null
+        modelData: ModelData, onProgress: ((Float) -> Unit)? = null
     ): Result<String> = withContext(Dispatchers.IO) {
         ensureInitialized()
 
@@ -154,7 +149,7 @@ object ModelInstallationManager {
 
             updateDownloadState(url, DownloadState.Complete(outputFile.absolutePath))
 
-            if (modelData.modelType == ModelType.TTS){
+            if (modelData.modelType == ModelType.TTS) {
 
             }
 
@@ -190,24 +185,24 @@ object ModelInstallationManager {
     suspend fun installModel(modelData: ModelData): Result<Unit> = withContext(Dispatchers.IO) {
         ensureInitialized()
 
-        when (modelData.providerName) {
-            ModelProvider.OpenRouter.toString() -> installOpenRouterModel(
-                modelData.modelName, modelData.modelUrl.toString(), ModelType.TEXT, onComplete
-            )
+//        when (modelData.providerName) {
+//            ModelProvider.OpenRouter.toString() -> installOpenRouterModel(
+//                modelData.modelName, modelData.modelUrl.toString(), ModelType.TEXT, onComplete
+//            )
+//
+//            ModelProvider.LocalGGUF.toString() -> installLocalGGUFModel(
+//                context, name, url, fileName, modelType, onProgress, onComplete, onError
+//            )
+//
+//            ModelProvider.HuggingFace.toString() -> installLocalGGUFModel(
+//                context, name, url, fileName, modelType, onProgress, onComplete, onError
+//            )
+//
+//            ModelProvider.SherpaONNX.toString() -> installSherpaModel(
+//                context, name, url, fileName, modelType, onProgress, onComplete, onError
+//            )
+//        }
 
-            ModelProvider.LocalGGUF.toString() -> installLocalGGUFModel(
-                context, name, url, fileName, modelType, onProgress, onComplete, onError
-            )
-
-            ModelProvider.HuggingFace.toString() -> installLocalGGUFModel(
-                context, name, url, fileName, modelType, onProgress, onComplete, onError
-            )
-
-            ModelProvider.SherpaONNX.toString() -> installSherpaModel(
-                context, name, url, fileName, modelType, onProgress, onComplete, onError
-            )
-        }
-        
         if (modelData.modelPath.isBlank()) {
             return@withContext Result.failure(IllegalArgumentException("Model path is required"))
         }
@@ -219,7 +214,7 @@ object ModelInstallationManager {
 
         try {
             // Calculate hash for future update checks
-            val fileHash = calculateFileHash(modelFile)
+            calculateFileHash(modelFile)
 
             // Store model with hash in metadata (you may want to add a hash field to ModelData)
             dao.insertModel(modelData)
@@ -237,29 +232,31 @@ object ModelInstallationManager {
      * @param deleteFile If true, also delete the model file from storage
      * @return Success or failure result
      */
-    suspend fun deleteModel(modelId: String, deleteFile: Boolean = true): Result<Unit> = withContext(Dispatchers.IO) {
-        ensureInitialized()
+    suspend fun deleteModel(modelId: String, deleteFile: Boolean = true): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            ensureInitialized()
 
-        try {
-            val model = dao.getModelById(modelId)
-                ?: return@withContext Result.failure(IllegalArgumentException("Model not found: $modelId"))
+            try {
+                val model = dao.getModelById(modelId) ?: return@withContext Result.failure(
+                    IllegalArgumentException("Model not found: $modelId")
+                )
 
-            // Delete from database
-            dao.deleteModel(model)
+                // Delete from database
+                dao.deleteModel(model)
 
-            // Optionally delete file
-            if (deleteFile && model.modelPath.isNotBlank()) {
-                val modelFile = File(model.modelPath)
-                if (modelFile.exists()) {
-                    modelFile.delete()
+                // Optionally delete file
+                if (deleteFile && model.modelPath.isNotBlank()) {
+                    val modelFile = File(model.modelPath)
+                    if (modelFile.exists()) {
+                        modelFile.delete()
+                    }
                 }
-            }
 
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
+                Result.success(Unit)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
         }
-    }
 
     /**
      * Download and install a model in one operation
@@ -269,8 +266,7 @@ object ModelInstallationManager {
      * @return Installed ModelData on success
      */
     suspend fun downloadAndInstallModel(
-        modelData: ModelData,
-        onProgress: ((Float) -> Unit)? = null
+        modelData: ModelData, onProgress: ((Float) -> Unit)? = null
     ): Result<ModelData> = withContext(Dispatchers.IO) {
         // Download the model
         val downloadResult = downloadModel(modelData, onProgress)
@@ -303,9 +299,7 @@ object ModelInstallationManager {
         dao.getModelByName(modelName) != null
     }
 
-    /* ========================================================================= */
-    /* HELPER FUNCTIONS                                                          */
-    /* ========================================================================= */
+    /* ========================================================================= *//* HELPER FUNCTIONS                                                          *//* ========================================================================= */
 
     /**
      * Calculate SHA-256 hash of a file for update detection
@@ -340,116 +334,15 @@ object ModelInstallationManager {
     // ---------------------
     //  LOCAL GGUF MODELS
     // ---------------------
-    private suspend fun installLocalGGUFModel(
-        context: Context,
-        name: String,
-        url: String,
-        fileName: String,
-        modelType: ModelType,
-        onProgress: (Float) -> Unit,
-        onComplete: () -> Unit,
-        onError: (Exception) -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelsDir = File(context.filesDir, "models")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
 
-        val outputFile = File(modelsDir, fileName)
-        downloadFile(url, outputFile, onProgress, {
-            val modelData = ModelData(
-                modelName = name,
-                providerName = ModelProvider.LocalGGUF.toString(),
-                modelType = modelType,
-                modelPath = outputFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-            this.launch {
-                ModelManager.addModel(modelData)
-            }
-            onComplete()
-        }, onError)
-
-        Result.success(
-            ModelData(
-                modelName = name,
-                providerName = ModelProvider.LocalGGUF.toString(),
-                modelType = modelType,
-                modelPath = outputFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-        )
-    }
 
     // ---------------------
     //  SHERPA ONNX MODELS
-    // ---------------------
-    private suspend fun installSherpaModel(
-        context: Context,
-        name: String,
-        url: String,
-        fileName: String,
-        modelType: ModelType,
-        onProgress: (Float) -> Unit,
-        onComplete: () -> Unit,
-        onError: (Exception) -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelsDir = File(context.filesDir, "models/${modelType.name.lowercase()}")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
 
-        val archiveFile = File(modelsDir, fileName)
-        downloadFile(url, archiveFile, onProgress, {
-            val extractDir = File(modelsDir, name.replace(" ", "_"))
-            unzipFlatten(archiveFile, extractDir)
-            archiveFile.delete()
-
-            val modelData = ModelData(
-                modelName = name,
-                providerName = ModelProvider.SherpaONNX.toString(),
-                modelType = modelType,
-                modelPath = extractDir.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-            this.launch {
-                ModelManager.addModel(modelData)
-            }
-            onComplete()
-        }, onError)
-
-        Result.success(
-            ModelData(
-                modelName = name,
-                providerName = ModelProvider.SherpaONNX.toString(),
-                modelType = modelType,
-                modelPath = archiveFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-        )
-    }
 
     // ---------------------
     //  OPENROUTER MODELS
-    // ---------------------
-    private suspend fun installOpenRouterModel(
-        name: String,
-        url: String,
-        modelType: ModelType,
-        onComplete: () -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelData = ModelData(
-            modelName = name,
-            providerName = ModelProvider.OpenRouter.toString(),
-            modelType = modelType,
-            modelUrl = url,
-            isImported = false
-        )
 
-        ModelManager.addModel(modelData)
-        onComplete()
-        Result.success(modelData)
-    }
 
     // ---------------------
     //  UTILITIES
@@ -509,6 +402,6 @@ sealed class DownloadState {
         override val isDownloading = false
         override val progress = 0f
         override val isComplete = false
-        override val errorMessage: String? = error
+        override val errorMessage: String = error
     }
 }

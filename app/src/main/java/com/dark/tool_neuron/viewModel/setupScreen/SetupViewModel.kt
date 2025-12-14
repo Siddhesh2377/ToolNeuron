@@ -3,10 +3,10 @@ package com.dark.tool_neuron.viewModel.setupScreen
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.worker.ModelInstaller
+import com.mp.ai_engine.models.ModelProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -198,9 +198,9 @@ class SetupViewModel(
         updateModelStatus(index, DownloadStatus.Downloading, 0f)
 
         val provider = when {
-            model.downloadUrl.endsWith(".zip") -> ModelProvider.SherpaONNX
-            model.downloadUrl.contains(".gguf") -> ModelProvider.LocalGGUF
-            else -> ModelProvider.OpenRouter
+            model.downloadUrl.endsWith(".zip") -> ModelProvider.SHERPA
+            model.downloadUrl.contains(".gguf") -> ModelProvider.GGUF
+            else -> ModelProvider.OPEN_ROUTER
         }
 
         viewModelScope.launch(Dispatchers.IO) {

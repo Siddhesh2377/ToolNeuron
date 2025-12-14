@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.OpenRouterModel
 import com.dark.ai_module.model.toModelData
 import com.dark.ai_module.workers.DownloadState
@@ -14,6 +13,7 @@ import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.data.UserPrefs
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.util.initOpenRouterFromPrefs
+import com.mp.ai_engine.models.ModelProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -82,21 +82,6 @@ class ModelScreenViewModel : ViewModel() {
     /* ========================================================================= */
 
     // Count of models by provider
-    val modelCounts: StateFlow<Map<ModelProvider, Int>> = _models
-        .combine(ModelInstallationManager.downloadProgress) { models, downloads ->
-            mapOf(
-                ModelProvider.LocalGGUF to models.count {
-                    it.providerName == ModelProvider.LocalGGUF.toString()
-                },
-                ModelProvider.OpenRouter to models.count {
-                    it.providerName == ModelProvider.OpenRouter.toString()
-                },
-                ModelProvider.SherpaONNX to models.count {
-                    it.providerName == ModelProvider.SherpaONNX.toString()
-                }
-            )
-        }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyMap())
 
     // Active downloads count
     val activeDownloadsCount: StateFlow<Int> = ModelInstallationManager.downloadProgress
@@ -137,7 +122,7 @@ class ModelScreenViewModel : ViewModel() {
 
                 // Derive OpenRouter installed models
                 _openRouterInstalledModels.value = modelList
-                    .filter { it.providerName == ModelProvider.OpenRouter.toString() }
+                    .filter { it.providerName == ModelProvider.OPEN_ROUTER.toString() }
                     .map { it.toOpenRouterModel() }
             }
     }
@@ -438,7 +423,7 @@ class ModelScreenViewModel : ViewModel() {
                 }
 
                 // Determine if file should be deleted
-                val shouldDeleteFile = model.providerName == ModelProvider.LocalGGUF.toString()
+                val shouldDeleteFile = model.providerName == ModelProvider.GGUF.toString()
                         && !model.isImported
 
                 if (shouldDeleteFile) {

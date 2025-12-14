@@ -65,7 +65,7 @@ fun OpenRouterModel.toModelData(): ModelData {
     return ModelData(
         id = id,
         modelName = name,
-        providerName = ModelProvider.OpenRouter.toString(),
+        providerName = "",
         modelUrl = id,
         ctxSize = ctxSize,
         temp = temperature,
@@ -140,35 +140,6 @@ fun ModelData.toDownloadModel(): ModelData {
         useMMAP = true,
         useMLOCK = false
     )
-}
-
-/**
- * Checks if this model is a cloud/API-based model.
- */
-fun ModelData.isCloudModel(): Boolean {
-    return providerName == ModelProvider.OpenRouter.toString() ||
-            providerName == ModelProvider.HuggingFace.toString()
-}
-
-/**
- * Checks if this model is locally stored.
- */
-fun ModelData.isLocalModel(): Boolean {
-    return providerName == ModelProvider.LocalGGUF.toString() ||
-            providerName == ModelProvider.SherpaONNX.toString()
-}
-
-/**
- * Gets a user-friendly display name for the provider.
- */
-fun ModelData.getProviderDisplayName(): String {
-    return when (providerName) {
-        ModelProvider.OpenRouter.toString() -> "OpenRouter"
-        ModelProvider.LocalGGUF.toString() -> "Local GGUF"
-        ModelProvider.SherpaONNX.toString() -> "Sherpa ONNX"
-        ModelProvider.HuggingFace.toString() -> "HuggingFace"
-        else -> providerName
-    }
 }
 
 /**

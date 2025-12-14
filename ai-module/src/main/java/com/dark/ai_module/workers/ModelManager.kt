@@ -13,7 +13,6 @@ import com.dark.ai_module.db.ModelDAO
 import com.dark.ai_module.model.GenerationParams
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
 import com.mp.ai_core.services.GenerationService
 import com.mp.ai_core.services.IGenerationCallback
@@ -143,11 +142,12 @@ object ModelManager {
     suspend fun loadGenerationModel(
         modelData: ModelData, onLoaded: (LoadState) -> Unit
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        when (modelData.providerName) {
-            ModelProvider.OpenRouter.toString() -> loadOpenRouterModel(modelData, onLoaded)
-            ModelProvider.LocalGGUF.toString() -> loadGGUFModel(modelData, onLoaded)
-            else -> Result.failure(IllegalArgumentException("Unknown provider: ${modelData.providerName}"))
-        }
+        return@withContext Result.success(Unit)
+//        when (modelData.providerName) {
+//            ModelProvider.OpenRouter.toString() -> loadOpenRouterModel(modelData, onLoaded)
+//            ModelProvider.LocalGGUF.toString() -> loadGGUFModel(modelData, onLoaded)
+//            else -> Result.failure(IllegalArgumentException("Unknown provider: ${modelData.providerName}"))
+//        }
     }
 
     private fun loadOpenRouterModel(
@@ -329,31 +329,32 @@ object ModelManager {
     ): String {
         val model = _currentModel.value
 
-        return when (model.providerName) {
-            ModelProvider.OpenRouter.toString() -> {
-                generateOpenRouter(
-                    modelId = model.modelUrl ?: "",
-                    prompt = prompt,
-                    systemPrompt = model.systemPrompt,
-                    gen = gen,
-                    toolJson = toolJson,
-                    onToolCalled = onToolCalled,
-                    onToken = onToken
-                )
-            }
-
-            ModelProvider.LocalGGUF.toString() -> {
-                generateGGUF(
-                    prompt = prompt,
-                    gen = gen,
-                    toolJson = toolJson,
-                    onToolCalled = onToolCalled,
-                    onToken = onToken
-                )
-            }
-
-            else -> throw IllegalStateException("Unknown provider: ${model.providerName}")
-        }
+        return ""
+//        return when (model.providerName) {
+//            ModelProvider.OpenRouter.toString() -> {
+//                generateOpenRouter(
+//                    modelId = model.modelUrl ?: "",
+//                    prompt = prompt,
+//                    systemPrompt = model.systemPrompt,
+//                    gen = gen,
+//                    toolJson = toolJson,
+//                    onToolCalled = onToolCalled,
+//                    onToken = onToken
+//                )
+//            }
+//
+//            ModelProvider.LocalGGUF.toString() -> {
+//                generateGGUF(
+//                    prompt = prompt,
+//                    gen = gen,
+//                    toolJson = toolJson,
+//                    onToolCalled = onToolCalled,
+//                    onToken = onToken
+//                )
+//            }
+//
+//            else -> throw IllegalStateException("Unknown provider: ${model.providerName}")
+//        }
     }
 
     private suspend fun generateOpenRouter(
@@ -414,12 +415,12 @@ object ModelManager {
 
     fun stopGeneration() {
         val model = _currentModel.value
-        when (model.providerName) {
-            ModelProvider.OpenRouter.toString() -> openRouterExecutor?.stopGeneration()
-            ModelProvider.LocalGGUF.toString() -> {
-                service?.stopTextGeneration()
-            }
-        }
+//        when (model.providerName) {
+//            ModelProvider.OpenRouter.toString() -> openRouterExecutor?.stopGeneration()
+//            ModelProvider.LocalGGUF.toString() -> {
+//                service?.stopTextGeneration()
+//            }
+//        }
         isGenerating.value = false
     }
 
@@ -521,9 +522,9 @@ object ModelManager {
 
     fun setSystemPrompt(prompt: String) {
         val model = _currentModel.value
-        when (model.providerName) {
-            ModelProvider.LocalGGUF.toString() -> service?.setSystemPrompt(prompt)
-        }
+//        when (model.providerName) {
+//            ModelProvider.LocalGGUF.toString() -> service?.setSystemPrompt(prompt)
+//        }
         _currentModel.value = model.copy(systemPrompt = prompt)
     }
 

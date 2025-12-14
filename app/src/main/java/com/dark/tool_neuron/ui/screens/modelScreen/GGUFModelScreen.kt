@@ -77,7 +77,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.DownloadState
 import com.dark.tool_neuron.model.GGUFModels
@@ -85,6 +84,7 @@ import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
 import com.dark.tool_neuron.viewModel.modelScreen.OnlineModelStoreViewModel
+import com.mp.ai_engine.models.ModelProvider
 import java.io.File
 import kotlin.math.roundToInt
 
@@ -552,7 +552,7 @@ fun GGUFModels.toModelData(context: Context): ModelData {
 
     return ModelData(
         modelName = modelName,
-        providerName = ModelProvider.LocalGGUF.toString(),
+        providerName = ModelProvider.GGUF.toString(),
         modelType = when (modelType) {
             "TXT" -> ModelType.TEXT
             "VLM" -> ModelType.VLM

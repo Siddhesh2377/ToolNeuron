@@ -210,10 +210,10 @@ object AudioManager {
         }
 
         try {
-            val ok = svc.initializeStt(modelData.modelPath, 2, 4)
-            if (!ok) {
-                return@withContext Result.failure(RuntimeException("STT initialization failed"))
-            }
+//            val ok = svc.initializeStt(modelData.modelPath, 2, 4)
+//            if (!ok) {
+//                return@withContext Result.failure(RuntimeException("STT initialization failed"))
+//            }
 
             _sttModel.value = modelData
             Result.success(Unit)
