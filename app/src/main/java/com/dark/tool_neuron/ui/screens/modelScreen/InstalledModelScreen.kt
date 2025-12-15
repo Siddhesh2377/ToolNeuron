@@ -60,7 +60,7 @@ import com.dark.ai_module.model.ModelData
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
-import com.mp.ai_engine.models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelProvider
 
 @Composable
 fun InstalledModelsTab(viewModel: ModelScreenViewModel) {

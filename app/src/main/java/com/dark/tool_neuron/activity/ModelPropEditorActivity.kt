@@ -70,7 +70,7 @@ import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDP
-import com.mp.ai_engine.models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import kotlinx.coroutines.launch
 
 class ModelPropEditorActivity : ComponentActivity() {

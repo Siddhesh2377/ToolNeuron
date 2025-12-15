@@ -2,9 +2,8 @@ package com.mp.ai_engine.workers.installer.internal_workers
 
 import android.util.Log
 import com.mp.ai_engine.managers.GGUFModelManager
-import com.mp.ai_engine.models.CloudModel
-import com.mp.ai_engine.models.ModelType
-import com.mp.ai_engine.models.toGGUFModel
+import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.toGGUFModel
 import com.mp.ai_engine.util.downloadFile
 import com.mp.ai_engine.workers.installer.DownloadEvents
 import com.mp.ai_engine.workers.installer.SuperInstaller

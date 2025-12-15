@@ -6,10 +6,10 @@ import com.mp.ai_engine.managers.GGUFModelManager
 import com.mp.ai_engine.managers.OpenRouterModelManager
 import com.mp.ai_engine.managers.SherpaSTTModelManager
 import com.mp.ai_engine.managers.SherpaTTSModelManager
-import com.mp.ai_engine.models.CloudModel
-import com.mp.ai_engine.models.ModelProvider
-import com.mp.ai_engine.models.ModelSearchResult
-import com.mp.ai_engine.models.ModelType
+import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelSearchResult
+import com.mp.ai_engine.models.llm_models.ModelType
 import com.mp.ai_engine.service.ModelDownloadService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

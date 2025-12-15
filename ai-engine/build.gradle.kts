@@ -51,7 +51,7 @@ android {
 }
 
 dependencies {
-
+    implementation(":ai-core-release@aar")
     //DATABASE
     implementation(libs.androidx.room.runtime)
     ksp(libs.androidx.room.compiler)

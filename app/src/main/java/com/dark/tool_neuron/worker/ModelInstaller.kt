@@ -2,11 +2,8 @@ package com.dark.tool_neuron.worker
 
 import android.content.Context
 import com.dark.ai_module.model.*
-import com.dark.ai_module.workers.ModelManager
-import com.dark.ai_module.workers.downloadFile
-import com.mp.ai_engine.models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.util.zip.ZipInputStream

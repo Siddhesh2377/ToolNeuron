@@ -6,8 +6,8 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.mp.ai_engine.models.GGUFDatabaseModel
-import com.mp.ai_engine.models.ModelType
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
+import com.mp.ai_engine.models.llm_models.ModelType
 import kotlinx.coroutines.flow.Flow
 
 @Dao

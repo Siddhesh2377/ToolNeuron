@@ -2,11 +2,9 @@ package com.mp.ai_engine.managers
 
 
 import android.content.Context
-import com.mp.ai_engine.databases.sherpa_stt.SherpaSTTDataBaseProvider
-import com.mp.ai_engine.databases.sherpa_stt.SherpaSTTDatabaseAccessObject
 import com.mp.ai_engine.databases.sherpa_tts.SherpaTTSDataBaseProvider
 import com.mp.ai_engine.databases.sherpa_tts.SherpaTTSDatabaseAccessObject
-import com.mp.ai_engine.models.SherpaTTSDatabaseModel
+import com.mp.ai_engine.models.llm_models.SherpaTTSDatabaseModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.File

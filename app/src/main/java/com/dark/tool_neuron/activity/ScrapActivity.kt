@@ -18,8 +18,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
-import com.mp.ai_engine.models.CloudModel
-import com.mp.ai_engine.models.ModelType
+import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.ModelType
 import com.mp.ai_engine.workers.installer.ModelInstaller
 import kotlinx.coroutines.launch
 

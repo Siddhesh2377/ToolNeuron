@@ -1,4 +1,4 @@
-package com.mp.ai_engine.models
+package com.mp.ai_engine.models.llm_models
 
 import android.util.Log
 import kotlinx.serialization.Serializable

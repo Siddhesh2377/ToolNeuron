@@ -1,13 +1,11 @@
 package com.mp.ai_engine.managers
 
 import android.content.Context
-import com.mp.ai_engine.databases.gguf.GGUFDataBaseProvider
-import com.mp.ai_engine.databases.gguf.GGUFDatabaseAccessObject
 import com.mp.ai_engine.databases.open_router.OpenRouterDataBaseProvider
 import com.mp.ai_engine.databases.open_router.OpenRouterDatabaseAccessObject
-import com.mp.ai_engine.models.ModelType
-import com.mp.ai_engine.models.OpenRouterDatabaseModel
-import com.mp.ai_engine.models.isFree
+import com.mp.ai_engine.models.llm_models.ModelType
+import com.mp.ai_engine.models.llm_models.OpenRouterDatabaseModel
+import com.mp.ai_engine.models.llm_models.isFree
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.util.concurrent.atomic.AtomicBoolean

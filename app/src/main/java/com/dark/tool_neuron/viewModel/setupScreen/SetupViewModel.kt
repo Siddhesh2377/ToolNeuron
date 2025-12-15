@@ -6,7 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.dark.ai_module.model.ModelType
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.worker.ModelInstaller
-import com.mp.ai_engine.models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

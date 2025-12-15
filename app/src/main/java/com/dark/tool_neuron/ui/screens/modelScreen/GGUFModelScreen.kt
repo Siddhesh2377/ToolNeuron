@@ -84,9 +84,8 @@ import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
 import com.dark.tool_neuron.viewModel.modelScreen.OnlineModelStoreViewModel
-import com.mp.ai_engine.models.ModelProvider
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import java.io.File
-import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

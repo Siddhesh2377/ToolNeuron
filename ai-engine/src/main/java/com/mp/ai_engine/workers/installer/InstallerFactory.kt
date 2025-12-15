@@ -1,7 +1,6 @@
 package com.mp.ai_engine.workers.installer
 
-import com.mp.ai_engine.models.CloudModel
-import com.mp.ai_engine.models.ModelType
+import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.workers.installer.internal_workers.GGUFModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.OpenRouterModelInstaller
 import com.mp.ai_engine.workers.installer.internal_workers.SherpaSTTModelInstaller

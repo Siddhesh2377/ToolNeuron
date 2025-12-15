@@ -2,10 +2,9 @@ package com.mp.ai_engine.managers
 
 import android.content.Context
 import com.mp.ai_engine.databases.gguf.GGUFDataBaseProvider
-import com.mp.ai_engine.databases.gguf.GGUFDatabase
 import com.mp.ai_engine.databases.gguf.GGUFDatabaseAccessObject
-import com.mp.ai_engine.models.GGUFDatabaseModel
-import com.mp.ai_engine.models.ModelType
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
+import com.mp.ai_engine.models.llm_models.ModelType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import java.io.File

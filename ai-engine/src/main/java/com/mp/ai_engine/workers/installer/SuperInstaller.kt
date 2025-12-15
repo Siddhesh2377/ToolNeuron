@@ -1,6 +1,6 @@
 package com.mp.ai_engine.workers.installer
 
-import com.mp.ai_engine.models.CloudModel
+import com.mp.ai_engine.models.llm_models.CloudModel
 import java.io.File
 
 /**

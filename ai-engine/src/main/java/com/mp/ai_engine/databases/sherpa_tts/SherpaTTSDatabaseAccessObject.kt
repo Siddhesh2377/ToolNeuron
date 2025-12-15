@@ -7,7 +7,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
-import com.mp.ai_engine.models.SherpaTTSDatabaseModel
+import com.mp.ai_engine.models.llm_models.SherpaTTSDatabaseModel
 import kotlinx.coroutines.flow.Flow
 
 @Dao

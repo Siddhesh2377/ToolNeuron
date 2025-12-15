@@ -2,10 +2,8 @@ package com.mp.ai_engine.workers.installer.internal_workers
 
 import android.util.Log
 import com.mp.ai_engine.managers.OpenRouterModelManager
-import com.mp.ai_engine.managers.SherpaTTSModelManager
-import com.mp.ai_engine.models.CloudModel
-import com.mp.ai_engine.models.ModelType
-import com.mp.ai_engine.models.toOpenRouterModel
+import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.toOpenRouterModel
 import com.mp.ai_engine.workers.installer.DownloadEvents
 import com.mp.ai_engine.workers.installer.SuperInstaller
 import java.io.File

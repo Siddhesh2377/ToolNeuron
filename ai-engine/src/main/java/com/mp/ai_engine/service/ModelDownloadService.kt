@@ -8,7 +8,7 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
-import com.mp.ai_engine.models.CloudModel
+import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.workers.installer.DownloadEvents
 import com.mp.ai_engine.workers.installer.InstallerFactory
 import com.mp.ai_engine.workers.installer.SuperInstaller
