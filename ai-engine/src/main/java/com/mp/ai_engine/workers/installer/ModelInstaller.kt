@@ -47,34 +47,6 @@ object ModelInstaller {
     }
 
     /**
-     * Get the base directory for all models
-     */
-    fun getBaseDirectory(): File {
-        checkInitialized()
-        return baseModelsDir
-    }
-
-    /**
-     * Get the directory for a specific model type
-     */
-    fun getModelTypeDirectory(cloudModel: CloudModel): File {
-        checkInitialized()
-        return when {
-            cloudModel.providerName.contains("GGUF", ignoreCase = true) ->
-                File(baseModelsDir, GGUF_DIR)
-            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
-                    cloudModel.providerName.contains("TTS", ignoreCase = true) ->
-                File(baseModelsDir, SHERPA_TTS_DIR)
-            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
-                    cloudModel.providerName.contains("STT", ignoreCase = true) ->
-                File(baseModelsDir, SHERPA_STT_DIR)
-            cloudModel.providerName.contains("OPENROUTER", ignoreCase = true) ->
-                File(baseModelsDir, OPENROUTER_DIR)
-            else -> baseModelsDir
-        }
-    }
-
-    /**
      * Install a model from the cloud
      * This starts the download service and handles the entire installation process
      */
@@ -361,6 +333,26 @@ object ModelInstaller {
     private fun checkInitialized() {
         check(::applicationContext.isInitialized) {
             "ModelInstaller not initialized. Call initialize(context) first."
+        }
+    }
+
+    /**
+     * Get the directory for a specific model type
+     */
+    private fun getModelTypeDirectory(cloudModel: CloudModel): File {
+        checkInitialized()
+        return when {
+            cloudModel.providerName.contains("GGUF", ignoreCase = true) ->
+                File(baseModelsDir, GGUF_DIR)
+            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
+                    cloudModel.providerName.contains("TTS", ignoreCase = true) ->
+                File(baseModelsDir, SHERPA_TTS_DIR)
+            cloudModel.providerName.contains("SHERPA", ignoreCase = true) &&
+                    cloudModel.providerName.contains("STT", ignoreCase = true) ->
+                File(baseModelsDir, SHERPA_STT_DIR)
+            cloudModel.providerName.contains("OPENROUTER", ignoreCase = true) ->
+                File(baseModelsDir, OPENROUTER_DIR)
+            else -> baseModelsDir
         }
     }
 

@@ -25,7 +25,7 @@ class NVApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        ModelInstaller.initialize(applicationContext)
+
 
         appScope.launch {
             // Get root node first

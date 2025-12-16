@@ -1,18 +1,16 @@
 package com.mp.ai_engine.models.llm_tasks
 
 import kotlinx.coroutines.CompletableDeferred
-import java.util.UUID
 
-data class GGUFTask(
-    val id: String = UUID.randomUUID().toString(),
+data class OpenRouterTask(
+    val id: String,
     val input: String,
-    val maxTokens: Int = 100,
-    val toolJson: String = "",
-    val events: GGUFStreamEvents,
+    val maxTokens: Int,
+    val events: OPStreamEvents,
     val result: CompletableDeferred<String>
 )
 
-interface GGUFStreamEvents {
+interface OPStreamEvents {
     fun onToken(token: String)
     fun onTool(toolName: String, toolArgs: String)
 }

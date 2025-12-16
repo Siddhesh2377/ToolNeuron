@@ -52,6 +52,7 @@ class GGUFModelWorker : SuperModelWorker<GGUFDatabaseModel, GGUFTask>() {
             nativeLib.generateStreaming(
                 task.input,
                 task.maxTokens,
+                toolsJson = task.toolJson,
                 callback = object : IGenerationCallback {
 
                     override fun onToken(p0: String?) {
