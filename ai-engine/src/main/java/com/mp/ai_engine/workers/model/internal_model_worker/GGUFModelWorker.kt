@@ -1,13 +1,14 @@
 package com.mp.ai_engine.workers.model.internal_model_worker
 
+import android.os.IBinder
 import com.mp.ai_core.NativeLib
+import com.mp.ai_core.services.IGenerationCallback
 import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
-import com.mp.ai_engine.models.llm_tasks.GGUFInferenceEvent
 import com.mp.ai_engine.models.llm_tasks.GGUFTask
 import com.mp.ai_engine.workers.model.SuperModelWorker
 import java.io.File
 
-class GGUFModelWorker : SuperModelWorker<GGUFDatabaseModel, Pair<GGUFTask, GGUFInferenceEvent>>() {
+class GGUFModelWorker : SuperModelWorker<GGUFDatabaseModel, GGUFTask>() {
 
     val nativeLib = NativeLib.getInstance()
 
@@ -43,8 +44,41 @@ class GGUFModelWorker : SuperModelWorker<GGUFDatabaseModel, Pair<GGUFTask, GGUFI
         nativeLib.nativeRelease()
     }
 
-    override suspend fun runTask(task: Pair<GGUFTask, GGUFInferenceEvent>) {
+    override suspend fun runTask(task: GGUFTask) {
 
+        val buffer = StringBuilder()
+
+        try {
+            nativeLib.generateStreaming(
+                task.input,
+                task.maxTokens,
+                callback = object : IGenerationCallback {
+
+                    override fun onToken(p0: String?) {
+                        val token = p0.orEmpty()
+                        buffer.append(token)
+                        task.events.onToken(token)
+                    }
+
+                    override fun onToolCall(p0: String?, p1: String?) {
+                        task.events.onTool(p0.orEmpty(), p1.orEmpty())
+                    }
+
+                    override fun onDone() {
+                        task.result.complete(buffer.toString())
+                    }
+
+                    override fun onError(p0: String?) {
+                        task.result.completeExceptionally(
+                            RuntimeException(p0 ?: "Unknown error")
+                        )
+                    }
+
+                    override fun asBinder(): IBinder? = null
+                }
+            )
+        } catch (e: Throwable) {
+            task.result.completeExceptionally(e)
+        }
     }
-
 }
