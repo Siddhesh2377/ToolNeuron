@@ -189,6 +189,8 @@ class DiffusionModelWorker(private val context: Context) :
 
         val clipFile = if (model.useCpuClip) "clip.mnn" else "clip.mnn"
 
+        Log.d(TAG, "Model Data >> $model")
+
         return if (model.runOnCpu) {
             buildList {
                 add(executable.absolutePath)
@@ -388,6 +390,26 @@ class DiffusionModelWorker(private val context: Context) :
                     val totalSteps = message.optInt("total_steps")
                     val progress = step.toFloat() / totalSteps
                     task.events.onProgress(progress, step, totalSteps)
+
+                    // Handle preview image if present
+                    if (message.has("preview_image")) {
+                        try {
+                            val previewBase64 = message.getString("preview_image")
+                            val previewWidth = message.getInt("preview_width")
+                            val previewHeight = message.getInt("preview_height")
+
+                            val previewBitmap = decodeImageData(
+                                previewBase64,
+                                previewWidth,
+                                previewHeight
+                            )
+
+                            task.events.onPreview(previewBitmap, step, totalSteps)
+                            Log.d(TAG, "Received preview at step $step/$totalSteps")
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Failed to decode preview image: ${e.message}")
+                        }
+                    }
                 }
 
                 "complete" -> {

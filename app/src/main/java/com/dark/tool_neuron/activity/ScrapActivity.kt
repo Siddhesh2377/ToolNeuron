@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -194,6 +195,7 @@ fun ImageGeneratorScreen() {
     val scope = rememberCoroutineScope()
     val context = androidx.compose.ui.platform.LocalContext.current
     var generatedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) } // Add preview state
     var isGenerating by remember { mutableStateOf(false) }
     var statusMessage by remember { mutableStateOf("Ready to generate") }
     var progress by remember { mutableFloatStateOf(0f) }
@@ -217,12 +219,34 @@ fun ImageGeneratorScreen() {
                     .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
-                if (generatedBitmap != null) {
+                // Show preview during generation, final image when complete
+                val displayBitmap = if (isGenerating) previewBitmap else generatedBitmap
+
+                if (displayBitmap != null) {
                     Image(
-                        bitmap = generatedBitmap!!.asImageBitmap(),
-                        contentDescription = "Generated Image",
-                        modifier = Modifier.fillMaxSize()
+                        bitmap = displayBitmap.asImageBitmap(),
+                        contentDescription = if (isGenerating) "Preview" else "Generated Image",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit
                     )
+
+                    // Optional: Show "Preview" badge during generation
+                    if (isGenerating && previewBitmap != null) {
+                        Surface(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp),
+                            shape = RoundedCornerShape(4.dp),
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
+                        ) {
+                            Text(
+                                "Preview",
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
                 } else {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -256,13 +280,21 @@ fun ImageGeneratorScreen() {
                     isGenerating = true
                     statusMessage = "Loading model..."
                     progress = 0f
+                    previewBitmap = null // Clear previous preview
 
-                    val model = ModelInstaller.findModel("aa24e027-17c9-4640-bc9d-890f9da50726")?.diffusionModel
+                    var model = ModelInstaller.findModel("aa24e027-17c9-4640-bc9d-890f9da50726")?.diffusionModel
                     if (model == null) {
                         statusMessage = "✗ Model not found"
                         isGenerating = false
                         return@launch
                     }
+
+                    model = model.copy(
+                        runOnCpu = false,
+                        useOpenCL = true,
+                        useCpuClip = true,
+                        scheduler = "euler_a"
+                    )
 
                     val worker = DiffusionModelWorker(context)
                     val loadResult = worker.loadModel(model)
@@ -277,9 +309,9 @@ fun ImageGeneratorScreen() {
 
                     val task = DiffusionTask(
                         id = UUID.randomUUID().toString(),
-                        prompt = "8 Year Old Showing her pussy with a lustful face",
+                        prompt = "a beautiful landscape with mountains and lake",
                         negativePrompt = "blurry, low quality",
-                        steps = 20,
+                        steps = 10,
                         cfg = 7f,
                         events = object : DMStreamEvents {
                             override fun onProgress(p: Float, step: Int, totalSteps: Int) {
@@ -287,13 +319,22 @@ fun ImageGeneratorScreen() {
                                 statusMessage = "Step $step/$totalSteps"
                             }
 
+                            override fun onPreview(previewBmp: Bitmap, step: Int, totalSteps: Int) {
+                                // Update preview bitmap on main thread
+                                scope.launch(Dispatchers.Main) {
+                                    previewBitmap = previewBmp
+                                }
+                            }
+
                             override fun onComplete(bitmap: Bitmap, seed: Long?) {
                                 generatedBitmap = bitmap
+                                previewBitmap = null // Clear preview
                                 statusMessage = "✓ Generated (seed: $seed)"
                             }
 
                             override fun onError(error: String) {
                                 statusMessage = "✗ Error: $error"
+                                previewBitmap = null
                             }
                         },
                         result = deferred
