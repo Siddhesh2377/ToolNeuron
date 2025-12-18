@@ -25,7 +25,7 @@ class NVApplication : Application() {
     override fun onCreate() {
         super.onCreate()
 
-
+        com.mp.ai_engine.workers.model.ModelManager.init(applicationContext)
 
         appScope.launch {
             // Get root node first
@@ -123,6 +123,7 @@ class NVApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
         val root = UserDataManager.getRootNode()
+        com.mp.ai_engine.workers.model.ModelManager.stopModelOperationService(applicationContext)
         AppLogger.endSession(root)
     }
 }

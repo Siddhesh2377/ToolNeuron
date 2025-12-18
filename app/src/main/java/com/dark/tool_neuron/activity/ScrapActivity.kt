@@ -146,7 +146,7 @@ fun TextGeneratorScreen() {
                     statusMessage = "Loading model..."
                     result = ""
 
-                    val model = ModelInstaller.findModel("Llama-3.2-1B-Q4")?.ggufModel
+                    val model = ModelInstaller.findModel("f0ed656c-fb89-4d20-a40a-c8932d87688f")?.ggufModel
                     if (model == null) {
                         statusMessage = "✗ Model not found"
                         isRunning = false
@@ -291,7 +291,7 @@ fun ImageGeneratorScreen() {
 
                     model = model.copy(
                         runOnCpu = false,
-                        useOpenCL = true,
+                        useOpenCL = false,
                         useCpuClip = true,
                         scheduler = "euler_a"
                     )

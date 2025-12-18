@@ -2,6 +2,7 @@ package com.mp.ai_engine.service
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -17,20 +18,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.io.File
 
 /**
  * Refactored service using dedicated installers for scalable model downloads
+ * with improved notification management to prevent spam
  */
 class ModelDownloadService : Service() {
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val activeDownloads = mutableMapOf<String, DownloadTask>()
-    private var notificationId = NOTIFICATION_ID_START
     private lateinit var notificationManager: NotificationManager
     private val json = Json { ignoreUnknownKeys = true }
+
+    // Notification throttling
+    private val notificationThrottler = NotificationThrottler()
 
     override fun onCreate() {
         super.onCreate()
@@ -50,6 +55,7 @@ class ModelDownloadService : Service() {
         serviceScope.cancel()
         activeDownloads.values.forEach { it.job.cancel() }
         activeDownloads.clear()
+        notificationThrottler.cancel()
         Log.i(TAG, "ModelDownloadService destroyed")
         super.onDestroy()
     }
@@ -90,8 +96,7 @@ class ModelDownloadService : Service() {
         val installer = InstallerFactory.getInstaller(cloudModel)
         if (installer == null) {
             Log.e(TAG, "No installer found for model type: ${cloudModel.modelType}")
-            showDownloadErrorNotification(
-                notificationId++,
+            showErrorNotification(
                 cloudModel.modelName,
                 "Unsupported model type: ${cloudModel.modelType}"
             )
@@ -100,7 +105,6 @@ class ModelDownloadService : Service() {
 
         // Determine output location
         val outputLocation = installer.determineOutputLocation(cloudModel, baseDir)
-        val currentNotificationId = notificationId++
 
         // Create download task
         val job = serviceScope.launch {
@@ -109,16 +113,19 @@ class ModelDownloadService : Service() {
                 cloudModel = cloudModel,
                 downloadUrl = downloadUrl,
                 outputLocation = outputLocation,
-                baseDir = baseDir,
-                notificationId = currentNotificationId
+                baseDir = baseDir
             )
         }
 
         activeDownloads[downloadUrl] = DownloadTask(
             job = job,
             installer = installer,
-            outputLocation = outputLocation
+            outputLocation = outputLocation,
+            modelName = cloudModel.modelName
         )
+
+        // Update summary notification
+        updateSummaryNotification()
     }
 
     private suspend fun executeDownload(
@@ -126,12 +133,10 @@ class ModelDownloadService : Service() {
         cloudModel: CloudModel,
         downloadUrl: String,
         outputLocation: File,
-        baseDir: File,
-        notificationId: Int
+        baseDir: File
     ) {
         try {
             Log.i(TAG, "Starting download for: ${cloudModel.modelName}")
-            showDownloadNotification(notificationId, cloudModel.modelName, 0f)
 
             // Download phase
             installer.downloadModel(
@@ -141,10 +146,10 @@ class ModelDownloadService : Service() {
                 downloadEvents = object : DownloadEvents {
                     override fun onProgress(progress: Float) {
                         if (progress > 0) {
-                            showDownloadNotification(
-                                notificationId,
+                            notificationThrottler.updateProgress(
+                                downloadUrl,
                                 cloudModel.modelName,
-                                progress * 100
+                                progress
                             )
                         }
                     }
@@ -156,7 +161,6 @@ class ModelDownloadService : Service() {
                                 cloudModel = cloudModel,
                                 outputLocation = outputLocation,
                                 baseDir = baseDir,
-                                notificationId = notificationId,
                                 downloadUrl = downloadUrl
                             )
                         }
@@ -167,7 +171,6 @@ class ModelDownloadService : Service() {
                             installer = installer,
                             cloudModel = cloudModel,
                             outputLocation = outputLocation,
-                            notificationId = notificationId,
                             downloadUrl = downloadUrl,
                             error = error
                         )
@@ -181,7 +184,6 @@ class ModelDownloadService : Service() {
                 installer = installer,
                 cloudModel = cloudModel,
                 outputLocation = outputLocation,
-                notificationId = notificationId,
                 downloadUrl = downloadUrl,
                 error = e
             )
@@ -193,7 +195,6 @@ class ModelDownloadService : Service() {
         cloudModel: CloudModel,
         outputLocation: File,
         baseDir: File,
-        notificationId: Int,
         downloadUrl: String
     ) {
         try {
@@ -201,11 +202,10 @@ class ModelDownloadService : Service() {
             val result = installer.installModel(cloudModel, outputLocation, baseDir)
 
             result.onSuccess {
-                showDownloadCompleteNotification(notificationId, cloudModel.modelName)
+                showCompletionNotification(cloudModel.modelName)
                 Log.i(TAG, "Successfully installed: ${cloudModel.modelName}")
             }.onFailure { error ->
-                showDownloadErrorNotification(
-                    notificationId,
+                showErrorNotification(
                     cloudModel.modelName,
                     error.message ?: "Installation failed"
                 )
@@ -215,14 +215,15 @@ class ModelDownloadService : Service() {
 
         } catch (e: Exception) {
             Log.e(TAG, "Error during installation: ${e.message}", e)
-            showDownloadErrorNotification(
-                notificationId,
+            showErrorNotification(
                 cloudModel.modelName,
                 e.message ?: "Installation error"
             )
             installer.cleanup(outputLocation)
         } finally {
             activeDownloads.remove(downloadUrl)
+            notificationThrottler.removeDownload(downloadUrl)
+            updateSummaryNotification()
             checkAndStopService()
         }
     }
@@ -231,12 +232,10 @@ class ModelDownloadService : Service() {
         installer: SuperInstaller,
         cloudModel: CloudModel,
         outputLocation: File,
-        notificationId: Int,
         downloadUrl: String,
         error: Throwable
     ) {
-        showDownloadErrorNotification(
-            notificationId,
+        showErrorNotification(
             cloudModel.modelName,
             error.message ?: "Download failed"
         )
@@ -244,6 +243,8 @@ class ModelDownloadService : Service() {
         Log.e(TAG, "Download failed for ${cloudModel.modelName}", error)
 
         activeDownloads.remove(downloadUrl)
+        notificationThrottler.removeDownload(downloadUrl)
+        updateSummaryNotification()
         checkAndStopService()
     }
 
@@ -252,17 +253,100 @@ class ModelDownloadService : Service() {
             task.job.cancel()
             task.installer.cleanup(task.outputLocation)
             activeDownloads.remove(url)
+            notificationThrottler.removeDownload(url)
             Log.i(TAG, "Cancelled download: $url")
 
+            updateSummaryNotification()
             checkAndStopService()
         }
     }
 
     private fun checkAndStopService() {
         if (activeDownloads.isEmpty()) {
+            notificationManager.cancel(SUMMARY_NOTIFICATION_ID)
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
+    }
+
+    private fun updateSummaryNotification() {
+        if (activeDownloads.isEmpty()) return
+
+        val downloadCount = activeDownloads.size
+        val progressData = notificationThrottler.getCurrentProgress()
+
+        // Calculate average progress
+        val avgProgress = if (progressData.isNotEmpty()) {
+            progressData.values.average().toFloat()
+        } else {
+            0f
+        }
+
+        val contentText = when {
+            downloadCount == 1 -> {
+                val modelName = activeDownloads.values.first().modelName
+                val progress = progressData.values.firstOrNull() ?: 0f
+                "$modelName (${progress.toInt()}%)"
+            }
+            else -> "$downloadCount models downloading"
+        }
+
+        // Create cancel all intent
+        val cancelIntent = Intent(this, ModelDownloadService::class.java).apply {
+            action = ACTION_CANCEL_ALL
+        }
+        val cancelPendingIntent = PendingIntent.getService(
+            this,
+            0,
+            cancelIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Model Downloads")
+            .setContentText(contentText)
+            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setProgress(100, avgProgress.toInt(), false)
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
+            .setOnlyAlertOnce(true)
+            .setGroup(NOTIFICATION_GROUP)
+            .setGroupSummary(true)
+            .addAction(
+                android.R.drawable.ic_delete,
+                "Cancel All",
+                cancelPendingIntent
+            )
+            .build()
+
+        startForeground(SUMMARY_NOTIFICATION_ID, notification)
+    }
+
+    private fun showCompletionNotification(modelName: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Download Complete")
+            .setContentText(modelName)
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .setGroup(NOTIFICATION_GROUP)
+            .build()
+
+        notificationManager.notify(modelName.hashCode(), notification)
+    }
+
+    private fun showErrorNotification(modelName: String, error: String) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Download Failed")
+            .setContentText("$modelName: $error")
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setGroup(NOTIFICATION_GROUP)
+            .build()
+
+        notificationManager.notify(modelName.hashCode(), notification)
     }
 
     private fun createNotificationChannel() {
@@ -277,59 +361,58 @@ class ModelDownloadService : Service() {
         notificationManager.createNotificationChannel(channel)
     }
 
-    private fun showDownloadNotification(id: Int, modelName: String, progress: Float) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Downloading: $modelName")
-            .setContentText("${progress.toInt()}%")
-            .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setProgress(100, progress.toInt(), false)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .build()
+    /**
+     * Throttles notification updates to prevent spam
+     */
+    private inner class NotificationThrottler {
+        private val progressMap = mutableMapOf<String, Float>()
+        private var updateJob: Job? = null
+        private val updateInterval = 500L // Update every 500ms
 
-        startForeground(id, notification)
-    }
+        fun updateProgress(downloadUrl: String, modelName: String, progress: Float) {
+            progressMap[downloadUrl] = progress
 
-    private fun showDownloadCompleteNotification(id: Int, modelName: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Download Complete")
-            .setContentText(modelName)
-            .setSmallIcon(android.R.drawable.stat_sys_download_done)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .setAutoCancel(true)
-            .build()
+            // Start update job if not already running
+            if (updateJob?.isActive != true) {
+                updateJob = serviceScope.launch {
+                    while (progressMap.isNotEmpty()) {
+                        updateSummaryNotification()
+                        delay(updateInterval)
+                    }
+                }
+            }
+        }
 
-        notificationManager.notify(id, notification)
-    }
+        fun removeDownload(downloadUrl: String) {
+            progressMap.remove(downloadUrl)
+        }
 
-    private fun showDownloadErrorNotification(id: Int, modelName: String, error: String) {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Download Failed")
-            .setContentText("$modelName: $error")
-            .setSmallIcon(android.R.drawable.stat_notify_error)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
-            .setAutoCancel(true)
-            .build()
+        fun getCurrentProgress(): Map<String, Float> = progressMap.toMap()
 
-        notificationManager.notify(id, notification)
+        fun cancel() {
+            updateJob?.cancel()
+            progressMap.clear()
+        }
     }
 
     private data class DownloadTask(
         val job: Job,
         val installer: SuperInstaller,
-        val outputLocation: File
+        val outputLocation: File,
+        val modelName: String
     )
 
     companion object {
         private const val TAG = "ModelDownloadService"
         private const val ACTION_START_DOWNLOAD = "com.mp.ai_engine.START_DOWNLOAD"
         private const val ACTION_CANCEL_DOWNLOAD = "com.mp.ai_engine.CANCEL_DOWNLOAD"
+        private const val ACTION_CANCEL_ALL = "com.mp.ai_engine.CANCEL_ALL"
         private const val EXTRA_CLOUD_MODEL = "extra_cloud_model"
         private const val EXTRA_DOWNLOAD_URL = "extra_download_url"
         private const val EXTRA_BASE_DIR = "extra_base_dir"
         private const val CHANNEL_ID = "model_download_channel"
-        private const val NOTIFICATION_ID_START = 1000
+        private const val SUMMARY_NOTIFICATION_ID = 1000
+        private const val NOTIFICATION_GROUP = "model_downloads"
 
         fun startDownload(
             context: Context,
