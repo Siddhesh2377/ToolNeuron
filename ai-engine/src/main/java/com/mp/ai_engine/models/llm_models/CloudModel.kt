@@ -13,6 +13,8 @@ data class CloudModel(
     val providerName: String = "",
     val modelType: ModelType = ModelType.NONE,
     val modelFileSize: String = "",
+    val modelFileLink: String = "",
+    val isLocal: Boolean = false,
     val metaData: Map<String, String> = emptyMap()
 )
 

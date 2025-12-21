@@ -1,184 +1,207 @@
 package com.dark.tool_neuron.viewModel.modelScreen
 
-import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.dark.tool_neuron.model.GGUFModels
+import com.dark.tool_neuron.data.ModelDataProvider
 import com.mp.ai_engine.models.llm_models.CloudModel
-import com.mp.ai_engine.models.llm_models.ModelProvider
-import com.mp.ai_engine.models.llm_models.ModelType
-import com.mp.ai_engine.workers.installer.DownloadProgressManager
-import com.mp.ai_engine.workers.installer.DownloadState
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
+import com.mp.ai_engine.workers.DownloadState
+import com.mp.ai_engine.workers.DownloadsState
 import com.mp.ai_engine.workers.installer.ModelInstaller
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
+/**
+ * Clean ViewModel for managing online model downloads
+ */
 class OnlineModelStoreViewModel : ViewModel() {
 
     companion object {
-        private const val TAG = "OnlineModelStoreViewModel"
+        private const val TAG = "OnlineModelStoreVM"
     }
 
-    private val _ggufModels = MutableStateFlow<List<GGUFModels>>(emptyList())
-    val ggufModels: StateFlow<List<GGUFModels>> = _ggufModels
+    // Available models from server/firebase
+    private val _availableModels = MutableStateFlow<List<CloudModel>>(emptyList())
+    val availableModels: StateFlow<List<CloudModel>> = _availableModels.asStateFlow()
 
-    // Observe download states from the centralized manager
-    val downloadStates: StateFlow<Map<String, DownloadState>> =
-        DownloadProgressManager.downloadStates.stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyMap()
-        )
+    // Installed models from database
+    private val _installedModels = MutableStateFlow<List<GGUFDatabaseModel>>(emptyList())
+    val installedModels: StateFlow<List<GGUFDatabaseModel>> = _installedModels.asStateFlow()
+
+    // Download states from ModelInstaller
+    val downloadsState: StateFlow<DownloadsState> = ModelInstaller.downloadsState.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = DownloadsState()
+    )
 
     init {
-        observeGGUFModels()
+        loadInstalledModels()
+        loadAvailableModels()
     }
 
-    private fun observeGGUFModels() {
-        viewModelScope.launch(Dispatchers.IO) {
-            // TODO: Implement your Firebase/database fetching logic
-//            db.collection("gguf-models").get().addOnSuccessListener {
-//                val models = it.toObjects(GGUFModels::class.java)
-//                _ggufModels.value = models
-//            }.addOnFailureListener {
-//                Log.e(TAG, "Error fetching GGUF models", it)
-//            }
-        }
-    }
+    // ==================== Data Loading ====================
 
     /**
-     * Start downloading a model
+     * Load installed models from database
      */
-    fun startDownload(model: GGUFModels) {
+    private fun loadInstalledModels() {
         viewModelScope.launch {
             try {
-                // Convert GGUFModels to CloudModel
-                val cloudModel = CloudModel(
-                    modelName = model.modelName,
-                    providerName = ModelProvider.GGUF.toString(),
-                    modelType = when (model.modelType) {
-                        "TXT" -> ModelType.TEXT
-                        "VLM" -> ModelType.VLM
-                        "EMBED" -> ModelType.EMBEDDING
-                        else -> ModelType.TEXT
-                    },
-                    modelDescription = model.modelDescription,
-                )
-
-                ModelInstaller.install(
-                    cloudModel = cloudModel,
-                    downloadUrl = model.modelFileLink,
-                    onSuccess = {
-                        Log.i(TAG, "Download started successfully for: ${model.modelName}")
-                    },
-                    onError = { error ->
-                        Log.e(TAG, "Failed to start download: $error")
-                        DownloadProgressManager.markFailed(model.modelFileLink, error)
-                    }
-                )
+                val models = ModelInstaller.getInstalledGGUFModels()
+                _installedModels.value = models
+                Log.d(TAG, "Loaded ${models.size} installed models")
             } catch (e: Exception) {
-                Log.e(TAG, "Error starting download", e)
-                DownloadProgressManager.markFailed(
-                    model.modelFileLink,
-                    e.message ?: "Unknown error"
-                )
+                Log.e(TAG, "Error loading installed models", e)
             }
         }
     }
 
     /**
-     * Cancel an ongoing download
+     * Load available models from server/firebase
      */
-    fun cancelDownload(modelName: String, downloadUrl: String, context: Context) {
+    private fun loadAvailableModels() {
         viewModelScope.launch {
             try {
-                ModelInstaller.cancelDownload(downloadUrl)
-                DownloadProgressManager.removeDownload(downloadUrl)
-                Log.i(TAG, "Download cancelled for: $modelName")
+                // Load from pre-configured list (can be replaced with Firebase/API)
+                val models = ModelDataProvider.getGGUFModels()
+                _availableModels.value = models
+
+                Log.d(TAG, "Loaded ${models.size} available models")
+
+                // TODO: Replace with Firebase fetch if needed:
+                // val firebaseModels = firebaseRepository.getAvailableModels()
+                // _availableModels.value = firebaseModels
             } catch (e: Exception) {
-                Log.e(TAG, "Error cancelling download", e)
+                Log.e(TAG, "Error loading available models", e)
             }
         }
     }
 
     /**
-     * Delete an installed model
+     * Refresh both lists
      */
-    fun removeModel(model: GGUFModels) {
-        viewModelScope.launch {
-            try {
-                // You'll need to get the model ID from your database
-                // For now, using model name as a fallback
-                withContext(Dispatchers.IO) {
-                    val installedModels = ModelInstaller.getInstalledGGUFModels()
-                    val installedModel = installedModels.find { it.modelName == model.modelName }
+    fun refresh() {
+        loadInstalledModels()
+        loadAvailableModels()
+    }
 
-                    if (installedModel != null) {
-                        ModelInstaller.deleteModel(
-                            modelId = installedModel.id,
-                            onSuccess = {
-                                Log.i(TAG, "Model deleted successfully: ${model.modelName}")
-                            },
-                            onError = { error ->
-                                Log.e(TAG, "Failed to delete model: $error")
-                            }
-                        )
-                    } else {
-                        Log.w(TAG, "Model not found in installed models: ${model.modelName}")
-                    }
+    // ==================== Installation ====================
+
+    /**
+     * Download and install a model from online source
+     */
+    fun downloadModel(cloudModel: CloudModel) {
+        viewModelScope.launch {
+            ModelInstaller.installOnline(
+                cloudModel = cloudModel,
+                onStarted = {
+                    Log.i(TAG, "Download started: ${cloudModel.modelName}")
+                },
+                onError = { error ->
+                    Log.e(TAG, "Download failed to start: $error")
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error deleting model", e)
-            }
+            )
         }
     }
 
     /**
-     * Get download state for a specific model
+     * Install model from local file
      */
-    fun getDownloadState(downloadUrl: String): DownloadState? {
-        return downloadStates.value[downloadUrl]
+    fun installLocalModel(cloudModel: CloudModel, localPath: String) {
+        viewModelScope.launch {
+            ModelInstaller.installOffline(
+                cloudModel = cloudModel,
+                localPath = localPath,
+                onSuccess = {
+                    Log.i(TAG, "Local model installed: ${cloudModel.modelName}")
+                    loadInstalledModels() // Refresh installed list
+                },
+                onError = { error ->
+                    Log.e(TAG, "Local install failed: $error")
+                }
+            )
+        }
     }
 
-    /**
-     * Check if a model is currently downloading
-     */
-    fun isModelDownloading(downloadUrl: String): Boolean {
-        return downloadStates.value[downloadUrl]?.isDownloading == true
-    }
+    // ==================== Download Control ====================
 
     /**
-     * Get all active downloads
+     * Cancel a specific download
      */
-    fun getActiveDownloads(): List<String> {
-        return DownloadProgressManager.getActiveDownloads()
-    }
-
-    /**
-     * Get download progress for a specific model (0-100)
-     */
-    fun getDownloadProgress(downloadUrl: String): Float {
-        return downloadStates.value[downloadUrl]?.progress ?: 0f
+    fun cancelDownload(downloadId: String) {
+        ModelInstaller.cancelDownload(downloadId)
+        Log.i(TAG, "Cancelled download: $downloadId")
     }
 
     /**
      * Cancel all active downloads
      */
-    fun cancelAllDownloads(context: Context) {
+    fun cancelAllDownloads() {
+        ModelInstaller.cancelAllDownloads()
+        Log.i(TAG, "Cancelled all downloads")
+    }
+
+    // ==================== Model Management ====================
+
+    /**
+     * Delete an installed model
+     */
+    fun deleteModel(modelId: String) {
         viewModelScope.launch {
-            val activeDownloads = getActiveDownloads()
-            activeDownloads.forEach { downloadUrl ->
-                ModelInstaller.cancelDownload(downloadUrl)
-                DownloadProgressManager.removeDownload(downloadUrl)
-            }
-            Log.i(TAG, "Cancelled all downloads (${activeDownloads.size})")
+            ModelInstaller.deleteModel(
+                modelId = modelId,
+                onSuccess = {
+                    Log.i(TAG, "Model deleted: $modelId")
+                    loadInstalledModels() // Refresh installed list
+                },
+                onError = { error ->
+                    Log.e(TAG, "Delete failed: $error")
+                }
+            )
         }
+    }
+
+    // ==================== Query Methods ====================
+
+    /**
+     * Check if a model is installed
+     */
+    fun isModelInstalled(modelName: String): Boolean {
+        return _installedModels.value.any { it.modelName == modelName }
+    }
+
+    /**
+     * Get download state for a specific model
+     */
+    fun getDownloadState(downloadId: String): DownloadState? {
+        return downloadsState.value.getDownload(downloadId)
+    }
+
+    /**
+     * Check if model is currently downloading
+     */
+    fun isDownloading(downloadId: String): Boolean {
+        return downloadsState.value.isDownloading(downloadId)
+    }
+
+    /**
+     * Get all active downloads
+     */
+    fun getActiveDownloads(): List<DownloadState> {
+        return downloadsState.value.activeDownloads
+    }
+
+    /**
+     * Clear completed/failed downloads from tracking
+     */
+    fun clearInactiveDownloads() {
+        ModelInstaller.clearInactiveDownloads()
     }
 
     override fun onCleared() {

@@ -49,10 +49,12 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -78,66 +80,469 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.ModelData
 import com.dark.ai_module.model.ModelType
+import com.dark.tool_neuron.activity.formatBytes
 import com.dark.tool_neuron.model.GGUFModels
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.llm_model.ModelScreenViewModel
 import com.dark.tool_neuron.viewModel.modelScreen.OnlineModelStoreViewModel
+import com.mp.ai_engine.models.llm_models.CloudModel
+import com.mp.ai_engine.models.llm_models.GGUFDatabaseModel
 import com.mp.ai_engine.models.llm_models.ModelProvider
+import com.mp.ai_engine.models.llm_models.toGGUFModel
+import com.mp.ai_engine.workers.DownloadState
 import java.io.File
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GGUFModelScreen(
-    viewModel: OnlineModelStoreViewModel = viewModel(),
-    modelScreenViewModel: ModelScreenViewModel = viewModel()
+    viewModel: OnlineModelStoreViewModel = viewModel()
 ) {
-    val models = viewModel.ggufModels.collectAsStateWithLifecycle()
-    val installedModels = modelScreenViewModel.ggufModels.collectAsStateWithLifecycle()
-    val downloadStates = viewModel.downloadStates.collectAsStateWithLifecycle()
+    val availableModels by viewModel.availableModels.collectAsStateWithLifecycle()
+    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val downloadsState by viewModel.downloadsState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         when {
-            models.value.isEmpty() -> {
+            availableModels.isEmpty() -> {
                 EmptyState()
             }
-
             else -> {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(rDP(16.dp)),
                     verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
                 ) {
-                    items(models.value) { model ->
-                        val isInstalled = installedModels.value.any {
-                            it.modelName == model.modelName
+                    items(
+                        items = availableModels,
+                        key = { it.modelFileLink } // Use download URL as unique key
+                    ) { cloudModel ->
+                        // Check if model is installed
+                        val isInstalled = installedModels.any {
+                            it.modelName == cloudModel.modelName
                         }
-                        val downloadState = downloadStates.value[model.modelFileLink]
-                        val compatibility = getModelCompatibility(context, model)
+
+                        // Get download state
+                        val downloadState = downloadsState.getDownload(cloudModel.modelFileLink)
+
+                        // Get compatibility
+                        val compatibility = getModelCompatibility(context, cloudModel.toGGUFModel(
+                            File("")))
 
                         ModelCard(
-                            model = model,
+                            model = cloudModel,
                             compatibility = compatibility,
                             isInstalled = isInstalled,
                             downloadState = downloadState,
                             onDownload = {
-                                val modelData = model.toModelData(context)
-                                viewModel.startDownload(modelData)
+                                viewModel.downloadModel(cloudModel)
                             },
                             onCancelDownload = {
-                                viewModel.cancelDownload(
-                                    model.modelName, model.modelFileLink, context
-                                )
+                                viewModel.cancelDownload(cloudModel.modelFileLink)
                             },
                             onDelete = {
-                                viewModel.removeModel(model.modelName)
-                            })
+                                // Find the installed model ID
+                                val installedModel = installedModels.find {
+                                    it.modelName == cloudModel.modelName
+                                }
+                                installedModel?.let {
+                                    viewModel.deleteModel(it.id)
+                                }
+                            }
+                        )
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Model card with download/install functionality
+ */
+@Composable
+fun ModelCard(
+    model: CloudModel,
+    compatibility: ModelCompatibility,
+    isInstalled: Boolean,
+    downloadState: DownloadState?,
+    onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var showDetails by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(rDP(16.dp)),
+        elevation = CardDefaults.cardElevation(defaultElevation = rDP(2.dp)),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(rDP(20.dp))
+        ) {
+            // Header - Model Name & Info
+            ModelHeader(model = model)
+
+            Spacer(modifier = Modifier.height(rDP(16.dp)))
+
+//            // Tags
+//            if (model.metaData["tags"]?.isNotEmpty() == true) {
+//                ModelTags(tags = model.metaData["tags"]!!.split(","))
+//                Spacer(modifier = Modifier.height(rDP(16.dp)))
+//            }
+
+            // Compatibility Badge
+            CompatibilityBadge(compatibility = compatibility)
+
+            Spacer(modifier = Modifier.height(rDP(16.dp)))
+
+            // Quick Stats
+            ModelQuickStats(model = model)
+
+            // Show Details Toggle
+            Spacer(modifier = Modifier.height(rDP(12.dp)))
+            TextButton(
+                onClick = { showDetails = !showDetails },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = if (showDetails) "Hide Details" else "Show Details",
+                    style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)
+                    )
+                )
+                Icon(
+                    imageVector = if (showDetails) Icons.Default.ExpandLess
+                    else Icons.Default.ExpandMore,
+                    contentDescription = null,
+                    modifier = Modifier.size(rDP(18.dp))
+                )
+            }
+
+            // Expanded Details
+            if (showDetails) {
+                Spacer(modifier = Modifier.height(rDP(12.dp)))
+                HorizontalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                )
+                Spacer(modifier = Modifier.height(rDP(16.dp)))
+                DetailedSpecs(model = model.toGGUFModel(File("")), compatibility = compatibility)
+            }
+
+            Spacer(modifier = Modifier.height(rDP(16.dp)))
+
+            // Action Section
+            ModelActionSection(
+                downloadState = downloadState,
+                isInstalled = isInstalled,
+                compatibility = compatibility,
+                onDownload = onDownload,
+                onCancelDownload = onCancelDownload,
+                onDelete = onDelete
+            )
+        }
+    }
+}
+
+/**
+ * Header section with model name and description
+ */
+@Composable
+private fun ModelHeader(model: CloudModel) {
+    Column {
+        Text(
+            text = model.modelName,
+            style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = rSp(MaterialTheme.typography.titleLarge.fontSize)
+            ),
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+
+        if (model.modelDescription.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(rDP(6.dp)))
+            Text(
+                text = model.modelDescription,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = rSp(MaterialTheme.typography.bodyMedium.fontSize)
+                ),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(rDP(10.dp)))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Architecture badge
+            val architecture = model.metaData["architecture"] ?: "LLAMA"
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(rDP(6.dp)))
+                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
+                    .padding(horizontal = rDP(10.dp), vertical = rDP(4.dp))
+            ) {
+                Text(
+                    text = architecture.uppercase(),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontSize = rSp(MaterialTheme.typography.labelSmall.fontSize)
+                    ),
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            Text(
+                text = "•",
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+            )
+
+            Text(
+                text = model.modelFileSize,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = rSp(MaterialTheme.typography.bodyMedium.fontSize)
+                ),
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Medium
+            )
+        }
+    }
+}
+
+/**
+ * Quick statistics row
+ */
+@Composable
+private fun ModelQuickStats(model: CloudModel) {
+    val ctxSize = model.metaData["ctxSize"]?.toIntOrNull() ?: 4096
+    val gpuLayers = model.metaData["gpu-layers"]?.toIntOrNull() ?: 0
+    val temp = model.metaData["temp"]?.toFloatOrNull() ?: 0.7f
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
+    ) {
+        QuickStatCard(
+            icon = Icons.Default.TextFields,
+            label = "Context",
+            value = formatNumber(ctxSize),
+            modifier = Modifier.weight(1f)
+        )
+        QuickStatCard(
+            icon = Icons.Outlined.Layers,
+            label = "GPU Layers",
+            value = gpuLayers.toString(),
+            modifier = Modifier.weight(1f)
+        )
+        QuickStatCard(
+            icon = Icons.Default.Speed,
+            label = "Temp",
+            value = temp.toString(),
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+/**
+ * Action section - download/install/delete buttons
+ */
+@Composable
+private fun ModelActionSection(
+    downloadState: DownloadState?,
+    isInstalled: Boolean,
+    compatibility: ModelCompatibility,
+    onDownload: () -> Unit,
+    onCancelDownload: () -> Unit,
+    onDelete: () -> Unit
+) {
+    when (downloadState) {
+        is DownloadState.Downloading -> {
+            DownloadProgressSection(
+                progress = downloadState.progressPercent.toFloat(),
+                downloadedBytes = downloadState.downloadedBytes,
+                totalBytes = downloadState.totalBytes,
+                onCancel = onCancelDownload
+            )
+        }
+
+        is DownloadState.Installing -> {
+            InstallingSection()
+        }
+
+        is DownloadState.Completed, null -> {
+            if (isInstalled) {
+                InstalledSection(onDelete = onDelete)
+            } else {
+                DownloadButton(
+                    compatibility = compatibility,
+                    onDownload = onDownload
+                )
+            }
+        }
+
+        is DownloadState.Failed -> {
+            ErrorSection(
+                errorMessage = downloadState.error,
+                onRetry = onDownload
+            )
+        }
+
+        is DownloadState.Cancelled -> {
+            DownloadButton(
+                compatibility = compatibility,
+                onDownload = onDownload
+            )
+        }
+
+        else -> { /* Idle state */ }
+    }
+}
+
+/**
+ * Download button
+ */
+@Composable
+private fun DownloadButton(
+    compatibility: ModelCompatibility,
+    onDownload: () -> Unit
+) {
+    Button(
+        onClick = onDownload,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(rDP(52.dp)),
+        shape = RoundedCornerShape(rDP(12.dp)),
+        enabled = compatibility.rating != CompatibilityRating.INCOMPATIBLE,
+        elevation = ButtonDefaults.buttonElevation(
+            defaultElevation = rDP(0.dp)
+        )
+    ) {
+        Icon(
+            imageVector = Icons.Default.Download,
+            contentDescription = null,
+            modifier = Modifier.size(rDP(20.dp))
+        )
+        Spacer(modifier = Modifier.width(rDP(10.dp)))
+        Text(
+            text = if (compatibility.rating == CompatibilityRating.INCOMPATIBLE)
+                "Incompatible with Device"
+            else "Download Model",
+            style = MaterialTheme.typography.labelLarge.copy(
+                fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)
+            ),
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+/**
+ * Installing indicator
+ */
+@Composable
+private fun InstallingSection() {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(rDP(12.dp)),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier.padding(rDP(16.dp)),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(rDP(20.dp)),
+                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                strokeWidth = rDP(2.dp)
+            )
+            Spacer(modifier = Modifier.width(rDP(12.dp)))
+            Text(
+                text = "Installing Model...",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = rSp(MaterialTheme.typography.bodyMedium.fontSize)
+                ),
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+/**
+ * Download progress section
+ */
+@Composable
+private fun DownloadProgressSection(
+    progress: Float,
+    downloadedBytes: Long,
+    totalBytes: Long,
+    onCancel: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Downloading...",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.primary
+            )
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = "${progress.toInt()}%",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (totalBytes > 0) {
+                    Text(
+                        text = "${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(rDP(8.dp)))
+
+        LinearProgressIndicator(
+            progress = progress / 100f,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(rDP(8.dp))
+                .clip(RoundedCornerShape(rDP(4.dp))),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+
+        Spacer(modifier = Modifier.height(rDP(12.dp)))
+
+        OutlinedButton(
+            onClick = onCancel,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDP(12.dp)),
+            colors = ButtonDefaults.outlinedButtonColors(
+                contentColor = MaterialTheme.colorScheme.error
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = null,
+                modifier = Modifier.size(rDP(20.dp))
+            )
+            Spacer(modifier = Modifier.width(rDP(8.dp)))
+            Text("Cancel Download")
         }
     }
 }
@@ -157,7 +562,7 @@ enum class CompatibilityRating {
     EXCELLENT, GOOD, FAIR, POOR, INCOMPATIBLE
 }
 
-fun getModelCompatibility(context: Context, model: GGUFModels): ModelCompatibility {
+fun getModelCompatibility(context: Context, model: GGUFDatabaseModel): ModelCompatibility {
     val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val memInfo = ActivityManager.MemoryInfo()
     activityManager.getMemoryInfo(memInfo)
@@ -543,296 +948,6 @@ fun EmptyState() {
     }
 }
 
-// Extension function to convert GGUFModels to ModelData
-fun GGUFModels.toModelData(context: Context): ModelData {
-    val modelsDir = File(context.filesDir, "models")
-    val modelFile = File(modelsDir, "${modelName}.gguf")
-
-    return ModelData(
-        modelName = modelName,
-        providerName = ModelProvider.GGUF.toString(),
-        modelType = when (modelType) {
-            "TXT" -> ModelType.TEXT
-            "VLM" -> ModelType.VLM
-            "EMBED" -> ModelType.EMBEDDING
-            else -> ModelType.TEXT
-        },
-        modelPath = modelFile.absolutePath,
-        architecture = architecture,
-        gpuLayers = gpuLayers,
-        useMMAP = useMMAP,
-        useMLOCK = useMLOCK,
-        ctxSize = ctxSize,
-        temp = temp,
-        topK = topK,
-        topP = topP,
-        minP = minP,
-        maxTokens = maxTokens,
-        mirostat = mirostat,
-        mirostatTau = mirostatTau,
-        mirostatEta = mirostatEta,
-        seed = seed,
-        isImported = isImported,
-        modelUrl = modelFileLink,
-        isToolCalling = isToolCalling,
-        systemPrompt = systemPrompt,
-        chatTemplate = chatTemplate
-    )
-}
-
-
-@Composable
-fun ModelCard(
-    model: GGUFModels,
-    compatibility: ModelCompatibility,
-    isInstalled: Boolean,
-    downloadState: DownloadState?,
-    onDownload: () -> Unit,
-    onCancelDownload: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var showDetails by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDP(16.dp)),
-        elevation = CardDefaults.cardElevation(defaultElevation = rDP(0.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
-        )
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(20.dp))
-        ) {
-            // Header Section - Model Name & Type
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = model.modelName,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = rSp(MaterialTheme.typography.titleLarge.fontSize)),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-
-                    if (model.modelDescription.isNotEmpty()) {
-                        Spacer(modifier = Modifier.height(rDP(6.dp)))
-                        Text(
-                            text = model.modelDescription,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = rSp(MaterialTheme.typography.bodyMedium.fontSize)),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
-                            lineHeight = rSp(20.sp)
-                        )
-                    }
-
-                    Spacer(modifier = Modifier.height(rDP(10.dp)))
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp)),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Architecture badge
-                        Box(
-                            modifier = Modifier
-                                .clip(RoundedCornerShape(rDP(6.dp)))
-                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f))
-                                .padding(horizontal = rDP(10.dp), vertical = rDP(4.dp))
-                        ) {
-                            Text(
-                                text = model.architecture.uppercase(),
-                                style = MaterialTheme.typography.labelSmall.copy(fontSize = rSp(MaterialTheme.typography.labelSmall.fontSize)),
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-
-                        Text(
-                            text = "•",
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-                        )
-
-                        Text(
-                            text = model.modelFileSize,
-                            style = MaterialTheme.typography.bodyMedium.copy(fontSize = rSp(MaterialTheme.typography.bodyMedium.fontSize)),
-                            color = MaterialTheme.colorScheme.onSurface,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                ModelTypeChip(modelType = model.modelType)
-            }
-
-            Spacer(modifier = Modifier.height(rDP(16.dp)))
-
-            // Tags Section
-            if (model.modelTags.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDP(6.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    model.modelTags.take(3).forEach { tag ->
-                        TagChip(text = tag)
-                    }
-                    if (model.modelTags.size > 3) {
-                        Text(
-                            text = "+${model.modelTags.size - 3}",
-                            style = MaterialTheme.typography.labelSmall.copy(fontSize = rSp(MaterialTheme.typography.labelSmall.fontSize)),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-                Spacer(modifier = Modifier.height(rDP(16.dp)))
-            }
-
-            // Compatibility Badge
-            CompatibilityBadge(compatibility = compatibility)
-
-            Spacer(modifier = Modifier.height(rDP(16.dp)))
-
-            // Quick Stats
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
-            ) {
-                QuickStatCard(
-                    icon = Icons.Default.TextFields,
-                    label = "Context",
-                    value = formatNumber(model.ctxSize),
-                    modifier = Modifier.weight(1f)
-                )
-                QuickStatCard(
-                    icon = Icons.Outlined.Layers,
-                    label = "GPU Layers",
-                    value = model.gpuLayers.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-                QuickStatCard(
-                    icon = Icons.Default.Speed,
-                    label = "Temp",
-                    value = model.temp.toString(),
-                    modifier = Modifier.weight(1f)
-                )
-            }
-
-            // Additional Features
-            if (model.isToolCalling) {
-                Spacer(modifier = Modifier.height(rDP(12.dp)))
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDP(6.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = null,
-                        modifier = Modifier.size(rDP(16.dp)),
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
-                    Text(
-                        text = "Function Calling Supported",
-                        style = MaterialTheme.typography.labelMedium.copy(fontSize = rSp(MaterialTheme.typography.labelMedium.fontSize)),
-                        color = MaterialTheme.colorScheme.tertiary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-
-            // Show Details Toggle
-            Spacer(modifier = Modifier.height(rDP(12.dp)))
-            TextButton(
-                onClick = { showDetails = !showDetails },
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(vertical = rDP(4.dp))
-            ) {
-                Text(
-                    text = if (showDetails) "Hide Advanced Settings" else "Show Advanced Settings",
-                    style = MaterialTheme.typography.labelLarge.copy(fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)),
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.width(rDP(4.dp)))
-                Icon(
-                    imageVector = if (showDetails) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDP(18.dp))
-                )
-            }
-
-            // Expanded Details
-            if (showDetails) {
-                Spacer(modifier = Modifier.height(rDP(12.dp)))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                Spacer(modifier = Modifier.height(rDP(16.dp)))
-                DetailedSpecs(model = model, compatibility = compatibility)
-            }
-
-            Spacer(modifier = Modifier.height(rDP(16.dp)))
-
-            // Action Button Section
-            when (downloadState) {
-                is DownloadState.Downloading -> {
-                    DownloadProgressSection(
-                        progress = downloadState.progress,
-                        onCancel = onCancelDownload
-                    )
-                }
-
-                is DownloadState.Complete -> {
-                    InstalledSection(onDelete = onDelete)
-                }
-
-                // If already installed (from database, not from download state)
-                null -> {
-                    if (isInstalled) {
-                        InstalledSection(onDelete = onDelete)
-                    } else {
-                        // Show download button
-                        Button(
-                            onClick = onDownload,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(rDP(52.dp)),
-                            shape = RoundedCornerShape(rDP(12.dp)),
-                            enabled = compatibility.rating != CompatibilityRating.INCOMPATIBLE,
-                            elevation = ButtonDefaults.buttonElevation(
-                                defaultElevation = rDP(0.dp),
-                                pressedElevation = rDP(0.dp)
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = null,
-                                modifier = Modifier.size(rDP(20.dp))
-                            )
-                            Spacer(modifier = Modifier.width(rDP(10.dp)))
-                            Text(
-                                text = if (compatibility.rating == CompatibilityRating.INCOMPATIBLE)
-                                    "Incompatible with Device"
-                                else "Download Model",
-                                style = MaterialTheme.typography.labelLarge.copy(
-                                    fontSize = rSp(MaterialTheme.typography.labelLarge.fontSize)
-                                ),
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-
-                is DownloadState.Failed -> {
-                    ErrorSection(
-                        errorMessage = downloadState.error,
-                        onRetry = onDownload
-                    )
-                }
-            }
-        }
-    }
-}
 @Composable
 fun TagChip(text: String) {
     Box(
@@ -954,7 +1069,7 @@ fun CompatibilityBadge(compatibility: ModelCompatibility) {
 }
 
 @Composable
-fun DetailedSpecs(model: GGUFModels, compatibility: ModelCompatibility) {
+fun DetailedSpecs(model: GGUFDatabaseModel, compatibility: ModelCompatibility) {
     Column(
         verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
     ) {
