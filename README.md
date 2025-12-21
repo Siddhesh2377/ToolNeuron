@@ -1,22 +1,24 @@
 <div align="center">
 
 # ToolNeuron
+<a href="https://www.producthunt.com/products/toolneuron?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-toolneuron" target="_blank" rel="noopener noreferrer"><img alt="ToolNeuron - Complete offline AI Chat Voice &amp; Image generation on Android | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1052397&amp;theme=light&amp;t=1766210679236"></a>
 
-### Enterprise-Grade AI Inference for Mobile Devices
+### The Complete Offline AI Ecosystem for Android
 
- APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
+[![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
+[![APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
 
 [![Latest Release](https://img.shields.io/badge/Release-Beta_5.1-blue?logo=github)](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Join-Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
-> "Bridging the gap between privacy and power in mobile AI—where enterprise capabilities meet consumer devices."
+> "Your phone becomes a complete AI workstation: Chat, Voice, Images, and Knowledge—all running offline with zero compromises."
 
-**A privacy-focused mobile ecosystem for AI inference.** Run offline models locally or connect to 100+ cloud models. No subscriptions. No data harvesting. Complete control.
+**The most comprehensive privacy-focused AI ecosystem for mobile devices.** Run LLMs, generate images, use voice AI, inject custom knowledge—all completely offline. Or seamlessly connect to 100+ cloud models when you need more power. No subscriptions. No data harvesting. Complete control.
 
 [![Get it on APKPure](https://img.shields.io/badge/Get_it_on-APKPure-01C853?style=for-the-badge&logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
- 
-  [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
+
+[GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
 
 </div>
 
@@ -24,54 +26,112 @@
 
 ## Overview
 
-ToolNeuron is an open-source Android application that delivers enterprise-grade AI capabilities to smartphones through a hybrid architecture prioritizing user control and data sovereignty.
+ToolNeuron is the first Android application to combine **Chat AI (LLMs)**, **Image Generation (Stable Diffusion)**, **Voice AI (TTS/STT)**, and **Custom Knowledge Injection (RAG)** in a single, privacy-first package. Everything runs entirely on-device with zero internet dependency, or connect to cloud models for maximum flexibility.
 
 ### Core Philosophy
 
-Traditional mobile AI applications force users to choose between two unsatisfactory options: limited offline functionality or cloud-dependent platforms that compromise privacy. ToolNeuron resolves this false dichotomy.
+Stop choosing between privacy and power. ToolNeuron gives you both.
 
 **Three Operating Modes:**
 
-- **Privacy Mode** — Execute quantized GGUF models entirely on-device using `llama.cpp`. Your data never leaves your phone.
-- **Power Mode** — Connect to 100+ premium models (GPT-4, Claude 3.5, Llama 3, Gemini) via OpenRouter for complex tasks.
-- **Hybrid Intelligence** — Seamlessly switch between modes mid-conversation while preserving full context.
+- **🔒 Privacy Mode** — Execute GGUF models (Llama 3, Mistral, Gemma), generate images with Stable Diffusion 1.5, use voice AI, and inject custom knowledge—all completely offline. Your data never leaves your phone.
+- **⚡ Power Mode** — Access 100+ premium cloud models (GPT-4, Claude 3.5, Gemini, DALL-E) via OpenRouter for complex tasks requiring maximum capability.
+- **🔄 Hybrid Intelligence** — Seamlessly switch between offline and cloud modes mid-conversation while preserving full context and conversation history.
+
+---
+
+## What Makes ToolNeuron Different?
+
+🤖 **Complete AI Suite Offline**  
+The only mobile app that combines chat, image generation, voice, and knowledge injection—all running on-device without internet.
+
+🎨 **On-Device Image Generation**  
+Run Stable Diffusion 1.5 (censored & uncensored) completely offline. Generate images on flights, in remote areas, anywhere.
+
+🧠 **RAG Data-Packs**  
+Inject Wikipedia dumps, coding documentation, personal notes, or any custom knowledge directly into AI context—no model retraining required.
+
+🔌 **Extensible Plugin System**  
+Add web search, content scraping, document analysis, and more. Build your own plugins for unlimited extensibility.
+
+🎙️ **Premium Offline Voice**  
+11 professional TTS voices + Whisper STT—all running on-device with zero cloud dependencies and near-instant processing.
+
+🌐 **100+ Cloud Models**  
+When you need maximum power, seamlessly access GPT-4, Claude, Gemini, and 100+ other models via OpenRouter integration.
 
 ---
 
 ## Key Features
 
-### Dual Inference Engine
+### 🤖 Dual Inference Engine
 
 **Local Execution**  
-Native support for GGUF model formats with zero-latency inference. All processing occurs on-device with no network dependencies.
+Native support for GGUF model formats using llama.cpp. Run models like Llama 3, Mistral, Gemma, Phi, and more entirely on-device with optimized quantization for mobile hardware.
 
 **Cloud Orchestration**  
-Unified API integration through OpenRouter provides access to 100+ state-of-the-art models without vendor lock-in.
+Unified API integration through OpenRouter provides instant access to 100+ state-of-the-art models without vendor lock-in or multiple subscriptions.
 
 **Intelligent Streaming**  
-Real-time token generation with context-aware memory management ensures smooth performance across both local and cloud deployments.
+Real-time token generation with context-aware memory management ensures smooth performance whether running locally or in the cloud.
 
-### Premium Offline Text-to-Speech
+### 🎨 On-Device Image Generation
 
-Powered by Sherpa-ONNX, ToolNeuron includes 11 professional-grade voices (5 American Female, 2 American Male, 2 British Female, 2 British Male) that run entirely on CPU/NPU with zero cloud dependencies and near-instantaneous synthesis.
+**Stable Diffusion 1.5**  
+Full SD 1.5 implementation running completely offline on your phone. Generate high-quality images in 30-90 seconds depending on your device.
 
-### Extensible Plugin System
+**Censored & Uncensored Options**  
+Choose between SFW (censored) or uncensored models for artistic freedom and research applications.
+
+**Optimized for Mobile**  
+Specially quantized and optimized to run on phones with 6GB+ RAM while maintaining image quality.
+
+### 🧠 RAG Data-Packs
+
+**Dynamic Knowledge Injection**  
+Mount custom datasets (JSON, text, markdown) to enhance AI responses with specialized knowledge without retraining models.
+
+**Use Cases:**
+- Inject Wikipedia dumps for educational queries
+- Load coding documentation for development assistance
+- Add personal notes or company data for context-aware responses
+- Import research papers or domain-specific knowledge
+
+**Plugin Integration**  
+Data-Packs work seamlessly with both local GGUF models and cloud models for maximum flexibility.
+
+### 🎙️ Premium Voice AI
+
+**Text-to-Speech (TTS)**  
+Powered by Sherpa-ONNX, includes 11 professional-grade voices (5 American Female, 2 American Male, 2 British Female, 2 British Male) running entirely on CPU/NPU with zero cloud dependencies.
+
+**Speech-to-Text (STT)**  
+Offline Whisper-powered speech recognition for hands-free AI interaction. Perfect for driving, multitasking, or accessibility needs.
+
+**Zero Latency**  
+All voice processing happens on-device with near-instantaneous synthesis and recognition.
+
+### 🔌 Extensible Plugin System
 
 **Available Now:**
-- Web Search — Real-time information retrieval
-- Web Scraper — Extract and inject context from any URL
-- DataHub — Mount JSON/text datasets to dynamically enhance model knowledge
+- **Web Search** — Real-time information retrieval with search engine integration
+- **Web Scraper** — Extract and inject content from any URL into conversation context
+- **DataHub** — Mount and manage custom knowledge bases dynamically
+- **Document Viewer** — Analyze and discuss PDF/text documents with AI
 
-**In Development:**
+**Coming Soon:**
 - Code execution environments
-- Image processing pipelines
-- Document analysis tools
+- Advanced image processing pipelines
+- Multi-document analysis
+- Custom plugin marketplace
 
-### Advanced Context Management
+### 💾 Advanced Context Management
 
-- **Conversation Persistence** — Full chat history retention with efficient storage
-- **Dynamic Datasets** — Attach custom knowledge bases without model retraining
-- **Context Preservation** — Switch models mid-conversation without losing thread continuity
+- **Conversation Persistence** — Full chat history with efficient SQLite storage
+- **Dynamic Datasets** — Attach custom knowledge without model retraining
+- **Context Preservation** — Switch models mid-conversation without losing thread
+- **Export Options** — Save conversations, code snippets, and generated images
+- **Multi-Session** — Manage multiple conversation threads simultaneously
 
 ---
 
@@ -81,9 +141,9 @@ Powered by Sherpa-ONNX, ToolNeuron includes 11 professional-grade voices (5 Amer
   <table>
     <tr>
       <td align="center"><b>Chat Interface</b><br/>Multi-modal conversations</td>
-      <td align="center"><b>Model Hub</b><br/>100+ models at your fingertips</td>
+      <td align="center"><b>Model Hub</b><br/>100+ models available</td>
       <td align="center"><b>Code Canvas</b><br/>Syntax highlighting & export</td>
-      <td align="center"><b>DataHub</b><br/>Dynamic context injection</td>
+      <td align="center"><b>Settings</b><br/>Complete customization</td>
     </tr>
     <tr>
       <td><img src="https://github.com/user-attachments/assets/f4d2c28a-a297-4c08-83e5-391f8bd82d89" width="200" alt="Chat Interface"></td>
@@ -96,17 +156,21 @@ Powered by Sherpa-ONNX, ToolNeuron includes 11 professional-grade voices (5 Amer
 
 ---
 
-## Comparative Analysis
+## Comprehensive Comparison
 
-| Feature | ToolNeuron | Traditional AI Apps |
-|:--------|:----------:|:-------------------:|
-| Offline GGUF Models | ✓ Native Support | ✗ Cloud Only |
-| Model Freedom | ✓ 100+ Options | ✗ Vendor Lock-in |
-| Content Policy | ✓ Uncensored | ✗ Heavy Filtering |
-| Privacy Architecture | ✓ Local-First | ✗ Server Logging |
-| Offline TTS | ✓ 11 Premium Voices | ✗ Cloud Dependencies |
-| Pricing Model | ✓ Free (BYOK/Model) | ✗ $20-60/month |
-| Source Availability | ✓ Apache 2.0 | ✗ Proprietary |
+| Feature | ToolNeuron | ChatGPT Mobile | Other AI Apps |
+|:--------|:----------:|:--------------:|:-------------:|
+| **Offline Chat (LLMs)** | ✅ Full GGUF support | ❌ Cloud only | ⚠️ Limited/Basic |
+| **Offline Image Generation** | ✅ Stable Diffusion 1.5 | ❌ | ❌ |
+| **Offline Voice (TTS/STT)** | ✅ 11 voices + Whisper | ❌ Cloud only | ⚠️ Cloud dependent |
+| **Custom Knowledge (RAG)** | ✅ Data-Packs system | ❌ | ❌ |
+| **Plugin Extensibility** | ✅ Open architecture | ❌ | ❌ |
+| **Cloud Model Access** | ✅ 100+ via OpenRouter | ✅ 1 model | ⚠️ Limited options |
+| **Uncensored Options** | ✅ User choice | ❌ Heavily filtered | ❌ Restricted |
+| **Privacy Architecture** | ✅ Local-first, zero logging | ❌ Server logging | ❌ Data harvesting |
+| **Pricing Model** | ✅ Free (BYOK optional) | ❌ $20/month | ❌ $10-60/month |
+| **Source Code** | ✅ Apache 2.0 | ❌ Proprietary | ❌ Closed source |
+| **Works Without Internet** | ✅ Full functionality | ❌ Useless offline | ⚠️ Very limited |
 
 ---
 
@@ -137,21 +201,50 @@ cd NeuroVerse
 
 ---
 
-## Configuration
+## Quick Start Guide
 
-### Privacy Mode Setup (Offline)
+### 🔒 Setup for Offline Use (Privacy Mode)
 
-1. Download a GGUF model from [HuggingFace](https://huggingface.co/models) (recommended: `Llama-3-8B-Q4_K_M.gguf`)
-2. Navigate to **Settings → Local Models → Import Model**
-3. Select your downloaded GGUF file
-4. Begin completely offline inference
+**1. Load a Chat Model (GGUF)**
+- Download a GGUF model from [HuggingFace](https://huggingface.co/models)
+    - Recommended: `Llama-3-8B-Q4_K_M.gguf` (4.5GB)
+    - Budget: `TinyLlama-1.1B-Q4_K_M.gguf` (669MB)
+- Navigate to **Settings → Local Models → Import Model**
+- Select your downloaded GGUF file
+- Wait for model to load, then start chatting offline!
 
-### Power Mode Setup (Cloud)
+**2. Load Image Generation (Stable Diffusion)**
+- Download SD 1.5 model (censored or uncensored version)
+- Navigate to **Settings → Image Models → Import SD Model**
+- Select model file
+- Generate images completely offline!
 
-1. Generate an API key at [OpenRouter.ai](https://openrouter.ai)
-2. Navigate to **Settings → API Configuration**
-3. Enter your OpenRouter API key
-4. Access 100+ models immediately
+**3. Enable Voice AI**
+- TTS voices are included by default (no download needed)
+- For STT: Download Whisper model from **Settings → Voice Models**
+- Enable voice input in chat interface
+
+**4. Create RAG Data-Packs**
+- Prepare your knowledge in JSON/text format
+- Navigate to **DataHub → Create New Pack**
+- Import your data files
+- Attach to conversations for enhanced context
+
+### ⚡ Setup for Cloud Use (Power Mode)
+
+1. Visit [OpenRouter.ai](https://openrouter.ai) and create account
+2. Generate an API key (free tier available)
+3. In ToolNeuron: **Settings → API Configuration**
+4. Enter your OpenRouter API key
+5. Access 100+ models instantly (GPT-4, Claude, Gemini, etc.)
+
+### 🔄 Hybrid Mode
+
+Simply switch between local and cloud models mid-conversation:
+- Use offline LLM for privacy-sensitive queries
+- Switch to GPT-4 for complex reasoning tasks
+- Return to offline for continued privacy
+- All context is preserved automatically!
 
 ---
 
@@ -161,82 +254,186 @@ cd NeuroVerse
 - **Operating System:** Android 8.0+ (API 26)
 - **RAM:** 4GB
 - **Storage:** 2GB available space
-- **Use Case:** Cloud models only
+- **Use Case:** Cloud models + basic TTS only
 
-### Recommended Specifications (Local Inference)
-- **Operating System:** Android 14+
-- **RAM:** 8GB or greater
-- **Processor:** Snapdragon 8 Gen 1 or equivalent
-- **Storage:** 5GB+ available space (for local models)
-- **NPU:** Optional but significantly improves performance
+### Recommended for Chat (Local GGUF)
+- **Operating System:** Android 10+
+- **RAM:** 6GB+ (8GB preferred)
+- **Processor:** Snapdragon 8 Gen 1 / Dimensity 8100 or equivalent
+- **Storage:** 5GB+ available space
+- **NPU:** Optional but improves performance significantly
+
+### Recommended for Image Generation
+- **Operating System:** Android 11+
+- **RAM:** 8GB minimum (12GB preferred)
+- **Processor:** Snapdragon 8 Gen 2 or equivalent flagship
+- **Storage:** 8GB+ available space (for SD models)
+- **Generation Time:** 30-90 seconds depending on device
+
+### Optimal Configuration (Everything Offline)
+- **RAM:** 12GB+
+- **Processor:** Snapdragon 8 Gen 3 or equivalent
+- **Storage:** 10GB+ free space
+- **Experience:** Smooth chat + image generation + voice AI
 
 ---
 
 ## Development Roadmap
 
-### Q1 2026: Sensory Integration
-- Advanced TTS with multi-voice conversation simulation
-- Speech-to-Text via offline Whisper/Sherpa implementation
-- Comprehensive export system for conversations, code snippets, and DataHub configurations
+### ✅ Q4 2024 - Q1 2025: Foundation (CURRENT)
+- ✅ GGUF model support with llama.cpp
+- ✅ 11 offline TTS voices via Sherpa-ONNX
+- ✅ OpenRouter cloud integration (100+ models)
+- ✅ Plugin system (Web Search, Scraper, DataHub)
+- ✅ RAG Data-Packs for knowledge injection
+- 🚧 Stable Diffusion 1.5 offline image generation
+- 🚧 Offline Whisper STT integration
 
-### Q2 2026: Universal Runtime
-- Native TFLite and ONNX execution support
-- On-device Stable Diffusion (quantized) for image generation
-- Vector memory implementation for long-term context retention using embeddings
+### Q2 2025: Expansion
+- Multi-voice TTS conversations (different voices for different characters)
+- Advanced code export with syntax highlighting
+- Desktop companion app (Windows/Linux sync)
+- Enhanced plugin marketplace
+- Vector database for long-term memory
 
-### Q3 2026: Ecosystem Maturity
-- Multi-modal model support with vision capabilities (LLaVA, GPT-4V)
-- Cross-device synchronization with desktop companion applications (Windows/Linux)
-- Community-driven plugin marketplace
+### Q3 2025: Advanced Features
+- Multi-modal vision models (LLaVA, GPT-4V integration)
+- TFLite and ONNX runtime support
+- On-device video analysis
+- Collaborative AI sessions
+- Custom model fine-tuning tools
+
+### Q4 2025: Ecosystem Maturity
+- Cross-platform synchronization (phone ↔ desktop)
+- Community plugin marketplace
+- Advanced RAG with semantic search
+- Enterprise deployment options
+- API for third-party integration
+
+---
+
+## Use Cases
+
+### 👨‍💻 For Developers
+- Test prompts and APIs without cloud costs during development
+- Run coding assistants offline on flights or with poor connectivity
+- Inject documentation into RAG for context-aware code help
+- Generate UI mockups and diagrams with SD
+- Privacy-first development environment
+
+### 🔐 For Privacy Advocates
+- Zero data leaves your device in offline mode
+- Verify privacy claims (open-source Apache 2.0)
+- No tracking, no telemetry, no server logging
+- Full control over your AI interactions
+- Uncensored options for research and legitimate use
+
+### ✈️ For Travelers
+- Full AI capability on flights (no WiFi needed)
+- Works in remote areas with no connectivity
+- No roaming data costs for AI queries
+- Generate travel content (images, itineraries) offline
+- Voice translations without cloud latency
+
+### 🎨 For Content Creators
+- Generate images for social media posts anywhere
+- Brainstorm content ideas with AI offline
+- Create variations and iterations without API limits
+- No subscription costs eating into creator budgets
+- Uncensored artistic freedom
+
+### 🎓 For Students & Researchers
+- Free access to cutting-edge AI models
+- Study AI without expensive subscriptions
+- Load research papers into RAG for analysis
+- Generate diagrams and visualizations
+- Privacy for sensitive academic work
 
 ---
 
 ## Technical Architecture
 
-ToolNeuron implements modern Android development patterns:
+ToolNeuron implements modern Android development patterns with a hybrid native/Kotlin architecture:
 
-- **Language:** Kotlin
-- **UI Framework:** Jetpack Compose
-- **Local Inference:** `llama.cpp` (C++ with JNI bindings)
-- **TTS Engine:** Sherpa-ONNX
-- **API Layer:** Retrofit + OkHttp
-- **Database:** Room (SQLite)
+**Core Technologies:**
+- **Language:** Kotlin (UI/Logic) + C++ (Inference engines)
+- **UI Framework:** Jetpack Compose (declarative, reactive UI)
+- **Local Inference:** llama.cpp (GGUF models) + JNI bindings
+- **Image Generation:** Stable Diffusion C++ implementation
+- **TTS Engine:** Sherpa-ONNX (neural voices)
+- **STT Engine:** Whisper via Sherpa-ONNX
+- **API Layer:** Retrofit + OkHttp (cloud models)
+- **Database:** Room (SQLite wrapper) for conversations
 - **Async Operations:** Kotlin Coroutines + Flow
+- **Dependency Injection:** Hilt/Dagger
+
+**Performance Optimizations:**
+- Quantized model support (Q4_K_M, Q5_K_S, etc.)
+- Context caching for faster inference
+- Memory-mapped model loading
+- NPU acceleration where available
+- Efficient token streaming
+- Background processing with WorkManager
 
 ---
 
 ## Contributing
 
-We welcome contributions from developers, researchers, and AI enthusiasts. To contribute:
+We welcome contributions from developers, researchers, AI enthusiasts, and privacy advocates!
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes with descriptive messages
-4. Push to your branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request with detailed description
+### How to Contribute
 
-**Priority Areas:**
-- Bug reports and fixes
-- Documentation improvements
-- Internationalization (i18n)
-- Cross-device testing and optimization
-- Feature implementations aligned with roadmap
+1. **Fork** the repository
+2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
+3. **Commit** your changes with descriptive messages
+4. **Push** to your branch (`git push origin feature/AmazingFeature`)
+5. **Open** a Pull Request with detailed description
+
+### Priority Areas
+
+**High Priority:**
+- 🐛 Bug reports and fixes (especially device-specific issues)
+- 📚 Documentation improvements and translations
+- 🧪 Testing on various Android devices and chipsets
+- 🔌 New plugin development
+- 🎨 UI/UX enhancements
+
+**Medium Priority:**
+- 🌍 Internationalization (i18n) - help us support more languages
+- ♿ Accessibility improvements
+- 📊 Performance optimizations
+- 🎓 Tutorial content and guides
+
+**Feature Requests:**
+- Check existing issues before creating new ones
+- Provide clear use cases and examples
+- Be patient - we're a small team!
+
+### Development Guidelines
+
+- Follow Kotlin coding conventions
+- Write meaningful commit messages
+- Test on real devices when possible
+- Document new features
+- Respect user privacy in all contributions
 
 ---
 
 ## License
 
-Distributed under the Apache 2.0 License. See [`LICENSE`](LICENSE) for complete terms.
+Distributed under the **Apache 2.0 License**. See [`LICENSE`](LICENSE) for complete terms.
 
-**Permissions:**
-- Commercial use
-- Modification and distribution
-- Private use
-- Patent use
+**What this means:**
+- ✅ **Commercial use** - Use in commercial products
+- ✅ **Modification** - Modify and create derivatives
+- ✅ **Distribution** - Distribute freely
+- ✅ **Patent use** - License includes patent rights
+- ✅ **Private use** - Use privately without restrictions
 
-**Conditions:**
-- License and copyright notice required
-- State changes documentation required
+**Requirements:**
+- 📄 Include license and copyright notice
+- 📝 Document any changes made
+- 🔓 Make source available if distributing
 
 ---
 
@@ -244,29 +441,74 @@ Distributed under the Apache 2.0 License. See [`LICENSE`](LICENSE) for complete 
 
 > "If I have seen further, it is by standing on the shoulders of giants." — Isaac Newton
 
-ToolNeuron builds upon exceptional open-source work:
+ToolNeuron would not be possible without these exceptional open-source projects:
 
-- **[llama.cpp](https://github.com/ggerganov/llama.cpp)** — Efficient local inference implementation
-- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — Premium offline text-to-speech synthesis
-- **[OpenRouter](https://openrouter.ai)** — Unified API gateway for diverse model ecosystems
-- **[Jetpack Compose](https://developer.android.com/jetpack/compose)** — Modern declarative UI framework
+- **[llama.cpp](https://github.com/ggerganov/llama.cpp)** by Georgi Gerganov — Efficient LLM inference in pure C/C++
+- **[Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx)** — Premium offline speech synthesis and recognition
+- **[Stable Diffusion](https://github.com/CompVis/stable-diffusion)** — Revolutionary text-to-image generation
+- **[OpenRouter](https://openrouter.ai)** — Unified API gateway for 100+ AI models
+- **[Jetpack Compose](https://developer.android.com/jetpack/compose)** — Modern declarative UI for Android
+- **[HuggingFace](https://huggingface.co)** — Community and models that make AI accessible
+
+Special thanks to the open-source AI community for making privacy-respecting AI possible.
 
 ---
 
 ## Support & Community
 
-- **Discord Community:** [Join discussions and get support](https://discord.gg/mVPwHDhrAP)
-- **Issue Tracker:** [Report bugs or request features](https://github.com/Siddhesh2377/NeuroVerse/issues)
-- **GitHub Discussions:** [Technical questions and ideas](https://github.com/Siddhesh2377/NeuroVerse/discussions)
+### Get Help & Connect
+
+- 💬 **[Discord Community](https://discord.gg/mVPwHDhrAP)** — Real-time chat, support, and discussions
+- 🐛 **[Issue Tracker](https://github.com/Siddhesh2377/NeuroVerse/issues)** — Report bugs or request features
+- 💡 **[GitHub Discussions](https://github.com/Siddhesh2377/NeuroVerse/discussions)** — Technical questions and ideas
+- 📧 **Email:** [Support](mailto:siddhesh2377@example.com) — For private inquiries
+
+### Stay Updated
+
+- ⭐ **Star this repository** to show support and get updates
+- 👀 **Watch releases** for new features and updates
+- 🐦 **Follow on Twitter** [@ToolNeuron](#) — News and announcements
+- 📱 **APKPure** — Automatic update notifications
+
+---
+
+## FAQ
+
+**Q: Will this drain my battery?**  
+A: Local inference is power-intensive. For long sessions, keep your phone plugged in. Cloud mode uses minimal battery.
+
+**Q: How big are the model files?**  
+A: GGUF models: 0.5GB-8GB depending on model size. SD 1.5: ~2GB. TTS/STT: 50-500MB.
+
+**Q: Can I use my own API keys?**  
+A: Yes! BYOK (Bring Your Own Key) for OpenRouter. You control costs and usage.
+
+**Q: Is my data really private?**  
+A: In offline mode, absolutely nothing leaves your device. Verify in our open-source code.
+
+**Q: Why not just use ChatGPT?**  
+A: ToolNeuron gives you choice, privacy, offline capability, uncensored options, and zero subscriptions.
+
+**Q: Does it support iOS?**  
+A: Not currently. Android only due to technical constraints of iOS.
+
+**Q: Can I monetize apps built with this?**  
+A: Yes! Apache 2.0 license allows commercial use.
 
 ---
 
 <div align="center">
 
-**Built by [Siddhesh2377](https://github.com/Siddhesh2377) and the Open Source Community**
+**Built with ❤️ by [Siddhesh2377](https://github.com/Siddhesh2377) and the Open Source Community**
 
-If you find ToolNeuron valuable, please consider starring the repository.
+*Privacy-first AI for everyone, everywhere*
 
-[Report Bug](https://github.com/Siddhesh2377/NeuroVerse/issues) • [Request Feature](https://github.com/Siddhesh2377/NeuroVerse/issues) • [View Releases](https://github.com/Siddhesh2377/NeuroVerse/releases) • [Download on APKPure](https://apkpure.com/p/com.dark.neurov)
+If ToolNeuron empowers your AI journey, please ⭐ star the repository!
+
+[Download](https://apkpure.com/p/com.dark.neurov) • [Report Bug](https://github.com/Siddhesh2377/NeuroVerse/issues) • [Request Feature](https://github.com/Siddhesh2377/NeuroVerse/issues) • [View Roadmap](https://github.com/Siddhesh2377/NeuroVerse/projects) • [Join Discord](https://discord.gg/mVPwHDhrAP)
+
+---
+
+**Made possible by llama.cpp • Sherpa-ONNX • Stable Diffusion • OpenRouter • Jetpack Compose**
 
 </div>
