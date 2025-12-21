@@ -17,7 +17,7 @@
 **The most comprehensive privacy-focused AI ecosystem for mobile devices.** Run LLMs, generate images, use voice AI, inject custom knowledge—all completely offline. Or seamlessly connect to 100+ cloud models when you need more power. No subscriptions. No data harvesting. Complete control.
 
 [![Get it on APKPure](https://img.shields.io/badge/Get_it_on-APKPure-01C853?style=for-the-badge&logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
-
+ 
 [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
 
 </div>
@@ -206,9 +206,9 @@ cd NeuroVerse
 ### 🔒 Setup for Offline Use (Privacy Mode)
 
 **1. Load a Chat Model (GGUF)**
-- Download a GGUF model from [HuggingFace](https://huggingface.co/models)
-    - Recommended: `Llama-3-8B-Q4_K_M.gguf` (4.5GB)
-    - Budget: `TinyLlama-1.1B-Q4_K_M.gguf` (669MB)
+- Download a GGUF model from [HuggingFace](https://huggingface.co/models) 
+  - Recommended: `Llama-3-8B-Q4_K_M.gguf` (4.5GB)
+  - Budget: `TinyLlama-1.1B-Q4_K_M.gguf` (669MB)
 - Navigate to **Settings → Local Models → Import Model**
 - Select your downloaded GGUF file
 - Wait for model to load, then start chatting offline!
