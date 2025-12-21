@@ -26,7 +26,7 @@
 
 > "Sometimes the bravest thing you can do is step back to move forward stronger." 
 
-**Development temporarily paused as of December 2024.**
+**Development temporarily paused as of December 2025.**
 
 After careful consideration, I've made the difficult decision to temporarily pause active development on ToolNeuron. This decision comes down to a few key factors:
 
