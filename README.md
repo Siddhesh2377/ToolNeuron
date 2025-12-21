@@ -1,13 +1,13 @@
 <div align="center">
 
 # ToolNeuron
+
 <a href="https://www.producthunt.com/products/toolneuron?embed=true&amp;utm_source=badge-featured&amp;utm_medium=badge&amp;utm_campaign=badge-toolneuron" target="_blank" rel="noopener noreferrer"><img alt="ToolNeuron - Complete offline AI Chat Voice &amp; Image generation on Android | Product Hunt" width="250" height="54" src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1052397&amp;theme=light&amp;t=1766210679236"></a>
 
 ### The Complete Offline AI Ecosystem for Android
 
 [![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
 [![APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
-
 [![Latest Release](https://img.shields.io/badge/Release-Beta_5.1-blue?logo=github)](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 [![Discord](https://img.shields.io/badge/Join-Discord-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
@@ -19,6 +19,37 @@
 [![Get it on APKPure](https://img.shields.io/badge/Get_it_on-APKPure-01C853?style=for-the-badge&logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
  
 [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
+
+---
+
+## ⚠️ Project Status Update
+
+> "Sometimes the bravest thing you can do is step back to move forward stronger." 
+
+**Development temporarily paused as of December 2024.**
+
+After careful consideration, I've made the difficult decision to temporarily pause active development on ToolNeuron. This decision comes down to a few key factors:
+
+**Why I'm pausing:**
+- My internship requires my full attention right now, and I need to prioritize it financially
+- Managing both my internship and this project simultaneously has become unsustainable
+- The mental load of juggling two complex projects has been taking a toll on my health and well-being
+- The project needs more maintainers than I can currently provide alone
+
+**What this means:**
+- The repository will remain available, and anyone interested in forking and continuing development is more than welcome to do so
+- Once my internship situation stabilizes and I have the bandwidth to give this project the attention it deserves, I plan to resume development
+- The Discord community remains open for discussions, collaboration, and support
+
+**A heartfelt thank you:**
+
+I'm genuinely grateful to everyone who has supported this project and stuck around. Your interest and contributions have meant a lot to me. I'm sorry I couldn't deliver the complete product as I had hoped, but I believe this pause is necessary for both the project's future and my own health.
+
+If you're interested in maintaining or contributing to a fork, please feel free to reach out via [Discord](https://discord.gg/mVPwHDhrAP). I'd love to see this project continue in some form.
+
+Thank you for understanding.
+
+---
 
 </div>
 
