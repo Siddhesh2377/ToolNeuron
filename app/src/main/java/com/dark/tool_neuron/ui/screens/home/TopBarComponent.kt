@@ -48,20 +48,22 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelType
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.model.ChatUiState
+import com.dark.tool_neuron.model.LocalModel
 import com.dark.tool_neuron.ui.theme.Mint
 import com.dark.tool_neuron.ui.theme.rDP
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewModel.chatViewModel.ChatScreenViewModel
+import com.dark.tool_neuron.viewModel.home_screen.HomeScreenViewModel
 import com.dark.tool_neuron.worker.UIStateManager
+import com.mp.ai_engine.models.llm_models.ModelType
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TopBar(
-    viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
+    homeScreenViewModel: HomeScreenViewModel = viewModel(), viewModel: ChatScreenViewModel, onMenu: () -> Unit = {}, onLeftMenu: () -> Unit = {}
 ) {
     val title by viewModel.chatTitle.collectAsStateWithLifecycle()
     val messages by viewModel.messages.collectAsStateWithLifecycle()
@@ -69,7 +71,7 @@ fun TopBar(
     CenterAlignedTopAppBar(
         title = {
         if (messages.isEmpty()) {
-            ModelSelection(viewModel, false)
+            ModelSelection(homeScreenViewModel, false)
         } else {
             Row(
                 Modifier.fillMaxWidth(),
@@ -84,7 +86,7 @@ fun TopBar(
                     color = colorScheme.primary
                 )
 
-                ModelSelection(viewModel, true)
+                ModelSelection(homeScreenViewModel, true)
             }
         }
     }, navigationIcon = {
@@ -118,16 +120,14 @@ fun TopBar(
 }
 
 @Composable
-fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
+fun ModelSelection(viewModel: HomeScreenViewModel, isCompact: Boolean) {
     var showDialog by remember { mutableStateOf(false) }
-    val modelList by viewModel.modelList.collectAsStateWithLifecycle()
+    val modelList by viewModel.installedModels.collectAsStateWithLifecycle()
     val selectedModel by viewModel.selectedModel.collectAsStateWithLifecycle()
     val uiState by UIStateManager.uiState.collectAsStateWithLifecycle()
     val isGeneratingTitle = uiState is ChatUiState.GeneratingTitle
 
-    val filteredModellist = modelList.filter {
-        it.modelType == ModelType.TEXT
-    }
+    val filteredModellist = modelList
 
     val selectedModelName = remember(selectedModel) {
         if (selectedModel.modelName == "") "Select Model"
@@ -199,11 +199,9 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
                             items(filteredModellist) { model ->
                                 val isSelected = model.modelName == selectedModel.modelName
                                 ModelDialogItem(
-                                    model = model,
-                                    isSelected = isSelected,
-                                    onSelect = {
+                                    model = model, isSelected = isSelected, onSelect = {
                                         showDialog = false
-                                        viewModel.selectModel(it)
+                                        viewModel.loadModel(it.modelId)
                                     })
                             }
                         }
@@ -226,7 +224,7 @@ fun ModelSelection(viewModel: ChatScreenViewModel, isCompact: Boolean) {
 
 @Composable
 private fun ModelDialogItem(
-    model: ModelData, isSelected: Boolean, onSelect: (ModelData) -> Unit
+    model: LocalModel, isSelected: Boolean, onSelect: (LocalModel) -> Unit
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) Mint.copy(alpha = 0.15f)
@@ -274,15 +272,22 @@ private fun ModelDialogItem(
                         color = if (isSelected) colorScheme.onSurface else Color.Gray
                     )
                 )
-                if (model.isToolCalling) {
-                    Spacer(Modifier.width(rDP(4.dp)))
-                    Icon(
-                        painterResource(R.drawable.hammer),
-                        "Hammer Icon",
-                        tint = Color.Gray,
-                        modifier = Modifier.size(rDP(12.dp))
-                    )
+
+                Spacer(Modifier.width(rDP(4.dp)))
+
+                val id = when(model.modelType){
+                    ModelType.TEXT -> {
+                        R.drawable.text_ai_models
+                    }
+                    else -> R.drawable.flower
                 }
+
+                Icon(
+                    painterResource(id),
+                    "Model Type",
+                    tint = Color.Gray,
+                    modifier = Modifier.size(rDP(12.dp))
+                )
             }
         }
     }

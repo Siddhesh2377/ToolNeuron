@@ -236,7 +236,7 @@ private fun TopBarSection(
     snackbarHostState: SnackbarHostState
 ) {
     Column {
-        TopBar(chatScreenViewModel, onMenu = onMenu, onLeftMenu = onLeftMenu)
+        TopBar(viewModel = chatScreenViewModel, onMenu = onMenu, onLeftMenu = onLeftMenu)
         ModelLoadProgressBar(loadState = modelState)
         TTSPlaybackBarCompact(ttsViewModel = ttsViewModel)
 
