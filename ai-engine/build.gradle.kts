@@ -48,6 +48,9 @@ android {
             useLegacyPackaging = false
         }
     }
+    buildFeatures {
+        aidl = true
+    }
 }
 
 dependencies {

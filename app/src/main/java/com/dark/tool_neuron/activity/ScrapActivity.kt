@@ -24,11 +24,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
+import com.mp.ai_engine.gguf.IGGUFCallback
 import com.mp.ai_engine.models.image_models.DiffusionDatabaseModel
 import com.mp.ai_engine.models.llm_models.CloudModel
 import com.mp.ai_engine.models.llm_models.ModelType
 import com.mp.ai_engine.models.llm_tasks.*
 import com.mp.ai_engine.workers.installer.ModelInstaller
+import com.mp.ai_engine.workers.model.ModelManager
 import com.mp.ai_engine.workers.model.internal_model_worker.DiffusionModelWorker
 import com.mp.ai_engine.workers.model.internal_model_worker.GGUFModelWorker
 import kotlinx.coroutines.*
@@ -46,6 +48,11 @@ class ScrapActivity : ComponentActivity() {
                 MainScreen()
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        com.mp.ai_engine.workers.model.ModelManager.shutdown(applicationContext)
     }
 }
 
@@ -153,28 +160,51 @@ fun TextGeneratorScreen() {
                         return@launch
                     }
 
-                    val worker = GGUFModelWorker()
-                    worker.loadModel(model)
+                    val ggufWorker = ModelManager.gguf()
+
+
+                    ggufWorker.loadTextModel(
+                        model.modelPath,
+                        model.threads,
+                        model.ctxSize,
+                        model.temp,
+                        model.topK,
+                        model.topP,
+                        model.minP,
+                        model.mirostat,
+                        model.mirostatTau,
+                        model.mirostatEta,
+                        model.seed.toLong()
+                    )
+
                     statusMessage = "Running inference..."
 
                     val deferred = CompletableDeferred<String>()
-                    val task = GGUFTask(
-                        id = UUID.randomUUID().toString(),
-                        input = "Hello, how are you?",
-                        maxTokens = 100,
-                        events = object : GGUFStreamEvents {
-                            override fun onToken(token: String) {
+
+                    ggufWorker.generateText(
+                        "Hi How are you ?",
+                        100,
+                        "",
+                        object : IGGUFCallback.Stub() {
+                            override fun onNewToken(token: String) {
                                 result += token
                             }
 
-                            override fun onTool(toolName: String, toolArgs: String) {}
-                        },
-                        result = deferred,
-                        resultEmbedded = CompletableDeferred(),
-                        taskType = GGUFTaskType.GENERATE
-                    )
+                            override fun onToolCall(
+                                toolName: String?,
+                                toolArgs: String?
+                            ) { }
 
-                    worker.runTask(task)
+                            override fun onComplete(finalResult: String) {
+                                deferred.complete(finalResult)
+                            }
+
+                            override fun onError(error: String?) {
+                                deferred.completeExceptionally(Exception(error))
+                            }
+
+                        }
+                    )
                     result = deferred.await()
                     statusMessage = "✓ Complete"
                     isRunning = false
@@ -309,9 +339,11 @@ fun ImageGeneratorScreen() {
 
                     val task = DiffusionTask(
                         id = UUID.randomUUID().toString(),
-                        prompt = "a beautiful landscape with mountains and lake",
+                        prompt = """
+                            
+                        """.trimIndent(),
                         negativePrompt = "blurry, low quality",
-                        steps = 10,
+                        steps = 25,
                         cfg = 7f,
                         events = object : DMStreamEvents {
                             override fun onProgress(p: Float, step: Int, totalSteps: Int) {
