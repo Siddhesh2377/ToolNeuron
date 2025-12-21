@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.core.view.WindowCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -37,9 +38,13 @@ import com.dark.tool_neuron.userdata.ntds.getOrCreateHardwareBackedAesKey
 import com.dark.tool_neuron.userdata.ntds.loadEncryptedTree
 import com.dark.tool_neuron.userdata.ntds.saveEncryptedTree
 import com.dark.tool_neuron.util.makeToast
+import com.mp.ai_engine.workers.installer.ModelInstaller
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.coroutines.coroutineContext
 
 class MainActivity : ComponentActivity() {
 
@@ -268,6 +273,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            com.mp.ai_engine.workers.model.ModelManager.init(applicationContext)
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         Log.d("MainActivity", "App resumed")
@@ -281,7 +293,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         super.onDestroy()
         Log.d("MainActivity", "App destroyed - shutting down ModelManager")
-        ModelManager.shutdown()
+        com.mp.ai_engine.workers.model.ModelManager.shutdown(applicationContext)
         AudioManager.shutdown()
     }
 
