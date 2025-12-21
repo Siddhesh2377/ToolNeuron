@@ -19,31 +19,41 @@ object AppLogger {
     private const val TAG = "AppLogger"
     private const val LOGS_NODE_ID = "systemLogs"
 
+    /**
+     * Global flag to enable/disable logging
+     * Set to false to skip all logging operations
+     */
+    var isLoggingEnabled: Boolean = true
+
     enum class LogLevel {
         INFO, WARN, ERROR
     }
 
     /**
-     * Get or create the logs node
+     * Measure execution time and log it
      */
-
     inline fun measureLogAndTime(
         root: NeuronNode,
         name: String,
         block: () -> Unit
     ) {
+        if (!isLoggingEnabled) {
+            block()
+            return
+        }
+
         try {
             val duration = measureTimeMillis {
                 block()
             }
 
-            AppLogger.info(
+            info(
                 root = root,
                 message = "$name initialized",
                 details = mapOf("duration" to "${duration}ms")
             )
         } catch (e: Exception) {
-            AppLogger.error(
+            error(
                 root = root,
                 message = "$name initialization failed",
                 details = mapOf(
@@ -53,6 +63,10 @@ object AppLogger {
             )
         }
     }
+
+    /**
+     * Get or create the logs node
+     */
     private fun getLogsNode(root: NeuronNode): NeuronNode {
         val tree = NeuronTree(root)
         return tree.getNodeDirectOrNull(LOGS_NODE_ID) ?: run {
@@ -75,6 +89,8 @@ object AppLogger {
      * Start a new logging session
      */
     fun startSession(root: NeuronNode, sessionName: String) {
+        if (!isLoggingEnabled) return
+
         try {
             val logsNode = getLogsNode(root)
             val tree = NeuronTree(root)
@@ -107,6 +123,8 @@ object AppLogger {
         message: String,
         details: Map<String, Any>? = null
     ) {
+        if (!isLoggingEnabled) return
+
         try {
             val logsNode = getLogsNode(root)
             val currentSession = logsNode.children.lastOrNull()
@@ -151,6 +169,8 @@ object AppLogger {
      * End the current session
      */
     fun endSession(root: NeuronNode) {
+        if (!isLoggingEnabled) return
+
         try {
             val logsNode = getLogsNode(root)
             val currentSession = logsNode.children.lastOrNull() ?: return

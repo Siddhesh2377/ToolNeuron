@@ -1,78 +1,104 @@
 package com.dark.tool_neuron.ui.screens
 
-import android.content.Context
 import android.content.Intent
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
-import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.twotone.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.twotone.FileOpen
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.*
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.dark.ai_module.data.ModelsList.getModelList
-import com.dark.ai_module.model.*
-import com.dark.tool_neuron.activity.GgufPickerActivity
-import com.dark.tool_neuron.model.DownloadState
-import com.dark.tool_neuron.ui.theme.rDP
-import com.dark.tool_neuron.viewModel.ModelScreenViewModel
-import kotlinx.coroutines.delay
-import java.io.File
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.activity.GgufPickerActivity
+import com.dark.tool_neuron.ui.screens.modelScreen.GGUFModelScreen
+import com.dark.tool_neuron.ui.screens.modelScreen.InstalledModelsTab
+import com.dark.tool_neuron.ui.screens.modelScreen.OpenRouterTab
+import com.dark.tool_neuron.ui.screens.modelScreen.SherpaONNXTab
+import com.dark.tool_neuron.ui.theme.rDP
+import com.dark.tool_neuron.ui.theme.rSp
+import com.dark.tool_neuron.viewModel.ModelScreenViewModel
+import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
 
 // ============================================================================
 // PROVIDER CONFIGURATION - Easy to extend!
 // ============================================================================
 
 private sealed class ModelProviderTab(
-    val id: String,
-    val label: String,
-    val icon: Int,
-    val description: String,
-    val isOnline: Boolean
+    val id: String, val label: String, val icon: Int, val description: String, val isOnline: Boolean
 ) {
     object LocalGGUF : ModelProviderTab(
-        "local_gguf", "Local Models", R.drawable.text_ai_models,
-        "On-device GGUF models", false
+        "local_gguf", "Local Models", R.drawable.text_ai_models, "On-device GGUF models", false
     )
 
     object OpenRouter : ModelProviderTab(
-        "openrouter", "OpenRouter", R.drawable.open_router,
-        "Cloud-based models", true
+        "openrouter", "OpenRouter", R.drawable.open_router, "Cloud-based AI models", true
     )
 
     object SherpaONNX : ModelProviderTab(
-        "sherpa", "Sherpa ONNX", R.drawable.stt_models,
-        "Speech & Audio models", false
+        "sherpa", "Sherpa ONNX", R.drawable.stt_models, "Speech & Audio processing", false
     )
 
     object Installed : ModelProviderTab(
-        "installed", "Installed", R.drawable.installed_models,
-        "All installed models", false
+        "installed", "Installed", R.drawable.installed_models, "All configured models", false
     )
 
     companion object {
@@ -84,169 +110,240 @@ private sealed class ModelProviderTab(
 // MAIN SCREEN
 // ============================================================================
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ModelsScreen(onBack: () -> Unit = {}) {
     val context = LocalContext.current
     val viewModel: ModelScreenViewModel = viewModel()
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
 
-    var selectedProvider by remember { mutableStateOf<ModelProviderTab>(ModelProviderTab.LocalGGUF) }
-    var showSearch by remember { mutableStateOf(false) }
+    val providers = remember { ModelProviderTab.all() }
+    val pagerState = rememberPagerState(pageCount = { providers.size })
 
-    Scaffold(
-        topBar = {
-            ModernTopBar(
-                title = selectedProvider.label,
-                subtitle = selectedProvider.description,
-                onBack = onBack,
-                onSearchToggle = { showSearch = !showSearch }
-            )
-        },
-        floatingActionButton = {
-            AnimatedVisibility(
-                visible = selectedProvider == ModelProviderTab.LocalGGUF,
-                enter = scaleIn() + fadeIn(),
-                exit = scaleOut() + fadeOut()
+    // Derive current provider from pager state
+    val currentProvider by remember {
+        derivedStateOf { providers[pagerState.currentPage] }
+    }
+
+    // Haptic feedback on page change
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.currentPage }.collect {
+            haptic.performHapticFeedback(HapticFeedbackType.Confirm)
+        }
+    }
+
+    Scaffold(topBar = {
+        ModernTopBar(
+            title = currentProvider.label,
+            subtitle = currentProvider.description,
+            isOnline = currentProvider.isOnline,
+            onBack = onBack
+        )
+    }, floatingActionButton = {
+        AnimatedVisibility(
+            visible = currentProvider == ModelProviderTab.LocalGGUF,
+            enter = scaleIn() + fadeIn(),
+            exit = scaleOut() + fadeOut()
+        ) {
+            FloatingActionButton(
+                onClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    context.startActivity(Intent(context, GgufPickerActivity::class.java))
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = RoundedCornerShape(rDP(16.dp))
             ) {
-                FloatingActionButton(
-                    onClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        context.startActivity(Intent(context, GgufPickerActivity::class.java))
-                    },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                ) {
-                    Icon(Icons.TwoTone.FileOpen, "Import Model")
-                }
+                Icon(
+                    Icons.TwoTone.FileOpen, "Import Model", modifier = Modifier.size(rDP(24.dp))
+                )
             }
         }
-    ) { padding ->
+    }) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
-            // Provider Tabs
+            // Enhanced Provider Tab Row with indicator
             ProviderTabRow(
-                providers = ModelProviderTab.all(),
-                selected = selectedProvider,
-                onSelect = {
-                    selectedProvider = it
-                    haptic.performHapticFeedback(HapticFeedbackType.Confirm)
-                }
-            )
+                providers = providers, pagerState = pagerState, onTabClick = { index ->
+                    scope.launch {
+                        pagerState.animateScrollToPage(index)
+                    }
+                })
 
-            // Content
-            AnimatedContent(
-                targetState = selectedProvider,
-                transitionSpec = {
-                    fadeIn(animationSpec = spring()) + slideInHorizontally(animationSpec = spring()) { it / 4 } togetherWith
-                            fadeOut(animationSpec = spring()) + slideOutHorizontally(animationSpec = spring()) { -it / 4 }
-                },
-                label = "provider_content"
-            ) { provider ->
-                when (provider) {
-                    ModelProviderTab.LocalGGUF -> LocalModelsTab(viewModel)
-                    ModelProviderTab.OpenRouter -> OpenRouterTab(viewModel)
-                    ModelProviderTab.SherpaONNX -> SherpaONNXTab(viewModel)
-                    ModelProviderTab.Installed -> InstalledModelsTab(viewModel)
+            // Horizontal Pager for swipeable content
+            HorizontalPager(
+                state = pagerState, modifier = Modifier.fillMaxSize(), beyondViewportPageCount = 1
+            ) { page ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            // Parallax effect
+                            val pageOffset =
+                                ((pagerState.currentPage - page) + pagerState.currentPageOffsetFraction)
+                            alpha = 1f - pageOffset.absoluteValue.coerceIn(0f, 1f) * 0.3f
+                        }) {
+                    when (providers[page]) {
+                        ModelProviderTab.LocalGGUF -> GGUFModelScreen()
+                        ModelProviderTab.OpenRouter -> OpenRouterTab(viewModel)
+                        ModelProviderTab.SherpaONNX -> SherpaONNXTab(viewModel)
+                        ModelProviderTab.Installed -> InstalledModelsTab(viewModel)
+                    }
                 }
             }
         }
     }
 }
 
-// ============================================================================
-// TOP BAR
-// ============================================================================
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun ModernTopBar(
-    title: String,
-    subtitle: String,
-    onBack: () -> Unit,
-    onSearchToggle: () -> Unit
+    title: String, subtitle: String, isOnline: Boolean, onBack: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(rDP(4.dp))
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            ) {
                 Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge.copy(
-                        fontWeight = FontWeight.Bold
+                    title, style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold, fontSize = rSp(20.sp, maxSp = 22.sp)
                     )
                 )
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
-                )
+                if (isOnline) {
+                    Surface(
+                        shape = CircleShape, color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(
+                                horizontal = rDP(8.dp), vertical = rDP(4.dp)
+                            ),
+                            horizontalArrangement = Arrangement.spacedBy(rDP(4.dp)),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(rDP(6.dp))
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            )
+                            Text(
+                                "Online", style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = rSp(10.sp, maxSp = 12.sp)
+                                ), color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
             }
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    painter = painterResource(R.drawable.next),
-                    contentDescription = "Back",
-                    modifier = Modifier.rotate(-180f)
-                )
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
+            Text(
+                subtitle, style = MaterialTheme.typography.bodySmall.copy(
+                    fontSize = rSp(12.sp, maxSp = 14.sp)
+                ), color = MaterialTheme.colorScheme.onSurface.copy(0.6f)
+            )
+        }
+    }, navigationIcon = {
+        IconButton(
+            onClick = onBack, modifier = Modifier.size(rDP(48.dp))
+        ) {
+            Icon(
+                painter = painterResource(R.drawable.next),
+                contentDescription = "Back",
+                modifier = Modifier
+                    .size(rDP(24.dp))
+                    .rotate(-180f)
+            )
+        }
+    }, colors = TopAppBarDefaults.topAppBarColors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    )
     )
 }
 
-// ============================================================================
-// PROVIDER TAB ROW
-// ============================================================================
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun ProviderTabRow(
-    providers: List<ModelProviderTab>,
-    selected: ModelProviderTab,
-    onSelect: (ModelProviderTab) -> Unit
+    providers: List<ModelProviderTab>, pagerState: PagerState, onTabClick: (Int) -> Unit
 ) {
-    // Use LazyRow instead of ScrollableTabRow for better performance
-    LazyRow(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceContainer)
-            .padding(vertical = rDP(8.dp)),
-        contentPadding = PaddingValues(horizontal = rDP(16.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
     ) {
-        items(providers, key = { it.id }) { provider ->
-            ProviderTab(
-                provider = provider,
-                isSelected = provider == selected,
-                onClick = { onSelect(provider) }
-            )
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = rDP(12.dp)),
+            contentPadding = PaddingValues(horizontal = rDP(16.dp)),
+            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+        ) {
+            itemsIndexed(providers, key = { _, it -> it.id }) { index, provider ->
+                ProviderTab(
+                    provider = provider,
+                    isSelected = pagerState.currentPage == index,
+                    onClick = { onTabClick(index) })
+            }
         }
+
+        // Animated indicator
+        TabIndicator(
+            providers = providers, pagerState = pagerState
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun TabIndicator(
+    providers: List<ModelProviderTab>, pagerState: PagerState
+) {
+    val indicatorWidth = rDP(32.dp)
+    val spacing = rDP(8.dp)
+    val tabWidth = rDP(120.dp) // Approximate tab width
+    val horizontalPadding = rDP(16.dp)
+
+    val indicatorOffset by animateDpAsState(
+        targetValue = horizontalPadding + (tabWidth + spacing) * pagerState.currentPage + (tabWidth - indicatorWidth) / 2,
+        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        label = "indicator_offset"
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(rDP(3.dp))
+            .padding(bottom = rDP(8.dp))
+    ) {
+        Box(modifier = Modifier
+            .offset { IntOffset(indicatorOffset.roundToPx(), 0) }
+            .width(indicatorWidth)
+            .height(rDP(3.dp))
+            .clip(RoundedCornerShape(rDP(2.dp)))
+            .background(MaterialTheme.colorScheme.primary))
     }
 }
 
 @Composable
 private fun ProviderTab(
-    provider: ModelProviderTab,
-    isSelected: Boolean,
-    onClick: () -> Unit
+    provider: ModelProviderTab, isSelected: Boolean, onClick: () -> Unit
 ) {
-    // Animate only the background color, not size
     val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected)
-            MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant,
-        animationSpec = tween(200),
-        label = "tab_bg"
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant, animationSpec = tween(200), label = "tab_bg"
     )
 
     val contentColor by animateColorAsState(
-        targetValue = if (isSelected)
-            MaterialTheme.colorScheme.onPrimaryContainer
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
         else MaterialTheme.colorScheme.onSurfaceVariant,
         animationSpec = tween(200),
         label = "tab_content"
@@ -254,982 +351,44 @@ private fun ProviderTab(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(rDP(12.dp)),
+        shape = RoundedCornerShape(rDP(16.dp)),
         color = backgroundColor,
-        modifier = Modifier.height(rDP(40.dp))
+        modifier = Modifier.height(rDP(48.dp))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDP(16.dp)),
+            modifier = Modifier.padding(
+                horizontal = rDP(16.dp), vertical = rDP(12.dp)
+            ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
+            horizontalArrangement = Arrangement.spacedBy(rDP(10.dp))
         ) {
-            Icon(
-                painter = painterResource(provider.icon),
-                contentDescription = null,
-                modifier = Modifier.size(rDP(20.dp)),
-                tint = contentColor
-            )
-
-            // Always show text, no AnimatedVisibility
-            if (isSelected) {
-                Text(
-                    provider.label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = contentColor
-                )
-            }
-        }
-    }
-}
-
-// ============================================================================
-// LOCAL MODELS TAB
-// ============================================================================
-
-@Composable
-private fun LocalModelsTab(viewModel: ModelScreenViewModel) {
-    val context = LocalContext.current
-    val downloadStates by viewModel.downloadStates.collectAsState()
-
-    val textModels = remember { getModelList(context) }
-    val vlmModels = remember { getVLMModelList(context) }
-    val allModels = remember { textModels + vlmModels }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDP(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-    ) {
-        if (textModels.isNotEmpty()) {
-            item {
-                CategoryHeader("Text Models", textModels.size)
-            }
-            items(textModels, key = { it.id }) { model ->
-                ModernModelCard(
-                    modelData = model,
-                    downloadState = downloadStates[model.modelUrl.toString()],
-                    viewModel = viewModel
-                )
-            }
-        }
-
-        if (vlmModels.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(rDP(8.dp)))
-                CategoryHeader("Vision Models", vlmModels.size)
-            }
-            items(vlmModels, key = { it.id }) { model ->
-                ModernModelCard(
-                    modelData = model,
-                    downloadState = downloadStates[model.modelUrl.toString()],
-                    viewModel = viewModel
-                )
-            }
-        }
-
-        if (allModels.isEmpty()) {
-            item {
-                EmptyState(
-                    icon = Icons.TwoTone.CloudOff,
-                    title = "No models available",
-                    subtitle = "Import a GGUF file to get started"
-                )
-            }
-        }
-    }
-}
-
-// ============================================================================
-// SHERPA ONNX TAB
-// ============================================================================
-
-@Composable
-private fun SherpaONNXTab(viewModel: ModelScreenViewModel) {
-    val context = LocalContext.current
-    val downloadStates by viewModel.downloadStates.collectAsState()
-
-    val sttModels = remember { getSTTModelList(context) }
-    val ttsModels = remember { getTTSModelList(context) }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDP(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-    ) {
-        if (sttModels.isNotEmpty()) {
-            item {
-                CategoryHeader("Speech-to-Text", sttModels.size)
-            }
-            items(sttModels, key = { it.id }) { model ->
-                ModernModelCard(
-                    modelData = model,
-                    downloadState = downloadStates[model.modelUrl.toString()],
-                    viewModel = viewModel
-                )
-            }
-        }
-
-        if (ttsModels.isNotEmpty()) {
-            item {
-                Spacer(Modifier.height(rDP(8.dp)))
-                CategoryHeader("Text-to-Speech", ttsModels.size)
-            }
-            items(ttsModels, key = { it.id }) { model ->
-                ModernModelCard(
-                    modelData = model,
-                    downloadState = downloadStates[model.modelUrl.toString()],
-                    viewModel = viewModel
-                )
-            }
-        }
-
-        if (sttModels.isEmpty() && ttsModels.isEmpty()) {
-            item {
-                EmptyState(
-                    icon = Icons.TwoTone.GraphicEq,
-                    title = "No audio models",
-                    subtitle = "Coming soon!"
-                )
-            }
-        }
-    }
-}
-
-// ============================================================================
-// MODERN MODEL CARD
-// ============================================================================
-
-@Composable
-private fun ModernModelCard(
-    modelData: ModelData,
-    downloadState: DownloadState?,
-    viewModel: ModelScreenViewModel
-) {
-    val context = LocalContext.current
-    var isInstalled by remember { mutableStateOf(false) }
-    var isExpanded by remember { mutableStateOf(false) }
-
-    val isDownloading = downloadState?.isDownloading == true
-    val progress = downloadState?.progress ?: 0f
-    val isComplete = downloadState?.isComplete == true
-
-    LaunchedEffect(modelData.modelName) {
-        viewModel.checkIfInstalled(modelData.modelName) { isInstalled = it }
-    }
-
-    LaunchedEffect(isComplete) {
-        if (isComplete) isInstalled = true
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        shape = RoundedCornerShape(rDP(16.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-        ) {
-            // Header
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+            Surface(
+                shape = CircleShape,
+                color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                else contentColor.copy(alpha = 0.1f),
+                modifier = Modifier.size(rDP(32.dp))
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        modelData.modelName,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(Modifier.height(rDP(4.dp)))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                        Chip("${modelData.ctxSize} ctx")
-                        if (modelData.isToolCalling) {
-                            Chip("Tools", isHighlighted = true)
-                        }
-                    }
-                }
-
-                if (isInstalled && !isDownloading) {
-                    IconButton(
-                        onClick = { isExpanded = !isExpanded },
-                        modifier = Modifier.size(rDP(36.dp))
-                    ) {
-                        Icon(
-                            Icons.TwoTone.Info,
-                            contentDescription = "Info",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
-            }
-
-            // Expanded Details
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    HorizontalDivider(Modifier.alpha(0.3f))
-                    DetailRow("Temperature", modelData.temp.toString())
-                    DetailRow("Top-P", modelData.topP.toString())
-                    DetailRow("Max Tokens", modelData.maxTokens.toString())
-                    DetailRow("GPU Layers", modelData.gpuLayers.toString())
-                }
-            }
-
-            // Download Progress
-            if (isDownloading) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            "Downloading...",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            "${(progress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium.copy(
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                    }
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(rDP(6.dp))
-                            .clip(RoundedCornerShape(rDP(3.dp)))
-                    )
-                }
-            }
-
-            // Action Buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))
-            ) {
-                Button(
-                    onClick = {
-                        when {
-                            isDownloading -> viewModel.cancelDownload(
-                                modelData.modelName,
-                                modelData.modelUrl.toString()
-                            )
-                            !isInstalled -> viewModel.startDownload(modelData, context)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = !isInstalled || isDownloading,
-                    colors = if (isInstalled && !isDownloading) {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else ButtonDefaults.buttonColors(),
-                    shape = RoundedCornerShape(rDP(12.dp))
-                ) {
+                Box(contentAlignment = Alignment.Center) {
                     Icon(
-                        when {
-                            isInstalled -> Icons.Outlined.CheckCircle
-                            isDownloading -> Icons.TwoTone.Close
-                            else -> Icons.TwoTone.Download
-                        },
+                        painter = painterResource(provider.icon),
                         contentDescription = null,
-                        modifier = Modifier.size(rDP(18.dp))
+                        modifier = Modifier.size(rDP(18.dp)),
+                        tint = contentColor
                     )
-                    Spacer(Modifier.width(rDP(8.dp)))
-                    Text(
-                        when {
-                            isInstalled -> "Installed"
-                            isDownloading -> "Cancel"
-                            else -> "Download"
-                        },
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-                AnimatedVisibility(
-                    visible = isInstalled && !isDownloading,
-                    enter = scaleIn() + fadeIn(),
-                    exit = scaleOut() + fadeOut()
-                ) {
-                    IconButton(
-                        onClick = {
-                            viewModel.removeModel(modelData.modelName)
-                            isInstalled = false
-                        },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Icon(
-                            Icons.TwoTone.Delete,
-                            contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// OPENROUTER TAB (Simplified for readability)
-// ============================================================================
-
-@Composable
-private fun OpenRouterTab(viewModel: ModelScreenViewModel) {
-    val context = LocalContext.current
-    val apiKey by viewModel.openRouterApiKey.collectAsStateWithLifecycle()
-    val baseUrl by viewModel.openRouterBaseUrl.collectAsStateWithLifecycle()
-    val installed by viewModel.openRouterInstalledModels.collectAsStateWithLifecycle()
-    val available by viewModel.availableModels.collectAsStateWithLifecycle()
-
-    var showPicker by remember { mutableStateOf(false) }
-    var showKey by remember { mutableStateOf(false) }
-
-    LaunchedEffect(Unit) {
-        viewModel.initOpenRouter(context)
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDP(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDP(16.dp))
-    ) {
-        // API Settings Card
-        item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
-                shape = RoundedCornerShape(rDP(16.dp))
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(rDP(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.TwoTone.Key, null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(rDP(8.dp)))
-                        Text("API Configuration", fontWeight = FontWeight.Bold)
-                    }
-
-                    OutlinedTextField(
-                        value = apiKey,
-                        onValueChange = { viewModel.saveOpenRouterApiKey(context, it) },
-                        label = { Text("API Key") },
-                        trailingIcon = {
-                            IconButton(onClick = { showKey = !showKey }) {
-                                Icon(
-                                    painterResource(if (showKey) R.drawable.show else R.drawable.hide),
-                                    "Toggle"
-                                )
-                            }
-                        },
-                        visualTransformation = if (showKey)
-                            VisualTransformation.None
-                        else PasswordVisualTransformation(),
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(rDP(12.dp))
-                    )
-
-                    Button(
-                        onClick = { viewModel.fetchAvailableModels() },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = apiKey.isNotBlank(),
-                        shape = RoundedCornerShape(rDP(12.dp))
-                    ) {
-                        Text("Fetch Models", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-
-        // Selected Models
-        item {
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-                ),
-                shape = RoundedCornerShape(rDP(16.dp))
-            ) {
-                Column(
-                    Modifier
-                        .fillMaxWidth()
-                        .padding(rDP(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-                ) {
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text("Selected Models", fontWeight = FontWeight.Bold)
-                        if (installed.isNotEmpty()) {
-                            Surface(
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    "${installed.size}",
-                                    modifier = Modifier.padding(
-                                        horizontal = rDP(10.dp),
-                                        vertical = rDP(4.dp)
-                                    ),
-                                    style = MaterialTheme.typography.labelMedium.copy(
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            }
-                        }
-                    }
-
-                    if (installed.isEmpty()) {
-                        EmptyState(
-                            icon = Icons.TwoTone.CloudOff,
-                            title = "No models selected",
-                            subtitle = "Add from available models",
-                            compact = true
-                        )
-                    } else {
-                        installed.forEach { model ->
-                            OpenRouterModelItem(
-                                model = model,
-                                onRemove = { viewModel.removeModel(model.name) }
-                            )
-                        }
-                    }
-
-                    Button(
-                        onClick = { showPicker = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        enabled = available.isNotEmpty(),
-                        shape = RoundedCornerShape(rDP(12.dp))
-                    ) {
-                        Icon(Icons.Filled.Add, null)
-                        Spacer(Modifier.width(rDP(8.dp)))
-                        Text("Add Model", fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-
-    if (showPicker) {
-        ModelPickerDialog(
-            available = available,
-            selected = installed,
-            onDismiss = { showPicker = false },
-            onSelect = { model ->
-                viewModel.addOpenRouterModel(model)
-                viewModel.addModel(model.toModelData())
-                showPicker = false
-            }
-        )
-    }
-}
-
-// ============================================================================
-// INSTALLED MODELS TAB
-// ============================================================================
-
-@Composable
-private fun InstalledModelsTab(viewModel: ModelScreenViewModel) {
-    val models by viewModel.models.collectAsState()
-
-    if (models.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            EmptyState(
-                icon = Icons.TwoTone.Inventory,
-                title = "No installed models",
-                subtitle = "Download or import models to get started"
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDP(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-        ) {
-            items(models, key = { it.id }) { model ->
-                InstalledModelCard(
-                    model = model,
-                    onRemove = { viewModel.removeModel(model.modelName) }
-                )
-            }
-        }
-    }
-}
-
-// ============================================================================
-// HELPER COMPONENTS
-// ============================================================================
-
-@Composable
-private fun CategoryHeader(title: String, count: Int) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = rDP(8.dp)),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleMedium.copy(
-                fontWeight = FontWeight.Bold
-            )
-        )
-        Surface(
-            shape = RoundedCornerShape(rDP(8.dp)),
-            color = MaterialTheme.colorScheme.secondaryContainer
-        ) {
-            Text(
-                "$count",
-                modifier = Modifier.padding(horizontal = rDP(10.dp), vertical = rDP(4.dp)),
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold
-            )
-        }
-    }
-}
-
-@Composable
-private fun Chip(text: String, isHighlighted: Boolean = false) {
-    Surface(
-        shape = RoundedCornerShape(rDP(8.dp)),
-        color = if (isHighlighted)
-            MaterialTheme.colorScheme.primaryContainer
-        else MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = rDP(10.dp), vertical = rDP(4.dp)),
-            style = MaterialTheme.typography.labelSmall,
-            color = if (isHighlighted)
-                MaterialTheme.colorScheme.onPrimaryContainer
-            else MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun DetailRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
-        )
-        Text(
-            value,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.SemiBold
-            )
-        )
-    }
-}
-
-@Composable
-private fun EmptyState(
-    icon: ImageVector,
-    title: String,
-    subtitle: String,
-    compact: Boolean = false
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(rDP(if (compact) 24.dp else 48.dp)),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-    ) {
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            modifier = Modifier.size(rDP(if (compact) 56.dp else 80.dp))
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDP(if (compact) 28.dp else 40.dp)),
-                    tint = MaterialTheme.colorScheme.onSurface.copy(0.5f)
-                )
-            }
-        }
-        Text(
-            title,
-            style = if (compact) MaterialTheme.typography.titleMedium
-            else MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            textAlign = TextAlign.Center
-        )
-        Text(
-            subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-            textAlign = TextAlign.Center
-        )
-    }
-}
-
-@Composable
-private fun OpenRouterModelItem(model: OpenRouterModel, onRemove: () -> Unit) {
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDP(12.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(12.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    model.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    "${model.ctxSize} ctx • Temp ${model.temperature}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            IconButton(
-                onClick = onRemove,
-                colors = IconButtonDefaults.iconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Icon(
-                    Icons.TwoTone.Delete,
-                    contentDescription = "Remove",
-                    tint = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.size(rDP(20.dp))
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun InstalledModelCard(model: ModelData, onRemove: () -> Unit) {
-    var isExpanded by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .animateContentSize(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        ),
-        shape = RoundedCornerShape(rDP(16.dp))
-    ) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(rDP(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-        ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        model.modelName,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold
-                        ),
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(Modifier.height(rDP(4.dp)))
-
-                    Chip(
-                        text = if (model.providerName == ModelProvider.LocalGGUF.toString())
-                            "Local Model" else model.providerName,
-                        isHighlighted = model.providerName == ModelProvider.LocalGGUF.toString()
-                    )
-                }
-
-                Row(horizontalArrangement = Arrangement.spacedBy(rDP(4.dp))) {
-                    IconButton(
-                        onClick = { isExpanded = !isExpanded },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    ) {
-                        Icon(
-                            Icons.TwoTone.Info,
-                            contentDescription = "Info",
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onRemove,
-                        colors = IconButtonDefaults.iconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        )
-                    ) {
-                        Icon(
-                            Icons.TwoTone.Delete,
-                            contentDescription = "Remove",
-                            tint = MaterialTheme.colorScheme.error
-                        )
-                    }
                 }
             }
 
             AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                visible = isSelected,
+                enter = fadeIn() + expandHorizontally(),
+                exit = fadeOut() + shrinkHorizontally()
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    HorizontalDivider(Modifier.alpha(0.3f))
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                        Chip("${model.ctxSize} ctx")
-                        Chip("Temp ${model.temp}")
-                        Chip("Top-P ${model.topP}")
-                    }
-
-                    DetailRow("Top-K", model.topK.toString())
-                    DetailRow("Max Tokens", model.maxTokens.toString())
-                    DetailRow("GPU Layers", model.gpuLayers.toString())
-                    DetailRow("Threads", model.threads.toString())
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ModelPickerDialog(
-    available: List<OpenRouterModel>,
-    selected: List<OpenRouterModel>,
-    onDismiss: () -> Unit,
-    onSelect: (OpenRouterModel) -> Unit
-) {
-    var searchQuery by remember { mutableStateOf("") }
-
-    val filtered = remember(searchQuery, available, selected) {
-        available
-            .filter { it.name.contains(searchQuery, ignoreCase = true) }
-            .filter { it !in selected }
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {},
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close", fontWeight = FontWeight.Bold)
-            }
-        },
-        title = {
-            Text(
-                "Select Model",
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.Bold
-                )
-            )
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = rDP(500.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDP(12.dp))
-            ) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    placeholder = { Text("Search models...") },
-                    leadingIcon = { Icon(Icons.TwoTone.Search, null) },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDP(12.dp)),
-                    singleLine = true
-                )
-
-                if (filtered.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.TwoTone.SearchOff,
-                        title = "No models found",
-                        subtitle = if (searchQuery.isBlank())
-                            "Fetch models first"
-                        else "Try different keywords",
-                        compact = true
-                    )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(rDP(8.dp))
-                    ) {
-                        items(filtered, key = { it.id }) { model ->
-                            ModelPickerItem(
-                                model = model,
-                                onClick = { onSelect(model) }
-                            )
-                        }
-                    }
-                }
-            }
-        },
-        shape = RoundedCornerShape(rDP(20.dp))
-    )
-}
-
-@Composable
-private fun ModelPickerItem(model: OpenRouterModel, onClick: () -> Unit) {
-    var isPressed by remember { mutableStateOf(false) }
-
-    val scale by animateFloatAsState(
-        if (isPressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
-    )
-
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .scale(scale)
-            .clip(RoundedCornerShape(rDP(12.dp)))
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) {
-                isPressed = true
-                onClick()
-            },
-        color = MaterialTheme.colorScheme.surfaceVariant,
-        shape = RoundedCornerShape(rDP(12.dp))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDP(12.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    model.name,
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
+                    provider.label, style = MaterialTheme.typography.labelLarge.copy(
+                        fontSize = rSp(14.sp, maxSp = 16.sp)
+                    ), fontWeight = FontWeight.Bold, color = contentColor
                 )
-
-                Spacer(Modifier.height(rDP(4.dp)))
-
-                Row(horizontalArrangement = Arrangement.spacedBy(rDP(8.dp))) {
-                    Text(
-                        "${model.ctxSize} ctx",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (model.supportsTools) {
-                        Text(
-                            "• Tools ✓",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                }
             }
-
-            Icon(
-                Icons.Filled.Add,
-                contentDescription = "Add",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(rDP(24.dp))
-            )
         }
     }
-
-    LaunchedEffect(isPressed) {
-        if (isPressed) {
-            delay(100)
-            isPressed = false
-        }
-    }
-}
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-private fun getVLMModelList(context: Context): List<ModelData> {
-    return emptyList()
-}
-
-private fun getSTTModelList(context: Context): List<ModelData> {
-    val modelsDir = File(context.filesDir, "models/stt")
-    if (!modelsDir.exists()) modelsDir.mkdirs()
-
-    return listOf(
-        ModelData(
-            modelName = "Whisper-EN-Small",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelType = ModelType.STT,
-            modelPath = modelsDir.absolutePath,
-            modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/sherpa-onnx-whisper-tiny.zip",
-            ctxSize = 448,
-            isImported = false
-        )
-    )
-}
-
-private fun getTTSModelList(context: Context): List<ModelData> {
-    val modelsDir = File(context.filesDir, "models/tts")
-    if (!modelsDir.exists()) modelsDir.mkdirs()
-
-    return listOf(
-        ModelData(
-            modelName = "KOR0-TTS-0.19-M",
-            providerName = ModelProvider.LocalGGUF.toString(),
-            modelType = ModelType.TTS,
-            modelPath = modelsDir.absolutePath,
-            modelUrl = "https://github.com/Siddhesh2377/ToolNeuron/releases/download/Beta-4.5/kokoro-en-v0_19.zip",
-            ctxSize = 512,
-            isImported = false
-        )
-    )
 }

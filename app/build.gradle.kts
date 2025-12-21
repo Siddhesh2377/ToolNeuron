@@ -8,8 +8,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.ksp)
-    alias(libs.plugins.gms.services)
-    kotlin("plugin.serialization") version "2.1.21"
+    alias(libs.plugins.kotlin.serialization)
 }
 val localPropertiesFile = rootProject.file("local.properties")
 
@@ -18,11 +17,11 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.dark.neurov"
+        applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 5
-        versionName = "5.0-beta"
+        versionCode = 4
+        versionName = "1.3-alpha"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
@@ -34,7 +33,7 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
             )
@@ -63,10 +62,6 @@ android {
     }
 
     dependencies {
-        //FIREBASE
-        implementation(platform(libs.firebase.bom))
-        implementation(libs.firebase.firestore.ktx)
-        implementation(libs.firebase.database)
 
         //NET
         implementation(libs.jsoup)
@@ -83,6 +78,7 @@ android {
 
         //LIBS
         implementation(project(":plugin-api"))
+        implementation(project(":ai-engine"))
         implementation(":ai-core-release@aar")
 
         //PROJECTS

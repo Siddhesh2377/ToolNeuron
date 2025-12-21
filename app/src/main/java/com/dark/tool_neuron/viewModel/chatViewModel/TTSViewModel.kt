@@ -164,7 +164,10 @@ class TTSViewModel() : ViewModel() {
                 track.play()
 
                 val startTime = TimeSource.Monotonic.markNow()
-                val ttsInfo = JSONObject(AudioManager.getAudioInfo()).getJSONObject("tts")
+                val autoData = AudioManager.getAudioInfo()
+                Log.d(TAG, autoData)
+                val ttsInfo = JSONObject(autoData).getJSONObject("tts")
+
                 val sampleRate = ttsInfo.getInt("sample_rate")
 
                 // Store metadata for later saving

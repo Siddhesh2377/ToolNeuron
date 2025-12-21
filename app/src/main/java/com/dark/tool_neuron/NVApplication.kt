@@ -12,6 +12,7 @@ import com.dark.tool_neuron.worker.UserDataManager
 import com.dark.plugins.manager.PluginManager
 import com.dark.tool_neuron.logger.AppLogger.measureLogAndTime
 import com.dark.tool_neuron.worker.DataHubManager
+import com.mp.ai_engine.workers.installer.ModelInstaller
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -20,13 +21,13 @@ import kotlin.system.measureTimeMillis
 
 class NVApplication : Application() {
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val TAG = "NVApplication"
 
     override fun onCreate() {
         super.onCreate()
 
         appScope.launch {
             // Get root node first
+            com.mp.ai_engine.workers.model.ModelManager.init(applicationContext)
             UserDataManager.init(applicationContext)
             val root = UserDataManager.getRootNode()
 

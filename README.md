@@ -5,8 +5,7 @@
 
 ### The Complete Offline AI Ecosystem for Android
 
-[![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
-[![APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
+ APKPure](https://img.shields.io/badge/APKPure-Download-01C853)](https://apkpure.com/p/com.dark.neurov)
 
 [![Latest Release](https://img.shields.io/badge/Release-Beta_5.1-blue?logo=github)](https://github.com/Siddhesh2377/NeuroVerse/releases/latest)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)

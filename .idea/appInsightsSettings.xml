@@ -22,8 +22,8 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="com.dark.neurov" />
-                  <option name="mobileSdkAppId" value="1:201495065187:android:d5a879728e927623b6be56" />
+                  <option name="appId" value="com.dark.tool_neuron" />
+                  <option name="mobileSdkAppId" value="1:201495065187:android:a540e7d35d6ea2ccb6be56" />
                   <option name="projectId" value="tool-neuron" />
                   <option name="projectNumber" value="201495065187" />
                 </ConnectionSetting>

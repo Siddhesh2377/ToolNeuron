@@ -1,8 +1,11 @@
 package com.dark.ai_module.model
 
+import android.content.Intent
+import android.os.Bundle
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import kotlinx.serialization.Serializable
+import org.json.JSONObject
 import java.util.UUID
 
 
@@ -62,7 +65,7 @@ fun OpenRouterModel.toModelData(): ModelData {
     return ModelData(
         id = id,
         modelName = name,
-        providerName = ModelProvider.OpenRouter.toString(),
+        providerName = "",
         modelUrl = id,
         ctxSize = ctxSize,
         temp = temperature,
@@ -80,12 +83,7 @@ sealed class LoadState {
 
 data class GenerationParams(val maxTokens: Int = 2048)
 
-enum class ModelProvider {
-    OpenRouter,
-    LocalGGUF,
-    SherpaONNX,
-    HuggingFace
-}
+
 
 enum class ModelType {
     TEXT,
@@ -94,3 +92,77 @@ enum class ModelType {
     VLM,
     EMBEDDING
 }
+
+/**
+ * Converts ModelData to JSON string for storage or transfer.
+ */
+fun ModelData.toJson(): String {
+    return JSONObject().apply {
+        put("id", id)
+        put("modelName", modelName)
+        put("providerName", providerName)
+        put("modelType", modelType.name)
+        put("modelPath", modelPath)
+        put("architecture", architecture)
+        put("threads", threads)
+        put("gpuLayers", gpuLayers)
+        put("useMMAP", useMMAP)
+        put("useMLOCK", useMLOCK)
+        put("ctxSize", ctxSize)
+        put("temp", temp)
+        put("topK", topK)
+        put("topP", topP)
+        put("minP", minP)
+        put("maxTokens", maxTokens)
+        put("mirostat", mirostat)
+        put("mirostatTau", mirostatTau)
+        put("mirostatEta", mirostatEta)
+        put("seed", seed)
+        put("isImported", isImported)
+        put("modelUrl", modelUrl)
+        put("isToolCalling", isToolCalling)
+        put("systemPrompt", systemPrompt)
+        put("chatTemplate", chatTemplate)
+    }.toString()
+}
+
+/* ========================================================================= */
+/* UTILITY EXTENSIONS                                                        */
+/* ========================================================================= */
+
+/**
+ * Creates a copy of ModelData with minimal fields for download purposes.
+ */
+fun ModelData.toDownloadModel(): ModelData {
+    return copy(
+        threads = 4,
+        gpuLayers = 0,
+        useMMAP = true,
+        useMLOCK = false
+    )
+}
+
+/**
+ * Gets formatted model size if available from the path.
+ */
+fun ModelData.getFormattedSize(): String? {
+    if (modelPath.isBlank()) return null
+
+    return try {
+        val file = java.io.File(modelPath)
+        if (file.exists()) {
+            val bytes = file.length()
+            when {
+                bytes < 1024 -> "$bytes B"
+                bytes < 1024 * 1024 -> "%.2f KB".format(bytes / 1024.0)
+                bytes < 1024 * 1024 * 1024 -> "%.2f MB".format(bytes / (1024.0 * 1024))
+                else -> "%.2f GB".format(bytes / (1024.0 * 1024 * 1024))
+            }
+        } else null
+    } catch (e: Exception) {
+        null
+    }
+}
+
+// Required companion object for fromJson extension
+fun ModelData.create() = ModelData()

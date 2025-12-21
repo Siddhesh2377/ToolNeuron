@@ -3,9 +3,12 @@ package com.dark.tool_neuron.model
 data class GGUFModels(
     //Model Details
     var modelName: String = "",
+    var modelDescription: String = "",
+    var modelTags: List<String> = emptyList(),
     var architecture: String = "",          //gemma, llama, qwen
     var modelType: String = "TXT",          //TXT, VLM, EMBED
     var modelFileLink: String = "",
+    var modelFileSize: String = "",
 
     // Performance settings
     var gpuLayers: Int = 0,

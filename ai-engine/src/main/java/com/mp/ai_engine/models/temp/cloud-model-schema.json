@@ -1,0 +1,9 @@
+{
+  "modelName": "",
+  "modelDescription": "",
+  "providerName": "GGUF | OpenRouter | Stable-Diffusion",
+  "modelType": "TEXT | VLM | EMBEDDING | TTS | STT | IMAGE_GEN | NONE",
+  "modelFileSize": "200 MB",
+  "modelFileLink": "",
+  "metaData": {}
+}

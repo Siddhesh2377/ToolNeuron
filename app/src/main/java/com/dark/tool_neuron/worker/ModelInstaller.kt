@@ -2,10 +2,8 @@ package com.dark.tool_neuron.worker
 
 import android.content.Context
 import com.dark.ai_module.model.*
-import com.dark.ai_module.workers.ModelManager
-import com.dark.ai_module.workers.downloadFile
+import com.mp.ai_engine.models.llm_models.ModelProvider
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.*
 import java.util.zip.ZipInputStream
@@ -23,143 +21,35 @@ object ModelInstaller {
         onComplete: () -> Unit,
         onError: (Exception) -> Unit
     ): Result<ModelData> = withContext(Dispatchers.IO) {
-        try {
-            when (provider) {
-                ModelProvider.OpenRouter -> installOpenRouterModel(
-                    name, url, modelType, onComplete
-                )
-
-                ModelProvider.LocalGGUF -> installLocalGGUFModel(
-                    context, name, url, fileName, modelType, onProgress, onComplete, onError
-                )
-
-                ModelProvider.HuggingFace -> installLocalGGUFModel(
-                    context, name, url, fileName, modelType, onProgress, onComplete, onError
-                )
-
-                ModelProvider.SherpaONNX -> installSherpaModel(
-                    context, name, url, fileName, modelType, onProgress, onComplete, onError
-                )
-            }
-        } catch (e: Exception) {
-            onError(e)
-            Result.failure(e)
-        }
+        Result.success(ModelData())
+//        try {
+//            when (provider) {
+//                ModelProvider.OpenRouter -> installOpenRouterModel(
+//                    name, url, modelType, onComplete
+//                )
+//
+//                ModelProvider.LocalGGUF -> installLocalGGUFModel(
+//                    context, name, url, fileName, modelType, onProgress, onComplete, onError
+//                )
+//
+//                ModelProvider.HuggingFace -> installLocalGGUFModel(
+//                    context, name, url, fileName, modelType, onProgress, onComplete, onError
+//                )
+//
+//                ModelProvider.SherpaONNX -> installSherpaModel(
+//                    context, name, url, fileName, modelType, onProgress, onComplete, onError
+//                )
+//            }
+//        } catch (e: Exception) {
+//            onError(e)
+//            Result.failure(e)
+//        }
     }
 
     // ---------------------
     //  LOCAL GGUF MODELS
     // ---------------------
-    private suspend fun installLocalGGUFModel(
-        context: Context,
-        name: String,
-        url: String,
-        fileName: String,
-        modelType: ModelType,
-        onProgress: (Float) -> Unit,
-        onComplete: () -> Unit,
-        onError: (Exception) -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelsDir = File(context.filesDir, "models")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
 
-        val outputFile = File(modelsDir, fileName)
-        downloadFile(url, outputFile, onProgress, {
-            val modelData = ModelData(
-                modelName = name,
-                providerName = ModelProvider.LocalGGUF.toString(),
-                modelType = modelType,
-                modelPath = outputFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-            this.launch {
-                ModelManager.addModel(modelData)
-            }
-            onComplete()
-        }, onError)
-
-        Result.success(
-            ModelData(
-                modelName = name,
-                providerName = ModelProvider.LocalGGUF.toString(),
-                modelType = modelType,
-                modelPath = outputFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-        )
-    }
-
-    // ---------------------
-    //  SHERPA ONNX MODELS
-    // ---------------------
-    private suspend fun installSherpaModel(
-        context: Context,
-        name: String,
-        url: String,
-        fileName: String,
-        modelType: ModelType,
-        onProgress: (Float) -> Unit,
-        onComplete: () -> Unit,
-        onError: (Exception) -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelsDir = File(context.filesDir, "models/${modelType.name.lowercase()}")
-        if (!modelsDir.exists()) modelsDir.mkdirs()
-
-        val archiveFile = File(modelsDir, fileName)
-        downloadFile(url, archiveFile, onProgress, {
-            val extractDir = File(modelsDir, name.replace(" ", "_"))
-            unzipFlatten(archiveFile, extractDir)
-            archiveFile.delete()
-
-            val modelData = ModelData(
-                modelName = name,
-                providerName = ModelProvider.SherpaONNX.toString(),
-                modelType = modelType,
-                modelPath = extractDir.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-            this.launch {
-                ModelManager.addModel(modelData)
-            }
-            onComplete()
-        }, onError)
-
-        Result.success(
-            ModelData(
-                modelName = name,
-                providerName = ModelProvider.SherpaONNX.toString(),
-                modelType = modelType,
-                modelPath = archiveFile.absolutePath,
-                modelUrl = url,
-                isImported = true
-            )
-        )
-    }
-
-    // ---------------------
-    //  OPENROUTER MODELS
-    // ---------------------
-    private suspend fun installOpenRouterModel(
-        name: String,
-        url: String,
-        modelType: ModelType,
-        onComplete: () -> Unit
-    ): Result<ModelData> = withContext(Dispatchers.IO) {
-        val modelData = ModelData(
-            modelName = name,
-            providerName = ModelProvider.OpenRouter.toString(),
-            modelType = modelType,
-            modelUrl = url,
-            isImported = false
-        )
-
-        ModelManager.addModel(modelData)
-        onComplete()
-        Result.success(modelData)
-    }
 
     // ---------------------
     //  UTILITIES

@@ -1,0 +1,39 @@
+{
+  "modelName": "Kodify-8k",
+  "modelDescription": "Some Random Ass Description",
+  "providerName": "OpenRouter|GGUF|SHERPA-ONNX",
+  "modelType": "TEXT | VLM | EMBEDDING | TTS | STT | IMAGE_GEN",
+  "modelFileSize": "2000 MB",
+  "meta-data": {
+    /* This WIll Be for MOSTLY TEXT GEN models */
+    "architecture": "QWEN | LLAMA | GEMMA | OTHERS",
+    "ctxSize": "4096 | 2048 | 1024 | 512",
+    "gpu-layers": "0-N",
+    "maxTokens": "2048",
+    "seed": "-1",
+    "threads": "4",
+    "useMMAP": true,
+    "useMLOCK": false,
+    "min-p": 1,
+    "mirostat": 0,
+    "mirostatEta" : 0.1,
+    "mirostatTau": 5,
+    "temp": 0.7,
+    "topK": 20,
+    "topP": 0.5,
+    "modelTags": ["tag1", "tag2", "tag3"],
+    "systemPrompt": "",
+    "chatTemplate": "",
+
+    /* This WIll Be for SHERPA_TTS */
+    "modelDir": "",
+    "modelName": "",
+    "voices": "",
+    "dataDir": "",
+
+    /* This WIll Be for SHERPA_STT */
+    "encoder" : "",
+    "decoder" : "",
+    "tokens-txt": ""
+  }
+}

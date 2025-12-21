@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.ai_module.model.LoadState
 import com.dark.ai_module.model.ModelData
-import com.dark.ai_module.model.ModelProvider
 import com.dark.ai_module.workers.ModelManager
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewModel.ModelScreenViewModel
@@ -82,7 +81,7 @@ fun ModelLoadingScreen(
             val initialModel = ModelData(
                 modelName = file.nameWithoutExtension,
                 modelPath = file.absolutePath,
-                providerName = ModelProvider.LocalGGUF.toString()
+                providerName = ""
             )
 
             ModelManager.loadGenerationModel(initialModel) { state ->
