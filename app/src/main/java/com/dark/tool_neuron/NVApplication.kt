@@ -27,6 +27,7 @@ class NVApplication : Application() {
 
         appScope.launch {
             // Get root node first
+            ModelInstaller.initialize(applicationContext)
             com.mp.ai_engine.workers.model.ModelManager.init(applicationContext)
             UserDataManager.init(applicationContext)
             val root = UserDataManager.getRootNode()

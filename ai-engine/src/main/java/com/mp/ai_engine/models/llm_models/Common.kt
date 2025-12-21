@@ -5,5 +5,5 @@ enum class ModelType {
 }
 
 enum class Architecture {
-    LLAMA, QWEN, GEMMA, PHI, MISTRAL, DEEPSEEK, OTHER
+    LLAMA, QWEN2, GEMMA2, PHI, MISTRAL, DEEPSEEK, OTHER, PHI3
 }

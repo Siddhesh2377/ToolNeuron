@@ -489,12 +489,12 @@ fun ActionButtons(
                 Button(
                     onClick = {
                         onStatusChange("Installing ${selectedModel.modelName}...")
-                        ModelInstaller.install(
-                            cloudModel = selectedModel,
-                            downloadUrl = selectedModel.metaData["downloadLink"].toString(),
-                            onSuccess = { onStatusChange("✓ Installation successful") },
-                            onError = { onStatusChange("✗ Error: $it") }
-                        )
+//                        ModelInstaller.install(
+//                            cloudModel = selectedModel,
+//                            downloadUrl = selectedModel.metaData["downloadLink"].toString(),
+//                            onSuccess = { onStatusChange("✓ Installation successful") },
+//                            onError = { onStatusChange("✗ Error: $it") }
+//                        )
                     },
                     modifier = Modifier.weight(1f)
                 ) {
