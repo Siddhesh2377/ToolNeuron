@@ -19,6 +19,7 @@
 [![Get it on APKPure](https://img.shields.io/badge/Get_it_on-APKPure-01C853?style=for-the-badge&logo=android&logoColor=white)](https://apkpure.com/p/com.dark.neurov)
  
 [GitHub Releases](https://github.com/Siddhesh2377/NeuroVerse/releases/latest) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Documentation](https://github.com/Siddhesh2377/NeuroVerse/wiki)
+</div>
 
 ---
 
@@ -48,10 +49,6 @@ I'm genuinely grateful to everyone who has supported this project and stuck arou
 If you're interested in maintaining or contributing to a fork, please feel free to reach out via [Discord](https://discord.gg/mVPwHDhrAP). I'd love to see this project continue in some form.
 
 Thank you for understanding.
-
----
-
-</div>
 
 ---
 
