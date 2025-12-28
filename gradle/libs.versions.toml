@@ -18,6 +18,10 @@ activity-compose = "1.12.1"
 
 # Lifecycle (for ViewModel)
 lifecycle = "2.10.0"
+junit = "4.13.2"
+junit-version = "1.3.0"
+espresso-core = "3.7.0"
+appcompat = "1.7.1"
 
 [libraries]
 # AndroidX Core
@@ -38,8 +42,13 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 
 # Debug tools
 androidx-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
+junit = { group = "junit", name = "junit", version.ref = "junit" }
+androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit-version" }
+androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso-core" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+android-library = { id = "com.android.library", version.ref = "agp" }
