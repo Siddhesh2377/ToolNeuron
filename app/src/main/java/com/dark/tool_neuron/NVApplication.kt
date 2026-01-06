@@ -7,6 +7,6 @@ class NVApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        AppContainer.init()
+        AppContainer.init(applicationContext)
     }
 }
