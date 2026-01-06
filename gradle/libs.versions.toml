@@ -1,20 +1,26 @@
-# =========================================
-# libs.versions.toml - Minimal for Hello World + ViewModel
-# =========================================
-
 [versions]
 # Build & Toolchain
 agp = "8.13.2"
-kotlin = "2.2.21"
+converter-gson = "3.0.0"
+kotlin = "2.3.0"
+ksp = "2.2.20-2.0.3"
+
+# Database
+logging-interceptor = "5.3.2"
+room = "2.8.4"
+
+# Data-Model
+kotlinx-serialization = "1.9.0"
 
 # AndroidX Core
 core-ktx = "1.17.0"
 
 # Compose
-compose-bom = "2025.12.00"
+compose-bom = "2025.12.01"
 compose-material3 = "1.5.0-alpha11"
 material = "1.13.0"
-activity-compose = "1.12.1"
+activity-compose = "1.12.2"
+material-icons-extended = "1.7.8"
 
 # Lifecycle (for ViewModel)
 lifecycle = "2.10.0"
@@ -25,6 +31,15 @@ appcompat = "1.7.1"
 ui-text = "1.10.0"
 
 [libraries]
+# Database
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-ktx = { module = "androidx.room:room-ktx", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
+#Data-Model
+converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converter-gson" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
 
@@ -33,6 +48,7 @@ androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecyc
 androidx-lifecycle-viewmodel-compose = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-compose", version.ref = "lifecycle" }
 
 # Compose & UI
+androidx-material-icons = { module = "androidx.compose.material:material-icons-extended", version.ref = "material-icons-extended" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "compose-material3" }
 androidx-material = { group = "com.google.android.material", name = "material", version.ref = "material" }
@@ -48,9 +64,13 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espresso-core" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 androidx-compose-ui-text = { group = "androidx.compose.ui", name = "ui-text", version.ref = "ui-text" }
+logging-interceptor = { module = "com.squareup.okhttp3:logging-interceptor", version.ref = "logging-interceptor" }
+retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "converter-gson" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

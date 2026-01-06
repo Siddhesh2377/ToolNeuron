@@ -31,4 +31,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "Tool-Neuron"
 include(":app")
-include(":ai-core")

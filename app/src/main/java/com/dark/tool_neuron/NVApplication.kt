@@ -4,4 +4,7 @@ import android.app.Application
 
 class NVApplication : Application() {
 
+    override fun onCreate() {
+        super.onCreate()
+    }
 }
