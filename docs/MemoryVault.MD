@@ -1,4 +1,3 @@
-```markdown
 # MemoryVault
 
 A high-performance, encrypted storage system for Android applications designed for secure data persistence with minimal memory footprint.
@@ -243,4 +242,3 @@ Developed for secure chat storage in Android applications requiring high perform
 - Vector embedding support
 - Write-Ahead Log for crash recovery
 - Defragmentation and backup/restore functionality
-```
