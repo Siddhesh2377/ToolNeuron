@@ -19,6 +19,7 @@ import com.dark.tool_neuron.ui.screen.home_screen.HomeDrawerScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
+import com.dark.tool_neuron.worker.LlmModelWorker
 import com.dark.tool_neuron.worker.NotificationPermissionHelper
 
 class MainActivity : ComponentActivity() {
@@ -29,9 +30,11 @@ class MainActivity : ComponentActivity() {
         if (!NotificationPermissionHelper.hasNotificationPermission(this)) {
             NotificationPermissionHelper.requestNotificationPermission(this) {
                 if (it) {
-                    Toast.makeText(this, "Notification permission granted", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Notification permission granted", Toast.LENGTH_SHORT)
+                        .show()
                 } else {
-                    Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "Notification permission denied", Toast.LENGTH_SHORT)
+                        .show()
                 }
             }
         }
@@ -41,6 +44,12 @@ class MainActivity : ComponentActivity() {
                 AppNavigation()
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        AppContainer.shutdown()
+        LlmModelWorker.unbindService()
     }
 }
 
@@ -81,14 +90,12 @@ fun AppNavigation() {
                 towards = AnimatedContentTransitionScope.SlideDirection.Right,
                 animationSpec = tween(300)
             ) + fadeOut(animationSpec = tween(300))
-        }
-    ) {
+        }) {
         composable(Screen.ChatList.route) {
             HomeDrawerScreen(
                 onChatSelected = { chatId ->
                     navController.navigate(Screen.Chat.createRoute(chatId))
-                }
-            )
+                })
         }
 
         composable(Screen.Chat.route) { backStackEntry ->
@@ -99,12 +106,9 @@ fun AppNavigation() {
             )
 
             HomeScreen(
-                chatViewModel = chatViewModel,
-                chatId = chatId,
-                onMenuClick = {
+                chatViewModel = chatViewModel, chatId = chatId, onMenuClick = {
                     navController.popBackStack()
-                }
-            )
+                })
         }
     }
 }
