@@ -15,13 +15,8 @@ class LLMModelViewModel(
     private val repository: ModelRepository
 ) : ViewModel() {
 
-    // --- READ ---
     val installedModels: Flow<List<Model>> = repository.getAllModels()
-    val activeInstalledModels: Flow<List<Model>> = repository.getActiveModels()
     val currentModelID = MutableStateFlow("")
-
-    fun getModelsByProvider(providerType: ProviderType): Flow<List<Model>> =
-        repository.getModelsByProvider(providerType)
 
     suspend fun getModelConfig(modelId: String): ModelConfig?{
        return repository.getConfigByModelId(modelId)

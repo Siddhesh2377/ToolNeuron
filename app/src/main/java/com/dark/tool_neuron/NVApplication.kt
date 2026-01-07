@@ -11,4 +11,10 @@ class NVApplication : Application() {
         AppContainer.init(applicationContext)
         LlmModelWorker.bindService(applicationContext)
     }
+
+    override fun onTerminate() {
+        super.onTerminate()
+        AppContainer.shutdown()
+        LlmModelWorker.unbindService()
+    }
 }

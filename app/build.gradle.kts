@@ -23,7 +23,9 @@ android {
         targetSdk = 36
         versionCode = 4
         versionName = "1.0.0"
-
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
     }
 
@@ -75,6 +77,7 @@ dependencies {
 
     //Projects
     implementation(":ai_gguf-release@aar")
+    implementation(project(":memory-vault"))
 
     // Core Android
     implementation(libs.androidx.core.ktx)
@@ -89,6 +92,7 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
+    implementation("androidx.navigation:navigation-compose:2.7.7")
 
     // Material (for XML themes)
     implementation(libs.androidx.material)
