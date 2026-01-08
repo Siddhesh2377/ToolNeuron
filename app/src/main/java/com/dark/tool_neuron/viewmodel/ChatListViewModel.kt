@@ -24,6 +24,9 @@ class ChatListViewModel(
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery
 
+    private val _isDialogOpen = MutableStateFlow(false)
+    val isDialogOpen: StateFlow<Boolean> = _isDialogOpen
+
     init {
         loadChats()
     }
@@ -122,6 +125,14 @@ class ChatListViewModel(
                 _error.value = "Import failed: ${e.message}"
             }
         }
+    }
+
+    fun openDialog() {
+        _isDialogOpen.value = true
+    }
+
+    fun closeDialog() {
+        _isDialogOpen.value = false
     }
 
     fun clearError() {

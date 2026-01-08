@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -72,9 +73,12 @@ fun HomeDrawerScreen(
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val searchQuery by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val isDialogOpen by viewModel.isDialogOpen.collectAsStateWithLifecycle()
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().then(
+            if (isDialogOpen) Modifier.blur(rDp(4.dp)) else Modifier
+        ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopBar(
@@ -117,6 +121,7 @@ fun HomeDrawerScreen(
                 else -> {
                     ChatList(
                         chats = chats,
+                        viewModel = viewModel,
                         onChatClick = onChatSelected,
                         onDeleteChat = { viewModel.deleteChat(it) })
                 }
@@ -177,7 +182,7 @@ private fun TopBar(
 
 @Composable
 private fun ChatList(
-    chats: List<ChatInfo>, onChatClick: (String) -> Unit, onDeleteChat: (String) -> Unit
+    chats: List<ChatInfo>, viewModel: ChatListViewModel, onChatClick: (String) -> Unit, onDeleteChat: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = rDp(8.dp))
@@ -186,6 +191,7 @@ private fun ChatList(
             items = chats, key = { it.chatId }) { chat ->
             ChatListItem(
                 chat = chat,
+                viewModel = viewModel,
                 onClick = { onChatClick(chat.chatId) },
                 onDelete = { onDeleteChat(chat.chatId) })
         }
@@ -195,9 +201,9 @@ private fun ChatList(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ChatListItem(
-    chat: ChatInfo, onClick: () -> Unit, onDelete: () -> Unit
+    chat: ChatInfo, viewModel: ChatListViewModel, onClick: () -> Unit, onDelete: () -> Unit
 ) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
+    val isDialogOpen by viewModel.isDialogOpen.collectAsStateWithLifecycle()
 
     Surface(
         onClick = onClick,
@@ -251,7 +257,7 @@ private fun ChatListItem(
             }
 
             IconButton(
-                onClick = { showDeleteDialog = true }) {
+                onClick = { viewModel.openDialog() }) {
                 Icon(
                     Icons.Filled.Delete,
                     contentDescription = "Delete chat",
@@ -261,22 +267,22 @@ private fun ChatListItem(
         }
     }
 
-    if (showDeleteDialog) {
+    if (isDialogOpen) {
         AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
+            onDismissRequest = { viewModel.closeDialog() },
             title = { Text("Delete Chat") },
             text = { Text("Are you sure you want to delete this chat? This action cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = {
                         onDelete()
-                        showDeleteDialog = false
+                        viewModel.closeDialog()
                     }) {
                     Text("Delete", color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
+                TextButton(onClick = { viewModel.closeDialog() }) {
                     Text("Cancel")
                 }
             })
