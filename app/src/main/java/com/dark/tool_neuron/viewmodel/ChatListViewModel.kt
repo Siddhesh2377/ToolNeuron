@@ -3,6 +3,7 @@ package com.dark.tool_neuron.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.vault.ChatInfo
+import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
@@ -43,7 +44,7 @@ class ChatListViewModel @Inject constructor(
             }.onFailure { e ->
                 _error.value = "Failed to load chats: ${e.message}"
             }
-
+            AppStateManager.unRefreshChat()
             _isLoading.value = false
         }
     }
@@ -51,7 +52,7 @@ class ChatListViewModel @Inject constructor(
     fun createNewChat(onCreated: (String) -> Unit) {
         viewModelScope.launch {
             _error.value = null
-
+            AppStateManager.chatRefreshed()
             chatManager.createNewChat().onSuccess { chatId ->
                 loadChats()
                 onCreated(chatId)

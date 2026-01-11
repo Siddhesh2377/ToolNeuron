@@ -12,5 +12,6 @@ class NVApplication : Application() {
         super.onCreate()
         AppContainer.init(applicationContext)
         LlmModelWorker.bindService(applicationContext)
+
     }
 }

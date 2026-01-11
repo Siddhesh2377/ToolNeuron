@@ -1,6 +1,17 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -32,10 +41,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
@@ -44,19 +54,20 @@ import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.mp.ai_gguf.models.DecodingMetrics
 
+// Update BodyContent
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun BodyContent(
-    paddingValues: PaddingValues,
-    chatViewModel: ChatViewModel = hiltViewModel()
+    paddingValues: PaddingValues, chatViewModel: ChatViewModel
 ) {
     val messages = chatViewModel.messages
     val isGenerating by chatViewModel.isGenerating.collectAsState()
     val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsState()
     val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsState()
+    val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
 
     val listState = rememberLazyListState()
 
-    // Auto-scroll for normal messages (not during streaming)
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty() && !isGenerating) {
             listState.animateScrollToItem(messages.size - 1)
@@ -72,14 +83,12 @@ fun BodyContent(
         if (messages.isEmpty() && !isGenerating) {
             EmptyMessagesState()
         } else {
-            // Show streaming view OR regular list
             if (isGenerating && streamingUserMessage != null) {
                 StreamingView(
                     userMessage = streamingUserMessage!!,
                     assistantMessage = streamingAssistantMessage
                 )
             } else {
-                // Regular message list
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
@@ -89,15 +98,53 @@ fun BodyContent(
                     items(
                         count = messages.size,
                         key = { index -> messages[index].msgId },
-                        contentType = { index -> messages[index].role }
-                    ) { index ->
+                        contentType = { index -> messages[index].role }) { index ->
                         MessageBubble(message = messages[index])
                     }
-
                     item {
                         Spacer(modifier = Modifier.height(rDp(16.dp)))
                     }
                 }
+            }
+        }
+
+        // Shared transition dialog
+        AnimatedVisibility(
+            visible = showDynamicWindow,
+            enter = fadeIn(animationSpec = tween(300)),
+            exit = fadeOut(animationSpec = tween(300))
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.6f))
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }) {
+                        chatViewModel.hideDynamicWindow()
+                    })
+        }
+
+        // Dynamic window overlay
+        AnimatedVisibility(
+            visible = showDynamicWindow,
+            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+                initialOffsetY = { -it }, animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMedium
+                )
+            ),
+            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
+                targetOffsetY = { -it }, animationSpec = tween(300)
+            )
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
+                contentAlignment = Alignment.TopCenter
+            ) {
+                DynamicActionWindow(chatViewModel)
             }
         }
     }
@@ -105,8 +152,7 @@ fun BodyContent(
 
 @Composable
 private fun StreamingView(
-    userMessage: String,
-    assistantMessage: String
+    userMessage: String, assistantMessage: String
 ) {
     // Scrollable column for overflow
     val scrollState = rememberScrollState()
@@ -126,10 +172,8 @@ private fun StreamingView(
         // User message bubble (static)
         UserMessageBubble(
             message = Messages(
-                role = Role.User,
-                content = MessageContent(
-                    contentType = ContentType.Text,
-                    content = userMessage
+                role = Role.User, content = MessageContent(
+                    contentType = ContentType.Text, content = userMessage
                 )
             )
         )
@@ -159,8 +203,7 @@ private fun AssistantStreamingBubble(text: String) {
                 modifier = Modifier
                     .size(rDp(8.dp))
                     .background(
-                        MaterialTheme.colorScheme.primary,
-                        shape = CircleShape
+                        MaterialTheme.colorScheme.primary, shape = CircleShape
                     )
             )
 
@@ -180,18 +223,23 @@ private fun EmptyMessagesState() {
         modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                Icons.Filled.SmartToy,
+                painter = painterResource(R.drawable.user),
                 contentDescription = null,
                 modifier = Modifier.size(rDp(64.dp)),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
             )
+            Spacer(Modifier.height(rDp(16.dp)))
             Text(
-                "Start a conversation",
+                "No Conversation Yet.!!",
                 style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                "Select a Model & Start a conversation",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

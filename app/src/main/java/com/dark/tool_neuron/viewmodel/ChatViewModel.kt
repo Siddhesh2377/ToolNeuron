@@ -1,6 +1,5 @@
 package com.dark.tool_neuron.viewmodel
 
-import android.util.Log
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.lifecycle.ViewModel
@@ -38,6 +37,8 @@ class ChatViewModel @Inject constructor(
     private val _currentChatId = MutableStateFlow<String?>(null)
     val currentChatId: StateFlow<String?> = _currentChatId
 
+    private var isNewConversation = true
+
     // Streaming state
     private val _streamingUserMessage = MutableStateFlow<String?>(null)
     val streamingUserMessage: StateFlow<String?> = _streamingUserMessage
@@ -52,6 +53,25 @@ class ChatViewModel @Inject constructor(
     private var currentUserMessage: Messages? = null
     private var currentGeneratedContent: String = ""
     private var currentMetrics: DecodingMetrics? = null
+
+    private val _showDynamicWindow = MutableStateFlow(false)
+    val showDynamicWindow: StateFlow<Boolean> = _showDynamicWindow
+
+    private val _showModelList = MutableStateFlow(false)
+    val showModelList: StateFlow<Boolean> = _showModelList
+
+    fun startNewConversation() {
+        _currentChatId.value = null
+        _messages.clear()
+        _streamingUserMessage.value = null
+        _streamingAssistantMessage.value = ""
+        currentUserMessage = null
+        currentGeneratedContent = ""
+        currentMetrics = null
+        _error.value = null
+        isNewConversation = true
+        AppStateManager.setHasMessages(false)
+    }
 
     fun loadChat(chatId: String) {
         viewModelScope.launch {
@@ -70,14 +90,6 @@ class ChatViewModel @Inject constructor(
     }
 
     fun sendMessage(prompt: String, maxTokens: Int = 512) {
-        val chatId = _currentChatId.value
-        if (chatId == null) {
-            Log.d("ChatViewModel", "No chat selected")
-            _error.value = "No chat selected"
-            AppStateManager.setError("No chat selected")
-            return
-        }
-
         if (!generationManager.isModelLoaded()) {
             _error.value = "Please load a model first"
             AppStateManager.setError("Please load a model first")
@@ -92,19 +104,172 @@ class ChatViewModel @Inject constructor(
         _streamingUserMessage.value = prompt
 
         viewModelScope.launch {
-            chatManager.addUserMessage(chatId, prompt).onSuccess { userMessage ->
-                currentUserMessage = userMessage
+            // If this is a new conversation, we'll create the chat after generation
+            if (isNewConversation) {
+                // Create a temporary user message for display
+                currentUserMessage = Messages(
+                    msgId = "", // Will be assigned later
+                    role = Role.User, content = MessageContent(
+                        contentType = ContentType.Text, content = prompt
+                    ), decodingMetrics = null
+                )
 
                 // Update state: Has messages now
                 AppStateManager.setHasMessages(true)
 
-                generate(chatId, userMessage, maxTokens)
-            }.onFailure { e ->
-                _error.value = "Failed to save message: ${e.message}"
-                _streamingUserMessage.value = null
-                currentUserMessage = null
-                AppStateManager.setError("Failed to save message: ${e.message}")
+                generateForNewChat(prompt, maxTokens)
+            } else {
+                // Existing flow for existing chats
+                val chatId = _currentChatId.value
+                if (chatId == null) {
+                    _error.value = "No chat selected"
+                    AppStateManager.setError("No chat selected")
+                    return@launch
+                }
+
+                chatManager.addUserMessage(chatId, prompt).onSuccess { userMessage ->
+                    currentUserMessage = userMessage
+                    AppStateManager.setHasMessages(true)
+                    generate(chatId, userMessage, maxTokens)
+                }.onFailure { e ->
+                    _error.value = "Failed to save message: ${e.message}"
+                    _streamingUserMessage.value = null
+                    currentUserMessage = null
+                    AppStateManager.setError("Failed to save message: ${e.message}")
+                }
             }
+        }
+    }
+
+    private fun generateForNewChat(prompt: String, maxTokens: Int) {
+        generationJob = viewModelScope.launch {
+            _isGenerating.value = true
+            _error.value = null
+            _streamingAssistantMessage.value = ""
+            currentGeneratedContent = ""
+            currentMetrics = null
+
+            AppStateManager.setGeneratingText()
+
+            var tokenBuffer = StringBuilder()
+            var tokenCount = 0
+            var lastUpdateTime = System.currentTimeMillis()
+            val updateIntervalMs = 50L
+            val tokenBatchSize = 3
+
+            try {
+                generationManager.generateStreaming(prompt, maxTokens).collect { event ->
+                        when (event) {
+                            is GenerationEvent.Token -> {
+                                currentGeneratedContent += event.text
+                                tokenBuffer.append(event.text)
+                                tokenCount++
+
+                                val currentTime = System.currentTimeMillis()
+                                val shouldUpdate =
+                                    tokenCount >= tokenBatchSize || (currentTime - lastUpdateTime) >= updateIntervalMs
+
+                                if (shouldUpdate) {
+                                    _streamingAssistantMessage.value = currentGeneratedContent
+                                    tokenBuffer.clear()
+                                    tokenCount = 0
+                                    lastUpdateTime = currentTime
+                                }
+                            }
+
+                            is GenerationEvent.Done -> {
+                                _streamingAssistantMessage.value = currentGeneratedContent
+                                _isGenerating.value = false
+
+                                // Now create the chat with both messages
+                                createChatWithMessages(
+                                    prompt,
+                                    currentGeneratedContent,
+                                    currentMetrics
+                                )
+                            }
+
+                            is GenerationEvent.Error -> {
+                                _streamingAssistantMessage.value = currentGeneratedContent
+                                _isGenerating.value = false
+                                _error.value = event.message
+                                AppStateManager.setError(event.message)
+
+                                // Still create chat even with error
+                                if (currentGeneratedContent.isNotEmpty()) {
+                                    createChatWithMessages(
+                                        prompt, "Error: ${event.message}", null
+                                    )
+                                }
+
+                                _streamingUserMessage.value = null
+                                _streamingAssistantMessage.value = ""
+                                currentUserMessage = null
+                                currentGeneratedContent = ""
+                                currentMetrics = null
+                            }
+
+                            is GenerationEvent.Metrics -> {
+                                currentMetrics = event.metrics
+                            }
+
+                            is GenerationEvent.ToolCall -> {}
+                        }
+                    }
+            } catch (e: Exception) {
+                _isGenerating.value = false
+                _error.value = e.message
+                AppStateManager.setError(e.message ?: "Unknown error")
+
+                if (currentGeneratedContent.isNotEmpty()) {
+                    createChatWithMessages(
+                        prompt, "$currentGeneratedContent [incomplete]", currentMetrics
+                    )
+                }
+
+                _streamingUserMessage.value = null
+                _streamingAssistantMessage.value = ""
+                currentUserMessage = null
+                currentGeneratedContent = ""
+                currentMetrics = null
+            }
+        }
+    }
+
+
+    private suspend fun createChatWithMessages(
+        userPrompt: String, assistantResponse: String, metrics: DecodingMetrics?
+    ) {
+        // Create a new chat
+        chatManager.createNewChat().onSuccess { newChatId ->
+            _currentChatId.value = newChatId
+            isNewConversation = false
+
+            // Add user message
+            chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
+                _messages.add(userMessage)
+
+                // Add assistant message
+                chatManager.addAssistantMessage(
+                    newChatId, assistantResponse, metrics
+                ).onSuccess { assistantMessage ->
+                    _messages.add(assistantMessage)
+
+                    AppStateManager.setGenerationComplete()
+
+                    _streamingUserMessage.value = null
+                    _streamingAssistantMessage.value = ""
+                    currentUserMessage = null
+                    currentGeneratedContent = ""
+                    currentMetrics = null
+                }
+            }.onFailure { e ->
+                _error.value = "Failed to save chat: ${e.message}"
+                AppStateManager.setError("Failed to save chat: ${e.message}")
+            }
+        }.onFailure { e ->
+            _error.value = "Failed to create chat: ${e.message}"
+            AppStateManager.setError("Failed to create chat: ${e.message}")
         }
     }
 
@@ -120,7 +285,7 @@ class ChatViewModel @Inject constructor(
             AppStateManager.setGeneratingText()
 
             // Batching variables
-            var tokenBuffer = StringBuilder()
+            val tokenBuffer = StringBuilder()
             var tokenCount = 0
             var lastUpdateTime = System.currentTimeMillis()
             val updateIntervalMs = 50L
@@ -307,5 +472,21 @@ class ChatViewModel @Inject constructor(
                 _error.value = "Failed to delete message: ${e.message}"
             }
         }
+    }
+
+    fun showDynamicWindow() {
+        _showDynamicWindow.value = _showDynamicWindow.value.not()
+    }
+
+    fun hideDynamicWindow() {
+        _showDynamicWindow.value = false
+    }
+
+    fun showModelList() {
+        _showModelList.value = true
+    }
+
+    fun hideModelList() {
+        _showModelList.value = false
     }
 }

@@ -52,7 +52,7 @@ object IndexSerializer {
             val metaBytes = ByteArray(BlockMetadata.METADATA_SIZE)
             buffer.get(metaBytes)
 
-            Log.d("IndexSerializer", "Read metadata $it, buffer position now: ${buffer.position()}")
+            //Log.d("IndexSerializer", "Read metadata $it, buffer position now: ${buffer.position()}")
 
             metadata.add(BlockMetadata.fromBytes(metaBytes))
         }

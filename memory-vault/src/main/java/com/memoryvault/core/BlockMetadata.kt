@@ -25,7 +25,7 @@ data class BlockMetadata(
             putLong(blockId.mostSignificantBits)
             putLong(blockId.leastSignificantBits)
 
-            Log.d("BlockMetadata", "Writing blockType ${blockType.code} at position ${position()}")
+            //Log.d("BlockMetadata", "Writing blockType ${blockType.code} at position ${position()}")
             put(blockType.code)
 
             putLong(fileOffset)
@@ -51,7 +51,7 @@ data class BlockMetadata(
         }
 
         val result = buffer.array()
-        Log.d("BlockMetadata", "Serialized metadata: ${result.size} bytes, first 20 bytes: ${result.take(20).joinToString()}")
+        //Log.d("BlockMetadata", "Serialized metadata: ${result.size} bytes, first 20 bytes: ${result.take(20).joinToString()}")
         return result
     }
 
@@ -74,7 +74,7 @@ data class BlockMetadata(
             val blockId = UUID(mostSig, leastSig)
 
             val blockTypeByte = buffer.get()
-            Log.d("BlockMetadata", "Reading blockType byte: $blockTypeByte at position ${buffer.position()}")
+            //Log.d("BlockMetadata", "Reading blockType byte: $blockTypeByte at position ${buffer.position()}")
 
 
             val blockType = BlockType.fromCode(blockTypeByte)

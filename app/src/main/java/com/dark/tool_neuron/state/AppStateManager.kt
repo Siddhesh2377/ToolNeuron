@@ -13,6 +13,8 @@ object AppStateManager {
     // Current loaded model info
     private var currentModelName: String? = null
     private var hasMessages: Boolean = false
+    private val _isChatRefreshed = MutableStateFlow(false)
+    val isChatRefreshed: StateFlow<Boolean> = _isChatRefreshed.asStateFlow()
     
     /**
      * Update when a model starts loading
@@ -36,6 +38,14 @@ object AppStateManager {
     fun setModelUnloaded() {
         currentModelName = null
         updateIdleState()
+    }
+
+    fun chatRefreshed() {
+        _isChatRefreshed.value = true
+    }
+
+    fun unRefreshChat() {
+        _isChatRefreshed.value = false
     }
     
     /**

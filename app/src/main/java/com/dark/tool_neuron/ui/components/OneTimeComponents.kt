@@ -6,6 +6,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.padding
@@ -29,7 +30,7 @@ import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.theme.rDp
 
 @Composable
-fun AnimatedTitle(modifier: Modifier = Modifier) {
+fun AnimatedTitle(modifier: Modifier = Modifier, onShowDynamicWindow: () -> Unit = {}) {
     val appState by AppStateManager.appState.collectAsState()
 
     AnimatedContent(
@@ -44,7 +45,9 @@ fun AnimatedTitle(modifier: Modifier = Modifier) {
             text = state.getDisplayText(),
             icon = state.getIcon(),
             state = state,
-            modifier = modifier
+            modifier = modifier.clickable{
+                onShowDynamicWindow()
+            }
         )
     }
 }

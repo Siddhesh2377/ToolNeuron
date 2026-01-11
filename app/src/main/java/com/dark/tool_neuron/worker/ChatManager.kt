@@ -6,6 +6,7 @@ import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
+import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.vault.VaultHelper
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
@@ -18,6 +19,7 @@ class ChatManager {
     suspend fun createNewChat(): Result<String> = withContext(Dispatchers.IO) {
         try {
             val chatId = VaultHelper.createChat()
+            AppStateManager.chatRefreshed()
             Result.success(chatId)
         } catch (e: Exception) {
             Result.failure(e)

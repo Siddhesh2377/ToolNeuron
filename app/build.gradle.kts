@@ -70,6 +70,9 @@ dependencies {
 
     // Hilt Navigation Compose
     implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
+    implementation ("org.apache.commons:commons-compress:1.28.0")
+    implementation ("org.tukaani:xz:1.11")
+    implementation(libs.okhttp)
 
     //Data-Ops
     implementation(libs.room.ktx)
@@ -85,6 +88,7 @@ dependencies {
 
     //Projects
     implementation(":ai_gguf-release@aar")
+    implementation(":ai_sd-release@aar")
     implementation(project(":memory-vault"))
 
     // Core Android

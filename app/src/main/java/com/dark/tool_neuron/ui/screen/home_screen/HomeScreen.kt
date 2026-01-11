@@ -2,6 +2,7 @@ package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -21,22 +22,28 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
@@ -55,40 +62,70 @@ import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import kotlinx.coroutines.launch
 
+// Update HomeScreen to wrap with SharedTransitionLayout
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
-    chatViewModel: ChatViewModel,
-    llmModelViewModel: LLMModelViewModel,
-    chatId: String,
-    onMenuClick: () -> Unit
+    chatViewModel: ChatViewModel, llmModelViewModel: LLMModelViewModel
 ) {
-    LaunchedEffect(chatId) {
-        chatViewModel.loadChat(chatId)
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    // Start with a new conversation instead of loading a chat
+    LaunchedEffect(Unit) {
+        chatViewModel.startNewConversation()
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopBar(onMenuClick = onMenuClick)
-        },
-        bottomBar = {
-            BottomBar(
-                chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
-            )
-        }) { paddingValues ->
-        BodyContent(paddingValues, chatViewModel)
+    ModalNavigationDrawer(
+        drawerState = drawerState, drawerContent = {
+            ModalDrawerSheet {
+                HomeDrawerScreen(onChatSelected = {
+                    chatViewModel.loadChat(it)
+                    scope.launch {
+                        drawerState.close()
+                    }
+                })
+            }
+        }) {
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+                TopBar(onMenuClick = {
+                    scope.launch {
+                        drawerState.open()
+                    }
+                }, showDynamicWindow = {
+                    chatViewModel.showDynamicWindow()
+                })
+            },
+            bottomBar = {
+                BottomBar(
+                    chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
+                )
+            }) { paddingValues ->
+            BodyContent(paddingValues, chatViewModel)
+        }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+// First, update your TopBar to use a shared transition key
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
-fun TopBar(onMenuClick: () -> Unit) {
+fun TopBar(
+    onMenuClick: () -> Unit,
+    showDynamicWindow: () -> Unit,
+) {
     val context = LocalContext.current
 
     CenterAlignedTopAppBar(title = {
-        AnimatedTitle()
+        AnimatedTitle(
+            modifier = Modifier
+        ) {
+            showDynamicWindow()
+        }
     }, navigationIcon = {
         ActionTextButton(
             onClickListener = onMenuClick,
@@ -97,15 +134,22 @@ fun TopBar(onMenuClick: () -> Unit) {
             modifier = Modifier.padding(start = rDp(6.dp))
         )
     }, actions = {
-        ActionButton(
-            onClickListener = {
-                context.startActivity(
-                    Intent(
-                        context, ModelLoadingActivity::class.java
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ActionButton(
+                onClickListener = {
+                    context.startActivity(
+                        Intent(context, ModelLoadingActivity::class.java)
                     )
-                )
-            }, icon = R.drawable.settings, modifier = Modifier.padding(end = rDp(6.dp))
-        )
+                }, icon = R.drawable.download, modifier = Modifier.padding(end = rDp(6.dp))
+            )
+            ActionButton(
+                onClickListener = {
+                    context.startActivity(
+                        Intent(context, ModelLoadingActivity::class.java)
+                    )
+                }, icon = R.drawable.settings, modifier = Modifier.padding(end = rDp(6.dp))
+            )
+        }
     })
 }
 
@@ -118,11 +162,7 @@ fun BottomBar(
     var value by remember { mutableStateOf("") }
     val installedModels by llmModelViewModel.installedModels.collectAsStateWithLifecycle(emptyList())
     val currentModelID by llmModelViewModel.currentModelID.collectAsStateWithLifecycle()
-    var showModelList by remember {
-        mutableStateOf(
-            false
-        )
-    }
+    val showModelList by chatViewModel.showModelList.collectAsStateWithLifecycle()
 
     val isGenerating by chatViewModel.isGenerating.collectAsStateWithLifecycle()
 
@@ -197,7 +237,13 @@ fun BottomBar(
                     )
 
                     ActionToggleButton(
-                        onCheckedChange = { showModelList = !showModelList },
+                        onCheckedChange = {
+                            if (showModelList) {
+                                chatViewModel.hideModelList()
+                            } else {
+                                chatViewModel.showModelList()
+                            }
+                        },
                         checked = showModelList,
                         icon = R.drawable.smart_temp_message,
                         modifier = Modifier.padding(start = 12.dp)
