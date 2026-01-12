@@ -175,6 +175,9 @@ fun BottomBar(
     val isTextModelLoaded by chatViewModel.isTextModelLoaded.collectAsStateWithLifecycle()
     val isImageModelLoaded by chatViewModel.isImageModelLoaded.collectAsStateWithLifecycle()
 
+    // Track if any model is loaded
+    val isModelLoaded = currentModelID.isNotEmpty()
+
     Column {
         AnimatedVisibility(showModelList) {
             LazyColumn(
@@ -197,7 +200,13 @@ fun BottomBar(
                         isLoaded = currentModelID == modelConfig.id,
                         model = modelConfig
                     ) { selectedModel ->
-                        llmModelViewModel.loadModel(model = selectedModel)
+                        if(isModelLoaded) {
+                            llmModelViewModel.unloadModel()
+                            chatViewModel.hideModelList()
+                        }else{
+                            llmModelViewModel.loadModel(selectedModel)
+                            chatViewModel.hideModelList()
+                        }
                     }
                 }
             }

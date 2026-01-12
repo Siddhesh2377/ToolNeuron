@@ -39,6 +39,7 @@ import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.ui.components.MarkdownText
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -348,7 +349,7 @@ private fun UserMessageBubble(message: Messages) {
                 .padding(horizontal = rDp(8.dp), vertical = rDp(5.dp))
                 .widthIn(max = rDp(280.dp))
         ) {
-            Text(
+            MarkdownText(
                 text = message.content.content,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -383,7 +384,7 @@ private fun AssistantMessageBubble(message: Messages) {
                 ImageMessageBubble(message)
             }
             else -> {
-                Text(
+                MarkdownText(
                     text = message.content.content,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -391,6 +392,7 @@ private fun AssistantMessageBubble(message: Messages) {
                 )
             }
         }
+        //TODO: Add Delete Icon
 
         // Show metrics based on message type
         if (showMetrics) {

@@ -11,6 +11,7 @@ room = "2.8.4"
 
 # Data-Model
 kotlinx-serialization = "1.9.0"
+datastore = "1.2.0"
 
 # AndroidX Core
 core-ktx = "1.17.0"
@@ -45,6 +46,7 @@ room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
 #Data-Model
 converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "converter-gson" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+androidx-datastore-preferences = { module = "androidx.datastore:datastore-preferences", version.ref = "datastore" }
 
 # AndroidX Core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }

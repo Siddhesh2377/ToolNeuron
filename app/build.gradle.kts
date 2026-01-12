@@ -22,7 +22,7 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 4
+        versionCode = 5
         versionName = "1.0.0"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -78,6 +78,7 @@ dependencies {
     implementation(libs.room.ktx)
     implementation(libs.room.runtime)
     implementation(libs.androidx.compose.runtime)
+    implementation(libs.androidx.datastore.preferences)
     ksp(libs.room.compiler)
     // Retrofit for API calls
     implementation(libs.retrofit)
