@@ -1,23 +1,88 @@
 package com.dark.tool_neuron.worker
 
+import android.graphics.Bitmap
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.worker.LlmModelWorker.DiffusionGenerationEvent
 import kotlinx.coroutines.flow.Flow
 
 class GenerationManager {
 
-    fun isModelLoaded(): Boolean {
-        return LlmModelWorker.isModelLoaded.value
+    enum class ModelType {
+        TEXT_GENERATION,
+        IMAGE_GENERATION
     }
 
-    fun generateStreaming(prompt: String, maxTokens: Int = 512): Flow<GenerationEvent> {
+    private var currentModelType: ModelType = ModelType.TEXT_GENERATION
+
+    // ==================== Model Management ====================
+
+    fun getCurrentModelType(): ModelType = currentModelType
+
+    fun setCurrentModelType(type: ModelType) {
+        currentModelType = type
+    }
+
+    fun isTextModelLoaded(): Boolean {
+        return LlmModelWorker.isGgufModelLoaded.value
+    }
+
+    fun isImageModelLoaded(): Boolean {
+        return LlmModelWorker.isDiffusionModelLoaded.value
+    }
+
+    fun isAnyModelLoaded(): Boolean {
+        return isTextModelLoaded() || isImageModelLoaded()
+    }
+
+    // ==================== Text Generation ====================
+
+    fun generateTextStreaming(prompt: String, maxTokens: Int = 512): Flow<GenerationEvent> {
         return LlmModelWorker.ggufGenerateStreaming(prompt, maxTokens)
     }
 
-    fun stopGeneration() {
+    fun stopTextGeneration() {
         LlmModelWorker.ggufStopGeneration()
     }
+
+    // ==================== Image Generation ====================
+
+    fun generateImageStreaming(
+        prompt: String,
+        negativePrompt: String = "blurry, low quality, distorted",
+        steps: Int = 28,
+        cfgScale: Float = 7.5f,
+        seed: Long = -1L,
+        width: Int = 512,
+        height: Int = 512,
+        scheduler: String = "dpm",
+        inputImage: String? = null,
+        mask: String? = null,
+        denoiseStrength: Float = 0.6f
+    ): Flow<DiffusionGenerationEvent> {
+        return LlmModelWorker.generateDiffusionImage(
+            prompt = prompt,
+            negativePrompt = negativePrompt,
+            steps = steps,
+            cfgScale = cfgScale,
+            seed = seed,
+            width = width,
+            height = height,
+            scheduler = scheduler,
+            inputImage = inputImage,
+            mask = mask,
+            denoiseStrength = denoiseStrength,
+            showDiffusionProcess = true,
+            showDiffusionStride = 5
+        )
+    }
+
+    fun stopImageGeneration() {
+        LlmModelWorker.stopDiffusionGeneration()
+    }
+
+    // ==================== Prompt Building ====================
 
     fun buildPromptFromHistory(messages: List<Messages>): String {
         val promptBuilder = StringBuilder()
@@ -27,9 +92,10 @@ class GenerationManager {
                 Role.User -> {
                     promptBuilder.append("User: ${message.content.content}\n")
                 }
-
                 Role.Assistant -> {
-                    promptBuilder.append("Assistant: ${message.content.content}\n")
+                    if (message.content.contentType != com.dark.tool_neuron.models.messages.ContentType.Image) {
+                        promptBuilder.append("Assistant: ${message.content.content}\n")
+                    }
                 }
             }
         }
@@ -49,9 +115,10 @@ class GenerationManager {
                 Role.User -> {
                     builder.append("User: ${message.content.content}\n")
                 }
-
                 Role.Assistant -> {
-                    builder.append("Assistant: ${message.content.content}\n")
+                    if (message.content.contentType != com.dark.tool_neuron.models.messages.ContentType.Image) {
+                        builder.append("Assistant: ${message.content.content}\n")
+                    }
                 }
             }
         }
@@ -59,5 +126,15 @@ class GenerationManager {
         builder.append("User: $currentPrompt\nAssistant:")
 
         return builder.toString()
+    }
+
+    // ==================== Utility ====================
+
+    fun bitmapToBase64(bitmap: Bitmap): String {
+        return LlmModelWorker.bitmapToBase64(bitmap)
+    }
+
+    fun bitmapToRgbBase64(bitmap: Bitmap): String {
+        return LlmModelWorker.bitmapToRgbBase64(bitmap)
     }
 }

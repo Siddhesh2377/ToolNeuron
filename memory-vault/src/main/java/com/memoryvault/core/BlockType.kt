@@ -10,6 +10,7 @@ enum class BlockType(val code: Byte) {
 
     companion object {
         private val map = values().associateBy { it.code }
-        fun fromCode(code: Byte): BlockType = map[code] ?: throw IllegalArgumentException("Unknown block type: $code")
+        fun fromCode(code: Byte): BlockType = map[code]
+            ?: throw IllegalArgumentException("Unknown block type: $code")
     }
 }

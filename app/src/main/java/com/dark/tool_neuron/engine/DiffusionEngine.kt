@@ -47,7 +47,7 @@ class DiffusionEngine {
             sdManager = StableDiffusionManager.getInstance(context)
             sdManager.initialize(
                 DiffusionRuntimeConfig(
-                    runtimeDir = "runtime_libs",
+                    runtimeDir = "runtime_libs/qnnlibs",
                     qnnLibsAssetPath = "qnnlibs",
                     safetyCheckerEnabled = safetyCheckerEnabled,
                     safetyCheckerPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""

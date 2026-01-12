@@ -1,11 +1,13 @@
 package com.dark.tool_neuron.worker
 
 import com.dark.tool_neuron.models.messages.ContentType
+import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
+import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.vault.VaultHelper
 import com.mp.ai_gguf.models.DecodingMetrics
@@ -49,8 +51,10 @@ class ChatManager {
         withContext(Dispatchers.IO) {
             try {
                 val message = Messages(
-                    role = Role.User, content = MessageContent(
-                        contentType = ContentType.Text, content = content
+                    role = Role.User,
+                    content = MessageContent(
+                        contentType = ContentType.Text,
+                        content = content
                     )
                 )
                 VaultHelper.addMessage(chatId, message)
@@ -61,13 +65,44 @@ class ChatManager {
         }
 
     suspend fun addAssistantMessage(
-        chatId: String, content: String, decodingMetrics: DecodingMetrics? = null
+        chatId: String,
+        content: String,
+        decodingMetrics: DecodingMetrics? = null
     ): Result<Messages> = withContext(Dispatchers.IO) {
         try {
             val message = Messages(
-                role = Role.Assistant, content = MessageContent(
-                    contentType = ContentType.Text, content = content
-                ), decodingMetrics = decodingMetrics
+                role = Role.Assistant,
+                content = MessageContent(
+                    contentType = ContentType.Text,
+                    content = content
+                ),
+                decodingMetrics = decodingMetrics
+            )
+            VaultHelper.addMessage(chatId, message)
+            Result.success(message)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addImageMessage(
+        chatId: String,
+        imageBase64: String,
+        prompt: String,
+        seed: Long,
+        imageMetrics: ImageGenerationMetrics?
+    ): Result<Messages> = withContext(Dispatchers.IO) {
+        try {
+            val message = Messages(
+                role = Role.Assistant,
+                content = MessageContent(
+                    contentType = ContentType.Image,
+                    content = "Generated image: $prompt",
+                    imageData = imageBase64,
+                    imagePrompt = prompt,
+                    imageSeed = seed
+                ),
+                imageMetrics = imageMetrics
             )
             VaultHelper.addMessage(chatId, message)
             Result.success(message)

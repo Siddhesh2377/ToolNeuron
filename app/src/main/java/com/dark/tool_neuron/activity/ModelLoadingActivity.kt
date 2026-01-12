@@ -6,7 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -34,14 +33,20 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -68,6 +73,8 @@ import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.worker.DiffusionConfig
+import com.dark.tool_neuron.worker.DiffusionModelInfo
 import com.dark.tool_neuron.worker.ModelDataParser
 import com.dark.tool_neuron.worker.ModelInfo
 import com.dark.tool_neuron.worker.ModelLoadResult
@@ -88,11 +95,11 @@ class ModelLoadingActivity : ComponentActivity() {
             NeuroVerseTheme {
                 ModelLoadingScreen(
                     modelPath = modelPath,
+                    intent = intent,
                     modelParser = modelParser,
                     onEngineLoaded = { loadedEngine = it },
                     onPickModel = { openModelPicker() },
-                    onClose = { finish() }
-                )
+                    onClose = { finish() })
             }
         }
     }
@@ -114,6 +121,7 @@ class ModelLoadingActivity : ComponentActivity() {
 @Composable
 fun ModelLoadingScreen(
     modelPath: String?,
+    intent: Intent,
     modelParser: ModelDataParser,
     onEngineLoaded: (Any) -> Unit,
     onPickModel: () -> Unit,
@@ -125,17 +133,32 @@ fun ModelLoadingScreen(
     val scope = rememberCoroutineScope()
     val repository = AppContainer.getModelRepository()
 
+// In ModelLoadingActivity.kt
     LaunchedEffect(modelPath) {
         if (modelPath != null) {
             loadingState = LoadingState.Loading
             scope.launch {
+                val providerTypeString = intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
+                val providerType = try {
+                    ProviderType.valueOf(providerTypeString ?: "GGUF")
+                } catch (e: Exception) {
+                    // Fallback: determine by path
+                    if (File(modelPath).isDirectory) ProviderType.DIFFUSION else ProviderType.GGUF
+                }
+
+                val pathType = if (providerType == ProviderType.DIFFUSION) {
+                    PathType.DIRECTORY
+                } else {
+                    PathType.FILE
+                }
+
                 val model = Model(
                     id = modelParser.checksumSHA256(modelPath),
                     modelPath = modelPath,
                     modelName = File(modelPath).name,
-                    pathType = PathType.FILE,
-                    providerType = ProviderType.GGUF,
-                    fileSize = File(modelPath).length()
+                    pathType = pathType,
+                    providerType = providerType,
+                    fileSize = if (providerType == ProviderType.GGUF) File(modelPath).length() else 0L
                 )
                 currentModel = model
 
@@ -152,6 +175,7 @@ fun ModelLoadingScreen(
                         onEngineLoaded(result.engine)
                         loadingState = LoadingState.Loaded(result.info)
                     }
+
                     is ModelLoadResult.Error -> {
                         loadingState = LoadingState.Error(result.message)
                     }
@@ -170,15 +194,27 @@ fun ModelLoadingScreen(
                     // Insert model
                     repository.insertModel(model)
 
-                    // Create and insert default config
-                    val defaultSchema = GgufEngineSchema()
-                    val config = ModelConfig(
-                        modelId = model.id,
-                        modelLoadingParams = defaultSchema.toLoadingJson(),
-                        modelInferenceParams = defaultSchema.toInferenceJson()
-                    )
-                    repository.insertConfig(config)
+                    // Create and insert config based on provider type
+                    val config = when (model.providerType) {
+                        ProviderType.GGUF -> {
+                            val defaultSchema = GgufEngineSchema()
+                            ModelConfig(
+                                modelId = model.id,
+                                modelLoadingParams = defaultSchema.toLoadingJson(),
+                                modelInferenceParams = defaultSchema.toInferenceJson()
+                            )
+                        }
+                        ProviderType.DIFFUSION -> {
+                            val diffusionConfig = DiffusionConfig()
+                            ModelConfig(
+                                modelId = model.id,
+                                modelLoadingParams = diffusionConfig.toJson(),
+                                modelInferenceParams = null
+                            )
+                        }
+                    }
 
+                    repository.insertConfig(config)
                     installState = InstallState.Installed
                 } catch (e: Exception) {
                     installState = InstallState.Error(e.message ?: "Installation failed")
@@ -207,37 +243,32 @@ fun ModelLoadingScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        "Model Loader",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                },
-                actions = {
-                    ActionButton(
-                        onClickListener = onClose,
-                        icon = Icons.Outlined.Close,
-                        contentDescription = "Close",
-                        shape = RoundedCornerShape(rDp(12.dp))
-                    )
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
+                Text(
+                    "Model Loader",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
                 )
+            }, actions = {
+                ActionButton(
+                    onClickListener = onClose,
+                    icon = Icons.Outlined.Close,
+                    contentDescription = "Close",
+                    shape = RoundedCornerShape(rDp(12.dp))
+                )
+            }, colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.background
             )
-        }
-    ) { padding ->
+            )
+        }) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
         ) {
             AnimatedContent(
-                targetState = loadingState,
-                transitionSpec = {
+                targetState = loadingState, transitionSpec = {
                     fadeIn(tween(300)) togetherWith fadeOut(tween(300))
-                },
-                label = "loading_state"
+                }, label = "loading_state"
             ) { state ->
                 when (state) {
                     is LoadingState.Idle -> EmptyState(onPickModel)
@@ -247,8 +278,8 @@ fun ModelLoadingScreen(
                         installState = installState,
                         onChangeModel = onPickModel,
                         onInstall = { installModel() },
-                        onUninstall = { uninstallModel() }
-                    )
+                        onUninstall = { uninstallModel() })
+
                     is LoadingState.Error -> ErrorStateView(state.message, onPickModel)
                 }
             }
@@ -259,8 +290,7 @@ fun ModelLoadingScreen(
 @Composable
 private fun EmptyState(onPickModel: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier.padding(rDp(24.dp)),
@@ -326,8 +356,7 @@ private fun EmptyState(onPickModel: () -> Unit) {
 @Composable
 private fun LoadingStateView() {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier.padding(rDp(24.dp)),
@@ -340,8 +369,7 @@ private fun LoadingStateView() {
                 verticalArrangement = Arrangement.spacedBy(rDp(20.dp))
             ) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(rDp(48.dp)),
-                    strokeWidth = rDp(4.dp)
+                    modifier = Modifier.size(rDp(48.dp)), strokeWidth = rDp(4.dp)
                 )
                 Text(
                     "Loading Model...",
@@ -366,6 +394,13 @@ private fun ModelInfoView(
     onInstall: () -> Unit,
     onUninstall: () -> Unit
 ) {
+    var showDiffusionSettings by remember { mutableStateOf(false) }
+    var diffusionConfig by remember {
+        mutableStateOf(
+            if (info is DiffusionModelInfo) info.modelConfig else DiffusionConfig()
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -393,7 +428,12 @@ private fun ModelInfoView(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painterResource(R.drawable.ai_model),
+                            painterResource(
+                                when (info.providerType) {
+                                    ProviderType.DIFFUSION -> R.drawable.load_model // Add image icon
+                                    else -> R.drawable.ai_model
+                                }
+                            ),
                             contentDescription = null,
                             modifier = Modifier.size(rDp(32.dp)),
                             tint = MaterialTheme.colorScheme.primary
@@ -407,11 +447,36 @@ private fun ModelInfoView(
                             fontWeight = FontWeight.Bold,
                             maxLines = 2
                         )
-                        Text(
-                            info.architecture,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.7f)
-                        )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                info.architecture,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.7f)
+                            )
+
+                            // Model type badge
+                            Surface(
+                                shape = RoundedCornerShape(rDp(4.dp)),
+                                color = MaterialTheme.colorScheme.primary.copy(0.2f)
+                            ) {
+                                Text(
+                                    text = when (info.providerType) {
+                                        ProviderType.GGUF -> "TEXT"
+                                        ProviderType.DIFFUSION -> "IMAGE"
+                                        else -> "OTHER"
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(
+                                        horizontal = rDp(6.dp), vertical = rDp(2.dp)
+                                    ),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     }
 
                     ActionButton(
@@ -428,12 +493,9 @@ private fun ModelInfoView(
                 Spacer(modifier = Modifier.height(rDp(16.dp)))
 
                 AnimatedContent(
-                    targetState = installState,
-                    label = "install_state",
-                    transitionSpec = {
+                    targetState = installState, label = "install_state", transitionSpec = {
                         (fadeIn() + scaleIn()) togetherWith (fadeOut() + scaleOut())
-                    }
-                ) { state ->
+                    }) { state ->
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -461,7 +523,9 @@ private fun ModelInfoView(
                                         Text(
                                             "Ready to use",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f)
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                                0.6f
+                                            )
                                         )
                                     }
                                 }
@@ -482,7 +546,9 @@ private fun ModelInfoView(
                                     Icon(
                                         Icons.Outlined.Download,
                                         contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                            0.6f
+                                        ),
                                         modifier = Modifier.size(rDp(24.dp))
                                     )
                                     Column {
@@ -495,7 +561,9 @@ private fun ModelInfoView(
                                         Text(
                                             "Add to database",
                                             style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.6f)
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                                0.6f
+                                            )
                                         )
                                     }
                                 }
@@ -510,28 +578,40 @@ private fun ModelInfoView(
                             }
                         }
 
-                        // Action Button
-                        if (state != InstallState.Installing) {
-                            ActionButton(
-                                onClickListener = {
-                                    when (state) {
-                                        InstallState.NotInstalled -> onInstall()
-                                        InstallState.Installed -> onUninstall()
-                                        else -> {}
-                                    }
-                                },
-                                icon = when (state) {
-                                    InstallState.NotInstalled -> Icons.Outlined.Download
-                                    InstallState.Installed -> Icons.Outlined.Delete
-                                    else -> Icons.Outlined.Download
-                                },
-                                contentDescription = when (state) {
-                                    InstallState.NotInstalled -> "Install"
-                                    InstallState.Installed -> "Uninstall"
-                                    else -> "Action"
-                                },
-                                shape = RoundedCornerShape(rDp(12.dp))
-                            )
+                        // Action Buttons Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        ) {
+                            // Settings button for Diffusion models
+                            if (info is DiffusionModelInfo && state == InstallState.Installed) {
+                                ActionButton(
+                                    onClickListener = { showDiffusionSettings = true },
+                                    icon = Icons.Outlined.Settings,
+                                    contentDescription = "Configure",
+                                    shape = RoundedCornerShape(rDp(12.dp))
+                                )
+                            }
+
+                            // Install/Uninstall button
+                            if (state != InstallState.Installing) {
+                                ActionButton(
+                                    onClickListener = {
+                                        when (state) {
+                                            InstallState.NotInstalled -> onInstall()
+                                            InstallState.Installed -> onUninstall()
+                                            else -> {}
+                                        }
+                                    }, icon = when (state) {
+                                        InstallState.NotInstalled -> Icons.Outlined.Download
+                                        InstallState.Installed -> Icons.Outlined.Delete
+                                        else -> Icons.Outlined.Download
+                                    }, contentDescription = when (state) {
+                                        InstallState.NotInstalled -> "Install"
+                                        InstallState.Installed -> "Uninstall"
+                                        else -> "Action"
+                                    }, shape = RoundedCornerShape(rDp(12.dp))
+                                )
+                            }
                         }
                     }
                 }
@@ -553,7 +633,12 @@ private fun ModelInfoView(
 
         // Parameters Section
         if (info.parameters.isNotEmpty()) {
-            InfoSection(title = "Model Parameters") {
+            InfoSection(
+                title = when (info.providerType) {
+                    ProviderType.DIFFUSION -> "Model Configuration"
+                    else -> "Model Parameters"
+                }
+            ) {
                 InfoCard {
                     info.parameters.entries.forEachIndexed { index, (key, value) ->
                         InfoRow(key, value)
@@ -570,10 +655,15 @@ private fun ModelInfoView(
             }
         }
 
-        // Vocabulary Section
+        // Additional Info Section (Vocabulary for GGUF, Model Info for Diffusion)
         info.additionalInfo?.let { additionalData ->
             if (additionalData.isNotEmpty()) {
-                InfoSection(title = "Vocabulary Info") {
+                InfoSection(
+                    title = when (info.providerType) {
+                        ProviderType.DIFFUSION -> "Additional Info"
+                        else -> "Vocabulary Info"
+                    }
+                ) {
                     InfoCard {
                         additionalData.entries.forEachIndexed { index, (key, value) ->
                             InfoRow(key, value)
@@ -593,13 +683,189 @@ private fun ModelInfoView(
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
     }
+
+    // Diffusion Settings Dialog
+    if (showDiffusionSettings && info is DiffusionModelInfo) {
+        DiffusionConfigDialog(
+            config = diffusionConfig,
+            onDismiss = { showDiffusionSettings = false },
+            onSave = { newConfig ->
+                diffusionConfig = newConfig
+                // TODO: Save to database
+                showDiffusionSettings = false
+            })
+    }
+}
+
+@Composable
+private fun DiffusionConfigDialog(
+    config: DiffusionConfig, onDismiss: () -> Unit, onSave: (DiffusionConfig) -> Unit
+) {
+    var runOnCpu by remember { mutableStateOf(config.runOnCpu) }
+    var useCpuClip by remember { mutableStateOf(config.useCpuClip) }
+    var safetyMode by remember { mutableStateOf(config.safetyMode) }
+    var isPony by remember { mutableStateOf(config.isPony) }
+    var textEmbeddingSize by remember { mutableStateOf(config.textEmbeddingSize) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss, title = {
+        Text(
+            "Diffusion Model Settings",
+            style = MaterialTheme.typography.titleLarge,
+            fontWeight = FontWeight.Bold
+        )
+    }, text = {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(rDp(16.dp)),
+            modifier = Modifier.verticalScroll(rememberScrollState())
+        ) {
+            // Backend Section
+            Text(
+                "Backend Configuration",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            SettingRow(
+                label = "Run on CPU",
+                description = "Use CPU instead of NPU/GPU",
+                checked = runOnCpu,
+                onCheckedChange = { runOnCpu = it })
+
+            SettingRow(
+                label = "CPU CLIP",
+                description = "Use CPU for CLIP model",
+                checked = useCpuClip,
+                onCheckedChange = { useCpuClip = it })
+
+            HorizontalDivider()
+
+            // Model Variant Section
+            Text(
+                "Model Variant",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            SettingRow(
+                label = "Pony Diffusion",
+                description = "Enable Pony v6 specific optimizations",
+                checked = isPony,
+                onCheckedChange = { isPony = it })
+
+            HorizontalDivider()
+
+            // Safety Section
+            Text(
+                "Safety & Filtering",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            SettingRow(
+                label = "Safety Filter",
+                description = "Enable content safety checker",
+                checked = safetyMode,
+                onCheckedChange = { safetyMode = it })
+
+            HorizontalDivider()
+
+            // Text Embedding Size
+            Text(
+                "Advanced",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            "Text Embedding Size",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Current: $textEmbeddingSize",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                        FilterChip(
+                            selected = textEmbeddingSize == 768,
+                            onClick = { textEmbeddingSize = 768 },
+                            label = { Text("768") })
+                        FilterChip(
+                            selected = textEmbeddingSize == 1024,
+                            onClick = { textEmbeddingSize = 1024 },
+                            label = { Text("1024") })
+                    }
+                }
+            }
+        }
+    }, confirmButton = {
+        Button(
+            onClick = {
+                onSave(
+                    config.copy(
+                        runOnCpu = runOnCpu,
+                        useCpuClip = useCpuClip,
+                        safetyMode = safetyMode,
+                        isPony = isPony,
+                        textEmbeddingSize = textEmbeddingSize
+                    )
+                )
+            }) {
+            Text("Save Changes")
+        }
+    }, dismissButton = {
+        TextButton(onClick = onDismiss) {
+            Text("Cancel")
+        }
+    }, shape = RoundedCornerShape(rDp(20.dp))
+    )
+}
+
+@Composable
+private fun SettingRow(
+    label: String, description: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                label, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium
+            )
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        Switch(
+            checked = checked, onCheckedChange = onCheckedChange
+        )
+    }
 }
 
 @Composable
 private fun ErrorStateView(message: String, onRetry: () -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
             modifier = Modifier.padding(rDp(24.dp)),
@@ -637,8 +903,7 @@ private fun ErrorStateView(message: String, onRetry: () -> Unit) {
 
 @Composable
 private fun InfoSection(
-    title: String,
-    content: @Composable () -> Unit
+    title: String, content: @Composable () -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
         Text(

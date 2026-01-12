@@ -58,10 +58,12 @@ import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
+import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.launch
 
 // Update HomeScreen to wrap with SharedTransitionLayout
@@ -163,8 +165,10 @@ fun BottomBar(
     val installedModels by llmModelViewModel.installedModels.collectAsStateWithLifecycle(emptyList())
     val currentModelID by llmModelViewModel.currentModelID.collectAsStateWithLifecycle()
     val showModelList by chatViewModel.showModelList.collectAsStateWithLifecycle()
-
     val isGenerating by chatViewModel.isGenerating.collectAsStateWithLifecycle()
+    val currentGenerationType by chatViewModel.currentGenerationType.collectAsStateWithLifecycle()
+    val isTextModelLoaded by chatViewModel.isTextModelLoaded.collectAsStateWithLifecycle()
+    val isImageModelLoaded by chatViewModel.isImageModelLoaded.collectAsStateWithLifecycle()
 
     Column {
         AnimatedVisibility(showModelList) {
@@ -176,7 +180,8 @@ fun BottomBar(
                         MaterialTheme.colorScheme.primary.copy(0.04f)
                             .compositeOver(MaterialTheme.colorScheme.background),
                         shape = RoundedCornerShape(rDp(8.dp))
-                    ), contentPadding = PaddingValues(bottom = rDp(8.dp))
+                    ),
+                contentPadding = PaddingValues(bottom = rDp(8.dp))
             ) {
                 items(installedModels) { modelConfig ->
                     ModelListItem(
@@ -217,7 +222,14 @@ fun BottomBar(
                         value = value,
                         onValueChange = { value = it },
                         modifier = Modifier.weight(1f),
-                        placeholder = { Text(text = "Say Anything…") },
+                        placeholder = {
+                            Text(
+                                text = when (currentGenerationType) {
+                                    GenerationManager.ModelType.TEXT_GENERATION -> "Say Anything…"
+                                    GenerationManager.ModelType.IMAGE_GENERATION -> "Describe the image you want…"
+                                }
+                            )
+                        },
                         colors = TextFieldDefaults.colors(
                             focusedContainerColor = Color.Transparent,
                             unfocusedContainerColor = Color.Transparent,
@@ -229,11 +241,30 @@ fun BottomBar(
                     )
                 }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    // Mode toggle switch (Text/Image)
+                    ModeToggleSwitch(
+                        isImageMode = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
+                        onModeChange = { isImageMode ->
+                            if (isImageMode) {
+                                chatViewModel.switchToImageGeneration()
+                            } else {
+                                chatViewModel.switchToTextGeneration()
+                            }
+                        },
+                        textModelLoaded = isTextModelLoaded,
+                        imageModelLoaded = isImageModelLoaded,
+                        modifier = Modifier.padding(start = rDp(12.dp))
+                    )
+
                     ActionButton(
                         onClickListener = { },
                         icon = R.drawable.tool,
-                        modifier = Modifier.padding(start = 12.dp)
+                        modifier = Modifier.padding(start = rDp(6.dp))
                     )
 
                     ActionToggleButton(
@@ -245,8 +276,7 @@ fun BottomBar(
                             }
                         },
                         checked = showModelList,
-                        icon = R.drawable.smart_temp_message,
-                        modifier = Modifier.padding(start = 12.dp)
+                        icon = R.drawable.smart_temp_message
                     )
 
                     Spacer(Modifier.weight(1f))
@@ -257,7 +287,7 @@ fun BottomBar(
                                 onClickListener = {
                                     chatViewModel.stop()
                                 },
-                                modifier = Modifier.padding(end = 12.dp),
+                                modifier = Modifier.padding(end = rDp(12.dp)),
                                 colors = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
                                     contentColor = MaterialTheme.colorScheme.primary
@@ -269,13 +299,20 @@ fun BottomBar(
                             ActionButton(
                                 onClickListener = {
                                     if (value.isNotBlank()) {
-                                        chatViewModel.sendMessage(value)
+                                        when (currentGenerationType) {
+                                            GenerationManager.ModelType.TEXT_GENERATION -> {
+                                                chatViewModel.sendTextMessage(value)
+                                            }
+                                            GenerationManager.ModelType.IMAGE_GENERATION -> {
+                                                chatViewModel.sendImageRequest(value)
+                                            }
+                                        }
                                         value = ""
                                     }
                                 },
                                 icon = R.drawable.send_chat,
                                 shape = MaterialShapes.Ghostish.toShape(),
-                                modifier = Modifier.padding(end = 12.dp),
+                                modifier = Modifier.padding(end = rDp(12.dp)),
                                 colors = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
                                     contentColor = MaterialTheme.colorScheme.primary

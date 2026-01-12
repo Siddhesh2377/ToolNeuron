@@ -54,9 +54,6 @@ object LlmModelWorker {
     private val _diffusionBackendState = MutableStateFlow("Idle")
     val diffusionBackendState: StateFlow<String> = _diffusionBackendState.asStateFlow()
 
-    @Deprecated("Use isGgufModelLoaded instead")
-    var isModelLoaded = _isGgufModelLoaded
-
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
             service = ILLMService.Stub.asInterface(binder)

@@ -7,54 +7,19 @@ import android.os.Environment
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.Crossfade
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.outlined.Check
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledIconButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -69,6 +34,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.net.toUri
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.CuteToggle
 import com.dark.tool_neuron.ui.theme.rDp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -80,14 +48,21 @@ import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.pow
 
+enum class PickerMode {
+    FILE,      // Pick .gguf files
+    FOLDER     // Pick directories (for diffusion models)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ModelPickerScreen(
-    finishWithPath: (String) -> Unit, onClose: () -> Unit
+    finishWithPath: (String, ProviderType) -> Unit,
+    onClose: () -> Unit
 ) {
     val context = LocalContext.current
     val rootPath = remember { Environment.getExternalStorageDirectory().absolutePath }
 
+    var pickerMode by rememberSaveable { mutableStateOf(PickerMode.FILE) }
     var hasAllFiles by remember { mutableStateOf(hasAllFilesAccess()) }
     var currentPath by rememberSaveable { mutableStateOf(rootPath) }
     var listState by remember { mutableStateOf<List<FileItem>>(emptyList()) }
@@ -97,12 +72,14 @@ fun ModelPickerScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
-    LaunchedEffect(hasAllFiles, currentPath) {
+    LaunchedEffect(hasAllFiles, currentPath, pickerMode) {
         if (hasAllFiles) {
             loading = true
             error = null
             listState = try {
-                withContext(Dispatchers.IO) { listChildrenFiltered(currentPath) }
+                withContext(Dispatchers.IO) {
+                    listChildrenFiltered(currentPath, pickerMode)
+                }
             } catch (t: Throwable) {
                 error = t.message
                 emptyList()
@@ -124,33 +101,54 @@ fun ModelPickerScreen(
         topBar = {
             CenterAlignedTopAppBar(
                 colors = TopAppBarDefaults.topAppBarColors(
-                containerColor = MaterialTheme.colorScheme.background,
-                scrolledContainerColor = MaterialTheme.colorScheme.background
-            ), navigationIcon = {
-                IconButton(onClick = {
-                    if (currentPath != rootPath) {
-                        currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
-                    } else onClose()
-                }) {
-                    Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
-                }
-            }, title = { PathBreadcrumbText(currentPath) }, actions = {
-                if (!hasAllFiles) {
-                    CompactIconButton(
-                        icon = Icons.Outlined.Settings,
-                        onClick = { openAllFilesAccessSettings(context) },
-                        contentDescription = "Grant access"
-                    )
-                } else {
-                    CompactIconButton(
-                        icon = Icons.Outlined.Home,
-                        onClick = { currentPath = rootPath },
-                        contentDescription = "Home"
-                    )
-                }
-            }, scrollBehavior = scrollBehavior
+                    containerColor = MaterialTheme.colorScheme.background,
+                    scrolledContainerColor = MaterialTheme.colorScheme.background
+                ),
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (currentPath != rootPath) {
+                            currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
+                        } else onClose()
+                    }) {
+                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                    }
+                },
+                title = { PathBreadcrumbText(currentPath) },
+                actions = {
+                    if (!hasAllFiles) {
+                        ActionButton(
+                            onClickListener = { openAllFilesAccessSettings(context) },
+                            icon = Icons.Outlined.Settings,
+                            contentDescription = "Grant access"
+                        )
+                    } else {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Mode toggle using CuteToggle
+                            CuteToggle(
+                                checked = pickerMode == PickerMode.FOLDER,
+                                onCheckedChange = { isFolder ->
+                                    pickerMode = if (isFolder) PickerMode.FOLDER else PickerMode.FILE
+                                },
+                                text = if (pickerMode == PickerMode.FILE) "File" else "Folder",
+                                icon = if (pickerMode == PickerMode.FILE) R.drawable.ai_model else null,
+                                iconChecked = R.drawable.load_model
+                            )
+
+                            ActionButton(
+                                onClickListener = { currentPath = rootPath },
+                                icon = Icons.Outlined.Home,
+                                contentDescription = "Home"
+                            )
+                        }
+                    }
+                },
+                scrollBehavior = scrollBehavior
             )
-        }) { inner ->
+        }
+    ) { inner ->
         val blurRadius = if (detailTarget != null) 12.dp else 0.dp
         Box(
             Modifier
@@ -160,7 +158,8 @@ fun ModelPickerScreen(
         ) {
             when {
                 !hasAllFiles -> PermissionGate(
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    pickerMode = pickerMode
                 ) { hasAllFiles = hasAllFilesAccess() }
 
                 loading -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -168,45 +167,34 @@ fun ModelPickerScreen(
                 }
 
                 error != null -> ErrorState(
-                    error = error!!, onRetry = { hasAllFiles = hasAllFilesAccess() })
+                    error = error!!,
+                    onRetry = { hasAllFiles = hasAllFilesAccess() }
+                )
 
                 else -> FileList(
                     modifier = Modifier.fillMaxSize(),
                     items = listState,
                     rootPath = rootPath,
                     currentPath = currentPath,
+                    pickerMode = pickerMode,
                     onNavigate = { folder -> currentPath = folder.absolutePath },
-                    onPick = { file -> finishWithPath(file.absolutePath) },
-                    onLongPress = { detailTarget = it })
+                    onPick = { file, type -> finishWithPath(file.absolutePath, type) },
+                    onShowInfo = { detailTarget = it }
+                )
             }
         }
 
         detailTarget?.let { item ->
             FileDetailDialog(
                 item = item,
+                pickerMode = pickerMode,
                 onDismiss = { detailTarget = null },
-                onSelect = { finishWithPath(item.file.absolutePath) })
+                onSelect = {
+                    val type = if (item.isDir) ProviderType.DIFFUSION else ProviderType.GGUF
+                    finishWithPath(item.file.absolutePath, type)
+                }
+            )
         }
-    }
-}
-
-@Composable
-private fun CompactIconButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    onClick: () -> Unit,
-    contentDescription: String,
-    modifier: Modifier = Modifier
-) {
-    FilledIconButton(
-        onClick = onClick,
-        modifier = modifier.size(rDp(40.dp)),
-        colors = IconButtonDefaults.filledIconButtonColors(
-            containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
-            contentColor = MaterialTheme.colorScheme.primary
-        ),
-        shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Icon(icon, contentDescription, modifier = Modifier.size(rDp(20.dp)))
     }
 }
 
@@ -233,7 +221,11 @@ private fun PathBreadcrumbText(path: String) {
 }
 
 @Composable
-private fun PermissionGate(modifier: Modifier = Modifier, onCheck: () -> Unit) {
+private fun PermissionGate(
+    modifier: Modifier = Modifier,
+    pickerMode: PickerMode,
+    onCheck: () -> Unit
+) {
     val ctx = LocalContext.current
     Box(modifier, contentAlignment = Alignment.Center) {
         Surface(
@@ -261,21 +253,24 @@ private fun PermissionGate(modifier: Modifier = Modifier, onCheck: () -> Unit) {
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "Allow 'All files access' to browse folders and select .gguf model files",
+                    when (pickerMode) {
+                        PickerMode.FILE -> "Allow 'All files access' to browse and select .gguf model files"
+                        PickerMode.FOLDER -> "Allow 'All files access' to browse and select model folders"
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
                 Spacer(Modifier.height(rDp(8.dp)))
                 Row(horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
-                    CompactIconButton(
+                    ActionButton(
+                        onClickListener = { openAllFilesAccessSettings(ctx) },
                         icon = Icons.Outlined.Settings,
-                        onClick = { openAllFilesAccessSettings(ctx) },
                         contentDescription = "Open Settings"
                     )
-                    CompactIconButton(
+                    ActionButton(
+                        onClickListener = onCheck,
                         icon = Icons.Outlined.Refresh,
-                        onClick = onCheck,
                         contentDescription = "Refresh"
                     )
                 }
@@ -308,24 +303,26 @@ private fun ErrorState(error: String, onRetry: () -> Unit) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onErrorContainer
                 )
-                CompactIconButton(
-                    icon = Icons.Outlined.Refresh, onClick = onRetry, contentDescription = "Retry"
+                ActionButton(
+                    onClickListener = onRetry,
+                    icon = Icons.Outlined.Refresh,
+                    contentDescription = "Retry"
                 )
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FileList(
     modifier: Modifier,
     items: List<FileItem>,
     rootPath: String,
     currentPath: String,
+    pickerMode: PickerMode,
     onNavigate: (File) -> Unit,
-    onPick: (File) -> Unit,
-    onLongPress: (FileItem) -> Unit
+    onPick: (File, ProviderType) -> Unit,
+    onShowInfo: (FileItem) -> Unit
 ) {
     val parent = File(currentPath).parentFile
     LazyColumn(
@@ -336,52 +333,94 @@ private fun FileList(
             item("..parent") {
                 FileListItem(
                     icon = {
-                    Icon(
-                        Icons.Outlined.Folder,
-                        null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                },
+                        Icon(
+                            Icons.Outlined.Folder,
+                            null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
                     title = "..",
                     subtitle = "Parent folder",
-                    onClick = { onNavigate(parent) },
-                    onLongClick = null,
-                    trailing = null
+                    trailing = {
+                        ActionButton(
+                            onClickListener = { onNavigate(parent) },
+                            icon = Icons.Outlined.ArrowUpward,
+                            contentDescription = "Go up",
+                            modifier = Modifier.size(rDp(32.dp))
+                        )
+                    }
                 )
             }
         }
+
         items(items, key = { it.file.absolutePath }) { item ->
+            val canSelect = when (pickerMode) {
+                PickerMode.FILE -> !item.isDir
+                PickerMode.FOLDER -> item.isDir
+            }
+
             FileListItem(
                 icon = {
-                when(item.isDir){
-                    true -> Icon(
-                         Icons.Outlined.Folder,
-                        null, tint = MaterialTheme.colorScheme.primary
-
+                    Icon(
+                        painter = painterResource(
+                            if (item.isDir) R.drawable.load_model else R.drawable.ai_model
+                        ),
+                        contentDescription = null,
+                        tint = if (canSelect) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        modifier = Modifier.size(rDp(20.dp))
                     )
-                    false -> Icon(
-                        painterResource(R.drawable.ai_model),
-                        null,
-                        tint =  MaterialTheme.colorScheme.secondary
-                    )
-                }
-            },
+                },
                 title = item.name,
                 subtitle = if (item.isDir) "Folder" else humanSize(item.size),
-                onClick = { if (item.isDir) onNavigate(item.file) else onPick(item.file) },
-                onLongClick = if (!item.isDir) ({ onLongPress(item) }) else null,
-                trailing = if (!item.isDir) {
-                    {
-                        Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-                            CompactIconButton(
+                trailing = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                        // Info button for all items
+                        if (canSelect) {
+                            ActionButton(
+                                onClickListener = { onShowInfo(item) },
                                 icon = Icons.Outlined.Info,
-                                onClick = { onLongPress(item) },
                                 contentDescription = "Info",
                                 modifier = Modifier.size(rDp(32.dp))
                             )
                         }
+
+                        // Action button based on type and mode
+                        when {
+                            // Navigate into folder in FILE mode
+                            item.isDir && pickerMode == PickerMode.FILE -> {
+                                ActionButton(
+                                    onClickListener = { onNavigate(item.file) },
+                                    icon = Icons.Outlined.ChevronRight,
+                                    contentDescription = "Open",
+                                    modifier = Modifier.size(rDp(32.dp))
+                                )
+                            }
+                            // Select folder in FOLDER mode
+                            item.isDir && pickerMode == PickerMode.FOLDER -> {
+                                ActionButton(
+                                    onClickListener = { onPick(item.file, ProviderType.DIFFUSION) },
+                                    icon = Icons.Outlined.Check,
+                                    contentDescription = "Select",
+                                    modifier = Modifier.size(rDp(32.dp))
+                                )
+                            }
+                            // Select file in FILE mode
+                            !item.isDir && pickerMode == PickerMode.FILE -> {
+                                ActionButton(
+                                    onClickListener = { onPick(item.file, ProviderType.GGUF) },
+                                    icon = Icons.Outlined.Check,
+                                    contentDescription = "Select",
+                                    modifier = Modifier.size(rDp(32.dp))
+                                )
+                            }
+                        }
                     }
-                } else null)
+                }
+            )
         }
     }
 }
@@ -391,15 +430,10 @@ private fun FileListItem(
     icon: @Composable () -> Unit,
     title: String,
     subtitle: String,
-    onClick: () -> Unit,
-    onLongClick: (() -> Unit)?,
-    trailing: (@Composable () -> Unit)?
+    trailing: @Composable () -> Unit
 ) {
     Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(12.dp)))
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         shape = RoundedCornerShape(rDp(12.dp))
     ) {
@@ -431,26 +465,30 @@ private fun FileListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            trailing?.let {
-                Spacer(Modifier.width(rDp(8.dp)))
-                it()
-            }
+            Spacer(Modifier.width(rDp(8.dp)))
+            trailing()
         }
     }
 }
 
 @Composable
 private fun FileDetailDialog(
-    item: FileItem, onDismiss: () -> Unit, onSelect: () -> Unit
+    item: FileItem,
+    pickerMode: PickerMode,
+    onDismiss: () -> Unit,
+    onSelect: () -> Unit
 ) {
     var quickSha by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(item.file) {
-        quickSha = computeSha256Prefix(item.file, limitBytes = 4L * 1024 * 1024)
+        if (!item.isDir) {
+            quickSha = computeSha256Prefix(item.file, limitBytes = 4L * 1024 * 1024)
+        }
     }
 
     Dialog(
-        onDismissRequest = onDismiss, properties = DialogProperties(dismissOnBackPress = true)
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(dismissOnBackPress = true)
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
@@ -465,13 +503,16 @@ private fun FileDetailDialog(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        "Model Details",
+                        when (pickerMode) {
+                            PickerMode.FILE -> "Model File Details"
+                            PickerMode.FOLDER -> "Model Folder Details"
+                        },
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.SemiBold
                     )
-                    CompactIconButton(
+                    ActionButton(
+                        onClickListener = onDismiss,
                         icon = Icons.Outlined.Close,
-                        onClick = onDismiss,
                         contentDescription = "Close",
                         modifier = Modifier.size(rDp(32.dp))
                     )
@@ -481,10 +522,21 @@ private fun FileDetailDialog(
 
                 DetailInfoCard {
                     InfoRow("Name", item.name)
-                    InfoRow("Size", "${humanSize(item.size)} (${item.size} B)")
+                    InfoRow("Type", if (item.isDir) "Folder" else "File")
+                    if (!item.isDir) {
+                        InfoRow("Size", "${humanSize(item.size)} (${item.size} B)")
+                    }
                     InfoRow("Permissions", "R: ${item.file.canRead()} / W: ${item.file.canWrite()}")
-                    guessQuant(item.name)?.let { InfoRow("Quantization", it) }
-                    quickSha?.let { InfoRow("SHA-256 (4MB)", it) }
+
+                    if (!item.isDir) {
+                        guessQuant(item.name)?.let { InfoRow("Quantization", it) }
+                        quickSha?.let { InfoRow("SHA-256 (4MB)", it) }
+                    } else {
+                        val contents = item.file.listFiles()
+                        if (contents != null) {
+                            InfoRow("Contents", "${contents.size} items")
+                        }
+                    }
                 }
 
                 Spacer(Modifier.height(rDp(20.dp)))
@@ -493,32 +545,35 @@ private fun FileDetailDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
                 ) {
-                    CompactIconButton(
-                        icon = Icons.Outlined.Close,
+                    OutlinedButton(
                         onClick = onDismiss,
-                        contentDescription = "Cancel",
                         modifier = Modifier
                             .weight(1f)
-                            .height(rDp(48.dp))
-                    )
-                    FilledIconButton(
+                            .height(rDp(48.dp)),
+                        shape = RoundedCornerShape(rDp(12.dp))
+                    ) {
+                        Text("Cancel")
+                    }
+
+                    Button(
                         onClick = onSelect,
                         modifier = Modifier
                             .weight(1f)
                             .height(rDp(48.dp)),
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        ),
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Outlined.Check, "Load", modifier = Modifier.size(rDp(20.dp)))
-                            Text("Load Model", style = MaterialTheme.typography.labelLarge)
-                        }
+                        Icon(
+                            Icons.Outlined.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(rDp(18.dp))
+                        )
+                        Spacer(Modifier.width(rDp(6.dp)))
+                        Text(
+                            when (pickerMode) {
+                                PickerMode.FILE -> "Load File"
+                                PickerMode.FOLDER -> "Load Folder"
+                            }
+                        )
                     }
                 }
             }
@@ -534,7 +589,8 @@ private fun DetailInfoCard(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            Modifier.padding(rDp(16.dp)), verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
             content()
         }
@@ -562,27 +618,37 @@ private fun InfoRow(k: String, v: String) {
 
 // Data and utility functions
 private data class FileItem(
-    val file: File, val name: String, val isDir: Boolean, val size: Long, val lastModified: Long
+    val file: File,
+    val name: String,
+    val isDir: Boolean,
+    val size: Long,
+    val lastModified: Long
 )
 
-private suspend fun listChildrenFiltered(path: String): List<FileItem> =
-    withContext(Dispatchers.IO) {
-        val dir = File(path)
-        val children = dir.listFiles()?.toList().orEmpty()
-        children.filter {
-            it.isDirectory || it.extension.equals("gguf", ignoreCase = true)
-        }.sortedWith(
-            compareBy({ !it.isDirectory }, { it.name.lowercase(Locale.getDefault()) })
-        ).map {
-            FileItem(
-                file = it,
-                name = it.name,
-                isDir = it.isDirectory,
-                size = if (it.isFile) it.length() else 0L,
-                lastModified = it.lastModified()
-            )
+private suspend fun listChildrenFiltered(
+    path: String,
+    pickerMode: PickerMode
+): List<FileItem> = withContext(Dispatchers.IO) {
+    val dir = File(path)
+    val children = dir.listFiles()?.toList().orEmpty()
+
+    children.filter { file ->
+        when (pickerMode) {
+            PickerMode.FILE -> file.isDirectory || file.extension.equals("gguf", ignoreCase = true)
+            PickerMode.FOLDER -> file.isDirectory
         }
+    }.sortedWith(
+        compareBy({ !it.isDirectory }, { it.name.lowercase(Locale.getDefault()) })
+    ).map {
+        FileItem(
+            file = it,
+            name = it.name,
+            isDir = it.isDirectory,
+            size = if (it.isFile) it.length() else 0L,
+            lastModified = it.lastModified()
+        )
     }
+}
 
 private fun hasAllFilesAccess(): Boolean = Environment.isExternalStorageManager()
 

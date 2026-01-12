@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.Spring
@@ -9,62 +11,55 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.messages.ContentType
+import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
+import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
+import java.util.Base64
 
-// Update BodyContent
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun BodyContent(
-    paddingValues: PaddingValues, chatViewModel: ChatViewModel
+    paddingValues: PaddingValues,
+    chatViewModel: ChatViewModel
 ) {
     val messages = chatViewModel.messages
     val isGenerating by chatViewModel.isGenerating.collectAsState()
     val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsState()
     val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsState()
+    val streamingImage by chatViewModel.streamingImage.collectAsState()
+    val imageProgress by chatViewModel.imageGenerationProgress.collectAsState()
+    val imageStep by chatViewModel.imageGenerationStep.collectAsState()
     val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
+    val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -86,7 +81,11 @@ fun BodyContent(
             if (isGenerating && streamingUserMessage != null) {
                 StreamingView(
                     userMessage = streamingUserMessage!!,
-                    assistantMessage = streamingAssistantMessage
+                    assistantMessage = streamingAssistantMessage,
+                    streamingImage = streamingImage,
+                    imageProgress = imageProgress,
+                    imageStep = imageStep,
+                    isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION
                 )
             } else {
                 LazyColumn(
@@ -98,7 +97,8 @@ fun BodyContent(
                     items(
                         count = messages.size,
                         key = { index -> messages[index].msgId },
-                        contentType = { index -> messages[index].role }) { index ->
+                        contentType = { index -> messages[index].role }
+                    ) { index ->
                         MessageBubble(message = messages[index])
                     }
                     item {
@@ -120,7 +120,8 @@ fun BodyContent(
                     .background(Color.Black.copy(alpha = 0.6f))
                     .clickable(
                         indication = null,
-                        interactionSource = remember { MutableInteractionSource() }) {
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {
                         chatViewModel.hideDynamicWindow()
                     })
         }
@@ -129,13 +130,15 @@ fun BodyContent(
         AnimatedVisibility(
             visible = showDynamicWindow,
             enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                initialOffsetY = { -it }, animationSpec = spring(
+                initialOffsetY = { -it },
+                animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessMedium
                 )
             ),
             exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
-                targetOffsetY = { -it }, animationSpec = tween(300)
+                targetOffsetY = { -it },
+                animationSpec = tween(300)
             )
         ) {
             Box(
@@ -152,13 +155,16 @@ fun BodyContent(
 
 @Composable
 private fun StreamingView(
-    userMessage: String, assistantMessage: String
+    userMessage: String,
+    assistantMessage: String,
+    streamingImage: Bitmap?,
+    imageProgress: Float,
+    imageStep: String,
+    isImageGeneration: Boolean
 ) {
-    // Scrollable column for overflow
     val scrollState = rememberScrollState()
 
-    // Auto-scroll to bottom when assistant message updates
-    LaunchedEffect(assistantMessage) {
+    LaunchedEffect(assistantMessage, streamingImage) {
         scrollState.animateScrollTo(scrollState.maxValue)
     }
 
@@ -169,20 +175,89 @@ private fun StreamingView(
             .padding(rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
-        // User message bubble (static)
+        // User message bubble
         UserMessageBubble(
             message = Messages(
-                role = Role.User, content = MessageContent(
-                    contentType = ContentType.Text, content = userMessage
+                role = Role.User,
+                content = MessageContent(
+                    contentType = ContentType.Text,
+                    content = userMessage
                 )
             )
         )
 
-        // Assistant message bubble (streaming)
-        AssistantStreamingBubble(text = assistantMessage)
+        // Assistant streaming bubble (text or image)
+        if (isImageGeneration) {
+            ImageGenerationStreamingBubble(
+                streamingImage = streamingImage,
+                progress = imageProgress,
+                step = imageStep
+            )
+        } else {
+            AssistantStreamingBubble(text = assistantMessage)
+        }
 
-        // Add some bottom padding
         Spacer(modifier = Modifier.height(rDp(16.dp)))
+    }
+}
+
+@Composable
+private fun ImageGenerationStreamingBubble(
+    streamingImage: Bitmap?,
+    progress: Float,
+    step: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+    ) {
+        // Progress indicator
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            CircularProgressIndicator(
+                progress = { progress },
+                modifier = Modifier.size(rDp(24.dp)),
+                color = MaterialTheme.colorScheme.primary,
+                strokeWidth = rDp(3.dp)
+            )
+
+            Column {
+                Text(
+                    text = "Generating image...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.Medium
+                )
+                Text(
+                    text = "$step • ${(progress * 100).toInt()}%",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        // Preview image if available
+        streamingImage?.let { bitmap ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f),
+                shape = RoundedCornerShape(rDp(12.dp)),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Image(
+                    bitmap = bitmap.asImageBitmap(),
+                    contentDescription = "Generating image preview",
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
+        }
     }
 }
 
@@ -198,12 +273,12 @@ private fun AssistantStreamingBubble(text: String) {
             horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
             verticalAlignment = Alignment.Top
         ) {
-            // Optional: Add a pulsing indicator
             Box(
                 modifier = Modifier
                     .size(rDp(8.dp))
                     .background(
-                        MaterialTheme.colorScheme.primary, shape = CircleShape
+                        MaterialTheme.colorScheme.primary,
+                        shape = CircleShape
                     )
             )
 
@@ -220,7 +295,8 @@ private fun AssistantStreamingBubble(text: String) {
 @Composable
 private fun EmptyMessagesState() {
     Box(
-        modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally
@@ -257,7 +333,8 @@ private fun MessageBubble(message: Messages) {
 @Composable
 private fun UserMessageBubble(message: Messages) {
     Row(
-        modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End
     ) {
         Surface(
             shape = RoundedCornerShape(rDp(12.dp)),
@@ -271,7 +348,8 @@ private fun UserMessageBubble(message: Messages) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                 modifier = Modifier.padding(
-                    horizontal = rDp(12.dp), vertical = rDp(10.dp)
+                    horizontal = rDp(12.dp),
+                    vertical = rDp(10.dp)
                 )
             )
         }
@@ -280,9 +358,12 @@ private fun UserMessageBubble(message: Messages) {
 
 @Composable
 private fun AssistantMessageBubble(message: Messages) {
-    // Memoize metrics display
     val showMetrics = remember(message.decodingMetrics) {
         message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
+    }
+
+    val showImageMetrics = remember(message.imageMetrics) {
+        message.imageMetrics != null
     }
 
     Column(
@@ -291,24 +372,96 @@ private fun AssistantMessageBubble(message: Messages) {
             .padding(rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
-        Text(
-            text = message.content.content,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = rDp(4.dp))
-        )
+        // Check if it's an image message
+        when (message.content.contentType) {
+            ContentType.Image -> {
+                ImageMessageBubble(message)
+            }
+            else -> {
+                Text(
+                    text = message.content.content,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = rDp(4.dp))
+                )
+            }
+        }
 
+        // Show metrics based on message type
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics)
+            }
+        }
+
+        if (showImageMetrics) {
+            message.imageMetrics?.let { metrics ->
+                ImageMetricsDisplay(metrics)
             }
         }
     }
 }
 
 @Composable
+private fun ImageMessageBubble(message: Messages) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+    ) {
+        // Show prompt if available
+        message.content.imagePrompt?.let { prompt ->
+            Text(
+                text = "Prompt: $prompt",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = rDp(4.dp))
+            )
+        }
+
+        // Display image
+        message.content.imageData?.let { base64Image ->
+            val bitmap = remember(base64Image) {
+                try {
+                    val imageBytes = Base64.getDecoder().decode(base64Image)
+                    BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                } catch (e: Exception) {
+                    null
+                }
+            }
+
+            bitmap?.let {
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f),
+                    shape = RoundedCornerShape(rDp(12.dp)),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Image(
+                        bitmap = it.asImageBitmap(),
+                        contentDescription = message.content.content,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(rDp(12.dp))),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+        }
+
+        // Show seed if available
+        message.content.imageSeed?.let { seed ->
+            Text(
+                text = "Seed: $seed",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier.padding(horizontal = rDp(4.dp))
+            )
+        }
+    }
+}
+
+@Composable
 private fun MetricsDisplay(metrics: DecodingMetrics) {
-    // Memoize formatted values
     val formattedSpeed = remember(metrics.tokensPerSecond) {
         "%.1f".format(metrics.tokensPerSecond)
     }
@@ -339,8 +492,29 @@ private fun MetricsDisplay(metrics: DecodingMetrics) {
 }
 
 @Composable
+private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
+    val formattedTime = remember(metrics.generationTimeMs) {
+        "%.1f".format(metrics.generationTimeMs / 1000f)
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(4.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+    ) {
+        MetricItem(icon = "🎨", value = metrics.steps.toString(), unit = "steps")
+        MetricItem(icon = "📐", value = "${metrics.width}×${metrics.height}", unit = "")
+        MetricItem(icon = "⚙️", value = "%.1f".format(metrics.cfgScale), unit = "cfg")
+        MetricItem(icon = "⏰", value = formattedTime, unit = "s")
+    }
+}
+
+@Composable
 private fun MetricItem(
-    icon: String, value: String, unit: String
+    icon: String,
+    value: String,
+    unit: String
 ) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
@@ -356,10 +530,12 @@ private fun MetricItem(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium
         )
-        Text(
-            text = unit,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-        )
+        if (unit.isNotEmpty()) {
+            Text(
+                text = unit,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            )
+        }
     }
 }

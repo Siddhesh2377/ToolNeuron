@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.worker
 
 import android.annotation.SuppressLint
+import com.dark.tool_neuron.engine.DiffusionEngine
 import com.dark.tool_neuron.engine.GGUFEngine
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -15,19 +16,18 @@ import java.security.MessageDigest
  * Handles parsing and loading of different model formats
  */
 class ModelDataParser {
-    
+
     suspend fun loadModel(
         model: Model,
         config: ModelConfig?
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         return@withContext when (model.providerType) {
             ProviderType.GGUF -> loadGGUFModel(model, config)
-            // ProviderType.DIFFUSION -> loadDiffusionModel(model, config)
-            // ProviderType.ONNX -> loadONNXModel(model, config)
+            ProviderType.DIFFUSION -> loadDiffusionModel(model, config)
             else -> ModelLoadResult.Error("Unsupported model type: ${model.providerType}")
         }
     }
-    
+
     private suspend fun loadGGUFModel(
         model: Model,
         config: ModelConfig?
@@ -35,7 +35,7 @@ class ModelDataParser {
         try {
             val engine = GGUFEngine()
             val success = engine.load(model, config)
-            
+
             if (success) {
                 val infoJson = engine.getModelInfo()
                 if (infoJson != null) {
@@ -55,11 +55,141 @@ class ModelDataParser {
         }
     }
 
+    private suspend fun loadDiffusionModel(
+        model: Model,
+        config: ModelConfig?
+    ): ModelLoadResult = withContext(Dispatchers.IO) {
+        try {
+            // Parse diffusion config from ModelConfig
+            val diffusionConfig = parseDiffusionConfig(config)
+
+            // Validate model directory exists
+            val modelDir = File(model.modelPath)
+            if (!modelDir.exists() || !modelDir.isDirectory) {
+                return@withContext ModelLoadResult.Error("Model directory not found: ${model.modelPath}")
+            }
+
+            // Check for required files
+            val requiredFiles = if (diffusionConfig.runOnCpu) {
+                listOf("clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json")
+            } else {
+                listOf("clip_v2.mnn", "unet.bin", "vae_decoder.bin", "tokenizer.json")
+            }
+
+            val missingFiles = requiredFiles.filter { !File(modelDir, it).exists() }
+            if (missingFiles.isNotEmpty()) {
+                return@withContext ModelLoadResult.Error("Missing files: ${missingFiles.joinToString()}")
+            }
+
+            // Load using worker (which uses service)
+            val success = LlmModelWorker.loadDiffusionModel(
+                name = model.modelName,
+                modelDir = model.modelPath,
+                textEmbeddingSize = diffusionConfig.textEmbeddingSize,
+                runOnCpu = diffusionConfig.runOnCpu,
+                useCpuClip = diffusionConfig.useCpuClip,
+                isPony = diffusionConfig.isPony,
+                httpPort = diffusionConfig.httpPort,
+                safetyMode = diffusionConfig.safetyMode
+            )
+
+            if (success) {
+                val modelInfo = DiffusionModelInfo(
+                    providerType = ProviderType.DIFFUSION,
+                    architecture = "Stable Diffusion",
+                    name = model.modelName,
+                    description = "Stable Diffusion model for image generation",
+                    parameters = buildDiffusionParametersMap(diffusionConfig, modelDir),
+                    modelConfig = diffusionConfig
+                )
+
+                ModelLoadResult.Success(
+                    info = modelInfo,
+                    engine = "DiffusionEngine" // Placeholder since engine is in service
+                )
+            } else {
+                ModelLoadResult.Error("Failed to load Diffusion model")
+            }
+        } catch (e: Exception) {
+            ModelLoadResult.Error("Diffusion loading error: ${e.message}")
+        }
+    }
+
+    private fun parseDiffusionConfig(config: ModelConfig?): DiffusionConfig {
+        if (config?.modelLoadingParams == null) {
+            return DiffusionConfig() // Return defaults
+        }
+
+        return try {
+            val json = JSONObject(config.modelLoadingParams)
+            DiffusionConfig(
+                textEmbeddingSize = json.optInt("text_embedding_size", 768),
+                runOnCpu = json.optBoolean("run_on_cpu", false),
+                useCpuClip = json.optBoolean("use_cpu_clip", true),
+                isPony = json.optBoolean("is_pony", false),
+                httpPort = json.optInt("http_port", 8081),
+                safetyMode = json.optBoolean("safety_mode", false),
+                width = json.optInt("width", 512),
+                height = json.optInt("height", 512)
+            )
+        } catch (e: Exception) {
+            DiffusionConfig() // Return defaults on error
+        }
+    }
+
+    private fun buildDiffusionParametersMap(
+        config: DiffusionConfig,
+        modelDir: File
+    ): Map<String, String> {
+        return buildMap {
+            put("Type", if (config.runOnCpu) "CPU" else "NPU/GPU")
+            put("Text Embedding Size", config.textEmbeddingSize.toString())
+            put("CLIP Mode", if (config.useCpuClip) "CPU" else "NPU")
+            put("Resolution", "${config.width}×${config.height}")
+            put("Port", config.httpPort.toString())
+
+            if (config.isPony) {
+                put("Model Variant", "Pony v6")
+            }
+
+            if (config.safetyMode) {
+                put("Safety Checker", "Enabled")
+            }
+
+            // Check for available components
+            val components = mutableListOf<String>()
+            if (File(modelDir, "unet.bin").exists() || File(modelDir, "unet.mnn").exists()) {
+                components.add("UNet")
+            }
+            if (File(modelDir, "vae_decoder.bin").exists() || File(modelDir, "vae_decoder.mnn").exists()) {
+                components.add("VAE Decoder")
+            }
+            if (File(modelDir, "vae_encoder.bin").exists() || File(modelDir, "vae_encoder.mnn").exists()) {
+                components.add("VAE Encoder")
+            }
+            if (File(modelDir, "clip_v2.mnn").exists() || File(modelDir, "clip.mnn").exists()) {
+                components.add("CLIP")
+            }
+
+            if (components.isNotEmpty()) {
+                put("Components", components.joinToString(", "))
+            }
+
+            // Check for patch files
+            val patches = modelDir.listFiles { file ->
+                file.name.endsWith(".patch")
+            }?.map { it.nameWithoutExtension } ?: emptyList()
+
+            if (patches.isNotEmpty()) {
+                put("Available Resolutions", patches.joinToString(", "))
+            }
+        }
+    }
+
     private fun parseGGUFInfo(jsonString: String): ModelInfo {
         return try {
             val json = JSONObject(jsonString)
 
-            // Build parameters map - only existing fields
             val parameters = buildMap {
                 if (json.has("n_vocab")) {
                     put("Vocabulary Size", formatNumber(json.getInt("n_vocab")))
@@ -81,7 +211,6 @@ class ModelDataParser {
                 }
             }
 
-            // Build vocabulary info - only existing fields
             val vocabularyInfo = buildMap<String, String> {
                 if (json.has("vocab_type")) {
                     put("Type", json.getString("vocab_type").uppercase())
@@ -120,11 +249,7 @@ class ModelDataParser {
             )
         }
     }
-    
-    // Future: Add parsers for other model types
-    // private suspend fun loadDiffusionModel(...): ModelLoadResult { ... }
-    // private suspend fun loadONNXModel(...): ModelLoadResult { ... }
-    
+
     @SuppressLint("DefaultLocale")
     private fun formatNumber(num: Int): String {
         return when {
@@ -134,19 +259,28 @@ class ModelDataParser {
             else -> num.toString()
         }
     }
-    
+
     suspend fun unloadModel(engine: Any?) = withContext(Dispatchers.IO) {
         when (engine) {
             is GGUFEngine -> engine.unload()
-            // is DiffusionEngine -> engine.unload()
-            // Add other engine types
+            is String -> {
+                if (engine == "DiffusionEngine") {
+                    LlmModelWorker.stopDiffusionBackend()
+                }
+            }
         }
     }
 
     fun checksumSHA256(modelPath: String): String {
         val file = File(modelPath)
-        val digest = MessageDigest.getInstance("SHA-256")
 
+        // For directories (diffusion models), use directory name + metadata
+        if (file.isDirectory) {
+            return checksumDirectory(file)
+        }
+
+        // For files (GGUF models), use file content
+        val digest = MessageDigest.getInstance("SHA-256")
         file.inputStream().use { input ->
             val buffer = ByteArray(8 * 1024)
             var bytesRead: Int
@@ -154,8 +288,58 @@ class ModelDataParser {
                 digest.update(buffer, 0, bytesRead)
             }
         }
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    private fun checksumDirectory(dir: File): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+
+        // Hash directory name
+        digest.update(dir.name.toByteArray())
+
+        // Hash key files
+        val keyFiles = listOf(
+            "unet.bin", "unet.mnn",
+            "vae_decoder.bin", "vae_decoder.mnn",
+            "tokenizer.json"
+        )
+
+        keyFiles.forEach { fileName ->
+            val file = File(dir, fileName)
+            if (file.exists()) {
+                digest.update(fileName.toByteArray())
+                digest.update(file.length().toString().toByteArray())
+            }
+        }
 
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+}
+
+/**
+ * Configuration for Diffusion models
+ */
+data class DiffusionConfig(
+    val textEmbeddingSize: Int = 768,
+    val runOnCpu: Boolean = false,
+    val useCpuClip: Boolean = true,
+    val isPony: Boolean = false,
+    val httpPort: Int = 8081,
+    val safetyMode: Boolean = false,
+    val width: Int = 512,
+    val height: Int = 512
+) {
+    fun toJson(): String {
+        return JSONObject().apply {
+            put("text_embedding_size", textEmbeddingSize)
+            put("run_on_cpu", runOnCpu)
+            put("use_cpu_clip", useCpuClip)
+            put("is_pony", isPony)
+            put("http_port", httpPort)
+            put("safety_mode", safetyMode)
+            put("width", width)
+            put("height", height)
+        }.toString()
     }
 }
 
@@ -165,9 +349,9 @@ class ModelDataParser {
 sealed class ModelLoadResult {
     data class Success(
         val info: ModelInfo,
-        val engine: Any // Can be GGUFEngine, DiffusionEngine, etc.
+        val engine: Any // Can be GGUFEngine, "DiffusionEngine", etc.
     ) : ModelLoadResult()
-    
+
     data class Error(val message: String) : ModelLoadResult()
 }
 
@@ -196,11 +380,29 @@ data class GGUFModelInfo(
     val systemInfo: String = "",
     val chatTemplate: String = "",
     val templateType: String = ""
-) : ModelInfo{
+) : ModelInfo {
     override val additionalInfo: Map<String, String>?
         get() = vocabularyInfo
 }
 
-// Future: Add info classes for other model types
-// data class DiffusionModelInfo(...) : ModelInfo
-// data class ONNXModelInfo(...) : ModelInfo
+/**
+ * Diffusion-specific model information
+ */
+data class DiffusionModelInfo(
+    override val providerType: ProviderType,
+    override val architecture: String,
+    override val name: String,
+    override val description: String,
+    override val parameters: Map<String, String> = emptyMap(),
+    val modelConfig: DiffusionConfig
+) : ModelInfo {
+    override val additionalInfo: Map<String, String>? = buildMap {
+        put("Backend", if (modelConfig.runOnCpu) "CPU" else "NPU/GPU")
+        put("CLIP", if (modelConfig.useCpuClip) "CPU (MNN)" else "NPU")
+        put("Default Size", "${modelConfig.width}×${modelConfig.height}")
+
+        if (modelConfig.safetyMode) {
+            put("Safety Filter", "Enabled")
+        }
+    }
+}
