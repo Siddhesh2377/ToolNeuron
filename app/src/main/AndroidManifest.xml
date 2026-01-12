@@ -63,6 +63,15 @@
             tools:targetApi="33" >
         </activity>
 
+        <activity
+            android:name=".activity.ModelStoreActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="33" >
+        </activity>
+
 
         <service
             android:name=".service.LLMService"
@@ -71,6 +80,12 @@
             android:foregroundServiceType="dataSync"
             android:permission="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
             android:stopWithTask="false" />
+
+        <service
+            android:name=".service.ModelDownloadService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
     </application>
 

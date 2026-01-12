@@ -65,11 +65,13 @@ import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import kotlinx.coroutines.launch
+import kotlin.math.max
 
 // Update HomeScreen to wrap with SharedTransitionLayout
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HomeScreen(
+    onStoreButtonClicked: () -> Unit,
     chatViewModel: ChatViewModel, llmModelViewModel: LLMModelViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -95,7 +97,9 @@ fun HomeScreen(
             containerColor = MaterialTheme.colorScheme.background,
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                TopBar(onMenuClick = {
+                TopBar(onStoreButtonClicked = {
+                    onStoreButtonClicked()
+                },onMenuClick = {
                     scope.launch {
                         drawerState.open()
                     }
@@ -119,6 +123,7 @@ fun HomeScreen(
 fun TopBar(
     onMenuClick: () -> Unit,
     showDynamicWindow: () -> Unit,
+    onStoreButtonClicked: () -> Unit
 ) {
     val context = LocalContext.current
 
@@ -139,9 +144,7 @@ fun TopBar(
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActionButton(
                 onClickListener = {
-                    context.startActivity(
-                        Intent(context, ModelLoadingActivity::class.java)
-                    )
+                    onStoreButtonClicked()
                 }, icon = R.drawable.download, modifier = Modifier.padding(end = rDp(6.dp))
             )
             ActionButton(
@@ -176,6 +179,7 @@ fun BottomBar(
                 Modifier
                     .fillMaxWidth()
                     .padding(rDp(8.dp))
+                    .heightIn(max = rDp(200.dp))
                     .background(
                         MaterialTheme.colorScheme.primary.copy(0.04f)
                             .compositeOver(MaterialTheme.colorScheme.background),

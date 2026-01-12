@@ -15,6 +15,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
@@ -63,6 +64,7 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String) {
     object Chat : Screen("chat")
+    object Store : Screen("store")
 }
 
 @Composable
@@ -73,13 +75,11 @@ fun AppNavigation(
 
     NavHost(navController = navController, startDestination = Screen.Chat.route, enterTransition = {
         slideIntoContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Left,
-            animationSpec = tween(300)
+            towards = AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300)
         ) + fadeIn(animationSpec = tween(300))
     }, exitTransition = {
         slideOutOfContainer(
-            towards = AnimatedContentTransitionScope.SlideDirection.Left,
-            animationSpec = tween(300)
+            towards = AnimatedContentTransitionScope.SlideDirection.Left, animationSpec = tween(300)
         ) + fadeOut(animationSpec = tween(300))
     }, popEnterTransition = {
         slideIntoContainer(
@@ -95,8 +95,16 @@ fun AppNavigation(
 
         composable(Screen.Chat.route) { _ ->
             HomeScreen(
-                chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
+                onStoreButtonClicked = {
+                    navController.navigate(Screen.Store.route)
+                }, chatViewModel = chatViewModel, llmModelViewModel = llmModelViewModel
             )
+        }
+
+        composable(Screen.Store.route) {
+            ModelStoreScreen(onNavigateBack = {
+                navController.popBackStack()
+            })
         }
     }
 }

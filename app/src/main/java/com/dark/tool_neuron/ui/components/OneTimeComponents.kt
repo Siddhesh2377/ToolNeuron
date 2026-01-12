@@ -22,6 +22,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.state.getDisplayText
 import com.dark.tool_neuron.models.state.getIcon
@@ -65,8 +66,7 @@ fun ModelListItem(
         Row(
             modifier = Modifier.padding(rDp(8.dp)), verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(model.modelName)
-            Spacer(Modifier.weight(1f))
+            Text(model.modelName, overflow = TextOverflow.Clip, modifier = Modifier.weight(1f).padding(end = rDp(12.dp)))
             Crossfade(isLoaded) {
                 when (it) {
                     true -> {

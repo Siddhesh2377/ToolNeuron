@@ -80,6 +80,7 @@ class DiffusionEngine {
                 useCpuClip(useCpuClip)
                 isPony(isPony)
                 httpPort(httpPort)
+                setSafetyMode(false)
             }
 
             val success = sdManager.loadModel(model, width = width, height = height)

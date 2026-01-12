@@ -71,6 +71,9 @@ class ChatViewModel @Inject constructor(
     private var currentGeneratedImage: Bitmap? = null
     private var imageGenerationStartTime: Long = 0
 
+    // Track if user message was already added to prevent duplicates
+    private var userMessageAdded = false
+
     // UI state
     private val _showDynamicWindow = MutableStateFlow(false)
     val showDynamicWindow: StateFlow<Boolean> = _showDynamicWindow
@@ -100,6 +103,7 @@ class ChatViewModel @Inject constructor(
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
+        userMessageAdded = false
         _error.value = null
         isNewConversation = true
         AppStateManager.setHasMessages(false)
@@ -151,6 +155,7 @@ class ChatViewModel @Inject constructor(
         if (_isGenerating.value) return
 
         _streamingUserMessage.value = prompt
+        userMessageAdded = false
 
         viewModelScope.launch {
             if (isNewConversation) {
@@ -291,7 +296,11 @@ class ChatViewModel @Inject constructor(
                                 _streamingAssistantMessage.value = currentGeneratedContent
                                 _isGenerating.value = false
 
-                                _messages.add(userMessage)
+                                if (!userMessageAdded) {
+                                    _messages.add(userMessage)
+                                    userMessageAdded = true
+                                }
+
                                 val assistantMessage = Messages(
                                     role = Role.Assistant,
                                     content = MessageContent(
@@ -349,6 +358,7 @@ class ChatViewModel @Inject constructor(
 
         _streamingUserMessage.value = prompt
         imageGenerationStartTime = System.currentTimeMillis()
+        userMessageAdded = false
 
         viewModelScope.launch {
             if (isNewConversation) {
@@ -398,7 +408,7 @@ class ChatViewModel @Inject constructor(
             _imageGenerationProgress.value = 0f
             currentGeneratedImage = null
 
-            AppStateManager.setGeneratingText()
+            AppStateManager.setGeneratingImage()
 
             try {
                 generationManager.generateImageStreaming(
@@ -470,7 +480,7 @@ class ChatViewModel @Inject constructor(
             _streamingImage.value = null
             _imageGenerationProgress.value = 0f
 
-            AppStateManager.setGeneratingText()
+            AppStateManager.setGeneratingImage()
 
             try {
                 generationManager.generateImageStreaming(
@@ -501,7 +511,10 @@ class ChatViewModel @Inject constructor(
                                 generationTimeMs = generationTime
                             )
 
-                            _messages.add(userMessage)
+                            if (!userMessageAdded) {
+                                _messages.add(userMessage)
+                                userMessageAdded = true
+                            }
 
                             val imageBase64 = generationManager.bitmapToBase64(event.image)
                             val imageMessage = Messages(
@@ -548,6 +561,7 @@ class ChatViewModel @Inject constructor(
 
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
                 _messages.add(userMessage)
+                userMessageAdded = true
 
                 chatManager.addAssistantMessage(
                     newChatId, assistantResponse, metrics
@@ -578,6 +592,7 @@ class ChatViewModel @Inject constructor(
 
             chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
                 _messages.add(userMessage)
+                userMessageAdded = true
 
                 chatManager.addImageMessage(
                     newChatId, imageBase64, imagePrompt, seed, currentImageMetrics
@@ -627,7 +642,11 @@ class ChatViewModel @Inject constructor(
         _error.value = errorMessage
         AppStateManager.setError(errorMessage)
 
-        _messages.add(userMessage)
+        if (!userMessageAdded) {
+            _messages.add(userMessage)
+            userMessageAdded = true
+        }
+
         val errorMsg = Messages(
             role = Role.Assistant,
             content = MessageContent(
@@ -645,7 +664,11 @@ class ChatViewModel @Inject constructor(
         AppStateManager.setError(exception.message ?: "Unknown error")
 
         if (currentGeneratedContent.isNotEmpty() && currentUserMessage != null) {
-            _messages.add(currentUserMessage!!)
+            if (!userMessageAdded) {
+                _messages.add(currentUserMessage!!)
+                userMessageAdded = true
+            }
+
             val partialMessage = Messages(
                 role = Role.Assistant,
                 content = MessageContent(
@@ -681,7 +704,11 @@ class ChatViewModel @Inject constructor(
         _error.value = errorMessage
         AppStateManager.setError(errorMessage)
 
-        _messages.add(userMessage)
+        if (!userMessageAdded) {
+            _messages.add(userMessage)
+            userMessageAdded = true
+        }
+
         val errorMsg = Messages(
             role = Role.Assistant,
             content = MessageContent(
@@ -698,7 +725,11 @@ class ChatViewModel @Inject constructor(
         _error.value = exception.message
         AppStateManager.setError(exception.message ?: "Unknown error")
 
-        _messages.add(userMessage)
+        if (!userMessageAdded) {
+            _messages.add(userMessage)
+            userMessageAdded = true
+        }
+
         resetStreamingState()
     }
 
@@ -713,6 +744,7 @@ class ChatViewModel @Inject constructor(
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
+        userMessageAdded = false
     }
 
     // ==================== Generation Control ====================
@@ -740,7 +772,10 @@ class ChatViewModel @Inject constructor(
 
         if (chatId != null && currentUserMessage != null && currentGeneratedContent.isNotEmpty()) {
             viewModelScope.launch {
-                _messages.add(currentUserMessage!!)
+                if (!userMessageAdded) {
+                    _messages.add(currentUserMessage!!)
+                    userMessageAdded = true
+                }
 
                 val assistantMessage = Messages(
                     role = Role.Assistant,
@@ -756,8 +791,9 @@ class ChatViewModel @Inject constructor(
                     chatId, "$currentGeneratedContent [stopped]", currentMetrics
                 )
             }
-        } else if (currentUserMessage != null) {
+        } else if (currentUserMessage != null && !userMessageAdded) {
             _messages.add(currentUserMessage!!)
+            userMessageAdded = true
         }
 
         resetStreamingState()
@@ -768,7 +804,11 @@ class ChatViewModel @Inject constructor(
 
         if (chatId != null && currentUserMessage != null && currentGeneratedImage != null) {
             viewModelScope.launch {
-                _messages.add(currentUserMessage!!)
+                // Only add user message if it hasn't been added yet
+                if (!userMessageAdded) {
+                    _messages.add(currentUserMessage!!)
+                    userMessageAdded = true
+                }
 
                 val imageBase64 = generationManager.bitmapToBase64(currentGeneratedImage!!)
                 val imageMessage = Messages(
@@ -784,8 +824,9 @@ class ChatViewModel @Inject constructor(
 
                 chatManager.addImageMessage(chatId, imageBase64, "", -1L, currentImageMetrics)
             }
-        } else if (currentUserMessage != null) {
+        } else if (currentUserMessage != null && !userMessageAdded) {
             _messages.add(currentUserMessage!!)
+            userMessageAdded = true
         }
 
         resetStreamingState()

@@ -18,6 +18,8 @@ class ModelRepository(private val modelDao: ModelDao, private val configDao: Mod
 
     suspend fun getModelById(id: String): Model? = modelDao.getById(id)
 
+    suspend fun getModelByName(name: String): Model? = modelDao.getByName(name)
+
     suspend fun insertModel(model: Model) = modelDao.insert(model)
 
     suspend fun updateModel(model: Model) = modelDao.update(model)

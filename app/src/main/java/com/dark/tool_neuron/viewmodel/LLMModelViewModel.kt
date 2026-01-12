@@ -11,6 +11,7 @@ import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import jakarta.inject.Inject
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -42,13 +43,15 @@ class LLMModelViewModel @Inject constructor(
     fun loadModel(model: Model) {
         viewModelScope.launch {
             try {
-                AppStateManager.setLoadingModel(model.modelName)
+                AppStateManager.setLoadingModel(model.modelName, 0f)
 
                 val config = getModelConfig(model.id)
                 if (config == null) {
                     AppStateManager.setError("Model configuration not found")
                     return@launch
                 }
+
+                simulateLoadingProgress()
 
                 when (model.providerType) {
                     ProviderType.GGUF -> loadGgufModel(model, config)
@@ -67,6 +70,9 @@ class LLMModelViewModel @Inject constructor(
         val success = LlmModelWorker.loadGgufModel(model, config)
 
         if (success) {
+            AppStateManager.updateLoadingProgress(1.0f)
+            delay(200) // Brief pause to show 100%
+
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
@@ -91,11 +97,44 @@ class LLMModelViewModel @Inject constructor(
         )
 
         if (success) {
+            AppStateManager.updateLoadingProgress(1.0f)
+            delay(200) // Brief pause to show 100%
+
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.DIFFUSION
             AppStateManager.setModelLoaded(model.modelName)
         } else {
             AppStateManager.setError("Failed to load Diffusion model")
+        }
+    }
+
+    /**
+     * Simulates model loading progress through different stages
+     * In a real implementation, this would be replaced with actual loading callbacks
+     */
+    private suspend fun simulateLoadingProgress() {
+        // Stage 1: Initialization (0-20%)
+        for (i in 0..20 step 5) {
+            AppStateManager.updateLoadingProgress(i / 100f)
+            delay(50)
+        }
+
+        // Stage 2: Loading weights (20-60%)
+        for (i in 20..60 step 4) {
+            AppStateManager.updateLoadingProgress(i / 100f)
+            delay(80)
+        }
+
+        // Stage 3: Optimization (60-90%)
+        for (i in 60..90 step 3) {
+            AppStateManager.updateLoadingProgress(i / 100f)
+            delay(60)
+        }
+
+        // Stage 4: Finalization (90-95%)
+        for (i in 90..95) {
+            AppStateManager.updateLoadingProgress(i / 100f)
+            delay(100)
         }
     }
 

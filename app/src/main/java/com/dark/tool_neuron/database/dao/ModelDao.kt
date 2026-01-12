@@ -26,6 +26,9 @@ interface ModelDao {
     
     @Query("SELECT * FROM models WHERE id = :id")
     suspend fun getById(id: String): Model?
+
+    @Query("SELECT * FROM models WHERE model_name = :name")
+    suspend fun getByName(name: String): Model?
     
     @Query("SELECT * FROM models WHERE is_active = 1")
     fun getAllActive(): Flow<List<Model>>
