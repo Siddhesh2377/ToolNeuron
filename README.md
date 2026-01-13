@@ -36,14 +36,14 @@ ToolNeuron runs AI models directly on your Android device. Import any GGUF model
 
 <table>
   <tr>
-    <td><img src="docs/img/Empty-Chat.png" alt="Chat Interface" width="200"/></td>
-    <td><img src="docs/img/Text+Image.png" alt="Text and Image Generation" width="200"/></td>
-    <td><img src="docs/img/Generated-Image.png" alt="Image Output" width="200"/></td>
+    <td><img src="./docs/img/Empty-Chat.png" alt="Chat Interface" width="200"/></td>
+    <td><img src="./docs/img/Text+Image.png" alt="Text and Image Generation" width="200"/></td>
+    <td><img src="./docs/img/Generated-Image.png" alt="Image Output" width="200"/></td>
   </tr>
   <tr>
-    <td><img src="docs/img/Image-Gen_Progress.png" alt="Generation Progress" width="200"/></td>
-    <td><img src="docs/img/LoadCustom-Model.png" alt="Model Loading" width="200"/></td>
-    <td><img src="docs/img/System-Info-UI.png" alt="System Information" width="200"/></td>
+    <td><img src="./docs/img/Image-Gen_Progress.png" alt="Generation Progress" width="200"/></td>
+    <td><img src="./docs/img/LoadCustom-Model.png" alt="Model Loading" width="200"/></td>
+    <td><img src="./docs/img/System-Info-UI.png" alt="System Information" width="200"/></td>
   </tr>
 </table>
 
