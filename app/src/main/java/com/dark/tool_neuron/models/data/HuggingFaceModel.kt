@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.models.data
 
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class HuggingFaceModel(
     val id: String,
     val name: String,
@@ -16,7 +18,7 @@ data class HuggingFaceModel(
     val requiresNPU: Boolean = false,
     val repositoryUrl: String = ""
 )
-
+@Serializable
 data class HFModelRepository(
     val id: String,
     val name: String,

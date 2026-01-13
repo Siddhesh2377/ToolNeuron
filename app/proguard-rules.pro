@@ -1,6 +1,7 @@
 # -- Keep all NeuroVerse model classes and their full members --
 -keep class com.dark.tool_neuron.model.** { *; }
 -keep class com.dark.tool_neuron.models.data.HuggingFaceModel { *; }
+-keep class com.dark.tool_neuron.models.data.HFModelRepository { *; }
 -keep class com.dark.tool_neuron.network.** { *; }
 -keep class com.dark.tool_neuron.models.data.ModelType { *; }
 -keep class com.dark.tool_neuron.activity.** { *; }
