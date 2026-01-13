@@ -266,9 +266,8 @@ Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
 Built with these open-source projects:
 
 - [llama.cpp](https://github.com/ggerganov/llama.cpp) by Georgi Gerganov - Efficient LLM inference
-- [Stable Diffusion](https://github.com/CompVis/stable-diffusion) - Text-to-image generation
+- [local-dream](https://github.com/xororz/local-dream) - Text-to-image generation
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) - Modern Android UI
-- [Sherpa-ONNX](https://github.com/k2-fsa/sherpa-onnx) - Speech processing (planned)
 
 ---
 
