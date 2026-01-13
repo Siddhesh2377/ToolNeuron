@@ -7,11 +7,29 @@
 [![Release](https://img.shields.io/badge/Release-1.0_Beta-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
-ToolNeuron is an offline-first AI assistant for Android that runs large language models and image generation completely on-device. No cloud dependencies, no subscriptions, complete privacy.
+<p align="left">
+  <a href="https://play.google.com/store/apps/details?id=com.dark.tool_neuron">
+    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
+         alt="Get it on Google Play"
+         height="80"/>
+  </a>
+</p>
 
-[Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) • [Join Discord](https://discord.gg/mVPwHDhrAP) • [Report Issue](https://github.com/Siddhesh2377/ToolNeuron/issues)
+ToolNeuron is an **offline-first AI assistant for Android** designed to run large language models and image generation fully on-device.  
+No cloud dependency. No subscriptions. Your data never leaves your phone.
+
+**Core goals**
+- On-device LLM and diffusion inference  
+- Zero telemetry, zero tracking  
+- Works offline by default  
+- Open-source and auditable  
+
+[Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
+[Join Discord](https://discord.gg/mVPwHDhrAP) ·
+[Report an Issue](https://github.com/Siddhesh2377/ToolNeuron/issues)
 
 ---
+
 
 ## What It Does
 
