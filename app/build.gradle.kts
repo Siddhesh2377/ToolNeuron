@@ -22,7 +22,7 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 8
+        versionCode = 9
         versionName = "1.0.1"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -65,6 +65,8 @@ android {
 
 
 dependencies {
+    implementation("io.gitlab.shubham0204:sentence-embeddings:v6")
+    implementation("io.gitlab.shubham0204:model2vec:v6")
     implementation("com.google.dagger:hilt-android:2.57.2")
     ksp("com.google.dagger:hilt-android-compiler:2.57.2")
 

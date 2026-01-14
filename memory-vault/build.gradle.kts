@@ -46,6 +46,8 @@ android {
 }
 
 dependencies {
+    implementation("io.gitlab.shubham0204:sentence-embeddings:v6")
+    implementation("io.gitlab.shubham0204:model2vec:v6")
     implementation("org.lz4:lz4-java:1.8.0")
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
