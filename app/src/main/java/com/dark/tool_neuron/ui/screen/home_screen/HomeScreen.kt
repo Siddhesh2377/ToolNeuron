@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
@@ -132,6 +134,21 @@ fun TopBar(
 ) {
     val context = LocalContext.current
 
+    // SAF file picker launcher - opens ModelLoadingActivity with selected URI
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            // Persist permission for future access
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            // Open ModelLoadingActivity which will automatically use the SAF picker
+            context.startActivity(Intent(context, ModelLoadingActivity::class.java))
+        }
+    }
+
     CenterAlignedTopAppBar(title = {
         AnimatedTitle(
             modifier = Modifier, onShowDynamicWindow = {
@@ -152,9 +169,8 @@ fun TopBar(
             )
             ActionButton(
                 onClickListener = {
-                    context.startActivity(
-                        Intent(context, ModelLoadingActivity::class.java)
-                    )
+                    // Open ModelLoadingActivity which will launch SAF picker automatically
+                    context.startActivity(Intent(context, ModelLoadingActivity::class.java))
                 }, icon = R.drawable.load_model, modifier = Modifier.padding(end = rDp(6.dp))
             )
         }

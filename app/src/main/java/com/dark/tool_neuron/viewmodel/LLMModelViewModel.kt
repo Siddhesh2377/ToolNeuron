@@ -1,8 +1,11 @@
 package com.dark.tool_neuron.viewmodel
 
+import android.app.Application
+import android.net.Uri
 import android.util.Log
-import androidx.lifecycle.ViewModel
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
@@ -23,8 +26,9 @@ import kotlinx.coroutines.launch
 
 @HiltViewModel
 class LLMModelViewModel @Inject constructor(
+    application: Application,
     private val repository: ModelRepository
-) : ViewModel() {
+) : AndroidViewModel(application) {
 
     val installedModels: Flow<List<Model>> = repository.getAllModels()
 
@@ -76,10 +80,22 @@ class LLMModelViewModel @Inject constructor(
     }
 
     private suspend fun loadGgufModel(model: Model, config: ModelConfig) {
-        val success = LlmModelWorker.loadGgufModel(model, config)
+        val success = if (model.pathType == PathType.CONTENT_URI) {
+            // Use FD-based loading for content:// URIs (SAF)
+            val uri = Uri.parse(model.modelPath)
+            LlmModelWorker.loadGgufModelFromUri(
+                context = getApplication(),
+                uri = uri,
+                modelName = model.modelName,
+                modelConfig = config
+            )
+        } else {
+            // Use path-based loading for regular file paths
+            LlmModelWorker.loadGgufModel(model, config)
+        }
 
         if (success) {
-            LlmModelWorker._currentGgufModelId.value = model.id // ADD THIS
+            LlmModelWorker._currentGgufModelId.value = model.id
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)

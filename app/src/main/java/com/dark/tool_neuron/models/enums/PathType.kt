@@ -2,5 +2,6 @@ package com.dark.tool_neuron.models.enums
 
 enum class PathType {
     FILE,
-    DIRECTORY
+    DIRECTORY,
+    CONTENT_URI  // For SAF content:// URIs (Android Storage Access Framework)
 }

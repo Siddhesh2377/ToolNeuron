@@ -18,7 +18,7 @@ class NVApplication : Application() {
         Log.d(TAG, "Application onCreate")
 
         // Initialize app container first
-        AppContainer.init(applicationContext)
+        AppContainer.init(applicationContext, this)
 
         // Bind service with application context (survives configuration changes)
         LlmModelWorker.bindService(applicationContext)

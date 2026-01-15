@@ -8,6 +8,7 @@ interface ILLMService {
 
     //Gguf
     void loadGgufModel(String modelPath, String modelName, String loadingParams, String inferenceParams, IModelLoadCallback callback);
+    void loadGgufModelFromFd(in ParcelFileDescriptor pfd, String modelName, String loadingParams, String inferenceParams, IModelLoadCallback callback);
     void generateGguf(String prompt, int maxTokens, IGgufGenerationCallback callback);
     void stopGenerationGguf();
     void unloadModelGguf();

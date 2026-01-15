@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.worker
 
 import android.annotation.SuppressLint
+import android.content.Context
+import android.net.Uri
 import com.dark.tool_neuron.engine.GGUFEngine
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -9,6 +11,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
 import java.security.MessageDigest
 
 /**
@@ -23,6 +26,41 @@ class ModelDataParser {
             ProviderType.GGUF -> loadGGUFModel(model, config)
             ProviderType.DIFFUSION -> loadDiffusionModel(model, config)
             else -> ModelLoadResult.Error("Unsupported model type: ${model.providerType}")
+        }
+    }
+
+    /**
+     * Load GGUF model from content:// URI using file descriptor
+     */
+    suspend fun loadModelFromUri(
+        context: Context,
+        uri: Uri,
+        modelName: String,
+        config: ModelConfig?
+    ): ModelLoadResult = withContext(Dispatchers.IO) {
+        try {
+            val engine = GGUFEngine()
+
+            // Get FD from content resolver
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+                ?: return@withContext ModelLoadResult.Error("Cannot open file descriptor for URI")
+
+            val fd = pfd.detachFd()  // Detach so engine owns it
+            val success = engine.loadFromFd(fd, config)
+
+            if (success) {
+                val infoJson = engine.getModelInfo()
+                if (infoJson != null) {
+                    val modelInfo = parseGGUFInfo(infoJson)
+                    ModelLoadResult.Success(info = modelInfo, engine = engine)
+                } else {
+                    ModelLoadResult.Error("Failed to retrieve model information")
+                }
+            } else {
+                ModelLoadResult.Error("Failed to load GGUF model from URI")
+            }
+        } catch (e: Exception) {
+            ModelLoadResult.Error("GGUF loading error: ${e.message}")
         }
     }
 
@@ -297,6 +335,44 @@ class ModelDataParser {
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Calculate SHA-256 checksum from content:// URI using content resolver
+     */
+    fun checksumSHA256FromUri(context: Context, uri: Uri): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            val buffer = ByteArray(8 * 1024)
+            var bytesRead: Int
+            while (input.read(buffer).also { bytesRead = it } != -1) {
+                digest.update(buffer, 0, bytesRead)
+            }
+        } ?: throw IllegalArgumentException("Cannot open input stream for URI: $uri")
+        return digest.digest().joinToString("") { "%02x".format(it) }
+    }
+
+    /**
+     * Get file size from content:// URI
+     */
+    fun getFileSizeFromUri(context: Context, uri: Uri): Long {
+        return context.contentResolver.openFileDescriptor(uri, "r")?.use { pfd ->
+            pfd.statSize
+        } ?: 0L
+    }
+
+    /**
+     * Get display name from content:// URI
+     */
+    fun getFileNameFromUri(context: Context, uri: Uri): String {
+        var name = "Unknown Model"
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+            if (cursor.moveToFirst() && nameIndex >= 0) {
+                name = cursor.getString(nameIndex)
+            }
+        }
+        return name
     }
 
     private fun checksumDirectory(dir: File): String {

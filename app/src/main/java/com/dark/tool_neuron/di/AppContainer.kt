@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.di
 
+import android.app.Application
 import android.content.Context
 import com.dark.tool_neuron.database.AppDatabase
 import com.dark.tool_neuron.repo.ChatRepository
@@ -29,7 +30,7 @@ object AppContainer {
     private var generationManager = GenerationManager()
     private var vaultInitialized = false
 
-    fun init(context: Context) {
+    fun init(context: Context, application: Application) {
         database = AppDatabase.getDatabase(context)
 
         modelRepository = ModelRepository(
@@ -38,7 +39,7 @@ object AppContainer {
 
         chatRepository = ChatRepository()
 
-        llmModelViewModelFactory = LLMModelViewModelFactory(modelRepository)
+        llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
         chatViewModelFactory = ChatViewModelFactory(chatManager, generationManager)
 

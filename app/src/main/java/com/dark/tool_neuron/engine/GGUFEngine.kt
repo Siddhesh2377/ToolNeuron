@@ -66,6 +66,54 @@ class GGUFEngine {
     }
 
     /**
+     * Load model from file descriptor (for SAF/content:// URIs)
+     * This allows loading models without MANAGE_EXTERNAL_STORAGE permission
+     *
+     * @param fd File descriptor from contentResolver.openFileDescriptor(uri, "r").detachFd()
+     * @param config Optional model configuration
+     * @return true if model loaded successfully
+     */
+    suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Boolean = withContext(Dispatchers.IO) {
+        if (isLoaded) unload()
+
+        val schema = GgufEngineSchema.fromJson(
+            config?.modelLoadingParams,
+            config?.modelInferenceParams
+        )
+
+        val loading = schema.loadingParams
+        val inference = schema.inferenceParams
+
+        val success = nativeLib.nativeLoadModelFromFd(
+            fd = fd,
+            threads = loading.threads,
+            ctxSize = loading.ctxSize,
+            temp = inference.temperature,
+            topK = inference.topK,
+            topP = inference.topP,
+            minP = inference.minP,
+            mirostat = inference.mirostat,
+            mirostatTau = inference.mirostatTau,
+            mirostatEta = inference.mirostatEta,
+            seed = inference.seed
+        )
+
+        if (success) {
+            isLoaded = true
+            currentModelId = "fd_$fd"
+
+            if (inference.systemPrompt.isNotEmpty()) {
+                nativeLib.nativeSetSystemPrompt(inference.systemPrompt)
+            }
+            if (inference.chatTemplate.isNotEmpty()) {
+                nativeLib.nativeSetChatTemplate(inference.chatTemplate)
+            }
+        }
+
+        success
+    }
+
+    /**
      * Generate tokens as a Flow using callbackFlow
      *
      * This properly handles the callback-to-flow conversion without

@@ -1,10 +1,13 @@
 package com.dark.tool_neuron.activity
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -71,6 +74,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -103,24 +107,15 @@ class ModelLoadingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
-        val modelPath = intent.getStringExtra(ModelPickerActivity.EXTRA_RESULT_FILE_PATH)
-
         setContent {
             NeuroVerseTheme {
                 ModelLoadingScreen(
-                    modelPath = modelPath,
-                    intent = intent,
                     modelParser = modelParser,
                     onEngineLoaded = { loadedEngine = it },
-                    onPickModel = { openModelPicker() },
-                    onClose = { finish() })
+                    onClose = { finish() }
+                )
             }
         }
-    }
-
-    private fun openModelPicker() {
-        startActivity(Intent(this, ModelPickerActivity::class.java))
-        finish()
     }
 
     override fun onDestroy() {
@@ -134,19 +129,32 @@ class ModelLoadingActivity : ComponentActivity() {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ModelLoadingScreen(
-    modelPath: String?,
-    intent: Intent,
     modelParser: ModelDataParser,
     onEngineLoaded: (Any) -> Unit,
-    onPickModel: () -> Unit,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
     var loadingState by remember { mutableStateOf<LoadingState>(LoadingState.Idle) }
     var installState by remember { mutableStateOf<InstallState>(InstallState.NotInstalled) }
     var currentModel by remember { mutableStateOf<Model?>(null) }
+    var selectedUri by remember { mutableStateOf<Uri?>(null) }
     val scope = rememberCoroutineScope()
     val repository = AppContainer.getModelRepository()
     var isProcessing by remember { mutableStateOf(false) }
+
+    // SAF file picker launcher
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            // Persist permission for future access
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            selectedUri = uri
+        }
+    }
 
     // Animated blur effect
     val infiniteTransition = rememberInfiniteTransition(label = "blur_animation")
@@ -160,34 +168,33 @@ fun ModelLoadingScreen(
         label = "blur_radius"
     )
 
-// In ModelLoadingActivity.kt
-    LaunchedEffect(modelPath) {
-        if (modelPath != null) {
-            loadingState = LoadingState.Loading
-            scope.launch(Dispatchers.IO) {
-                isProcessing = true
-                val providerTypeString =
-                    intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
-                val providerType = try {
-                    ProviderType.valueOf(providerTypeString ?: "GGUF")
-                } catch (e: Exception) {
-                    // Fallback: determine by path
-                    if (File(modelPath).isDirectory) ProviderType.DIFFUSION else ProviderType.GGUF
-                }
+    // Function to open file picker
+    fun openFilePicker() {
+        filePickerLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+    }
 
-                val pathType = if (providerType == ProviderType.DIFFUSION) {
-                    PathType.DIRECTORY
-                } else {
-                    PathType.FILE
-                }
+    // Process selected URI
+    LaunchedEffect(selectedUri) {
+        val uri = selectedUri ?: return@LaunchedEffect
+
+        loadingState = LoadingState.Loading
+        scope.launch(Dispatchers.IO) {
+            isProcessing = true
+            try {
+                // Get file info from URI
+                val modelName = modelParser.getFileNameFromUri(context, uri)
+                val fileSize = modelParser.getFileSizeFromUri(context, uri)
+
+                // Calculate hash for deduplication (this reads the entire file)
+                val modelHash = modelParser.checksumSHA256FromUri(context, uri)
 
                 val model = Model(
-                    id = modelParser.checksumSHA256(modelPath),
-                    modelPath = modelPath,
-                    modelName = File(modelPath).name,
-                    pathType = pathType,
-                    providerType = providerType,
-                    fileSize = if (providerType == ProviderType.GGUF) File(modelPath).length() else 0L
+                    id = modelHash,
+                    modelPath = uri.toString(),  // Store the content:// URI string
+                    modelName = modelName,
+                    pathType = PathType.CONTENT_URI,
+                    providerType = ProviderType.GGUF,
+                    fileSize = fileSize
                 )
                 currentModel = model
 
@@ -199,7 +206,8 @@ fun ModelLoadingScreen(
                     InstallState.NotInstalled
                 }
 
-                when (val result = modelParser.loadModel(model, null)) {
+                // Load the model using FD
+                when (val result = modelParser.loadModelFromUri(context, uri, modelName, null)) {
                     is ModelLoadResult.Success -> {
                         onEngineLoaded(result.engine)
                         loadingState = LoadingState.Loaded(result.info)
@@ -209,10 +217,10 @@ fun ModelLoadingScreen(
                         loadingState = LoadingState.Error(result.message)
                     }
                 }
-                isProcessing = false
+            } catch (e: Exception) {
+                loadingState = LoadingState.Error(e.message ?: "Unknown error")
             }
-        } else {
-            loadingState = LoadingState.Idle
+            isProcessing = false
         }
     }
 
@@ -270,6 +278,13 @@ fun ModelLoadingScreen(
         }
     }
 
+    // Auto-launch file picker on first load if no model selected
+    LaunchedEffect(Unit) {
+        if (selectedUri == null && loadingState == LoadingState.Idle) {
+            openFilePicker()
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -306,16 +321,16 @@ fun ModelLoadingScreen(
                 }, label = "loading_state"
             ) { state ->
                 when (state) {
-                    is LoadingState.Idle -> EmptyState(onPickModel)
+                    is LoadingState.Idle -> EmptyState { openFilePicker() }
                     is LoadingState.Loading -> LoadingStateView()
                     is LoadingState.Loaded -> ModelInfoView(
                         info = state.info,
                         installState = installState,
-                        onChangeModel = onPickModel,
+                        onChangeModel = { openFilePicker() },
                         onInstall = { installModel() },
                         onUninstall = { uninstallModel() })
 
-                    is LoadingState.Error -> ErrorStateView(state.message, onPickModel)
+                    is LoadingState.Error -> ErrorStateView(state.message) { openFilePicker() }
                 }
             }
 

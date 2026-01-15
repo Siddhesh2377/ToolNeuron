@@ -7,7 +7,9 @@ import android.content.Intent
 import android.content.ServiceConnection
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.util.Log
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.table_schema.Model
@@ -172,6 +174,53 @@ object LlmModelWorker {
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Exception loading GGUF model", e)
+                continuation.resumeWithException(e)
+            }
+        }
+    }
+
+    /**
+     * Load GGUF model from a content:// URI using file descriptor
+     * This is used for SAF (Storage Access Framework) URIs
+     */
+    suspend fun loadGgufModelFromUri(
+        context: Context,
+        uri: Uri,
+        modelName: String,
+        modelConfig: ModelConfig
+    ): Boolean {
+        val svc = ensureServiceBound()
+
+        // Open ParcelFileDescriptor from content URI
+        val pfd = context.contentResolver.openFileDescriptor(uri, "r")
+            ?: throw IllegalArgumentException("Cannot open file descriptor for URI: $uri")
+
+        return suspendCancellableCoroutine { continuation ->
+            val callback = object : IModelLoadCallback.Stub() {
+                override fun onSuccess() {
+                    _isGgufModelLoaded.value = true
+                    Log.i(TAG, "GGUF model loaded successfully from URI")
+                    continuation.resume(true)
+                }
+
+                override fun onError(message: String) {
+                    _isGgufModelLoaded.value = false
+                    Log.e(TAG, "Failed to load GGUF model from URI: $message")
+                    continuation.resume(false)
+                }
+            }
+
+            try {
+                svc.loadGgufModelFromFd(
+                    pfd,
+                    modelName,
+                    modelConfig.modelLoadingParams ?: "",
+                    modelConfig.modelInferenceParams ?: "",
+                    callback
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Exception loading GGUF model from URI", e)
+                pfd.close()
                 continuation.resumeWithException(e)
             }
         }

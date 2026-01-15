@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
+import android.os.ParcelFileDescriptor
 import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -74,6 +75,42 @@ class LLMService : Service() {
                     }
                 } catch (e: Exception) {
                     AppStateManager.setError(e.message ?: "Unknown error loading model")
+                    callback.onError(e.message ?: "Unknown error")
+                }
+            }
+        }
+
+        override fun loadGgufModelFromFd(
+            pfd: ParcelFileDescriptor,
+            modelName: String,
+            loadingParams: String,
+            inferenceParams: String,
+            callback: IModelLoadCallback
+        ) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    AppStateManager.setLoadingModel(modelName)
+
+                    // Get the native FD and detach it so GGUFEngine can own it
+                    val fd = pfd.detachFd()
+
+                    val config = ModelConfig(
+                        modelId = modelName,
+                        modelLoadingParams = loadingParams,
+                        modelInferenceParams = inferenceParams
+                    )
+
+                    val success = ggufEngine.loadFromFd(fd, config)
+
+                    if (success) {
+                        AppStateManager.setModelLoaded(modelName)
+                        callback.onSuccess()
+                    } else {
+                        AppStateManager.setError("Failed to load model from FD: $modelName")
+                        callback.onError("Failed to load model from file descriptor")
+                    }
+                } catch (e: Exception) {
+                    AppStateManager.setError(e.message ?: "Unknown error loading model from FD")
                     callback.onError(e.message ?: "Unknown error")
                 }
             }
