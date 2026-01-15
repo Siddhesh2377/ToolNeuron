@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Android_8.0%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-1.0_Beta-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
+[![Release](https://img.shields.io/badge/Release-1.1_Stable-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
 <p align="left">
@@ -15,38 +15,18 @@
   </a>
 </p>
 
-ToolNeuron is an **offline-first AI assistant for Android** designed to run large language models and image generation fully on-device.  
-No cloud dependency. No subscriptions. Your data never leaves your phone.
+ToolNeuron is an offline-first AI assistant for Android that runs large language models and image generation completely on-device. No cloud dependencies. No subscriptions. Your data never leaves your phone.
 
-**Core goals**
-- On-device LLM and diffusion inference  
-- Zero telemetry, zero tracking  
-- Works offline by default  
-- Open-source and auditable  
+**What it does:**
+- Run any GGUF text model locally (Llama, Mistral, Gemma, etc.)
+- Generate images with Stable Diffusion 1.5 (censored & uncensored)
+- Encrypted storage with crash recovery
+- Zero telemetry or tracking
+- Works completely offline
 
 [Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
 [Join Discord](https://discord.gg/mVPwHDhrAP) ·
-[Report an Issue](https://github.com/Siddhesh2377/ToolNeuron/issues)
-
----
-
-
-## What It Does
-
-ToolNeuron runs AI models directly on your Android device. Import any GGUF model (Llama, Mistral, Gemma) or Stable Diffusion 1.5 model and start generating text or images completely offline.
-
-**Core Features:**
-- Run any GGUF format language model locally
-- Generate images with Stable Diffusion 1.5 (censored or uncensored)
-- Encrypted local storage for conversations and generated content
-- Custom model configurations and sampling parameters
-- Complete offline operation with zero data transmission
-
-**Privacy Architecture:**
-- All processing occurs on-device
-- AES-256-GCM encryption for stored data
-- No telemetry, no logging, no cloud dependencies
-- Open source for full transparency
+[Report Issue](https://github.com/Siddhesh2377/ToolNeuron/issues)
 
 ---
 
@@ -67,57 +47,101 @@ ToolNeuron runs AI models directly on your Android device. Import any GGUF model
 
 ---
 
+## Features
+
+### Text Generation
+- Run any GGUF model locally (Llama 3, Mistral, Gemma, Phi, etc.)
+- Users report 7-second response times for 8B Q6 models on flagship devices
+- Custom model configurations (temperature, top-k, top-p, context length)
+- Add HuggingFace repositories to browse available models
+- Load local models without storage permissions
+
+### Image Generation
+- Stable Diffusion 1.5 (censored & uncensored variants)
+- Powered by LocalDream
+- 30-90 second generation times depending on device
+- Full control over prompts and parameters
+
+### Privacy & Security
+- Hardware-backed AES-256-GCM encryption (Android KeyStore)
+- Write-Ahead Logging (WAL) for crash recovery
+- LZ4 compression for efficient storage
+- Content deduplication via SHA-256
+- Zero telemetry, analytics, or tracking
+- All processing happens on-device
+
+### Storage & Memory
+- Encrypted conversation history
+- Three-tier caching system (3-5MB during normal use)
+- Memory-mapped model loading
+- Automatic RAM optimization
+- Export conversations and generated images
+
+### Coming Soon
+- RAG system for document injection (nearly complete)
+- Optimized plugin/tool system
+- Text-to-Speech (TTS) and Speech-to-Text (STT)
+- Multi-modal support (vision models)
+
+---
+
 ## Installation
 
-### Requirements
+### System Requirements
 
-**Minimum (Text Generation Only):**
+**Minimum (Text Only):**
 - Android 8.0+ (API 26)
 - 6GB RAM
 - 4GB free storage
 
-**Recommended (Text + Image Generation):**
+**Recommended (Text + Image):**
 - Android 10+
-- 8GB RAM (12GB for smooth operation)
+- 8GB RAM (12GB preferred)
 - 8GB free storage
 - Snapdragon 8 Gen 1 or equivalent
 
-### Install
+### Download
 
-1. Download the latest APK from [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases)
-2. Enable installation from unknown sources in Android settings
-3. Install the APK
-4. Launch ToolNeuron
+**Google Play Store (Recommended):**
+[Get it on Play Store](https://play.google.com/store/apps/details?id=com.dark.tool_neuron)
+
+**Direct APK:**
+Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/releases)
 
 ---
 
 ## Quick Start
 
-### Text Generation
+### 1. Get Models
 
-1. Download a GGUF model from [Hugging Face](https://huggingface.co/models?other=gguf)
-   - Recommended: Llama-3-8B-Q4_K_M.gguf (4.5GB)
-   - Budget: TinyLlama-1.1B-Q4_K_M.gguf (669MB)
+**Option A: Browse Model Store (In-App)**
+- Open ToolNeuron
+- Navigate to Model Store
+- Add HuggingFace repository (e.g., `QuantFactory/Meta-Llama-3-8B-GGUF`)
+- Browse and download models with one tap
 
-2. Open ToolNeuron and navigate to model selection
-3. Import your downloaded GGUF file
-4. Wait for model to load, then start chatting
+**Option B: Manual Download**
+- Visit [Hugging Face GGUF Models](https://huggingface.co/models?other=gguf)
+- Download a model (Recommended: Llama-3-8B-Q4_K_M.gguf)
+- Load in ToolNeuron without needing storage permissions
 
-### Image Generation
+**Recommended Models:**
+- **Budget:** TinyLlama-1.1B-Q4_K_M (669MB)
+- **Balanced:** Llama-3-8B-Q4_K_M (4.5GB)
+- **Quality:** Mistral-7B-Q6_K (6GB)
+- **Medical:** Bio-Medical-Llama-3-8B (find on HF)
 
-1. Download Stable Diffusion 1.5 model (ONNX format)
-   - Censored or uncensored variants available
-   - Model size: ~2GB
+### 2. Generate Text
 
-2. Navigate to image generation settings
-3. Import your SD model
-4. Enter prompt and generate (30-90 seconds depending on device)
+1. Select or import your GGUF model
+2. Wait for model to load
+3. Start chatting
 
-### Model Sources
+### 3. Generate Images
 
-- [Hugging Face GGUF Models](https://huggingface.co/models?other=gguf)
-- [Hugging Face Stable Diffusion](https://huggingface.co/models?other=stable-diffusion)
-- Community-shared models via Discord
+1. Download SD 1.5 model from HuggingFace
+2. Import into ToolNeuron
+3. Enter prompt and generate
 
 ---
 
@@ -125,32 +149,26 @@ ToolNeuron runs AI models directly on your Android device. Import any GGUF model
 
 ### Architecture
 
-**Language:** Kotlin + C++ (JNI bindings)  
-**UI Framework:** Jetpack Compose  
-**Text Inference:** llama.cpp (GGUF support)  
-**Image Inference:** Stable Diffusion 1.5 C++ implementation  
-**Storage:** Room (SQLite) + AES-256-GCM encryption  
-**Async:** Kotlin Coroutines + Flow  
-
-### Memory Management
-
-- Efficient context caching for faster inference
-- Memory-mapped model loading
-- Automatic RAM optimization based on device capabilities
-- Background processing with WorkManager
+**Core:**
+- **Language:** Kotlin + C++ (JNI bindings)
+- **UI:** Jetpack Compose
+- **Text Inference:** llama.cpp
+- **Image Inference:** Stable Diffusion 1.5 (LocalDream)
+- **Storage:** Room + AES-256-GCM encryption
+- **Async:** Kotlin Coroutines + Flow
 
 ### Storage System
 
+The memory system uses:
 - Write-Ahead Logging (WAL) for crash recovery
-- LZ4 compression for efficient storage
-- Content deduplication via SHA-256 hashing
-- Encrypted block storage with hardware-backed keys
+- LZ4 compression for storage efficiency
+- SHA-256 content deduplication
+- Hardware-backed encryption (Android KeyStore)
+- Three-tier caching (L1: Hot cache, L2: Memory-mapped, L3: On-demand)
 
----
+### Performance
 
-## System Performance
-
-**Text Generation (7B GGUF Q4):**
+**Text Generation (8B Q4_K_M):**
 - 6GB RAM: 2-4 tokens/sec
 - 8GB RAM: 4-8 tokens/sec
 - 12GB RAM: 8-15 tokens/sec
@@ -159,50 +177,29 @@ ToolNeuron runs AI models directly on your Android device. Import any GGUF model
 - Mid-range (SD 8 Gen 1): 60-90 seconds
 - Flagship (SD 8 Gen 3): 30-50 seconds
 
-Performance varies based on model size, quantization, and device hardware.
+Performance varies by model size, quantization, and hardware.
 
 ---
 
-## Comparison
+## Use Cases
 
-| Feature | ToolNeuron | Cloud AI Apps | Other Local AI |
-|---------|------------|---------------|----------------|
-| **Text Generation** | Any GGUF model | Cloud only | Limited models |
-| **Image Generation** | SD 1.5 offline | Cloud only | None |
-| **Privacy** | Complete offline | Server logging | Varies |
-| **Cost** | Free | $20+/month | Free/Paid |
-| **Internet Required** | No | Yes | Varies |
-| **Data Encryption** | AES-256-GCM | N/A | Varies |
-| **Open Source** | Apache 2.0 | Proprietary | Varies |
+### Privacy-Critical Applications
+- Medical professionals handling patient data
+- Legal professionals with confidential documents
+- Journalists protecting sources
+- Anyone who values data sovereignty
 
----
+### Offline Scenarios
+- Air travel (no WiFi needed)
+- Remote locations
+- Areas with unreliable internet
+- Avoiding mobile data costs
 
-## Roadmap
-
-### Version 1.0 (Current)
-- Text generation with GGUF models
-- Image generation with SD 1.5
-- Encrypted local storage
-- Custom model loading
-- Conversation history
-
-### Version 1.1 (Q1 2026)
-- Text-to-Speech (TTS) integration
-- Speech-to-Text (STT) support
-- Model quantization tools
-- Performance optimizations
-
-### Version 1.2 (Q2 2026)
-- RAG (Retrieval Augmented Generation) system
-- Plugin architecture
-- Multi-modal support (vision models)
-- Desktop companion app
-
-### Version 2.0 (Q3 2026)
-- ONNX runtime support
-- Multiple inference backends
-- Advanced memory management
-- Collaborative features
+### Creative & Development
+- Writing and brainstorming
+- Code generation and debugging
+- Image generation for content
+- Learning and research
 
 ---
 
@@ -213,10 +210,10 @@ Performance varies based on model size, quantization, and device hardware.
 git clone https://github.com/Siddhesh2377/ToolNeuron.git
 cd ToolNeuron
 
-# Open in Android Studio (latest stable)
+# Open in Android Studio (Ladybug or newer)
 # Sync Gradle dependencies
 
-# Build APK
+# Build release APK
 ./gradlew assembleRelease
 
 # Install on device
@@ -224,67 +221,114 @@ cd ToolNeuron
 ```
 
 **Requirements:**
-- Android Studio Ladybug or newer
+- Android Studio Ladybug+
 - JDK 17
 - Android SDK 34
-- NDK 26.x (for C++ components)
+- NDK 26.x
 
 ---
 
 ## Contributing
 
-Contributions are welcome. Please follow these guidelines:
+Contributions welcome. Focus areas:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/improvement`)
-3. Make your changes with clear commit messages
-4. Test on real Android devices when possible
-5. Submit a Pull Request
-
-**Priority Areas:**
-- Bug fixes and stability improvements
+- Bug fixes and stability
 - Performance optimizations
-- Documentation and examples
 - Device compatibility testing
+- Documentation improvements
 - UI/UX enhancements
+
+**Process:**
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/name`)
+3. Commit with clear messages
+4. Test on real devices
+5. Submit Pull Request
+
+---
+
+## Roadmap
+
+### Version 1.1 (Current - January 2026)
+- ✅ Text generation with any GGUF model
+- ✅ Image generation with SD 1.5
+- ✅ HuggingFace repository integration
+- ✅ Encrypted memory system with WAL
+- ✅ Model configuration editor
+- 🚧 RAG system (nearly complete)
+- 🚧 Plugin/tool system (in progress)
+
+### Version 1.2 (Q1 2026)
+- RAG document injection system
+- Optimized plugin architecture
+- Text-to-Speech (TTS) integration
+- Speech-to-Text (STT) support
+
+### Version 1.3 (Q2 2026)
+- Multi-modal support (vision models)
+- Additional model formats (ONNX, TFLite)
+- Desktop companion app
+- Advanced memory management
+
+---
+
+## Comparison
+
+| Feature | ToolNeuron | Cloud AI Apps | Other Local AI |
+|---------|------------|---------------|----------------|
+| Text Generation | Any GGUF | Cloud only | Limited |
+| Image Generation | SD 1.5 offline | Cloud only | Rare |
+| Privacy | Complete offline | Server logging | Varies |
+| Cost | Free | $20+/month | Varies |
+| Internet | Not required | Required | Varies |
+| Encryption | AES-256-GCM | N/A | Varies |
+| Open Source | Apache 2.0 | Proprietary | Varies |
+| Storage Permissions | Not needed | N/A | Usually needed |
 
 ---
 
 ## Privacy & Security
 
 ### Data Collection
-ToolNeuron collects **zero data**. All processing occurs entirely on your device.
+**Zero data collection.** All processing happens on your device.
 
 ### What Stays Local
-- All conversations and chat history
-- Generated images and content
+- All conversations
+- Generated images
 - Model configurations
 - User preferences
 
 ### Encryption
-- AES-256-GCM for all stored data
-- Hardware-backed key storage (Android KeyStore)
-- Encrypted database for conversations
+- AES-256-GCM encryption for stored data
+- Hardware-backed keys (Android KeyStore)
+- Encrypted conversation database
+- Secure memory management
 
 ### Verification
-ToolNeuron is fully open source. Audit the code yourself or review community security assessments.
+Fully open source. Audit the code or review community security assessments.
+
+---
+
+## Community Testimonials
+
+> "The only LLM frontend capable of running 8B Q6 models on my hardware with lightspeed loading. I'm in military healthcare and privacy is critical. ToolNeuron is the only app that meets my requirements."  
+> — Senior Healthcare Professional, Netherlands
 
 ---
 
 ## License
 
-Licensed under the Apache License 2.0. See [LICENSE](LICENSE) for details.
+Apache License 2.0. See [LICENSE](LICENSE) for details.
 
-**Commercial Use Permitted:** Use ToolNeuron in commercial products without restrictions.
+**Commercial use permitted.** Use ToolNeuron in commercial products without restrictions.
 
 ---
 
 ## Acknowledgments
 
-Built with these open-source projects:
-
-- [llama.cpp](https://github.com/ggerganov/llama.cpp) by Georgi Gerganov - Efficient LLM inference
-- [local-dream](https://github.com/xororz/local-dream) - Text-to-image generation
+Built with:
+- [llama.cpp](https://github.com/ggerganov/llama.cpp) - Efficient LLM inference
+- [LocalDream](https://github.com/xororz/local-dream) - Stable Diffusion on Android
 - [Jetpack Compose](https://developer.android.com/jetpack/compose) - Modern Android UI
 
 ---
@@ -292,30 +336,33 @@ Built with these open-source projects:
 ## Support
 
 - **Discord:** [Join Community](https://discord.gg/mVPwHDhrAP)
-- **Issues:** [Report Bug](https://github.com/Siddhesh2377/ToolNeuron/issues)
+- **GitHub Issues:** [Report Bug](https://github.com/Siddhesh2377/ToolNeuron/issues)
 - **Email:** siddheshsonar2377@gmail.com
 
 ---
 
 ## FAQ
 
-**Q: Does this work offline?**  
-A: Yes. All AI processing happens on your device with zero internet requirement.
+**Q: Does this really work offline?**  
+A: Yes. After downloading models, all AI processing happens on your device with zero internet dependency.
 
 **Q: How much storage do I need?**  
-A: Depends on models you use. Budget 5-8GB for typical setup (one 7B GGUF + SD 1.5).
+A: 5-8GB for typical setup (one 7B GGUF + SD 1.5). Models range from 500MB to 10GB+.
 
 **Q: Will this drain my battery?**  
-A: Local AI is power-intensive. Keep device charged during long sessions.
+A: Local AI is power-intensive. Keep device charged during extended use.
 
-**Q: Is my data private?**  
+**Q: Is my data actually private?**  
 A: Yes. Nothing leaves your device. Verify in the open-source code.
 
-**Q: Can I use my own models?**  
-A: Yes. Any GGUF format model or SD 1.5 checkpoint works.
+**Q: Can I use custom models?**  
+A: Yes. Any GGUF text model or SD 1.5 checkpoint works.
+
+**Q: Why don't you need storage permissions?**  
+A: Android scoped storage allows direct model loading without broad storage access.
 
 **Q: Why is image generation slow?**  
-A: SD 1.5 is computationally expensive. 30-90 seconds is normal on mobile hardware.
+A: SD 1.5 is computationally expensive. 30-90 seconds is normal for mobile hardware.
 
 ---
 
