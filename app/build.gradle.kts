@@ -22,7 +22,7 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 10
+        versionCode = 11
         versionName = "1.0.1"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
