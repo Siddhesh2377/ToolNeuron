@@ -6,9 +6,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.ml.shubham0204.sentence_embeddings.SentenceEmbedding
+import com.dark.tool_neuron.engine.EmbeddingConfig
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
@@ -44,7 +46,7 @@ data class PersonProfile(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DataPackScreen() {
-
+    val context = LocalContext.current
     var modelStatus by remember { mutableStateOf("Not Initialized") }
     var searchQuery by remember { mutableStateOf("") }
     var searchResults by remember { mutableStateOf("") }
@@ -52,7 +54,7 @@ fun DataPackScreen() {
     var errorMessage by remember { mutableStateOf("") }
 
     val scope = rememberCoroutineScope()
-    val sentenceEmbedding = remember { SentenceEmbedding() }
+    val embeddingEngine = remember { EmbeddingEngine() }
 
     // Sample dataset
     val profiles = remember {
@@ -103,28 +105,23 @@ fun DataPackScreen() {
                         errorMessage = ""
 
                         try {
-                            val modelFile = File("/storage/emulated/0/Download/Models/embedding/model_fp16.onnx")
-                            val tokenizerFile = File("/storage/emulated/0/Download/Models/embedding/tokenizer.json")
+                            val modelPath = EmbeddingEngine.getModelPath(context)
 
-                            if (!modelFile.exists() || !tokenizerFile.exists()) {
-                                throw Exception("Model files not found")
+                            if (!modelPath.exists()) {
+                                throw Exception("Model file not found")
                             }
 
-                            val tokenizerBytes = tokenizerFile.readBytes()
-
-                            sentenceEmbedding.init(
-                                modelFilepath = modelFile.absolutePath,
-                                tokenizerBytes = tokenizerBytes,
-                                useTokenTypeIds = true,
-                                outputTensorName = "sentence_embedding",
-                                useFP16 = false,
-                                useXNNPack = false,
-                                normalizeEmbeddings = true
+                            val config = EmbeddingConfig(
+                                modelPath = modelPath.absolutePath
                             )
 
-                            // Generate embeddings for all profiles
+                            val result = embeddingEngine.initialize(config)
+                            if (result.isFailure) {
+                                throw result.exceptionOrNull() ?: Exception("Initialization failed")
+                            }
+
                             profiles.forEach { profile ->
-                                profile.embedding = sentenceEmbedding.encode(profile.description)
+                                profile.embedding = embeddingEngine.embed(profile.description)
                             }
 
                             modelStatus = "Ready (${profiles.size} profiles loaded)"
@@ -172,8 +169,8 @@ fun DataPackScreen() {
                         errorMessage = ""
 
                         try {
-                            // Generate embedding for search query
-                            val queryEmbedding = sentenceEmbedding.encode(searchQuery)
+                            val queryEmbedding = embeddingEngine.embed(searchQuery)
+                                ?: throw Exception("Failed to generate query embedding")
 
                             // Calculate similarity with all profiles
                             val results = profiles.map { profile ->

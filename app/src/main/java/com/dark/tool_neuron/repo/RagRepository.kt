@@ -75,9 +75,14 @@ class RagRepository(
      * so the UI correctly reflects that no RAGs are loaded.
      */
     suspend fun syncLoadedStateOnStartup() = withContext(Dispatchers.IO) {
-        // Mark all RAGs that were marked as LOADED in DB as INSTALLED
-        // since we don't have them in memory anymore
-        ragDao.unloadAllRags()
+        // Only unload RAGs from DB if they're not actually loaded in memory
+        // This prevents unloading RAGs when ViewModel is recreated during navigation
+        if (loadedGraphs.isEmpty()) {
+            android.util.Log.d("RagRepository", "No RAGs in memory, marking all as unloaded in DB")
+            ragDao.unloadAllRags()
+        } else {
+            android.util.Log.d("RagRepository", "Found ${loadedGraphs.size} RAGs in memory, keeping DB state")
+        }
     }
 
     suspend fun getRagCount(): Int = ragDao.getRagCount()
@@ -301,6 +306,11 @@ class RagRepository(
                 return@withContext Result.failure(Exception("RAG file not found"))
             }
 
+            // Check if encrypted RAG is being loaded without password
+            if (rag.sourceType == RagSourceType.NEURON_PACKET && password == null) {
+                return@withContext Result.failure(Exception("This RAG is encrypted. Please provide a password to load it."))
+            }
+
             // For neuron packets, we need to decrypt
             if (rag.sourceType == RagSourceType.NEURON_PACKET && password != null) {
                 val packetManager = NeuronPacketManager()
@@ -350,17 +360,187 @@ class RagRepository(
     ): List<Pair<InstalledRag, List<com.dark.tool_neuron.neuron_example.QueryResult>>> = withContext(Dispatchers.IO) {
         val results = mutableListOf<Pair<InstalledRag, List<com.dark.tool_neuron.neuron_example.QueryResult>>>()
 
+        android.util.Log.d("RagRepository", "Querying ${loadedGraphs.size} loaded graphs for: $query")
+
         for ((ragId, graph) in loadedGraphs) {
             val rag = ragDao.getById(ragId) ?: continue
-            if (!rag.isEnabled) continue
+            android.util.Log.d("RagRepository", "Checking RAG: ${rag.name}, isEnabled: ${rag.isEnabled}, nodeCount: ${graph.nodeCount}")
+
+            if (!rag.isEnabled) {
+                android.util.Log.w("RagRepository", "Skipping disabled RAG: ${rag.name}")
+                continue
+            }
 
             val queryResults = graph.query(query, topK)
+            android.util.Log.d("RagRepository", "RAG ${rag.name} returned ${queryResults.size} results")
+
             if (queryResults.isNotEmpty()) {
                 results.add(rag to queryResults)
             }
         }
 
+        android.util.Log.d("RagRepository", "Total RAGs with results: ${results.size}")
         results
+    }
+
+    suspend fun createSecureRagFromText(
+        name: String,
+        description: String,
+        text: String,
+        graph: NeuronGraph,
+        domain: String = "general",
+        tags: List<String> = emptyList(),
+        adminPassword: String,
+        readOnlyUsers: List<com.neuronpacket.UserCredentials> = emptyList(),
+        loadingMode: com.neuronpacket.LoadingMode = com.neuronpacket.LoadingMode.EMBEDDED,
+        onProgress: (Float, String) -> Unit = { _, _ -> }
+    ): Result<InstalledRag> = withContext(Dispatchers.IO) {
+        try {
+            onProgress(0.1f, "Adding text to graph...")
+            val addResult = graph.addText(text, name)
+            if (addResult.isFailure) {
+                return@withContext Result.failure(addResult.exceptionOrNull() ?: Exception("Failed to add text"))
+            }
+
+            val nodes = addResult.getOrThrow()
+            onProgress(0.5f, "Serializing graph...")
+
+            val payload = graph.serialize()
+            val ragId = java.util.UUID.randomUUID().toString()
+            val destFile = File(ragsDir, "$ragId.neuron")
+
+            onProgress(0.7f, "Encrypting RAG...")
+            val packetManager = NeuronPacketManager()
+            val metadata = com.neuronpacket.PacketMetadata(
+                packetId = ragId,
+                name = name,
+                description = description,
+                domain = domain,
+                tags = tags,
+                loadingMode = loadingMode
+            )
+
+            val config = com.neuronpacket.ExportConfig(
+                adminPassword = adminPassword,
+                readOnlyUsers = readOnlyUsers,
+                loadingMode = loadingMode,
+                compress = true
+            )
+
+            val exportResult = packetManager.export(destFile, metadata, payload, config)
+            if (exportResult.isFailure) {
+                return@withContext Result.failure(exportResult.exceptionOrNull() ?: Exception("Export failed"))
+            }
+
+            onProgress(0.9f, "Saving to database...")
+            val ragInfo = InstalledRag(
+                id = ragId,
+                name = name,
+                description = description,
+                sourceType = RagSourceType.NEURON_PACKET,
+                filePath = destFile.absolutePath,
+                nodeCount = nodes.size,
+                embeddingDimension = graph.getEmbeddingDimension(),
+                embeddingModel = graph.getEmbeddingModelName(),
+                domain = domain,
+                tags = tags.joinToString(","),
+                status = RagStatus.INSTALLED,
+                isEnabled = false,
+                sizeBytes = destFile.length(),
+                isEncrypted = true,
+                loadingMode = loadingMode.value,
+                hasAdminAccess = true
+            )
+
+            ragDao.insert(ragInfo)
+            onProgress(1.0f, "Complete!")
+            Result.success(ragInfo)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun createSecureRagFromFile(
+        name: String,
+        description: String,
+        fileUri: Uri,
+        graph: NeuronGraph,
+        domain: String = "general",
+        tags: List<String> = emptyList(),
+        adminPassword: String,
+        readOnlyUsers: List<com.neuronpacket.UserCredentials> = emptyList(),
+        loadingMode: com.neuronpacket.LoadingMode = com.neuronpacket.LoadingMode.EMBEDDED,
+        onProgress: (Float, String) -> Unit = { _, _ -> }
+    ): Result<InstalledRag> = withContext(Dispatchers.IO) {
+        try {
+            onProgress(0.1f, "Reading file...")
+            val inputStream = context.contentResolver.openInputStream(fileUri)
+                ?: return@withContext Result.failure(Exception("Cannot open file"))
+
+            val content = inputStream.bufferedReader().use { it.readText() }
+
+            onProgress(0.3f, "Adding content to graph...")
+            val addResult = graph.addText(content, name)
+            if (addResult.isFailure) {
+                return@withContext Result.failure(addResult.exceptionOrNull() ?: Exception("Failed to add file content"))
+            }
+
+            val nodes = addResult.getOrThrow()
+            onProgress(0.6f, "Serializing graph...")
+
+            val payload = graph.serialize()
+            val ragId = java.util.UUID.randomUUID().toString()
+            val destFile = File(ragsDir, "$ragId.neuron")
+
+            onProgress(0.8f, "Encrypting RAG...")
+            val packetManager = NeuronPacketManager()
+            val metadata = com.neuronpacket.PacketMetadata(
+                packetId = ragId,
+                name = name,
+                description = description,
+                domain = domain,
+                tags = tags,
+                loadingMode = loadingMode
+            )
+
+            val config = com.neuronpacket.ExportConfig(
+                adminPassword = adminPassword,
+                readOnlyUsers = readOnlyUsers,
+                loadingMode = loadingMode,
+                compress = true
+            )
+
+            val exportResult = packetManager.export(destFile, metadata, payload, config)
+            if (exportResult.isFailure) {
+                return@withContext Result.failure(exportResult.exceptionOrNull() ?: Exception("Export failed"))
+            }
+
+            onProgress(0.95f, "Saving to database...")
+            val ragInfo = InstalledRag(
+                id = ragId,
+                name = name,
+                description = description,
+                sourceType = RagSourceType.NEURON_PACKET,
+                filePath = destFile.absolutePath,
+                nodeCount = nodes.size,
+                embeddingDimension = graph.getEmbeddingDimension(),
+                embeddingModel = graph.getEmbeddingModelName(),
+                domain = domain,
+                tags = tags.joinToString(","),
+                status = RagStatus.INSTALLED,
+                isEnabled = false,
+                sizeBytes = destFile.length(),
+                isEncrypted = true,
+                loadingMode = loadingMode.value,
+                hasAdminAccess = true
+            )
+
+            ragDao.insert(ragInfo)
+            onProgress(1.0f, "Complete!")
+            Result.success(ragInfo)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 
     // ==================== Utility ====================

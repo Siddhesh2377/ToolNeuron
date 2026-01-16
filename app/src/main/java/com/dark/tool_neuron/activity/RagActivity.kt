@@ -45,9 +45,14 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -83,6 +88,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -94,11 +101,13 @@ import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
+import com.dark.tool_neuron.ui.screen.SecureRagCreationScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -130,6 +139,8 @@ fun RagScreen(
     var showCreateSheet by remember { mutableStateOf(false) }
     var showDetailSheet by remember { mutableStateOf(false) }
     var selectedRagDetail by remember { mutableStateOf<InstalledRag?>(null) }
+    var showPasswordDialog by remember { mutableStateOf(false) }
+    var ragToLoad by remember { mutableStateOf<String?>(null) }
 
     val installedRags by ragViewModel.installedRags.collectAsStateWithLifecycle()
     val loadedRags by ragViewModel.loadedRags.collectAsStateWithLifecycle()
@@ -230,29 +241,31 @@ fun RagScreen(
 
             // Error display
             error?.let { errorMsg ->
-                Surface(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(rDp(8.dp)),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(rDp(8.dp))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(rDp(12.dp)),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                if (errorMsg != null){
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(rDp(8.dp)),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        shape = RoundedCornerShape(rDp(8.dp))
                     ) {
-                        Text(
-                            text = errorMsg,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { ragViewModel.clearError() }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
+                        Row(
+                            modifier = Modifier.padding(rDp(12.dp)),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = errorMsg,
+                                color = MaterialTheme.colorScheme.onErrorContainer,
+                                modifier = Modifier.weight(1f)
                             )
+                            IconButton(onClick = { ragViewModel.clearError() }) {
+                                Icon(
+                                    Icons.Default.Close,
+                                    contentDescription = "Dismiss",
+                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
                         }
                     }
                 }
@@ -282,9 +295,18 @@ fun RagScreen(
                             showDetailSheet = true
                         },
                         onToggleEnabled = { id, enabled -> ragViewModel.toggleRagEnabled(id, enabled) },
-                        onLoad = { ragViewModel.loadRag(it) },
+                        onLoad = { ragId ->
+                            val rag = installedRags.find { it.id == ragId }
+                            if (rag?.isEncrypted == true) {
+                                ragToLoad = ragId
+                                showPasswordDialog = true
+                            } else {
+                                ragViewModel.loadRag(ragId)
+                            }
+                        },
                         onUnload = { ragViewModel.unloadRag(it) },
-                        onDelete = { ragViewModel.deleteRag(it) }
+                        onDelete = { ragViewModel.deleteRag(it) },
+                        onShare = { rag -> shareRag(context, rag) }
                     )
                     1 -> RagListContent(
                         rags = loadedRags,
@@ -295,12 +317,22 @@ fun RagScreen(
                             showDetailSheet = true
                         },
                         onToggleEnabled = { id, enabled -> ragViewModel.toggleRagEnabled(id, enabled) },
-                        onLoad = { ragViewModel.loadRag(it) },
+                        onLoad = { ragId ->
+                            val rag = loadedRags.find { it.id == ragId }
+                            if (rag?.isEncrypted == true) {
+                                ragToLoad = ragId
+                                showPasswordDialog = true
+                            } else {
+                                ragViewModel.loadRag(ragId)
+                            }
+                        },
                         onUnload = { ragViewModel.unloadRag(it) },
-                        onDelete = { ragViewModel.deleteRag(it) }
+                        onDelete = { ragViewModel.deleteRag(it) },
+                        onShare = { rag -> shareRag(context, rag) }
                     )
-                    2 -> CreateRagContent(
+                    2 -> SecureRagCreationScreen(
                         ragViewModel = ragViewModel,
+                        padding = PaddingValues(0.dp),
                         onRagCreated = { selectedTab = 0 }
                     )
                 }
@@ -328,16 +360,73 @@ fun RagScreen(
                     showDetailSheet = false
                     selectedRagDetail = null
                 },
-                onLoad = { ragViewModel.loadRag(rag.id) },
+                onLoad = {
+                    if (rag.isEncrypted) {
+                        ragToLoad = rag.id
+                        showPasswordDialog = true
+                    } else {
+                        ragViewModel.loadRag(rag.id)
+                    }
+                },
                 onUnload = { ragViewModel.unloadRag(rag.id) },
                 onDelete = {
                     ragViewModel.deleteRag(rag.id)
                     showDetailSheet = false
                     selectedRagDetail = null
+                },
+                onShare = {
+                    shareRag(context, rag)
                 }
             )
         }
     }
+
+    // Password Dialog for encrypted RAGs
+    if (showPasswordDialog && ragToLoad != null) {
+        PasswordDialog(
+            onDismiss = {
+                showPasswordDialog = false
+                ragToLoad = null
+            },
+            onConfirm = { password ->
+                ragViewModel.loadRag(ragToLoad!!, password)
+                showPasswordDialog = false
+                ragToLoad = null
+            }
+        )
+    }
+}
+
+private fun shareRag(context: android.content.Context, rag: InstalledRag) {
+    val ragFile = File(rag.filePath)
+    if (!ragFile.exists()) {
+        android.widget.Toast.makeText(context, "RAG file not found", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val uri = androidx.core.content.FileProvider.getUriForFile(
+        context,
+        "${context.packageName}.fileprovider",
+        ragFile
+    )
+
+    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+        type = "application/octet-stream"
+        putExtra(Intent.EXTRA_STREAM, uri)
+        putExtra(Intent.EXTRA_SUBJECT, rag.name)
+        putExtra(Intent.EXTRA_TEXT, buildString {
+            append("${rag.name}\n")
+            if (rag.description.isNotBlank()) {
+                append("${rag.description}\n\n")
+            }
+            append("Nodes: ${rag.nodeCount}\n")
+            append("Size: ${rag.getFormattedSize()}\n")
+            append("Domain: ${rag.domain}")
+        })
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    }
+
+    context.startActivity(Intent.createChooser(shareIntent, "Share RAG"))
 }
 
 @Composable
@@ -349,7 +438,8 @@ private fun RagListContent(
     onToggleEnabled: (String, Boolean) -> Unit,
     onLoad: (String) -> Unit,
     onUnload: (String) -> Unit,
-    onDelete: (String) -> Unit
+    onDelete: (String) -> Unit,
+    onShare: ((InstalledRag) -> Unit)? = null
 ) {
     if (rags.isEmpty()) {
         EmptyRagListState(message = emptyMessage, subMessage = emptySubMessage)
@@ -366,7 +456,8 @@ private fun RagListContent(
                     onToggleEnabled = { onToggleEnabled(rag.id, it) },
                     onLoad = { onLoad(rag.id) },
                     onUnload = { onUnload(rag.id) },
-                    onDelete = { onDelete(rag.id) }
+                    onDelete = { onDelete(rag.id) },
+                    onShare = onShare?.let { { it(rag) } }
                 )
             }
         }
@@ -412,7 +503,8 @@ private fun RagCard(
     onToggleEnabled: (Boolean) -> Unit,
     onLoad: () -> Unit,
     onUnload: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onShare: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
@@ -564,6 +656,16 @@ private fun RagCard(
                         }
                     }
 
+                    onShare?.let { shareAction ->
+                        IconButton(onClick = shareAction) {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = "Share",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+
                     IconButton(onClick = onDelete) {
                         Icon(
                             Icons.Default.Delete,
@@ -628,558 +730,6 @@ private fun TagChip(tag: String) {
     }
 }
 
-@Composable
-private fun CreateRagContent(
-    ragViewModel: RagViewModel,
-    onRagCreated: () -> Unit
-) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var selectedSourceType by remember { mutableStateOf<RagSourceType?>(null) }
-    var ragName by remember { mutableStateOf("") }
-    var ragDescription by remember { mutableStateOf("") }
-    var ragContent by remember { mutableStateOf("") }
-    var ragDomain by remember { mutableStateOf("general") }
-    var ragTags by remember { mutableStateOf("") }
-    var selectedFileUri by remember { mutableStateOf<Uri?>(null) }
-    var filePreviewContent by remember { mutableStateOf<String?>(null) }
-    var selectedChatId by remember { mutableStateOf<String?>(null) }
-    var selectedChatMessages by remember { mutableStateOf<List<com.dark.tool_neuron.models.messages.Messages>>(emptyList()) }
-
-    val isLoading by ragViewModel.isLoading.collectAsStateWithLifecycle()
-    val availableChats by ragViewModel.availableChats.collectAsStateWithLifecycle()
-    val embeddingStatus by ragViewModel.embeddingStatus.collectAsStateWithLifecycle()
-    val isEmbeddingInitialized by ragViewModel.isEmbeddingInitialized.collectAsStateWithLifecycle()
-
-    // Load chats when Chat source type is selected
-    LaunchedEffect(selectedSourceType) {
-        if (selectedSourceType == RagSourceType.CHAT) {
-            ragViewModel.loadAvailableChats()
-        }
-    }
-
-    // Read file content when file is selected
-    LaunchedEffect(selectedFileUri) {
-        selectedFileUri?.let { uri ->
-            filePreviewContent = ragViewModel.readFileContent(uri)
-        }
-    }
-
-    // File picker for file-based RAG creation
-    val filePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            selectedFileUri = uri
-        }
-    }
-
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding(),
-        contentPadding = PaddingValues(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
-    ) {
-        // Header
-        item {
-            Text(
-                text = "Create New RAG",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(rDp(4.dp)))
-            Text(
-                text = "Select a source type and provide content to create a RAG package",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Embedding Status Banner
-        item {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = if (isEmbeddingInitialized)
-                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                else
-                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(8.dp))
-            ) {
-                Row(
-                    modifier = Modifier.padding(rDp(12.dp)),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = if (isEmbeddingInitialized) Icons.Default.Check else Icons.Default.Close,
-                        contentDescription = null,
-                        modifier = Modifier.size(rDp(20.dp)),
-                        tint = if (isEmbeddingInitialized)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.error
-                    )
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Embedding Model",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = embeddingStatus,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    if (!isEmbeddingInitialized) {
-                        TextButton(onClick = { ragViewModel.initializeEmbeddingFromAssets() }) {
-                            Text("Initialize")
-                        }
-                    }
-                }
-            }
-        }
-
-        // Source Type Selection
-        item {
-            Text(
-                text = "Source Type",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-            ) {
-                SourceTypeCard(
-                    title = "Text",
-                    icon = Icons.Default.Book,
-                    description = "Plain text content",
-                    isSelected = selectedSourceType == RagSourceType.TEXT,
-                    onClick = { selectedSourceType = RagSourceType.TEXT },
-                    modifier = Modifier.weight(1f)
-                )
-                SourceTypeCard(
-                    title = "File",
-                    icon = Icons.Default.Description,
-                    description = "From text file",
-                    isSelected = selectedSourceType == RagSourceType.FILE,
-                    onClick = { selectedSourceType = RagSourceType.FILE },
-                    modifier = Modifier.weight(1f)
-                )
-                SourceTypeCard(
-                    title = "Chat",
-                    icon = Icons.Default.Chat,
-                    description = "From conversations",
-                    isSelected = selectedSourceType == RagSourceType.CHAT,
-                    onClick = { selectedSourceType = RagSourceType.CHAT },
-                    modifier = Modifier.weight(1f)
-                )
-            }
-        }
-
-        // Form Fields
-        item {
-            AnimatedVisibility(visible = selectedSourceType != null) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(16.dp))) {
-                    OutlinedTextField(
-                        value = ragName,
-                        onValueChange = { ragName = it },
-                        label = { Text("Name") },
-                        placeholder = { Text("Enter RAG name") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = ragDescription,
-                        onValueChange = { ragDescription = it },
-                        label = { Text("Description") },
-                        placeholder = { Text("Brief description of this RAG") },
-                        modifier = Modifier.fillMaxWidth(),
-                        minLines = 2,
-                        maxLines = 4
-                    )
-
-                    OutlinedTextField(
-                        value = ragDomain,
-                        onValueChange = { ragDomain = it },
-                        label = { Text("Domain") },
-                        placeholder = { Text("e.g., general, technical, personal") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    OutlinedTextField(
-                        value = ragTags,
-                        onValueChange = { ragTags = it },
-                        label = { Text("Tags (comma separated)") },
-                        placeholder = { Text("tag1, tag2, tag3") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-
-                    // Content input based on source type
-                    when (selectedSourceType) {
-                        RagSourceType.TEXT -> {
-                            OutlinedTextField(
-                                value = ragContent,
-                                onValueChange = { ragContent = it },
-                                label = { Text("Content") },
-                                placeholder = { Text("Enter or paste your text content here...") },
-                                modifier = Modifier.fillMaxWidth(),
-                                minLines = 6,
-                                maxLines = 12
-                            )
-                        }
-                        RagSourceType.FILE -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-                                Button(
-                                    onClick = { filePicker.launch(arrayOf("text/*", "application/pdf")) },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Icon(Icons.Default.Description, contentDescription = null)
-                                    Spacer(modifier = Modifier.width(rDp(8.dp)))
-                                    Text(if (selectedFileUri != null) "Change File" else "Select File")
-                                }
-
-                                selectedFileUri?.let { uri ->
-                                    Text(
-                                        text = "Selected: ${uri.lastPathSegment}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-
-                                    // File content preview
-                                    filePreviewContent?.let { content ->
-                                        Text(
-                                            text = "Preview",
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.SemiBold
-                                        )
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            color = MaterialTheme.colorScheme.surfaceVariant,
-                                            shape = RoundedCornerShape(rDp(8.dp))
-                                        ) {
-                                            Column(modifier = Modifier.padding(rDp(12.dp))) {
-                                                Text(
-                                                    text = content.take(1000) + if (content.length > 1000) "..." else "",
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    maxLines = 15,
-                                                    overflow = TextOverflow.Ellipsis
-                                                )
-                                                if (content.length > 1000) {
-                                                    Spacer(modifier = Modifier.height(rDp(4.dp)))
-                                                    Text(
-                                                        text = "${content.length} characters total",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        RagSourceType.CHAT -> {
-                            Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-                                Text(
-                                    text = "Select a Chat",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-
-                                if (availableChats.isEmpty()) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(rDp(8.dp))
-                                    ) {
-                                        Text(
-                                            text = "No chats available. Start a conversation first.",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(rDp(16.dp)),
-                                            textAlign = TextAlign.Center
-                                        )
-                                    }
-                                } else {
-                                    availableChats.forEach { chat ->
-                                        ChatSelectionCard(
-                                            chatInfo = chat,
-                                            isSelected = selectedChatId == chat.chatId,
-                                            onClick = {
-                                                selectedChatId = chat.chatId
-                                                scope.launch {
-                                                    selectedChatMessages = ragViewModel.getChatMessages(chat.chatId)
-                                                    if (ragName.isBlank()) {
-                                                        ragName = chat.chatId.ifBlank { "Chat ${chat.chatId.take(8)}" }
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    }
-                                }
-
-                                // Show selected chat preview
-                                if (selectedChatId != null && selectedChatMessages.isNotEmpty()) {
-                                    Spacer(modifier = Modifier.height(rDp(8.dp)))
-                                    Text(
-                                        text = "Chat Preview (${selectedChatMessages.size} messages)",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Surface(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        color = MaterialTheme.colorScheme.surfaceVariant,
-                                        shape = RoundedCornerShape(rDp(8.dp))
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(rDp(12.dp)),
-                                            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                                        ) {
-                                            selectedChatMessages.take(5).forEach { msg ->
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                                                ) {
-                                                    Text(
-                                                        text = if (msg.role == com.dark.tool_neuron.models.messages.Role.User) "You:" else "AI:",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = if (msg.role == com.dark.tool_neuron.models.messages.Role.User)
-                                                            MaterialTheme.colorScheme.primary
-                                                        else
-                                                            MaterialTheme.colorScheme.tertiary
-                                                    )
-                                                    Text(
-                                                        text = msg.content.content.take(100) + if (msg.content.content.length > 100) "..." else "",
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                        maxLines = 2,
-                                                        overflow = TextOverflow.Ellipsis
-                                                    )
-                                                }
-                                            }
-                                            if (selectedChatMessages.size > 5) {
-                                                Text(
-                                                    text = "... and ${selectedChatMessages.size - 5} more messages",
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        else -> {}
-                    }
-                }
-            }
-        }
-
-        // Create Button
-        item {
-            AnimatedVisibility(visible = selectedSourceType != null) {
-                val canCreate = !isLoading && ragName.isNotBlank() && isEmbeddingInitialized && when (selectedSourceType) {
-                    RagSourceType.TEXT -> ragContent.isNotBlank()
-                    RagSourceType.FILE -> selectedFileUri != null
-                    RagSourceType.CHAT -> selectedChatId != null && selectedChatMessages.isNotEmpty()
-                    else -> false
-                }
-
-                Button(
-                    onClick = {
-                        val tags = ragTags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-                        when (selectedSourceType) {
-                            RagSourceType.TEXT -> {
-                                ragViewModel.createRagFromText(
-                                    name = ragName,
-                                    description = ragDescription,
-                                    text = ragContent,
-                                    domain = ragDomain,
-                                    tags = tags
-                                ) { result ->
-                                    if (result.isSuccess) {
-                                        onRagCreated()
-                                    }
-                                }
-                            }
-                            RagSourceType.FILE -> {
-                                selectedFileUri?.let { uri ->
-                                    ragViewModel.createRagFromFile(
-                                        name = ragName,
-                                        description = ragDescription,
-                                        fileUri = uri,
-                                        domain = ragDomain,
-                                        tags = tags
-                                    ) { result ->
-                                        if (result.isSuccess) {
-                                            onRagCreated()
-                                        }
-                                    }
-                                }
-                            }
-                            RagSourceType.CHAT -> {
-                                selectedChatId?.let { chatId ->
-                                    ragViewModel.createRagFromChat(
-                                        name = ragName,
-                                        description = ragDescription,
-                                        chatId = chatId,
-                                        messages = selectedChatMessages,
-                                        domain = ragDomain,
-                                        tags = tags
-                                    ) { result ->
-                                        if (result.isSuccess) {
-                                            onRagCreated()
-                                        }
-                                    }
-                                }
-                            }
-                            else -> {}
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = canCreate
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(rDp(20.dp)),
-                            strokeWidth = rDp(2.dp),
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(modifier = Modifier.width(rDp(8.dp)))
-                        Text("Create RAG")
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ChatSelectionCard(
-    chatInfo: com.dark.tool_neuron.models.vault.ChatInfo,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(rDp(8.dp))
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(12.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Chat,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(24.dp)),
-                    tint = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Column {
-                    Text(
-                        text = chatInfo.chatId.ifBlank { "Chat ${chatInfo.chatId.take(8)}" },
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = "${chatInfo.messageCount} messages",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.Check,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(20.dp)),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SourceTypeCard(
-    title: String,
-    icon: ImageVector,
-    description: String,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
-        shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(16.dp)),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(rDp(32.dp)),
-                tint = if (isSelected)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
-            Text(
-                text = description,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CreateRagBottomSheet(
@@ -1193,8 +743,9 @@ private fun CreateRagBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState
     ) {
-        CreateRagContent(
+        SecureRagCreationScreen(
             ragViewModel = ragViewModel,
+            padding = PaddingValues(),
             onRagCreated = onCreated
         )
     }
@@ -1207,7 +758,8 @@ private fun RagDetailBottomSheet(
     onDismiss: () -> Unit,
     onLoad: () -> Unit,
     onUnload: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onShare: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -1310,57 +862,72 @@ private fun RagDetailBottomSheet(
             Spacer(modifier = Modifier.height(rDp(24.dp)))
 
             // Actions
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
-            ) {
-                when (rag.status) {
-                    RagStatus.LOADED -> {
-                        Button(
-                            onClick = onUnload,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Close, contentDescription = null)
-                            Spacer(modifier = Modifier.width(rDp(8.dp)))
-                            Text("Unload")
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                ) {
+                    when (rag.status) {
+                        RagStatus.LOADED -> {
+                            Button(
+                                onClick = onUnload,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Close, contentDescription = null)
+                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Text("Unload")
+                            }
+                        }
+                        RagStatus.LOADING -> {
+                            Button(
+                                onClick = {},
+                                modifier = Modifier.weight(1f),
+                                enabled = false
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(rDp(20.dp)),
+                                    strokeWidth = rDp(2.dp)
+                                )
+                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Text("Loading...")
+                            }
+                        }
+                        else -> {
+                            Button(
+                                onClick = onLoad,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Text("Load")
+                            }
                         }
                     }
-                    RagStatus.LOADING -> {
-                        Button(
-                            onClick = {},
-                            modifier = Modifier.weight(1f),
-                            enabled = false
-                        ) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDp(20.dp)),
-                                strokeWidth = rDp(2.dp)
-                            )
-                            Spacer(modifier = Modifier.width(rDp(8.dp)))
-                            Text("Loading...")
-                        }
-                    }
-                    else -> {
-                        Button(
-                            onClick = onLoad,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Icon(Icons.Default.Download, contentDescription = null)
-                            Spacer(modifier = Modifier.width(rDp(8.dp)))
-                            Text("Load")
-                        }
+
+                    Button(
+                        onClick = onDelete,
+                        modifier = Modifier.weight(1f),
+                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Spacer(modifier = Modifier.width(rDp(8.dp)))
+                        Text("Delete")
                     }
                 }
 
                 Button(
-                    onClick = onDelete,
-                    modifier = Modifier.weight(1f),
+                    onClick = onShare,
+                    modifier = Modifier.fillMaxWidth(),
                     colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
+                    Icon(Icons.Default.Share, contentDescription = null)
                     Spacer(modifier = Modifier.width(rDp(8.dp)))
-                    Text("Delete")
+                    Text("Share RAG")
                 }
             }
 
@@ -1402,4 +969,62 @@ private fun getRagSourceIcon(sourceType: RagSourceType): ImageVector = when (sou
 private fun formatDate(timestamp: Long): String {
     val sdf = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
+}
+
+@Composable
+private fun PasswordDialog(
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var password by remember { mutableStateOf("") }
+    var showPassword by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(Icons.Default.Lock, contentDescription = null)
+        },
+        title = { Text("Enter Password") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+                Text(
+                    text = "This RAG is encrypted. Enter the password to load it.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Password") },
+                    singleLine = true,
+                    visualTransformation = if (showPassword)
+                        VisualTransformation.None
+                    else
+                        PasswordVisualTransformation(),
+                    trailingIcon = {
+                        IconButton(onClick = { showPassword = !showPassword }) {
+                            Icon(
+                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = null
+                            )
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(rDp(12.dp))
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onConfirm(password) },
+                enabled = password.isNotBlank()
+            ) {
+                Text("Load")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }

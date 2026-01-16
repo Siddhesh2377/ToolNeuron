@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.neuron_example
 
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.Role
 import kotlinx.coroutines.Dispatchers
@@ -25,8 +26,8 @@ data class GraphSettings(
     val edgeThreshold: Float = 0.75f,
     val maxEdgesPerNode: Int = 10,
     val traversalDepth: Int = 1,
-    val chunkSizeTokens: Int = 384,
-    val chunkOverlapTokens: Int = 50,
+    val chunkSizeTokens: Int = 256,
+    val chunkOverlapTokens: Int = 40,
     val minChunkLength: Int = 20
 ) {
     companion object {
@@ -332,8 +333,9 @@ object SemanticChunker {
     }
 
     private fun estimateTokens(text: String): Int {
-        // Rough estimate: ~0.75 tokens per word for English
-        return (text.split(Regex("\\s+")).size * 1.33).toInt()
+        val words = text.split(Regex("\\s+")).size
+        val punctuation = text.count { it in ".,!?;:()[]{}\"'-" }
+        return ((words * 1.5) + (punctuation * 0.5)).toInt()
     }
 
     private fun createNode(
@@ -360,7 +362,7 @@ object SemanticChunker {
 // ============================================================================
 
 class NeuronGraph(
-    private val embeddingProvider: EmbeddingProvider,
+    private val embeddingEngine: EmbeddingEngine,
     var settings: GraphSettings = GraphSettings.DEFAULT
 ) {
     private val nodes = mutableMapOf<String, NeuronNode>()
@@ -368,6 +370,9 @@ class NeuronGraph(
 
     val nodeCount: Int get() = nodes.size
     val edgeCount: Int get() = nodes.values.sumOf { it.edges.size } / 2  // Edges counted twice
+
+    fun getEmbeddingModelName(): String = embeddingEngine.getModelName()
+    fun getEmbeddingDimension(): Int = embeddingEngine.getDimension()
 
     fun getStats(): GraphStats {
         val sources = nodes.values.map { it.metadata.sourceId }.distinct().size
@@ -398,7 +403,7 @@ class NeuronGraph(
         sourceId: String = UUID.randomUUID().toString()
     ): Result<List<NeuronNode>> = withContext(Dispatchers.IO) {
         try {
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
@@ -438,7 +443,7 @@ class NeuronGraph(
         windowSize: Int = 4
     ): Result<List<NeuronNode>> = withContext(Dispatchers.IO) {
         try {
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
@@ -466,12 +471,12 @@ class NeuronGraph(
      */
     suspend fun addNode(node: NeuronNode): Result<NeuronNode> = withContext(Dispatchers.IO) {
         try {
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
             val nodeWithEmbedding = if (node.embedding == null) {
-                node.copy().also { it.embedding = embeddingProvider.embed(node.content) }
+                node.copy().also { it.embedding = embeddingEngine.embed(node.content) }
             } else {
                 node
             }
@@ -490,7 +495,7 @@ class NeuronGraph(
 
     private suspend fun addNodesWithEmbeddings(newNodes: List<NeuronNode>): List<NeuronNode> {
         // Generate embeddings for all nodes
-        val embeddings = embeddingProvider.embedBatch(newNodes.map { it.content })
+        val embeddings = embeddingEngine.embedBatch(newNodes.map { it.content })
 
         val nodesWithEmbeddings = newNodes.mapIndexed { index, node ->
             node.also { it.embedding = embeddings[index] }
@@ -582,22 +587,47 @@ class NeuronGraph(
         topK: Int = 5,
         expandConnections: Boolean = true
     ): List<QueryResult> = withContext(Dispatchers.IO) {
-        if (!embeddingProvider.isInitialized() || nodes.isEmpty()) {
+        if (!embeddingEngine.isInitialized()) {
+            android.util.Log.e("NeuronGraph", "Query failed: Embedding engine not initialized")
             return@withContext emptyList()
         }
 
-        val queryEmbedding = embeddingProvider.embed(queryText) ?: return@withContext emptyList()
+        if (nodes.isEmpty()) {
+            android.util.Log.e("NeuronGraph", "Query failed: Graph has no nodes")
+            return@withContext emptyList()
+        }
+
+        android.util.Log.d("NeuronGraph", "Querying graph with ${nodes.size} nodes for: $queryText")
+
+        val queryEmbedding = embeddingEngine.embed(queryText)
+        if (queryEmbedding == null) {
+            android.util.Log.e("NeuronGraph", "Query failed: Could not generate embedding for query")
+            return@withContext emptyList()
+        }
+
+        // Use a lower threshold for queries - 0.3 (30%) is more practical for RAG
+        // Edge building uses settings.edgeThreshold (0.75), but queries need to be more permissive
+        val threshold = 0.3f
+        android.util.Log.d("NeuronGraph", "Using similarity threshold: $threshold")
 
         // Find top-K similar nodes
-        val similarities = nodes.values
+        val allSimilarities = nodes.values
             .mapNotNull { node ->
                 node.embedding?.let { emb ->
-                    node to cosineSimilarity(queryEmbedding, emb)
+                    val sim = cosineSimilarity(queryEmbedding, emb)
+                    node to sim
                 }
             }
-            .filter { it.second >= settings.edgeThreshold * 0.8f }  // Slightly lower threshold for query
+
+        val maxSimilarity = allSimilarities.maxOfOrNull { it.second } ?: 0f
+        android.util.Log.d("NeuronGraph", "Calculated ${allSimilarities.size} similarities, max: $maxSimilarity, min: ${allSimilarities.minOfOrNull { it.second } ?: 0f}")
+
+        val similarities = allSimilarities
+            .filter { it.second >= threshold }
             .sortedByDescending { it.second }
             .take(topK)
+
+        android.util.Log.d("NeuronGraph", "Found ${similarities.size} nodes above threshold (top scores: ${similarities.take(3).map { "%.3f".format(it.second) }})")
 
         // Build results with connected nodes
         similarities.map { (node, score) ->
@@ -686,8 +716,8 @@ class NeuronGraph(
         dos.writeUTF(settingsJson)
 
         // Write embedding info
-        dos.writeUTF(embeddingProvider.getModelName())
-        dos.writeInt(embeddingProvider.getDimension())
+        dos.writeUTF(embeddingEngine.getModelName())
+        dos.writeInt(embeddingEngine.getDimension())
 
         // Write nodes
         dos.writeInt(nodes.size)
@@ -747,10 +777,10 @@ class NeuronGraph(
             val dimension = dis.readInt()
 
             // Verify embedding compatibility
-            if (embeddingProvider.isInitialized()) {
-                if (embeddingProvider.getDimension() != dimension) {
+            if (embeddingEngine.isInitialized()) {
+                if (embeddingEngine.getDimension() != dimension) {
                     return@withContext Result.failure(
-                        Exception("Embedding dimension mismatch: expected $dimension, got ${embeddingProvider.getDimension()}")
+                        Exception("Embedding dimension mismatch: expected $dimension, got ${embeddingEngine.getDimension()}")
                     )
                 }
             }

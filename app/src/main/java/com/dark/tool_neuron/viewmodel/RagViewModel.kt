@@ -2,13 +2,14 @@ package com.dark.tool_neuron.viewmodel
 
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.engine.EmbeddingConfig
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.models.vault.ChatInfo
-import com.dark.tool_neuron.neuron_example.EmbeddingConfig
-import com.dark.tool_neuron.neuron_example.EmbeddingProvider
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.QueryResult
@@ -36,7 +37,7 @@ data class RagQueryDisplayResult(
 @HiltViewModel
 class RagViewModel @Inject constructor(
     private val ragRepository: RagRepository,
-    private val embeddingProvider: EmbeddingProvider,
+    private val embeddingEngine: EmbeddingEngine,
     private val chatRepository: ChatRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
@@ -82,7 +83,7 @@ class RagViewModel @Inject constructor(
     val loadedCount: StateFlow<Int> = _loadedCount
 
     // Embedding state
-    val isEmbeddingReady: Boolean get() = embeddingProvider.isInitialized()
+    val isEmbeddingReady: Boolean get() = embeddingEngine.isInitialized()
 
     // RAG enabled for chat
     private val _isRagEnabledForChat = MutableStateFlow(false)
@@ -100,9 +101,9 @@ class RagViewModel @Inject constructor(
         }
 
         refreshCounts()
-        _isEmbeddingInitialized.value = embeddingProvider.isInitialized()
-        if (embeddingProvider.isInitialized()) {
-            _embeddingStatus.value = "Ready (dim: ${embeddingProvider.getDimension()})"
+        _isEmbeddingInitialized.value = embeddingEngine.isInitialized()
+        if (embeddingEngine.isInitialized()) {
+            _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
         }
     }
 
@@ -151,19 +152,47 @@ class RagViewModel @Inject constructor(
             _error.value = null
 
             try {
+                // Initialize embedding engine if not already initialized
+                if (!embeddingEngine.isInitialized()) {
+                    Log.d("RagViewModel", "Embedding engine not initialized, initializing now...")
+                    val modelFile = com.dark.tool_neuron.engine.EmbeddingEngine.getModelPath(context)
+
+                    if (!modelFile.exists()) {
+                        _error.value = "Embedding model not found. Please install the embedding model first."
+                        _isLoading.value = false
+                        ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
+                        return@launch
+                    }
+
+                    val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                    val initResult = embeddingEngine.initialize(config)
+
+                    if (initResult.isFailure) {
+                        _error.value = "Failed to initialize embedding engine: ${initResult.exceptionOrNull()?.message}"
+                        _isLoading.value = false
+                        ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
+                        return@launch
+                    }
+
+                    Log.d("RagViewModel", "Embedding engine initialized successfully")
+                }
+
                 ragRepository.updateRagStatus(ragId, RagStatus.LOADING)
 
-                val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+                val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
                 val result = ragRepository.loadGraph(ragId, graph, password)
 
                 if (result.isSuccess) {
                     _loadedCount.value = ragRepository.getLoadedRagCount()
+                    Log.d("RagViewModel", "RAG loaded successfully, total loaded: ${_loadedCount.value}")
                 } else {
+                    Log.e("RagViewModel", "Error loading RAG: ${result.exceptionOrNull()?.message}")
                     ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
                     _error.value = result.exceptionOrNull()?.message ?: "Failed to load RAG"
                 }
             } catch (e: Exception) {
                 ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
+                Log.e("RagViewModel", "Error loading RAG: ${e.message}")
                 _error.value = e.message
             }
 
@@ -252,14 +281,27 @@ class RagViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            if (!embeddingProvider.isInitialized()) {
-                _error.value = "Embedding provider not initialized"
-                _isLoading.value = false
-                onComplete(Result.failure(Exception("Embedding provider not initialized")))
-                return@launch
+            // Auto-initialize embedding engine if needed
+            if (!embeddingEngine.isInitialized()) {
+                val modelFile = EmbeddingEngine.getModelPath(context)
+                if (!modelFile.exists()) {
+                    _error.value = "Embedding model not found"
+                    _isLoading.value = false
+                    onComplete(Result.failure(Exception("Embedding model not found")))
+                    return@launch
+                }
+
+                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                val initResult = embeddingEngine.initialize(config)
+                if (initResult.isFailure) {
+                    _error.value = "Failed to initialize embedding engine"
+                    _isLoading.value = false
+                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
+                    return@launch
+                }
             }
 
-            val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
             val result = ragRepository.createRagFromText(name, description, text, graph, domain, tags)
 
             if (result.isFailure) {
@@ -286,14 +328,27 @@ class RagViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            if (!embeddingProvider.isInitialized()) {
-                _error.value = "Embedding provider not initialized"
-                _isLoading.value = false
-                onComplete(Result.failure(Exception("Embedding provider not initialized")))
-                return@launch
+            // Auto-initialize embedding engine if needed
+            if (!embeddingEngine.isInitialized()) {
+                val modelFile = EmbeddingEngine.getModelPath(context)
+                if (!modelFile.exists()) {
+                    _error.value = "Embedding model not found"
+                    _isLoading.value = false
+                    onComplete(Result.failure(Exception("Embedding model not found")))
+                    return@launch
+                }
+
+                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                val initResult = embeddingEngine.initialize(config)
+                if (initResult.isFailure) {
+                    _error.value = "Failed to initialize embedding engine"
+                    _isLoading.value = false
+                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
+                    return@launch
+                }
             }
 
-            val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
             val result = ragRepository.createRagFromChat(name, description, chatId, messages, graph, domain, tags)
 
             if (result.isFailure) {
@@ -319,14 +374,27 @@ class RagViewModel @Inject constructor(
             _isLoading.value = true
             _error.value = null
 
-            if (!embeddingProvider.isInitialized()) {
-                _error.value = "Embedding provider not initialized"
-                _isLoading.value = false
-                onComplete(Result.failure(Exception("Embedding provider not initialized")))
-                return@launch
+            // Auto-initialize embedding engine if needed
+            if (!embeddingEngine.isInitialized()) {
+                val modelFile = EmbeddingEngine.getModelPath(context)
+                if (!modelFile.exists()) {
+                    _error.value = "Embedding model not found"
+                    _isLoading.value = false
+                    onComplete(Result.failure(Exception("Embedding model not found")))
+                    return@launch
+                }
+
+                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                val initResult = embeddingEngine.initialize(config)
+                if (initResult.isFailure) {
+                    _error.value = "Failed to initialize embedding engine"
+                    _isLoading.value = false
+                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
+                    return@launch
+                }
             }
 
-            val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
             val result = ragRepository.createRagFromFile(name, description, fileUri, graph, domain, tags)
 
             if (result.isFailure) {
@@ -342,21 +410,19 @@ class RagViewModel @Inject constructor(
 
     // ==================== Embedding Initialization ====================
 
-    fun initializeEmbedding(modelPath: String, tokenizerPath: String) {
+    fun initializeEmbedding(modelPath: String) {
         viewModelScope.launch(Dispatchers.IO) {
             _embeddingStatus.value = "Initializing..."
             _isLoading.value = true
 
             val config = EmbeddingConfig(
-                modelPath = modelPath,
-                tokenizerPath = tokenizerPath,
-                modelName = "sentence-embedding"
+                modelPath = modelPath
             )
 
-            val result = embeddingProvider.initialize(config)
+            val result = embeddingEngine.initialize(config)
             if (result.isSuccess) {
                 _isEmbeddingInitialized.value = true
-                _embeddingStatus.value = "Ready (dim: ${embeddingProvider.getDimension()})"
+                _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
             } else {
                 _isEmbeddingInitialized.value = false
                 _embeddingStatus.value = "Error: ${result.exceptionOrNull()?.message}"
@@ -367,27 +433,22 @@ class RagViewModel @Inject constructor(
         }
     }
 
-    fun initializeEmbeddingFromAssets() {
+    fun initializeEmbeddingFromFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             _embeddingStatus.value = "Checking models..."
             _isLoading.value = true
 
-            // Check for embedding model in app's files directory
-            val modelsDir = File(context.filesDir, "models/embedding")
-            val modelFile = File(modelsDir, "model.onnx")
-            val tokenizerFile = File(modelsDir, "tokenizer.json")
+            val modelFile = EmbeddingEngine.getModelPath(context)
 
-            if (modelFile.exists() && tokenizerFile.exists()) {
+            if (modelFile.exists()) {
                 val config = EmbeddingConfig(
-                    modelPath = modelFile.absolutePath,
-                    tokenizerPath = tokenizerFile.absolutePath,
-                    modelName = "sentence-embedding"
+                    modelPath = modelFile.absolutePath
                 )
 
-                val result = embeddingProvider.initialize(config)
+                val result = embeddingEngine.initialize(config)
                 if (result.isSuccess) {
                     _isEmbeddingInitialized.value = true
-                    _embeddingStatus.value = "Ready (dim: ${embeddingProvider.getDimension()})"
+                    _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
                 } else {
                     _isEmbeddingInitialized.value = false
                     _embeddingStatus.value = "Error: ${result.exceptionOrNull()?.message}"
@@ -395,7 +456,7 @@ class RagViewModel @Inject constructor(
                 }
             } else {
                 _embeddingStatus.value = "Model not found - Please install embedding model"
-                _error.value = "Embedding model files not found. Please install a sentence embedding model in the models/embedding directory."
+                _error.value = "Embedding model files not found."
             }
 
             _isLoading.value = false
@@ -467,6 +528,120 @@ class RagViewModel @Inject constructor(
 
     fun clearRagResults() {
         _lastRagResults.value = emptyList()
+    }
+
+    // ==================== Secure RAG Creation ====================
+
+    fun createSecureRagFromText(
+        name: String,
+        description: String,
+        text: String,
+        domain: String = "general",
+        tags: List<String> = emptyList(),
+        adminPassword: String,
+        readOnlyUsers: List<com.neuronpacket.UserCredentials> = emptyList(),
+        loadingMode: com.neuronpacket.LoadingMode = com.neuronpacket.LoadingMode.EMBEDDED,
+        onProgress: (Float, String) -> Unit,
+        onComplete: (Result<InstalledRag>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _error.value = null
+
+            // Auto-initialize embedding engine if needed
+            if (!embeddingEngine.isInitialized()) {
+                onProgress(0.05f, "Initializing embedding engine...")
+                val modelFile = EmbeddingEngine.getModelPath(context)
+
+                if (!modelFile.exists()) {
+                    _error.value = "Embedding model not found"
+                    _isLoading.value = false
+                    onComplete(Result.failure(Exception("Embedding model not found")))
+                    return@launch
+                }
+
+                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                val initResult = embeddingEngine.initialize(config)
+
+                if (initResult.isFailure) {
+                    _error.value = "Failed to initialize embedding engine"
+                    _isLoading.value = false
+                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
+                    return@launch
+                }
+            }
+
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
+            val result = ragRepository.createSecureRagFromText(
+                name, description, text, graph, domain, tags,
+                adminPassword, readOnlyUsers, loadingMode, onProgress
+            )
+
+            if (result.isFailure) {
+                _error.value = result.exceptionOrNull()?.message ?: "Failed to create secure RAG"
+            } else {
+                refreshCounts()
+            }
+
+            _isLoading.value = false
+            onComplete(result)
+        }
+    }
+
+    fun createSecureRagFromFile(
+        name: String,
+        description: String,
+        fileUri: Uri,
+        domain: String = "general",
+        tags: List<String> = emptyList(),
+        adminPassword: String,
+        readOnlyUsers: List<com.neuronpacket.UserCredentials> = emptyList(),
+        loadingMode: com.neuronpacket.LoadingMode = com.neuronpacket.LoadingMode.EMBEDDED,
+        onProgress: (Float, String) -> Unit,
+        onComplete: (Result<InstalledRag>) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _error.value = null
+
+            // Auto-initialize embedding engine if needed
+            if (!embeddingEngine.isInitialized()) {
+                onProgress(0.05f, "Initializing embedding engine...")
+                val modelFile = EmbeddingEngine.getModelPath(context)
+
+                if (!modelFile.exists()) {
+                    _error.value = "Embedding model not found"
+                    _isLoading.value = false
+                    onComplete(Result.failure(Exception("Embedding model not found")))
+                    return@launch
+                }
+
+                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
+                val initResult = embeddingEngine.initialize(config)
+
+                if (initResult.isFailure) {
+                    _error.value = "Failed to initialize embedding engine"
+                    _isLoading.value = false
+                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
+                    return@launch
+                }
+            }
+
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
+            val result = ragRepository.createSecureRagFromFile(
+                name, description, fileUri, graph, domain, tags,
+                adminPassword, readOnlyUsers, loadingMode, onProgress
+            )
+
+            if (result.isFailure) {
+                _error.value = result.exceptionOrNull()?.message ?: "Failed to create secure RAG"
+            } else {
+                refreshCounts()
+            }
+
+            _isLoading.value = false
+            onComplete(result)
+        }
     }
 
     // ==================== File Content Reading ====================

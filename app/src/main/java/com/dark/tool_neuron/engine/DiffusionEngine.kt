@@ -42,7 +42,7 @@ class DiffusionEngine {
     val isGenerating: StateFlow<Boolean>
         get() = sdManager.isGenerating
 
-    fun init(context: Context, safetyCheckerEnabled: Boolean = true) {
+    suspend fun init(context: Context, safetyCheckerEnabled: Boolean = true) {
         try {
             sdManager = StableDiffusionManager.getInstance(context)
             sdManager.initialize(

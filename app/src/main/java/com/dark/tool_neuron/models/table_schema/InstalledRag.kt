@@ -78,7 +78,16 @@ data class InstalledRag(
     val sizeBytes: Long = 0,
 
     @ColumnInfo(name = "metadata_json")
-    val metadataJson: String? = null
+    val metadataJson: String? = null,
+
+    @ColumnInfo(name = "is_encrypted")
+    val isEncrypted: Boolean = false,
+
+    @ColumnInfo(name = "loading_mode")
+    val loadingMode: Int = 1,
+
+    @ColumnInfo(name = "has_admin_access")
+    val hasAdminAccess: Boolean = false
 ) {
     fun getTagsList(): List<String> = tags.split(",").filter { it.isNotBlank() }.map { it.trim() }
 
@@ -88,5 +97,11 @@ data class InstalledRag(
             sizeBytes < 1024 * 1024 -> "${sizeBytes / 1024} KB"
             else -> "${sizeBytes / (1024 * 1024)} MB"
         }
+    }
+
+    fun getLoadingModeName(): String = when (loadingMode) {
+        0 -> "Transient"
+        1 -> "Embedded"
+        else -> "Unknown"
     }
 }

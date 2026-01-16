@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.neuron_example
 
-import com.ml.shubham0204.sentence_embeddings.SentenceEmbedding
+import com.dark.tool_neuron.engine.EmbeddingConfig
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.neuronpacket.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -12,25 +13,15 @@ import java.io.File
 
 class NeuronPacketExample(private val cacheDir: File) {
     private val packetManager = NeuronPacketManager()
-    private var sentenceEmbedding: SentenceEmbedding? = null
+    private val embeddingEngine = EmbeddingEngine()
 
-    suspend fun initializeEmbedding(modelPath: String, tokenizerPath: String) = withContext(Dispatchers.IO) {
-        val tokenizerBytes = File(tokenizerPath).readBytes()
-        sentenceEmbedding = SentenceEmbedding().apply {
-            init(
-                modelFilepath = modelPath,
-                tokenizerBytes = tokenizerBytes,
-                useTokenTypeIds = true,
-                outputTensorName = "sentence_embedding",
-                useFP16 = true,
-                useXNNPack = false,
-                normalizeEmbeddings = true
-            )
-        }
+    suspend fun initializeEmbedding(modelPath: String) = withContext(Dispatchers.IO) {
+        val config = EmbeddingConfig(modelPath = modelPath)
+        embeddingEngine.initialize(config)
     }
 
     suspend fun generateEmbedding(text: String): FloatArray? {
-        return sentenceEmbedding?.encode(text)
+        return embeddingEngine.embed(text)
     }
 
     suspend fun createKnowledgePacket(

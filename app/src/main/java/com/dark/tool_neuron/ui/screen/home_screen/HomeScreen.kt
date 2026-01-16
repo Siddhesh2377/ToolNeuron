@@ -400,15 +400,21 @@ fun BottomBar(
                                         when (currentGenerationType) {
                                             GenerationManager.ModelType.TEXT_GENERATION -> {
                                                 // Check if RAG is enabled and there are loaded RAGs
-                                                Log.d("Home Screen", loadedRags.isEmpty().toString())
+                                                Log.d("HomeScreen", "Loaded RAGs count: ${loadedRags.size}")
+                                                loadedRags.forEach { rag ->
+                                                    Log.d("HomeScreen", "RAG: ${rag.name}, enabled: ${rag.isEnabled}, status: ${rag.status}")
+                                                }
+
                                                 if (loadedRags.isNotEmpty()) {
                                                     val userQuery = value
                                                     value = ""
                                                     scope.launch {
+                                                        Log.d("HomeScreen", "Querying RAGs for: $userQuery")
                                                         // Query RAG first
                                                         val ragContext = ragViewModel.queryAndStoreResults(userQuery)
                                                         // Set RAG context and results in ChatViewModel
-                                                        Log.d("Home-Screen", ragContext)
+                                                        Log.d("HomeScreen", "RAG context length: ${ragContext.length}, results count: ${ragViewModel.lastRagResults.value.size}")
+                                                        Log.d("HomeScreen", "RAG context: $ragContext")
                                                         chatViewModel.setRagContext(
                                                             ragContext.ifBlank { null },
                                                             ragViewModel.lastRagResults.value
@@ -417,6 +423,7 @@ fun BottomBar(
                                                         chatViewModel.sendTextMessage(userQuery)
                                                     }
                                                 } else {
+                                                    Log.d("HomeScreen", "No RAGs loaded, sending message without RAG context")
                                                     // No RAG loaded, send directly
                                                     chatViewModel.clearRagContext()
                                                     chatViewModel.sendTextMessage(value)

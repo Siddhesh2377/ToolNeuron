@@ -62,14 +62,6 @@ fun IntroScreen() {
     val pulseScale = remember { Animatable(1f) }
     val shimmerAlpha = remember { Animatable(0.3f) }
 
-    // Copy embedding models from assets on first launch
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            copyEmbeddingModelsFromAssets(context) { status ->
-                loadingStatus = status
-            }
-        }
-    }
 
     // Pulsing animation for the icon
     LaunchedEffect(Unit) {
@@ -258,73 +250,5 @@ fun IntroScreen() {
                 )
             }
         }
-    }
-}
-
-/**
- * Copies embedding model files from assets to app's internal storage.
- * Only copies if the files don't already exist.
- */
-fun copyEmbeddingModelsFromAssets(
-    context: Context,
-    onStatusUpdate: (String) -> Unit
-) {
-    try {
-        val embeddingDir = File(context.filesDir, "models/embedding")
-
-        // Check if models already exist
-        val modelFile = File(embeddingDir, "model.onnx")
-        val tokenizerFile = File(embeddingDir, "tokenizer.json")
-
-        if (modelFile.exists() && tokenizerFile.exists()) {
-            onStatusUpdate("Embedding models ready")
-            return
-        }
-
-        // Create directory if it doesn't exist
-        if (!embeddingDir.exists()) {
-            embeddingDir.mkdirs()
-        }
-
-        onStatusUpdate("Setting up embedding models...")
-
-        // Copy model file from assets
-        if (!modelFile.exists()) {
-            onStatusUpdate("Copying embedding model...")
-            try {
-                context.assets.open("embedding-model/model_fp16.onnx").use { input ->
-                    modelFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (_: Exception) {
-                // Model file might not exist in assets, that's okay
-                onStatusUpdate("Embedding model not bundled")
-            }
-        }
-
-        // Copy tokenizer file from assets
-        if (!tokenizerFile.exists()) {
-            onStatusUpdate("Copying tokenizer...")
-            try {
-                context.assets.open("embedding-model/tokenizer.json").use { input ->
-                    tokenizerFile.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            } catch (_: Exception) {
-                // Tokenizer file might not exist in assets, that's okay
-                onStatusUpdate("Tokenizer not bundled")
-            }
-        }
-
-        // Verify files were copied
-        if (modelFile.exists() && tokenizerFile.exists()) {
-            onStatusUpdate("Embedding models ready")
-        } else {
-            onStatusUpdate("Initializing App...")
-        }
-    } catch (_: Exception) {
-        onStatusUpdate("Initializing App...")
     }
 }

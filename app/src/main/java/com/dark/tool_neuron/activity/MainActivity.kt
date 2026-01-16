@@ -14,17 +14,21 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.engine.EmbeddingEngine
+import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
-import com.dark.tool_neuron.ui.screen.copyEmbeddingModelsFromAssets
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -63,36 +67,42 @@ class MainActivity : ComponentActivity() {
             val context = this
 
             NeuroVerseTheme {
+                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
+                var embeddingModelReady by remember { mutableStateOf(false) }
+                val scope = rememberCoroutineScope()
+
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        copyEmbeddingModelsFromAssets(context) { status ->
-                            Log.d("Embedding", status)
-                        }
+                        embeddingModelReady = EmbeddingEngine.isModelDownloaded(context)
                     }
                 }
 
-                // Check if terms are accepted
-                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
-                val scope = rememberCoroutineScope()
-
-                if (hasAcceptedTerms) {
-                    // Create ViewModels at activity level
-                    val chatViewModel: ChatViewModel = hiltViewModel()
-                    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
-
-                    AppNavigation(
-                        chatViewModel = chatViewModel,
-                        llmModelViewModel = llmModelViewModel
-                    )
-                } else {
-                    // Show terms and conditions
-                    TermsAndConditionsScreen(
-                        onAccept = {
-                            scope.launch {
-                                termsDataStore.acceptTerms()
+                when {
+                    !hasAcceptedTerms -> {
+                        TermsAndConditionsScreen(
+                            onAccept = {
+                                scope.launch {
+                                    termsDataStore.acceptTerms()
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
+                    !embeddingModelReady -> {
+                        EmbeddingSetupScreen(
+                            onSetupComplete = {
+                                embeddingModelReady = true
+                            }
+                        )
+                    }
+                    else -> {
+                        val chatViewModel: ChatViewModel = hiltViewModel()
+                        val llmModelViewModel: LLMModelViewModel = hiltViewModel()
+
+                        AppNavigation(
+                            chatViewModel = chatViewModel,
+                            llmModelViewModel = llmModelViewModel
+                        )
+                    }
                 }
             }
         }

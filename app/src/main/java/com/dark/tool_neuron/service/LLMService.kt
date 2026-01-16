@@ -360,8 +360,10 @@ class LLMService : Service() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
 
         try {
-            diffusionEngine.init(applicationContext, safetyCheckerEnabled = true)
-            Log.i(TAG, "LLMService created successfully")
+            scope.launch(Dispatchers.IO) {
+                diffusionEngine.init(applicationContext, safetyCheckerEnabled = true)
+                Log.i(TAG, "LLMService created successfully")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize diffusion engine", e)
         }

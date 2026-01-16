@@ -1,9 +1,9 @@
 package com.dark.tool_neuron.worker
 
 import android.content.Context
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
-import com.dark.tool_neuron.neuron_example.EmbeddingProvider
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.NeuronNode
@@ -24,7 +24,7 @@ import java.util.UUID
 class RagVaultIntegration(
     private val context: Context,
     private val ragRepository: RagRepository,
-    private val embeddingProvider: EmbeddingProvider
+    private val embeddingEngine: EmbeddingEngine
 ) {
     private var memoryVault: MemoryVault? = null
 
@@ -53,7 +53,7 @@ class RagVaultIntegration(
         try {
             val vault = memoryVault ?: return@withContext Result.failure(Exception("Vault not initialized"))
 
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
@@ -69,7 +69,7 @@ class RagVaultIntegration(
                 return@withContext Result.failure(Exception("No messages found with the specified filters"))
             }
 
-            val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
 
             val nodes = messages.mapIndexed { index, message ->
                 NeuronNode(
@@ -109,8 +109,8 @@ class RagVaultIntegration(
                 sourceType = RagSourceType.MEMORY_VAULT,
                 filePath = destFile.absolutePath,
                 nodeCount = nodes.size,
-                embeddingDimension = embeddingProvider.getDimension(),
-                embeddingModel = embeddingProvider.getModelName(),
+                embeddingDimension = embeddingEngine.getDimension(),
+                embeddingModel = embeddingEngine.getModelName(),
                 domain = domain,
                 tags = ragTags.joinToString(","),
                 sizeBytes = destFile.length()
@@ -133,7 +133,7 @@ class RagVaultIntegration(
         try {
             val vault = memoryVault ?: return@withContext Result.failure(Exception("Vault not initialized"))
 
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
@@ -143,7 +143,7 @@ class RagVaultIntegration(
                 return@withContext Result.failure(Exception("No items found in category: $category"))
             }
 
-            val graph = NeuronGraph(embeddingProvider, GraphSettings.DEFAULT)
+            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
 
             items.forEachIndexed { index, item ->
                 val content = when (item) {
@@ -186,8 +186,8 @@ class RagVaultIntegration(
                 sourceType = RagSourceType.MEMORY_VAULT,
                 filePath = destFile.absolutePath,
                 nodeCount = graph.nodeCount,
-                embeddingDimension = embeddingProvider.getDimension(),
-                embeddingModel = embeddingProvider.getModelName(),
+                embeddingDimension = embeddingEngine.getDimension(),
+                embeddingModel = embeddingEngine.getModelName(),
                 domain = domain,
                 tags = ragTags.joinToString(","),
                 sizeBytes = destFile.length()
@@ -234,12 +234,12 @@ class RagVaultIntegration(
         threshold: Float = 0.7f
     ): List<ScoredVaultContent> = withContext(Dispatchers.IO) {
         try {
-            if (!embeddingProvider.isInitialized()) {
+            if (!embeddingEngine.isInitialized()) {
                 return@withContext emptyList()
             }
 
             val vault = memoryVault ?: return@withContext emptyList()
-            val queryEmbedding = embeddingProvider.embed(query) ?: return@withContext emptyList()
+            val queryEmbedding = embeddingEngine.embed(query) ?: return@withContext emptyList()
 
             vault.semanticSearch(queryEmbedding, limit, threshold).map { scored ->
                 ScoredVaultContent(

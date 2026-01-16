@@ -33,6 +33,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.repo.ChatRepository
 import com.neuronpacket.*
@@ -44,450 +45,448 @@ import java.io.File
 // Main Screen
 
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun NeuronExampleScreen() {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-
-    // State
-    var status by remember { mutableStateOf("Not Initialized") }
-    var isLoading by remember { mutableStateOf(false) }
-    var errorMessage by remember { mutableStateOf("") }
-    var settings by remember { mutableStateOf(GraphSettings.DEFAULT) }
-
-    // Dialogs
-    var showSettingsSheet by remember { mutableStateOf(false) }
-    var showAddTextDialog by remember { mutableStateOf(false) }
-    var showChatPickerDialog by remember { mutableStateOf(false) }
-    var showExportDialog by remember { mutableStateOf(false) }
-    var showLoadDialog by remember { mutableStateOf(false) }
-
-    // Graph state
-    var selectedNodeId by remember { mutableStateOf<String?>(null) }
-    var searchQuery by remember { mutableStateOf("") }
-    var searchResults by remember { mutableStateOf<List<QueryResult>>(emptyList()) }
-
-    // Loaded packet info
-    var loadedPacketInfo by remember { mutableStateOf<LoadedPacketState?>(null) }
-
-    // Embedding provider
-    val embeddingProvider = remember { SentenceEmbeddingProvider() }
-    val graph = remember { NeuronGraph(embeddingProvider, settings) }
-    var graphNodes by remember { mutableStateOf<List<NeuronNode>>(emptyList()) }
-
-    // Update graph settings when changed
-    LaunchedEffect(settings) {
-        graph.settings = settings
-    }
-
-    // Refresh nodes display
-    fun refreshNodes() {
-        graphNodes = graph.getAllNodes()
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Neuron Graph")
-                        if (loadedPacketInfo != null) {
-                            Text(
-                                text = loadedPacketInfo!!.metadata.name.ifEmpty { "Loaded Pack" },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                },
-                actions = {
-                    // Load button
-                    IconButton(onClick = { showLoadDialog = true }) {
-                        Icon(Icons.Default.FolderOpen, contentDescription = "Load Pack")
-                    }
-                    // Settings button
-                    IconButton(onClick = { showSettingsSheet = true }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Settings")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Status & Error
-            if (status.isNotEmpty()) {
-                Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            if (errorMessage.isNotEmpty()) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = errorMessage,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.weight(1f)
-                        )
-                        IconButton(onClick = { errorMessage = "" }) {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                tint = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Initialize Button
-            if (!embeddingProvider.isInitialized()) {
-                Button(
-                    onClick = {
-                        scope.launch(Dispatchers.IO) {
-                            isLoading = true
-                            status = "Initializing embedding model..."
-                            errorMessage = ""
-
-                            val config = EmbeddingConfig(
-                                modelPath = "/storage/emulated/0/Download/Models/embedding/model_fp16.onnx",
-                                tokenizerPath = "/storage/emulated/0/Download/Models/embedding/tokenizer.json",
-                                modelName = "sentence-transformer-fp16"
-                            )
-
-                            val result = embeddingProvider.initialize(config)
-                            if (result.isSuccess) {
-                                status = "Ready (dim: ${embeddingProvider.getDimension()})"
-                            } else {
-                                status = "Initialization failed"
-                                errorMessage = result.exceptionOrNull()?.message ?: "Unknown error"
-                            }
-                            isLoading = false
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading
-                ) {
-                    if (isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                    }
-                    Text("Initialize Embedding Model")
-                }
-            }
-
-            // Add Content Buttons
-            if (embeddingProvider.isInitialized()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { showAddTextDialog = true },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.TextFields, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Text")
-                    }
-
-                    OutlinedButton(
-                        onClick = { showChatPickerDialog = true },
-                        modifier = Modifier.weight(1f),
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Chat")
-                    }
-                }
-            }
-
-            // Stats Bar
-            if (graphNodes.isNotEmpty()) {
-                val stats = graph.getStats()
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        StatItem("Nodes", stats.nodeCount.toString())
-                        StatItem("Edges", stats.edgeCount.toString())
-                        StatItem("Sources", stats.sourceCount.toString())
-                    }
-                }
-            }
-
-            // Graph Visualization
-            if (embeddingProvider.isInitialized()) {
-                val selectedNode = graphNodes.find { it.id == selectedNodeId }
-                val connectedNodes = selectedNode?.edges?.mapNotNull { edge ->
-                    graphNodes.find { it.id == edge.targetId }
-                } ?: emptyList()
-
-                GraphVisualization(
-                    nodes = graphNodes,
-                    selectedNodeId = selectedNodeId,
-                    onNodeSelected = { selectedNodeId = it },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
-                )
-
-                // Node Detail Card
-                AnimatedVisibility(
-                    visible = selectedNode != null,
-                    enter = slideInVertically { it } + fadeIn(),
-                    exit = slideOutVertically { it } + fadeOut()
-                ) {
-                    NodeDetailCard(
-                        node = selectedNode,
-                        connectedNodes = connectedNodes,
-                        onDismiss = { selectedNodeId = null },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            // Search Section
-            if (graphNodes.isNotEmpty()) {
-                HorizontalDivider()
-
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Query the graph") },
-                    placeholder = { Text("Ask something...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
-                            IconButton(
-                                onClick = {
-                                    scope.launch(Dispatchers.IO) {
-                                        isLoading = true
-                                        searchResults = graph.query(searchQuery, topK = 5)
-                                        isLoading = false
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.Search, contentDescription = "Search")
-                            }
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            scope.launch(Dispatchers.IO) {
-                                isLoading = true
-                                searchResults = graph.query(searchQuery, topK = 5)
-                                isLoading = false
-                            }
-                        }
-                    ),
-                    singleLine = true
-                )
-
-                // Search Results
-                if (searchResults.isNotEmpty()) {
-                    Text(
-                        text = "Results (${searchResults.size})",
-                        style = MaterialTheme.typography.labelMedium,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-
-                    LazyColumn(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(searchResults) { result ->
-                            SearchResultCard(
-                                result = result,
-                                onClick = { selectedNodeId = result.node.id }
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            // Export Button
-            if (graphNodes.isNotEmpty()) {
-                Button(
-                    onClick = { showExportDialog = true },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = !isLoading
-                ) {
-                    Icon(Icons.Default.Save, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Export as Neuron Pack")
-                }
-            }
-
-            // Clear Button
-            if (graphNodes.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = {
-                        scope.launch {
-                            graph.clear()
-                            refreshNodes()
-                            searchResults = emptyList()
-                            selectedNodeId = null
-                            loadedPacketInfo = null
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) {
-                    Icon(Icons.Default.Delete, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Clear Graph")
-                }
-            }
-        }
-    }
-
-    // Settings Bottom Sheet
-    if (showSettingsSheet) {
-        SettingsBottomSheet(
-            settings = settings,
-            onSettingsChange = { settings = it },
-            onDismiss = { showSettingsSheet = false }
-        )
-    }
-
-    // Add Text Dialog
-    if (showAddTextDialog) {
-        AddTextDialog(
-            onAdd = { text, name ->
-                scope.launch(Dispatchers.IO) {
-                    isLoading = true
-                    status = "Processing text..."
-                    errorMessage = ""
-
-                    val result = graph.addText(text, name)
-                    if (result.isSuccess) {
-                        val added = result.getOrThrow()
-                        status = "Added ${added.size} nodes"
-                        refreshNodes()
-                    } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to add text"
-                    }
-                    isLoading = false
-                }
-                showAddTextDialog = false
-            },
-            onDismiss = { showAddTextDialog = false }
-        )
-    }
-
-    // Chat Picker Dialog
-    if (showChatPickerDialog) {
-        ChatPickerDialog(
-            onChatSelected = { chatInfo, messages ->
-                scope.launch(Dispatchers.IO) {
-                    isLoading = true
-                    status = "Processing chat..."
-                    errorMessage = ""
-
-                    val result = graph.addChatMessages(
-                        messages = messages,
-                        chatId = chatInfo.chatId,
-                        chatName = "Chat ${chatInfo.chatId.take(8)}",
-                        asConversationWindows = false
-                    )
-
-                    if (result.isSuccess) {
-                        val added = result.getOrThrow()
-                        status = "Added ${added.size} nodes from chat"
-                        refreshNodes()
-                    } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to add chat"
-                    }
-                    isLoading = false
-                }
-                showChatPickerDialog = false
-            },
-            onDismiss = { showChatPickerDialog = false }
-        )
-    }
-
-    // Export Dialog
-    if (showExportDialog) {
-        ExportDialog(
-            graph = graph,
-            cacheDir = context.cacheDir,
-            onExported = { path, recoveryKey ->
-                status = "Exported to: $path"
-                showExportDialog = false
-            },
-            onDismiss = { showExportDialog = false }
-        )
-    }
-
-    // Load Dialog
-    if (showLoadDialog) {
-        LoadPacketDialog(
-            cacheDir = context.cacheDir,
-            onLoaded = { packetState, graphData ->
-                scope.launch(Dispatchers.IO) {
-                    isLoading = true
-                    status = "Loading graph..."
-
-                    val result = graph.deserialize(graphData)
-                    if (result.isSuccess) {
-                        loadedPacketInfo = packetState
-                        refreshNodes()
-                        status = "Loaded: ${packetState.metadata.name}"
-                    } else {
-                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to load graph"
-                    }
-                    isLoading = false
-                }
-                showLoadDialog = false
-            },
-            onDismiss = { showLoadDialog = false }
-        )
-    }
-}
+//@OptIn(ExperimentalMaterial3Api::class)
+//@Composable
+//fun NeuronExampleScreen() {
+//    val context = LocalContext.current
+//    val scope = rememberCoroutineScope()
+//
+//    // State
+//    var status by remember { mutableStateOf("Not Initialized") }
+//    var isLoading by remember { mutableStateOf(false) }
+//    var errorMessage by remember { mutableStateOf("") }
+//    var settings by remember { mutableStateOf(GraphSettings.DEFAULT) }
+//
+//    // Dialogs
+//    var showSettingsSheet by remember { mutableStateOf(false) }
+//    var showAddTextDialog by remember { mutableStateOf(false) }
+//    var showChatPickerDialog by remember { mutableStateOf(false) }
+//    var showExportDialog by remember { mutableStateOf(false) }
+//    var showLoadDialog by remember { mutableStateOf(false) }
+//
+//    // Graph state
+//    var selectedNodeId by remember { mutableStateOf<String?>(null) }
+//    var searchQuery by remember { mutableStateOf("") }
+//    var searchResults by remember { mutableStateOf<List<QueryResult>>(emptyList()) }
+//
+//    // Loaded packet info
+//    var loadedPacketInfo by remember { mutableStateOf<LoadedPacketState?>(null) }
+//
+//    val embeddingEngine = remember { EmbeddingEngine() }
+//    val graph = remember { NeuronGraph(embeddingEngine, settings) }
+//    var graphNodes by remember { mutableStateOf<List<NeuronNode>>(emptyList()) }
+//
+//    // Update graph settings when changed
+//    LaunchedEffect(settings) {
+//        graph.settings = settings
+//    }
+//
+//    // Refresh nodes display
+//    fun refreshNodes() {
+//        graphNodes = graph.getAllNodes()
+//    }
+//
+//    Scaffold(
+//        topBar = {
+//            TopAppBar(
+//                title = {
+//                    Column {
+//                        Text("Neuron Graph")
+//                        if (loadedPacketInfo != null) {
+//                            Text(
+//                                text = loadedPacketInfo!!.metadata.name.ifEmpty { "Loaded Pack" },
+//                                style = MaterialTheme.typography.labelSmall,
+//                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+//                            )
+//                        }
+//                    }
+//                },
+//                actions = {
+//                    // Load button
+//                    IconButton(onClick = { showLoadDialog = true }) {
+//                        Icon(Icons.Default.FolderOpen, contentDescription = "Load Pack")
+//                    }
+//                    // Settings button
+//                    IconButton(onClick = { showSettingsSheet = true }) {
+//                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+//                    }
+//                },
+//                colors = TopAppBarDefaults.topAppBarColors(
+//                    containerColor = MaterialTheme.colorScheme.primaryContainer
+//                )
+//            )
+//        }
+//    ) { padding ->
+//        Column(
+//            modifier = Modifier
+//                .fillMaxSize()
+//                .padding(padding)
+//                .padding(16.dp),
+//            verticalArrangement = Arrangement.spacedBy(12.dp)
+//        ) {
+//            // Status & Error
+//            if (status.isNotEmpty()) {
+//                Text(
+//                    text = status,
+//                    style = MaterialTheme.typography.bodySmall,
+//                    color = MaterialTheme.colorScheme.onSurfaceVariant
+//                )
+//            }
+//
+//            if (errorMessage.isNotEmpty()) {
+//                Card(
+//                    colors = CardDefaults.cardColors(
+//                        containerColor = MaterialTheme.colorScheme.errorContainer
+//                    )
+//                ) {
+//                    Row(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(12.dp),
+//                        horizontalArrangement = Arrangement.SpaceBetween,
+//                        verticalAlignment = Alignment.CenterVertically
+//                    ) {
+//                        Text(
+//                            text = errorMessage,
+//                            color = MaterialTheme.colorScheme.onErrorContainer,
+//                            style = MaterialTheme.typography.bodySmall,
+//                            modifier = Modifier.weight(1f)
+//                        )
+//                        IconButton(onClick = { errorMessage = "" }) {
+//                            Icon(
+//                                Icons.Default.Close,
+//                                contentDescription = "Dismiss",
+//                                tint = MaterialTheme.colorScheme.onErrorContainer
+//                            )
+//                        }
+//                    }
+//                }
+//            }
+//
+//            // Initialize Button
+//            if (!embeddingProvider.isInitialized()) {
+//                Button(
+//                    onClick = {
+//                        scope.launch(Dispatchers.IO) {
+//                            isLoading = true
+//                            status = "Initializing embedding model..."
+//                            errorMessage = ""
+//
+//                            val modelPath = EmbeddingEngine.getModelPath(context)
+//                            val config = com.dark.tool_neuron.engine.EmbeddingConfig(
+//                                modelPath = modelPath.absolutePath
+//                            )
+//
+//                            val result = embeddingEngine.initialize(config)
+//                            if (result.isSuccess) {
+//                                status = "Ready (dim: ${embeddingEngine.getDimension()})"
+//                            } else {
+//                                status = "Initialization failed"
+//                                errorMessage = result.exceptionOrNull()?.message ?: "Unknown error"
+//                            }
+//                            isLoading = false
+//                        }
+//                    },
+//                    modifier = Modifier.fillMaxWidth(),
+//                    enabled = !isLoading
+//                ) {
+//                    if (isLoading) {
+//                        CircularProgressIndicator(
+//                            modifier = Modifier.size(20.dp),
+//                            strokeWidth = 2.dp
+//                        )
+//                        Spacer(modifier = Modifier.width(8.dp))
+//                    }
+//                    Text("Initialize Embedding Model")
+//                }
+//            }
+//
+//            // Add Content Buttons
+//            if (embeddingProvider.isInitialized()) {
+//                Row(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+//                ) {
+//                    OutlinedButton(
+//                        onClick = { showAddTextDialog = true },
+//                        modifier = Modifier.weight(1f),
+//                        enabled = !isLoading
+//                    ) {
+//                        Icon(Icons.Default.TextFields, contentDescription = null, modifier = Modifier.size(18.dp))
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Text")
+//                    }
+//
+//                    OutlinedButton(
+//                        onClick = { showChatPickerDialog = true },
+//                        modifier = Modifier.weight(1f),
+//                        enabled = !isLoading
+//                    ) {
+//                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+//                        Spacer(modifier = Modifier.width(4.dp))
+//                        Text("Chat")
+//                    }
+//                }
+//            }
+//
+//            // Stats Bar
+//            if (graphNodes.isNotEmpty()) {
+//                val stats = graph.getStats()
+//                Card(
+//                    modifier = Modifier.fillMaxWidth(),
+//                    colors = CardDefaults.cardColors(
+//                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+//                    )
+//                ) {
+//                    Row(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .padding(12.dp),
+//                        horizontalArrangement = Arrangement.SpaceEvenly
+//                    ) {
+//                        StatItem("Nodes", stats.nodeCount.toString())
+//                        StatItem("Edges", stats.edgeCount.toString())
+//                        StatItem("Sources", stats.sourceCount.toString())
+//                    }
+//                }
+//            }
+//
+//            // Graph Visualization
+//            if (embeddingProvider.isInitialized()) {
+//                val selectedNode = graphNodes.find { it.id == selectedNodeId }
+//                val connectedNodes = selectedNode?.edges?.mapNotNull { edge ->
+//                    graphNodes.find { it.id == edge.targetId }
+//                } ?: emptyList()
+//
+//                GraphVisualization(
+//                    nodes = graphNodes,
+//                    selectedNodeId = selectedNodeId,
+//                    onNodeSelected = { selectedNodeId = it },
+//                    modifier = Modifier
+//                        .fillMaxWidth()
+//                        .height(250.dp)
+//                )
+//
+//                // Node Detail Card
+//                AnimatedVisibility(
+//                    visible = selectedNode != null,
+//                    enter = slideInVertically { it } + fadeIn(),
+//                    exit = slideOutVertically { it } + fadeOut()
+//                ) {
+//                    NodeDetailCard(
+//                        node = selectedNode,
+//                        connectedNodes = connectedNodes,
+//                        onDismiss = { selectedNodeId = null },
+//                        modifier = Modifier.fillMaxWidth()
+//                    )
+//                }
+//            }
+//
+//            // Search Section
+//            if (graphNodes.isNotEmpty()) {
+//                HorizontalDivider()
+//
+//                OutlinedTextField(
+//                    value = searchQuery,
+//                    onValueChange = { searchQuery = it },
+//                    label = { Text("Query the graph") },
+//                    placeholder = { Text("Ask something...") },
+//                    modifier = Modifier.fillMaxWidth(),
+//                    trailingIcon = {
+//                        if (searchQuery.isNotBlank()) {
+//                            IconButton(
+//                                onClick = {
+//                                    scope.launch(Dispatchers.IO) {
+//                                        isLoading = true
+//                                        searchResults = graph.query(searchQuery, topK = 5)
+//                                        isLoading = false
+//                                    }
+//                                }
+//                            ) {
+//                                Icon(Icons.Default.Search, contentDescription = "Search")
+//                            }
+//                        }
+//                    },
+//                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+//                    keyboardActions = KeyboardActions(
+//                        onSearch = {
+//                            scope.launch(Dispatchers.IO) {
+//                                isLoading = true
+//                                searchResults = graph.query(searchQuery, topK = 5)
+//                                isLoading = false
+//                            }
+//                        }
+//                    ),
+//                    singleLine = true
+//                )
+//
+//                // Search Results
+//                if (searchResults.isNotEmpty()) {
+//                    Text(
+//                        text = "Results (${searchResults.size})",
+//                        style = MaterialTheme.typography.labelMedium,
+//                        modifier = Modifier.padding(top = 8.dp)
+//                    )
+//
+//                    LazyColumn(
+//                        modifier = Modifier
+//                            .fillMaxWidth()
+//                            .weight(1f),
+//                        verticalArrangement = Arrangement.spacedBy(8.dp)
+//                    ) {
+//                        items(searchResults) { result ->
+//                            SearchResultCard(
+//                                result = result,
+//                                onClick = { selectedNodeId = result.node.id }
+//                            )
+//                        }
+//                    }
+//                }
+//            }
+//
+//            Spacer(modifier = Modifier.weight(1f))
+//
+//            // Export Button
+//            if (graphNodes.isNotEmpty()) {
+//                Button(
+//                    onClick = { showExportDialog = true },
+//                    modifier = Modifier.fillMaxWidth(),
+//                    enabled = !isLoading
+//                ) {
+//                    Icon(Icons.Default.Save, contentDescription = null)
+//                    Spacer(modifier = Modifier.width(8.dp))
+//                    Text("Export as Neuron Pack")
+//                }
+//            }
+//
+//            // Clear Button
+//            if (graphNodes.isNotEmpty()) {
+//                OutlinedButton(
+//                    onClick = {
+//                        scope.launch {
+//                            graph.clear()
+//                            refreshNodes()
+//                            searchResults = emptyList()
+//                            selectedNodeId = null
+//                            loadedPacketInfo = null
+//                        }
+//                    },
+//                    modifier = Modifier.fillMaxWidth(),
+//                    colors = ButtonDefaults.outlinedButtonColors(
+//                        contentColor = MaterialTheme.colorScheme.error
+//                    )
+//                ) {
+//                    Icon(Icons.Default.Delete, contentDescription = null)
+//                    Spacer(modifier = Modifier.width(8.dp))
+//                    Text("Clear Graph")
+//                }
+//            }
+//        }
+//    }
+//
+//    // Settings Bottom Sheet
+//    if (showSettingsSheet) {
+//        SettingsBottomSheet(
+//            settings = settings,
+//            onSettingsChange = { settings = it },
+//            onDismiss = { showSettingsSheet = false }
+//        )
+//    }
+//
+//    // Add Text Dialog
+//    if (showAddTextDialog) {
+//        AddTextDialog(
+//            onAdd = { text, name ->
+//                scope.launch(Dispatchers.IO) {
+//                    isLoading = true
+//                    status = "Processing text..."
+//                    errorMessage = ""
+//
+//                    val result = graph.addText(text, name)
+//                    if (result.isSuccess) {
+//                        val added = result.getOrThrow()
+//                        status = "Added ${added.size} nodes"
+//                        refreshNodes()
+//                    } else {
+//                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to add text"
+//                    }
+//                    isLoading = false
+//                }
+//                showAddTextDialog = false
+//            },
+//            onDismiss = { showAddTextDialog = false }
+//        )
+//    }
+//
+//    // Chat Picker Dialog
+//    if (showChatPickerDialog) {
+//        ChatPickerDialog(
+//            onChatSelected = { chatInfo, messages ->
+//                scope.launch(Dispatchers.IO) {
+//                    isLoading = true
+//                    status = "Processing chat..."
+//                    errorMessage = ""
+//
+//                    val result = graph.addChatMessages(
+//                        messages = messages,
+//                        chatId = chatInfo.chatId,
+//                        chatName = "Chat ${chatInfo.chatId.take(8)}",
+//                        asConversationWindows = false
+//                    )
+//
+//                    if (result.isSuccess) {
+//                        val added = result.getOrThrow()
+//                        status = "Added ${added.size} nodes from chat"
+//                        refreshNodes()
+//                    } else {
+//                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to add chat"
+//                    }
+//                    isLoading = false
+//                }
+//                showChatPickerDialog = false
+//            },
+//            onDismiss = { showChatPickerDialog = false }
+//        )
+//    }
+//
+//    // Export Dialog
+//    if (showExportDialog) {
+//        ExportDialog(
+//            graph = graph,
+//            cacheDir = context.cacheDir,
+//            onExported = { path, recoveryKey ->
+//                status = "Exported to: $path"
+//                showExportDialog = false
+//            },
+//            onDismiss = { showExportDialog = false }
+//        )
+//    }
+//
+//    // Load Dialog
+//    if (showLoadDialog) {
+//        LoadPacketDialog(
+//            cacheDir = context.cacheDir,
+//            onLoaded = { packetState, graphData ->
+//                scope.launch(Dispatchers.IO) {
+//                    isLoading = true
+//                    status = "Loading graph..."
+//
+//                    val result = graph.deserialize(graphData)
+//                    if (result.isSuccess) {
+//                        loadedPacketInfo = packetState
+//                        refreshNodes()
+//                        status = "Loaded: ${packetState.metadata.name}"
+//                    } else {
+//                        errorMessage = result.exceptionOrNull()?.message ?: "Failed to load graph"
+//                    }
+//                    isLoading = false
+//                }
+//                showLoadDialog = false
+//            },
+//            onDismiss = { showLoadDialog = false }
+//        )
+//    }
+//}
 
 
 // Data Classes

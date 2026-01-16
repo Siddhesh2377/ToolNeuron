@@ -2,8 +2,7 @@
 
     import android.content.Context
     import com.dark.tool_neuron.database.AppDatabase
-    import com.dark.tool_neuron.neuron_example.EmbeddingProvider
-    import com.dark.tool_neuron.neuron_example.SentenceEmbeddingProvider
+    import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
     import com.dark.tool_neuron.repo.ModelRepository
     import com.dark.tool_neuron.repo.RagRepository
@@ -74,8 +73,8 @@
 
         @Provides
         @Singleton
-        fun provideEmbeddingProvider(): EmbeddingProvider {
-            return SentenceEmbeddingProvider()
+        fun provideEmbeddingEngine(): EmbeddingEngine {
+            return EmbeddingEngine()
         }
     }
 
@@ -107,12 +106,12 @@
         fun provideRagVaultIntegration(
             @ApplicationContext context: Context,
             ragRepository: RagRepository,
-            embeddingProvider: EmbeddingProvider
+            embeddingEngine: EmbeddingEngine
         ): RagVaultIntegration {
             return RagVaultIntegration(
                 context = context,
                 ragRepository = ragRepository,
-                embeddingProvider = embeddingProvider
+                embeddingEngine = embeddingEngine
             )
         }
     }

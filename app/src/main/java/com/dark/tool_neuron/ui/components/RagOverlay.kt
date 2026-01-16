@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -211,14 +213,12 @@ private fun RagOverlayHeader(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-//            IconButton(onClick = onInstallRag) {
-//                Icon(
-//                    Icons.Default.Download,
-//                    contentDescription = "Install RAG",
-//                    tint = MaterialTheme.colorScheme.primary
-//                )
-//            }
-            ActionTextButton(onClickListener = onOpenRagActivity, icon = Icons.Default.Add, text = "Create")
+            ActionTextButton(
+                onClickListener = onOpenRagActivity,
+                icon = Icons.Default.Add,
+                text = "Create",
+                shape = RoundedCornerShape(rDp(12.dp))
+            )
         }
     }
 }
@@ -439,17 +439,28 @@ private fun RagListItem(
                                 ActionTextButton(
                                     onClickListener = onUnload,
                                     icon = Icons.Default.Close,
-                                    text = "Unload"
+                                    text = "Unload",
+                                    shape = RoundedCornerShape(rDp(12.dp))
                                 )
                             }
                             RagStatus.LOADING -> {
-                                // Show loading state
+                                Box(
+                                    modifier = Modifier
+                                        .size(rDp(32.dp))
+                                        .padding(rDp(4.dp))
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.fillMaxSize(),
+                                        strokeWidth = rDp(2.dp)
+                                    )
+                                }
                             }
                             else -> {
                                 ActionTextButton(
                                     onClickListener = onLoad,
                                     icon = Icons.Default.Download,
-                                    text = "Load"
+                                    text = "Load",
+                                    shape = RoundedCornerShape(rDp(12.dp))
                                 )
                             }
                         }
@@ -476,14 +487,15 @@ private fun RagListItem(
 private fun RagTag(tag: String) {
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(rDp(4.dp)))
+            .clip(RoundedCornerShape(rDp(12.dp)))
             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
     ) {
         Text(
             text = tag,
             style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
         )
     }
 }
