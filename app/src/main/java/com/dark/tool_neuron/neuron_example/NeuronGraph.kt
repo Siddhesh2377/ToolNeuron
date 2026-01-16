@@ -25,13 +25,23 @@ import kotlin.math.sqrt
 data class GraphSettings(
     val edgeThreshold: Float = 0.75f,
     val maxEdgesPerNode: Int = 10,
-    val traversalDepth: Int = 1,
+    val traversalDepth: Int = 2,  // Increased from 1 to get more context
     val chunkSizeTokens: Int = 256,
-    val chunkOverlapTokens: Int = 40,
+    val chunkOverlapTokens: Int = 40,  // Will use sentence overlap instead
     val minChunkLength: Int = 20
 ) {
     companion object {
         val DEFAULT = GraphSettings()
+
+        // Optimized for medical/technical documents with lots of IDs and data
+        val TECHNICAL = GraphSettings(
+            edgeThreshold = 0.70f,  // Slightly lower for technical content
+            maxEdgesPerNode = 15,   // More connections for related data
+            traversalDepth = 2,     // Get more context
+            chunkSizeTokens = 200,  // Smaller chunks for precise matching
+            chunkOverlapTokens = 40,
+            minChunkLength = 15
+        )
     }
 }
 
@@ -315,16 +325,50 @@ object SemanticChunker {
             if (index == 0) {
                 chunk
             } else {
-                // Get last N tokens from previous chunk
+                // Get last 1-2 complete sentences from previous chunk for better context
                 val prevChunk = chunks[index - 1]
-                val overlapText = getLastNTokens(prevChunk, overlapTokens)
+                val overlapText = getLastSentences(prevChunk, 2)
                 if (overlapText.isNotEmpty()) {
-                    "...$overlapText\n\n$chunk"
+                    "$overlapText\n\n$chunk"
                 } else {
                     chunk
                 }
             }
         }
+    }
+
+    /**
+     * Get the last N complete sentences from text for better context overlap
+     */
+    private fun getLastSentences(text: String, n: Int): String {
+        val sentences = mutableListOf<String>()
+        var remaining = text
+
+        // Find all sentence boundaries
+        while (remaining.isNotEmpty()) {
+            var earliestIndex = remaining.length
+            var foundEnding = ""
+
+            for (ending in SENTENCE_ENDINGS) {
+                val index = remaining.indexOf(ending)
+                if (index in 0 until earliestIndex) {
+                    earliestIndex = index
+                    foundEnding = ending
+                }
+            }
+
+            if (earliestIndex < remaining.length) {
+                sentences.add(remaining.substring(0, earliestIndex + foundEnding.length).trim())
+                remaining = remaining.substring(earliestIndex + foundEnding.length)
+            } else {
+                if (remaining.isNotBlank()) {
+                    sentences.add(remaining.trim())
+                }
+                break
+            }
+        }
+
+        return sentences.takeLast(n).joinToString(" ")
     }
 
     private fun getLastNTokens(text: String, n: Int): String {
@@ -581,6 +625,7 @@ class NeuronGraph(
 
     /**
      * Query the graph and return relevant nodes with their connections.
+     * Uses hybrid search: semantic similarity + keyword matching
      */
     suspend fun query(
         queryText: String,
@@ -605,32 +650,52 @@ class NeuronGraph(
             return@withContext emptyList()
         }
 
-        // Use a lower threshold for queries - 0.3 (30%) is more practical for RAG
+        // Extract important keywords from query (IDs, names, specific terms)
+        val keywords = extractKeywords(queryText)
+        android.util.Log.d("NeuronGraph", "Extracted keywords: $keywords")
+
+        // Use a lower threshold for queries - 0.25 (25%) is more practical for RAG
         // Edge building uses settings.edgeThreshold (0.75), but queries need to be more permissive
-        val threshold = 0.3f
+        val threshold = 0.25f
         android.util.Log.d("NeuronGraph", "Using similarity threshold: $threshold")
 
-        // Find top-K similar nodes
-        val allSimilarities = nodes.values
+        // Calculate hybrid scores (semantic + keyword)
+        val allScores = nodes.values
             .mapNotNull { node ->
                 node.embedding?.let { emb ->
-                    val sim = cosineSimilarity(queryEmbedding, emb)
-                    node to sim
+                    val semanticScore = cosineSimilarity(queryEmbedding, emb)
+
+                    // Calculate keyword match score (0.0 to 1.0)
+                    val keywordScore = calculateKeywordScore(node.content, keywords)
+
+                    // Hybrid score: 70% semantic + 30% keyword
+                    // If exact keyword match, boost significantly
+                    val hybridScore = if (keywordScore > 0.5f) {
+                        // Strong keyword match - boost semantic score
+                        (semanticScore * 0.6f) + (keywordScore * 0.4f)
+                    } else {
+                        // Weak or no keyword match - rely more on semantic
+                        (semanticScore * 0.8f) + (keywordScore * 0.2f)
+                    }
+
+                    Triple(node, hybridScore, semanticScore)
                 }
             }
 
-        val maxSimilarity = allSimilarities.maxOfOrNull { it.second } ?: 0f
-        android.util.Log.d("NeuronGraph", "Calculated ${allSimilarities.size} similarities, max: $maxSimilarity, min: ${allSimilarities.minOfOrNull { it.second } ?: 0f}")
+        val maxScore = allScores.maxOfOrNull { it.second } ?: 0f
+        val maxSemanticScore = allScores.maxOfOrNull { it.third } ?: 0f
+        android.util.Log.d("NeuronGraph", "Calculated ${allScores.size} scores - max hybrid: $maxScore, max semantic: $maxSemanticScore")
 
-        val similarities = allSimilarities
+        // Filter and sort by hybrid score
+        val topResults = allScores
             .filter { it.second >= threshold }
             .sortedByDescending { it.second }
             .take(topK)
 
-        android.util.Log.d("NeuronGraph", "Found ${similarities.size} nodes above threshold (top scores: ${similarities.take(3).map { "%.3f".format(it.second) }})")
+        android.util.Log.d("NeuronGraph", "Found ${topResults.size} nodes above threshold (top hybrid scores: ${topResults.take(3).map { "%.3f".format(it.second) }})")
 
         // Build results with connected nodes
-        similarities.map { (node, score) ->
+        topResults.map { (node, hybridScore, _) ->
             val connectedNodes = if (expandConnections) {
                 expandByEdges(node, settings.traversalDepth)
             } else {
@@ -639,10 +704,75 @@ class NeuronGraph(
 
             QueryResult(
                 node = node,
-                score = score,
+                score = hybridScore,
                 connectedNodes = connectedNodes
             )
         }
+    }
+
+    /**
+     * Extract important keywords from query text
+     * Focuses on: IDs (patterns like XX-YYYY-NNN), capitalized words, quoted text
+     */
+    private fun extractKeywords(text: String): List<String> {
+        val keywords = mutableListOf<String>()
+
+        // Extract ID patterns (e.g., TU-2024-002, ID: 12345, etc.)
+        val idPattern = Regex("""[A-Z]{2,}-\d{4}-\d{3}|\b(?:ID|id):\s*[\w-]+""")
+        idPattern.findAll(text).forEach {
+            keywords.add(it.value.trim())
+        }
+
+        // Extract quoted text
+        val quotedPattern = Regex(""""([^"]+)"""")
+        quotedPattern.findAll(text).forEach {
+            keywords.add(it.groupValues[1])
+        }
+
+        // Extract capitalized words (likely names, places, etc.)
+        val capitalizedPattern = Regex("""\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\b""")
+        capitalizedPattern.findAll(text).forEach {
+            if (it.value.length > 2) { // Ignore short words like "ID"
+                keywords.add(it.value)
+            }
+        }
+
+        // Extract important technical terms (numbers, codes)
+        val technicalPattern = Regex("""\b\d+(?:\.\d+)?(?:[a-zA-Z]+)?\b""")
+        technicalPattern.findAll(text).forEach {
+            keywords.add(it.value)
+        }
+
+        return keywords.distinct()
+    }
+
+    /**
+     * Calculate keyword match score between content and keywords
+     */
+    private fun calculateKeywordScore(content: String, keywords: List<String>): Float {
+        if (keywords.isEmpty()) return 0f
+
+        val contentLower = content.lowercase()
+        var matchCount = 0
+        var exactMatchCount = 0
+
+        for (keyword in keywords) {
+            val keywordLower = keyword.lowercase()
+
+            // Check for exact match
+            if (content.contains(keyword, ignoreCase = true)) {
+                exactMatchCount++
+                matchCount++
+            }
+            // Check for partial match
+            else if (contentLower.contains(keywordLower)) {
+                matchCount++
+            }
+        }
+
+        // Score: exact matches count double
+        val score = (exactMatchCount * 2f + matchCount) / (keywords.size * 2f)
+        return score.coerceIn(0f, 1f)
     }
 
     private fun expandByEdges(startNode: NeuronNode, depth: Int): List<NeuronNode> {

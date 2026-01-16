@@ -491,6 +491,7 @@ class RagViewModel @Inject constructor(
         // The caller (HomeScreen) already checks if loadedRags is not empty
         val results = queryRags(query, topK)
         if (results.isEmpty()) {
+            Log.w("RagViewModel", "No RAG results found for query: $query")
             _lastRagResults.value = emptyList()
             return ""
         }
@@ -502,12 +503,26 @@ class RagViewModel @Inject constructor(
 
         for ((rag, queryResults) in results) {
             if (queryResults.isNotEmpty()) {
+                Log.d("RagViewModel", "RAG '${rag.name}' returned ${queryResults.size} results")
                 contextBuilder.append("**From ${rag.name}:**\n")
-                for (result in queryResults) {
+                for ((index, result) in queryResults.withIndex()) {
                     val score = result.score
                     val scorePercent = (score * 100).toInt()
                     val contentPreview = result.node.content.take(500)
+
+                    // Log detailed match info
+                    Log.d("RagViewModel", "  Result ${index + 1}: score=${"%.3f".format(score)} ($scorePercent%), " +
+                            "content=${result.node.content.take(100)}...")
+
                     contextBuilder.append("- [$scorePercent% match] $contentPreview\n")
+
+                    // Include connected nodes for more context
+                    if (result.connectedNodes.isNotEmpty()) {
+                        Log.d("RagViewModel", "    + ${result.connectedNodes.size} connected nodes")
+                        for (connectedNode in result.connectedNodes.take(2)) {
+                            contextBuilder.append("  Related: ${connectedNode.content.take(200)}\n")
+                        }
+                    }
 
                     displayResults.add(
                         RagQueryDisplayResult(
@@ -523,6 +538,7 @@ class RagViewModel @Inject constructor(
         }
 
         _lastRagResults.value = displayResults.sortedByDescending { it.score }
+        Log.d("RagViewModel", "RAG context length: ${contextBuilder.length} chars, ${displayResults.size} results")
         return contextBuilder.toString()
     }
 
