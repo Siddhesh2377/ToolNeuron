@@ -211,20 +211,14 @@ private fun RagOverlayHeader(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-            IconButton(onClick = onInstallRag) {
-                Icon(
-                    Icons.Default.Download,
-                    contentDescription = "Install RAG",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
-            IconButton(onClick = onOpenRagActivity) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "Create RAG",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-            }
+//            IconButton(onClick = onInstallRag) {
+//                Icon(
+//                    Icons.Default.Download,
+//                    contentDescription = "Install RAG",
+//                    tint = MaterialTheme.colorScheme.primary
+//                )
+//            }
+            ActionTextButton(onClickListener = onOpenRagActivity, icon = Icons.Default.Add, text = "Create")
         }
     }
 }

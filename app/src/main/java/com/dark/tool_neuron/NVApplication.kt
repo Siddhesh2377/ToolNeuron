@@ -27,8 +27,6 @@ class NVApplication : Application() {
     override fun onTerminate() {
         super.onTerminate()
         Log.d(TAG, "Application onTerminate")
-        LlmModelWorker.unbindService()
-        AppContainer.shutdown()
     }
 
     override fun onTrimMemory(level: Int) {

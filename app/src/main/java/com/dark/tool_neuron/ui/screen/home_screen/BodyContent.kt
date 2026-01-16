@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandLess
@@ -457,13 +458,15 @@ private fun UserMessageBubble(message: Messages) {
                 .padding(horizontal = rDp(8.dp), vertical = rDp(5.dp))
                 .widthIn(max = rDp(280.dp))
         ) {
-            MarkdownText(
-                text = message.content.content,
-                modifier = Modifier.padding(
-                    horizontal = rDp(12.dp),
-                    vertical = rDp(6.dp)
+            SelectionContainer {
+                MarkdownText(
+                    text = message.content.content,
+                    modifier = Modifier.padding(
+                        horizontal = rDp(12.dp),
+                        vertical = rDp(6.dp)
+                    )
                 )
-            )
+            }
         }
     }
 }
@@ -516,10 +519,12 @@ private fun AssistantMessageBubble(message: Messages) {
                 }
 
                 if (parsedMessage.actualContent.isNotEmpty()) {
-                    MarkdownText(
-                        text = parsedMessage.actualContent,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(4.dp))
-                    )
+                    SelectionContainer{
+                        MarkdownText(
+                            text = parsedMessage.actualContent,
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(4.dp))
+                        )
+                    }
                 }
             }
         }

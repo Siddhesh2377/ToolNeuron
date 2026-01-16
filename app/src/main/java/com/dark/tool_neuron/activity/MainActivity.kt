@@ -97,6 +97,12 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        LlmModelWorker.unbindService()
+        AppContainer.shutdown()
+    }
 }
 
 sealed class Screen(val route: String) {

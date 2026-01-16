@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
@@ -50,6 +51,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -86,10 +88,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.RagViewModel
@@ -149,7 +153,7 @@ fun RagScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            CenterAlignedTopAppBar(
                 title = {
                     Column {
                         Text(
@@ -164,16 +168,17 @@ fun RagScreen(
                         )
                     }
                 },
-                actions = {
-                    IconButton(onClick = { ragFilePicker.launch(arrayOf("*/*")) }) {
-                        Icon(Icons.Default.Download, contentDescription = "Install RAG")
-                    }
-                    IconButton(onClick = { showCreateSheet = true }) {
-                        Icon(Icons.Default.Add, contentDescription = "Create RAG")
-                    }
-                    ActionButton(
+                navigationIcon = {
+//                    IconButton(onClick = { ragFilePicker.launch(arrayOf("*/*")) }) {
+//                        Icon(Icons.Default.Download, contentDescription = "Install RAG")
+//                    }
+//                    IconButton(onClick = { showCreateSheet = true }) {
+//                        Icon(Icons.Default.Add, contentDescription = "Create RAG")
+//                    }
+                    ActionTextButton(
                         onClickListener = onClose,
-                        icon = Icons.Outlined.Close,
+                        icon = Icons.Default.ChevronLeft,
+                        text = "Back",
                         contentDescription = "Close",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
