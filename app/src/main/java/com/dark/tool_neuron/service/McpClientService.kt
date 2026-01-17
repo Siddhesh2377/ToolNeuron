@@ -2,6 +2,7 @@ package com.dark.tool_neuron.service
 
 import android.util.Log
 import com.dark.tool_neuron.models.table_schema.McpServer
+import com.dark.tool_neuron.models.table_schema.McpTransportType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -31,7 +32,11 @@ data class McpTestResult(
 
 /**
  * Client service for connecting to remote MCP (Model Context Protocol) servers.
- * Supports SSE and Streamable HTTP transport types.
+ * Supports both SSE (Server-Sent Events) and Streamable HTTP transport types.
+ * 
+ * Transport Types:
+ * - SSE: Uses text/event-stream for responses (legacy, being deprecated)
+ * - Streamable HTTP: Uses standard JSON responses (recommended)
  */
 @Singleton
 class McpClientService @Inject constructor() {
@@ -44,14 +49,35 @@ class McpClientService @Inject constructor() {
         private const val CLIENT_NAME = "ToolNeuron"
         private const val CLIENT_VERSION = "1.0.0"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
-        // Accept header must include both JSON and SSE for MCP servers like Zapier
-        private const val ACCEPT_HEADER = "application/json, text/event-stream"
+        // Accept headers for different transport types
+        private const val ACCEPT_HEADER_SSE = "application/json, text/event-stream"
+        private const val ACCEPT_HEADER_HTTP = "application/json"
     }
     
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
+    
+    /**
+     * Get the appropriate Accept header based on transport type
+     */
+    private fun getAcceptHeader(transportType: McpTransportType): String {
+        return when (transportType) {
+            McpTransportType.SSE -> ACCEPT_HEADER_SSE
+            McpTransportType.STREAMABLE_HTTP -> ACCEPT_HEADER_HTTP
+        }
+    }
+    
+    /**
+     * Parse response body, handling SSE format for SSE transport
+     */
+    private fun parseResponse(responseBody: String, transportType: McpTransportType): String {
+        return when (transportType) {
+            McpTransportType.SSE -> parseSseResponse(responseBody)
+            McpTransportType.STREAMABLE_HTTP -> responseBody  // Standard JSON, no parsing needed
+        }
+    }
     
     /**
      * Parse SSE (Server-Sent Events) response format.
@@ -89,7 +115,7 @@ class McpClientService @Inject constructor() {
      */
     suspend fun testConnection(server: McpServer): McpTestResult = withContext(Dispatchers.IO) {
         try {
-            Log.d(TAG, "Testing connection to MCP server: ${server.name} at ${server.url}")
+            Log.d(TAG, "Testing connection to MCP server: ${server.name} at ${server.url} (transport: ${server.transportType})")
             
             // Build the initialize request according to MCP protocol
             val initializeRequest = JSONObject().apply {
@@ -110,7 +136,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(initializeRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", ACCEPT_HEADER)
+                .addHeader("Accept", getAcceptHeader(server.transportType))
             
             // Add API key if provided
             server.apiKey?.let { key ->
@@ -134,8 +160,8 @@ class McpClientService @Inject constructor() {
                 )
             }
             
-            // Parse SSE format if needed
-            val responseBody = parseSseResponse(rawResponseBody)
+            // Parse response based on transport type
+            val responseBody = parseResponse(rawResponseBody, server.transportType)
             val jsonResponse = JSONObject(responseBody)
             
             // Check for JSON-RPC error
@@ -188,7 +214,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(listToolsRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", ACCEPT_HEADER)
+                .addHeader("Accept", getAcceptHeader(server.transportType))
             
             server.apiKey?.let { key ->
                 requestBuilder.addHeader("Authorization", "Bearer $key")
@@ -201,8 +227,8 @@ class McpClientService @Inject constructor() {
             }
             
             val rawResponseBody = response.body?.string() ?: return@withContext emptyList()
-            // Parse SSE format if needed
-            val responseBody = parseSseResponse(rawResponseBody)
+            // Parse response based on transport type
+            val responseBody = parseResponse(rawResponseBody, server.transportType)
             val jsonResponse = JSONObject(responseBody)
             
             if (jsonResponse.has("error")) {
@@ -253,7 +279,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(callToolRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", ACCEPT_HEADER)
+                .addHeader("Accept", getAcceptHeader(server.transportType))
             
             server.apiKey?.let { key ->
                 requestBuilder.addHeader("Authorization", "Bearer $key")
@@ -268,8 +294,8 @@ class McpClientService @Inject constructor() {
             val rawResponseBody = response.body?.string()
                 ?: return@withContext Result.failure(Exception("Empty response"))
             
-            // Parse SSE format if needed
-            val responseBody = parseSseResponse(rawResponseBody)
+            // Parse response based on transport type
+            val responseBody = parseResponse(rawResponseBody, server.transportType)
             val jsonResponse = JSONObject(responseBody)
             
             if (jsonResponse.has("error")) {
