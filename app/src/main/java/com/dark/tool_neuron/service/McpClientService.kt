@@ -55,19 +55,33 @@ class McpClientService @Inject constructor() {
     
     /**
      * Parse SSE (Server-Sent Events) response format.
-     * SSE responses come as "event: message\ndata: {...json...}"
+     * SSE responses come as "event: message\ndata: {...json...}\n\n"
+     * This handles single-event responses commonly used in MCP request/response patterns.
      */
     private fun parseSseResponse(responseBody: String): String {
-        val lines = responseBody.lines()
-        val dataLines = lines.filter { it.startsWith("data:") }
-        
-        return if (dataLines.isNotEmpty()) {
-            // Extract JSON from "data: {...}" format
-            dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
-        } else {
+        // Check if this is an SSE response
+        if (!responseBody.contains("data:")) {
             // Not SSE format, return as-is
-            responseBody
+            return responseBody
         }
+        
+        // Split by double newlines to separate events
+        val events = responseBody.split("\n\n")
+        
+        // Find the last event with data (for request/response pattern)
+        for (event in events.reversed()) {
+            val lines = event.lines()
+            val dataLines = lines.filter { it.startsWith("data:") }
+            
+            if (dataLines.isNotEmpty()) {
+                // Extract JSON from "data: {...}" format
+                // Multiple data lines in same event should be joined with newlines per SSE spec
+                return dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
+            }
+        }
+        
+        // Fallback: return original response
+        return responseBody
     }
     
     /**
