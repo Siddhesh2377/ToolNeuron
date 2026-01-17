@@ -7,17 +7,19 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dark.tool_neuron.database.dao.McpServerDao
 import com.dark.tool_neuron.database.dao.ModelConfigDao
 import com.dark.tool_neuron.database.dao.ModelDao
 import com.dark.tool_neuron.database.dao.RagDao
 import com.dark.tool_neuron.models.converters.Converters
 import com.dark.tool_neuron.models.table_schema.InstalledRag
+import com.dark.tool_neuron.models.table_schema.McpServer
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 
 @Database(
-    entities = [Model::class, ModelConfig::class, InstalledRag::class],
-    version = 4,
+    entities = [Model::class, ModelConfig::class, InstalledRag::class, McpServer::class],
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,6 +27,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun modelDao(): ModelDao
     abstract fun modelConfigDao(): ModelConfigDao
     abstract fun ragDao(): RagDao
+    abstract fun mcpServerDao(): McpServerDao
 
     companion object {
         @Volatile
@@ -114,6 +117,29 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create mcp_servers table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS mcp_servers (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        url TEXT NOT NULL,
+                        transportType TEXT NOT NULL,
+                        apiKey TEXT,
+                        isEnabled INTEGER NOT NULL,
+                        connectionStatus TEXT NOT NULL,
+                        lastError TEXT,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        lastConnectedAt INTEGER,
+                        description TEXT NOT NULL,
+                        customHeadersJson TEXT
+                    )
+                """.trimIndent())
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -121,7 +147,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "llm_models_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .fallbackToDestructiveMigration()
                     .build()
                 INSTANCE = instance

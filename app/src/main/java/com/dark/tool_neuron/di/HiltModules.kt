@@ -4,8 +4,10 @@
     import com.dark.tool_neuron.database.AppDatabase
     import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
+    import com.dark.tool_neuron.repo.McpServerRepository
     import com.dark.tool_neuron.repo.ModelRepository
     import com.dark.tool_neuron.repo.RagRepository
+    import com.dark.tool_neuron.service.McpClientService
     import com.dark.tool_neuron.worker.ChatManager
     import com.dark.tool_neuron.worker.GenerationManager
     import com.dark.tool_neuron.worker.RagVaultIntegration
@@ -65,6 +67,14 @@
                 context = context
             )
         }
+
+        @Provides
+        @Singleton
+        fun provideMcpServerRepository(database: AppDatabase): McpServerRepository {
+            return McpServerRepository(
+                mcpServerDao = database.mcpServerDao()
+            )
+        }
     }
 
     @Module
@@ -75,6 +85,17 @@
         @Singleton
         fun provideEmbeddingEngine(): EmbeddingEngine {
             return EmbeddingEngine()
+        }
+    }
+
+    @Module
+    @InstallIn(SingletonComponent::class)
+    object ServiceModule {
+
+        @Provides
+        @Singleton
+        fun provideMcpClientService(): McpClientService {
+            return McpClientService()
         }
     }
 

@@ -26,6 +26,7 @@ import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
+import com.dark.tool_neuron.ui.screen.McpServersScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
@@ -121,6 +122,7 @@ sealed class Screen(val route: String) {
     object Store : Screen("store")
     object Editor : Screen("editor")
     object VaultManager: Screen("vault_manager")
+    object McpServers: Screen("mcp_servers")
 }
 
 @Composable
@@ -176,6 +178,9 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
+                onMcpServersClick = {
+                    navController.navigate(Screen.McpServers.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -195,6 +200,12 @@ fun AppNavigation(
 
         composable(Screen.VaultManager.route) {
             VaultDashboard()
+        }
+
+        composable(Screen.McpServers.route) {
+            McpServersScreen(onBackClick = {
+                navController.popBackStack()
+            })
         }
     }
 }

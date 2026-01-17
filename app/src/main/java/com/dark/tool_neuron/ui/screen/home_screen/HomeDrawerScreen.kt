@@ -16,6 +16,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -56,6 +57,7 @@ import java.util.Locale
 fun HomeDrawerScreen(
     onChatSelected: (String) -> Unit,
     onVaultManagerClick: () -> Unit,
+    onMcpServersClick: () -> Unit,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
@@ -79,6 +81,7 @@ fun HomeDrawerScreen(
         topBar = {
             TopBar(
                 onVaultManagerClick,
+                onMcpServersClick,
                 onCreateNewChat = {
                     viewModel.createNewChat { chatId ->
                         onChatSelected(chatId)
@@ -124,6 +127,7 @@ fun HomeDrawerScreen(
 @Composable
 private fun TopBar(
     onVaultManagerClick: () -> Unit,
+    onMcpServersClick: () -> Unit,
     onCreateNewChat: () -> Unit
 ) {
     TopAppBar(
@@ -135,6 +139,11 @@ private fun TopBar(
         },
         actions = {
             Row{
+                ActionButton(
+                    onClickListener = onMcpServersClick,
+                    icon = Icons.Filled.Cloud,
+                    modifier = Modifier.padding(end = rDp(6.dp))
+                )
                 ActionButton(
                     onClickListener = onVaultManagerClick,
                     icon = R.drawable.smart_temp_message,
