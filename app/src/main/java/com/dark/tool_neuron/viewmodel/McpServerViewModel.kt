@@ -86,18 +86,22 @@ class McpServerViewModel @Inject constructor(
     // Error state
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    private var errorClearJob: kotlinx.coroutines.Job? = null
     
     /**
-     * Set an error message that auto-clears after a timeout
+     * Set an error message that auto-clears after a timeout.
+     * Cancels any previous auto-clear job to prevent race conditions.
      */
     private fun setError(message: String) {
+        // Cancel any pending error clear job
+        errorClearJob?.cancel()
+        
         _error.value = message
-        viewModelScope.launch {
+        
+        // Start new clear job
+        errorClearJob = viewModelScope.launch {
             delay(ERROR_DISPLAY_DURATION_MS)
-            // Only clear if it's still the same error
-            if (_error.value == message) {
-                _error.value = null
-            }
+            _error.value = null
         }
     }
     
