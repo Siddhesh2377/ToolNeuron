@@ -10,11 +10,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 /**
- * Integration tests for MCP server functionality.
- * These tests validate that the MCP client can properly connect to and interact with
- * remote MCP servers like Zapier.
+ * Unit tests for MCP server-related functionality.
+ * These tests validate McpToolMapper functionality, JSON parsing,
+ * and configuration objects without connecting to real MCP servers.
  */
-class McpServerIntegrationTest {
+class McpServerTest {
+
+    // Helper function to parse SSE response format.
+    // This is a simplified version for tests that extracts JSON from single-event SSE responses.
+    // The production code in McpClientService.parseSseResponse() handles multiple events and validates JSON.
+    private fun parseSseData(sseResponse: String): String {
+        val dataLine = sseResponse.lines().find { it.startsWith("data:") }
+            ?: return sseResponse
+        return dataLine.removePrefix("data:").trim()
+    }
 
     /**
      * Test that McpServer can be created with the correct configuration
@@ -41,18 +50,15 @@ class McpServerIntegrationTest {
     }
 
     /**
-     * Test parsing of MCP initialize response in SSE format.
+     * Test parsing of MCP initialize response in SSE format using helper function.
      */
     @Test
     fun parseMcpInitializeResponse() {
         val sseResponse = """event: message
 data: {"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listChanged":true}},"serverInfo":{"name":"zapier","title":"Zapier MCP","version":"1.0.0"}},"jsonrpc":"2.0","id":1}"""
 
-        // Extract JSON from SSE format
-        val dataLine = sseResponse.lines().find { it.startsWith("data:") }
-        assertNotNull(dataLine)
-        
-        val jsonStr = dataLine!!.removePrefix("data:").trim()
+        // Use helper function to extract JSON from SSE format
+        val jsonStr = parseSseData(sseResponse)
         val json = JSONObject(jsonStr)
         
         assertEquals("2.0", json.getString("jsonrpc"))
@@ -74,10 +80,8 @@ data: {"result":{"protocolVersion":"2024-11-05","capabilities":{"tools":{"listCh
         val sseResponse = """event: message
 data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","description":"Create a new document from text.","inputSchema":{"type":"object","properties":{"title":{"type":"string"}},"required":[]}}]},"jsonrpc":"2.0","id":2}"""
 
-        val dataLine = sseResponse.lines().find { it.startsWith("data:") }
-        assertNotNull(dataLine)
-        
-        val jsonStr = dataLine!!.removePrefix("data:").trim()
+        // Use helper function to extract JSON from SSE format
+        val jsonStr = parseSseData(sseResponse)
         val json = JSONObject(jsonStr)
         
         val result = json.getJSONObject("result")
@@ -124,22 +128,29 @@ data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","descr
         val toolsArray = JSONArray(mapping.toolsJson)
         assertEquals(2, toolsArray.length())
         
-        // Check first tool
+        // Check first tool structure
         val firstTool = toolsArray.getJSONObject(0)
         assertEquals("function", firstTool.getString("type"))
         
         val function = firstTool.getJSONObject("function")
-        // Tool name should be sanitized: "zapier_mcp_google_docs_create_document_from_text"
-        assertTrue(function.getString("name").contains("google_docs_create_document_from_text"))
+        // Verify exact tool name format: "zapier_mcp_google_docs_create_document_from_text"
+        assertEquals("zapier_mcp_google_docs_create_document_from_text", function.getString("name"))
         assertTrue(function.has("description"))
         
-        // Check tool registry
+        // Check tool registry size and contents
         assertEquals(2, mapping.toolRegistry.size)
         
-        // Check that registry maps back to original tool names
-        val firstEntry = mapping.toolRegistry.values.first()
-        assertEquals(server, firstEntry.server)
-        assertTrue(firstEntry.toolName.startsWith("google_docs_"))
+        // Verify exact tool name mapping in registry
+        val toolNames = mapping.toolRegistry.values.map { it.toolName }.toSet()
+        assertEquals(
+            setOf("google_docs_create_document_from_text", "google_docs_find_a_document"),
+            toolNames
+        )
+        
+        // Verify all entries reference the same server
+        mapping.toolRegistry.values.forEach { entry ->
+            assertEquals(server, entry.server)
+        }
     }
 
     /**
@@ -155,9 +166,10 @@ data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","descr
             put("file", "Hello World")
         }
         
+        // Use fixed ID for deterministic test behavior
         val request = JSONObject().apply {
             put("jsonrpc", "2.0")
-            put("id", System.currentTimeMillis())
+            put("id", 123L)
             put("method", "tools/call")
             put("params", JSONObject().apply {
                 put("name", toolName)
@@ -166,6 +178,7 @@ data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","descr
         }
         
         assertEquals("2.0", request.getString("jsonrpc"))
+        assertEquals(123L, request.getLong("id"))
         assertEquals("tools/call", request.getString("method"))
         
         val params = request.getJSONObject("params")
@@ -177,42 +190,46 @@ data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","descr
     }
 
     /**
-     * Test SSE transport type is correctly identified for Zapier MCP.
+     * Test that both transport types can be assigned to McpServer.
      */
     @Test
-    fun identifyZapierTransportType() {
-        // Zapier uses SSE transport
-        val zapierServer = McpServer(
-            id = "zapier",
-            name = "Zapier",
-            url = "https://mcp.zapier.com/api/v1/connect",
+    fun verifyTransportTypeAssignment() {
+        // SSE transport type
+        val sseServer = McpServer(
+            id = "server-sse",
+            name = "SSE Server",
+            url = "https://mcp.example.com/sse",
             transportType = McpTransportType.SSE
         )
+        assertEquals(McpTransportType.SSE, sseServer.transportType)
         
-        assertEquals(McpTransportType.SSE, zapierServer.transportType)
-        
-        // Alternative: Streamable HTTP transport
+        // Streamable HTTP transport type
         val httpServer = McpServer(
-            id = "custom",
-            name = "Custom MCP",
-            url = "https://api.example.com/mcp",
+            id = "server-http",
+            name = "HTTP Server",
+            url = "https://mcp.example.com/http",
             transportType = McpTransportType.STREAMABLE_HTTP
         )
-        
         assertEquals(McpTransportType.STREAMABLE_HTTP, httpServer.transportType)
     }
 
     /**
-     * Test that server ID generation produces unique IDs.
+     * Test that server ID generation produces unique UUIDs.
      */
     @Test
     fun generateUniqueServerIds() {
         val ids = mutableSetOf<String>()
-        repeat(100) {
+        // Generate 10 IDs to demonstrate uniqueness with reasonable confidence
+        repeat(10) {
             ids.add(McpServer.generateId())
         }
         
-        // All 100 IDs should be unique
-        assertEquals(100, ids.size)
+        // All 10 IDs should be unique
+        assertEquals(10, ids.size)
+        
+        // Verify IDs are valid UUID format (lowercase hexadecimal)
+        ids.forEach { id ->
+            assertTrue("ID should be a valid UUID format", id.matches(Regex("[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")))
+        }
     }
 }

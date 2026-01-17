@@ -87,14 +87,14 @@ class McpClientService @Inject constructor() {
     }
     
     /**
-     * Parse response body, handling SSE format for SSE transport.
-     * For Streamable HTTP, returns the raw JSON body (no SSE envelope to parse).
+     * Parse response body, handling SSE format automatically.
+     * Some MCP servers return SSE-formatted responses regardless of the declared transport type,
+     * so we detect and parse SSE format for both transport types.
      */
     private fun parseResponse(responseBody: String, transportType: McpTransportType): String {
-        return when (transportType) {
-            McpTransportType.SSE -> parseSseResponse(responseBody)
-            McpTransportType.STREAMABLE_HTTP -> responseBody  // Already JSON, no SSE envelope to parse
-        }
+        // Always try to parse SSE format first, as some servers return SSE regardless of transport type
+        // The parseSseResponse function will return the original body if it's not SSE format
+        return parseSseResponse(responseBody)
     }
     
     /**
