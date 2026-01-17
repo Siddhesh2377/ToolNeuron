@@ -27,6 +27,10 @@ android {
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
