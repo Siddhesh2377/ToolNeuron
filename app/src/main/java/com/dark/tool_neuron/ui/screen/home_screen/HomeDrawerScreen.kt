@@ -123,6 +123,15 @@ fun HomeDrawerScreen(
     }
 }
 
+/**
+ * Top app bar used in the home drawer screen.
+ * Provides quick access actions for managing vaults, configuring MCP servers,
+ * and creating a new chat session.
+ *
+ * @param onVaultManagerClick Invoked when the vault manager action is selected.
+ * @param onMcpServersClick Invoked when the MCP servers action is selected.
+ * @param onCreateNewChat Invoked when the user requests to create a new chat.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DrawerTopBar(

@@ -9,6 +9,7 @@ import com.dark.tool_neuron.repo.McpServerRepository
 import com.dark.tool_neuron.service.McpClientService
 import com.dark.tool_neuron.service.McpTestResult
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -34,6 +35,10 @@ class McpServerViewModel @Inject constructor(
     private val repository: McpServerRepository,
     private val mcpClientService: McpClientService
 ) : ViewModel() {
+    
+    companion object {
+        private const val ERROR_DISPLAY_DURATION_MS = 5000L
+    }
     
     // All servers with their runtime status
     val servers: StateFlow<List<McpServerUiState>> = combine(
@@ -81,6 +86,20 @@ class McpServerViewModel @Inject constructor(
     // Error state
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+    
+    /**
+     * Set an error message that auto-clears after a timeout
+     */
+    private fun setError(message: String) {
+        _error.value = message
+        viewModelScope.launch {
+            delay(ERROR_DISPLAY_DURATION_MS)
+            // Only clear if it's still the same error
+            if (_error.value == message) {
+                _error.value = null
+            }
+        }
+    }
     
     /**
      * Show the add server dialog
@@ -133,7 +152,7 @@ class McpServerViewModel @Inject constructor(
                 repository.addServer(name, url, transportType, apiKey, description)
                 hideAddServerDialog()
             } catch (e: Exception) {
-                _error.value = "Failed to add server: ${e.message}"
+                setError("Failed to add server: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
@@ -150,7 +169,7 @@ class McpServerViewModel @Inject constructor(
                 repository.updateServer(server)
                 hideEditServerDialog()
             } catch (e: Exception) {
-                _error.value = "Failed to update server: ${e.message}"
+                setError("Failed to update server: ${e.message}")
             } finally {
                 _isLoading.value = false
             }
@@ -165,7 +184,7 @@ class McpServerViewModel @Inject constructor(
             try {
                 repository.deleteServer(serverId)
             } catch (e: Exception) {
-                _error.value = "Failed to delete server: ${e.message}"
+                setError("Failed to delete server: ${e.message}")
             }
         }
     }
@@ -178,7 +197,7 @@ class McpServerViewModel @Inject constructor(
             try {
                 repository.setServerEnabled(serverId, enabled)
             } catch (e: Exception) {
-                _error.value = "Failed to update server: ${e.message}"
+                setError("Failed to update server: ${e.message}")
             }
         }
     }

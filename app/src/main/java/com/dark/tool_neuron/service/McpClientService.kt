@@ -60,6 +60,23 @@ class McpClientService @Inject constructor() {
         .build()
     
     /**
+     * Clean up resources associated with the underlying OkHttpClient.
+     * This should be called when the McpClientService is no longer needed.
+     */
+    fun close() {
+        try {
+            // Shut down the executor service used by the dispatcher
+            httpClient.dispatcher.executorService.shutdown()
+            // Evict all connections from the connection pool
+            httpClient.connectionPool.evictAll()
+            // Close any configured cache
+            httpClient.cache?.close()
+        } catch (e: Exception) {
+            Log.w(TAG, "Error while closing OkHttpClient resources", e)
+        }
+    }
+    
+    /**
      * Get the appropriate Accept header based on transport type
      */
     private fun getAcceptHeader(transportType: McpTransportType): String {
@@ -84,6 +101,9 @@ class McpClientService @Inject constructor() {
      * Parse SSE (Server-Sent Events) response format.
      * SSE responses come as "event: message\ndata: {...json...}\n\n"
      * This handles single-event responses commonly used in MCP request/response patterns.
+     * 
+     * Note: For streaming scenarios, this parser extracts the last complete event.
+     * In MCP's request/response pattern, this is typically the only event.
      */
     private fun parseSseResponse(responseBody: String): String {
         // Check if this is an SSE response
@@ -103,7 +123,16 @@ class McpClientService @Inject constructor() {
             if (dataLines.isNotEmpty()) {
                 // Extract JSON from "data: {...}" format
                 // Multiple data lines in same event should be joined with newlines per SSE spec
-                return dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
+                val joinedData = dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
+                
+                // Validate that the joined data is valid JSON to avoid propagating malformed JSON-RPC
+                return try {
+                    JSONObject(joinedData)
+                    joinedData
+                } catch (e: Exception) {
+                    Log.w(TAG, "SSE data is not valid JSON; returning raw SSE response body", e)
+                    responseBody
+                }
             }
         }
         
@@ -163,7 +192,17 @@ class McpClientService @Inject constructor() {
             
             // Parse response based on transport type
             val responseBody = parseResponse(rawResponseBody, server.transportType)
-            val jsonResponse = JSONObject(responseBody)
+            
+            // Parse JSON response with specific error handling
+            val jsonResponse = try {
+                JSONObject(responseBody)
+            } catch (e: org.json.JSONException) {
+                Log.e(TAG, "Failed to parse MCP response as JSON: ${e.message}")
+                return@withContext McpTestResult(
+                    success = false,
+                    message = "Server returned invalid JSON response. The server may not be a valid MCP server."
+                )
+            }
             
             // Check for JSON-RPC error
             if (jsonResponse.has("error")) {

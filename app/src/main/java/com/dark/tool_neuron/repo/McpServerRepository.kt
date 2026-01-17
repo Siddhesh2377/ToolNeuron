@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.repo
 
+import android.util.Log
 import com.dark.tool_neuron.database.dao.McpServerDao
 import com.dark.tool_neuron.models.table_schema.McpConnectionStatus
 import com.dark.tool_neuron.models.table_schema.McpServer
@@ -8,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.net.URI
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,6 +20,9 @@ import javax.inject.Singleton
 class McpServerRepository @Inject constructor(
     private val mcpServerDao: McpServerDao
 ) {
+    companion object {
+        private const val TAG = "McpServerRepository"
+    }
     // Runtime connection status tracking (not persisted)
     private val _connectionStatuses = MutableStateFlow<Map<String, McpConnectionStatus>>(emptyMap())
     val connectionStatuses: StateFlow<Map<String, McpConnectionStatus>> = _connectionStatuses.asStateFlow()
@@ -39,6 +44,7 @@ class McpServerRepository @Inject constructor(
 
     /**
      * Add a new MCP server
+     * @throws IllegalArgumentException if the URL is not valid
      */
     suspend fun addServer(
         name: String,
@@ -47,10 +53,28 @@ class McpServerRepository @Inject constructor(
         apiKey: String? = null,
         description: String = ""
     ): McpServer {
+        val trimmedUrl = url.trim()
+        
+        // Validate URL format
+        val validatedUrl = try {
+            val uri = URI(trimmedUrl)
+            if (uri.scheme.isNullOrBlank() || uri.host.isNullOrBlank()) {
+                throw IllegalArgumentException("Invalid server URL: missing scheme or host")
+            }
+            if (uri.scheme != "http" && uri.scheme != "https") {
+                throw IllegalArgumentException("Invalid server URL scheme: ${uri.scheme}")
+            }
+            trimmedUrl
+        } catch (e: IllegalArgumentException) {
+            throw e
+        } catch (e: Exception) {
+            throw IllegalArgumentException("Invalid server URL format: '$trimmedUrl'", e)
+        }
+        
         val server = McpServer(
             id = McpServer.generateId(),
             name = name,
-            url = url.trim(),
+            url = validatedUrl,
             transportType = transportType,
             apiKey = apiKey?.trim()?.takeIf { it.isNotEmpty() },
             description = description.trim(),
@@ -91,8 +115,14 @@ class McpServerRepository @Inject constructor(
 
     /**
      * Update the runtime connection status of a server
+     * @param serverId The ID of the server
+     * @param status The new connection status
+     * @param error Optional error message when status is ERROR
      */
     fun updateConnectionStatus(serverId: String, status: McpConnectionStatus, error: String? = null) {
+        if (error != null && status == McpConnectionStatus.ERROR) {
+            Log.w(TAG, "MCP server $serverId connection error: $error")
+        }
         _connectionStatuses.value = _connectionStatuses.value + (serverId to status)
     }
 
