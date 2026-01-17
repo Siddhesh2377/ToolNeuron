@@ -35,8 +35,8 @@ data class McpTestResult(
  * Supports both SSE (Server-Sent Events) and Streamable HTTP transport types.
  * 
  * Transport Types:
- * - SSE: Uses text/event-stream for responses (legacy, being deprecated)
- * - Streamable HTTP: Uses standard JSON responses (recommended)
+ * - SSE: Uses text/event-stream for responses (commonly used by servers like Zapier MCP)
+ * - Streamable HTTP: Uses standard JSON responses
  */
 @Singleton
 class McpClientService @Inject constructor() {
@@ -70,12 +70,13 @@ class McpClientService @Inject constructor() {
     }
     
     /**
-     * Parse response body, handling SSE format for SSE transport
+     * Parse response body, handling SSE format for SSE transport.
+     * For Streamable HTTP, returns the raw JSON body (no SSE envelope to parse).
      */
     private fun parseResponse(responseBody: String, transportType: McpTransportType): String {
         return when (transportType) {
             McpTransportType.SSE -> parseSseResponse(responseBody)
-            McpTransportType.STREAMABLE_HTTP -> responseBody  // Standard JSON, no parsing needed
+            McpTransportType.STREAMABLE_HTTP -> responseBody  // Already JSON, no SSE envelope to parse
         }
     }
     
