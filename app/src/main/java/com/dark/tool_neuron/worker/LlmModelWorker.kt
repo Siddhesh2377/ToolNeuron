@@ -309,6 +309,25 @@ object LlmModelWorker {
         return service?.modelInfoGguf
     }
 
+    suspend fun setGgufToolsJson(toolsJson: String): Boolean {
+        val svc = ensureServiceBound()
+        return try {
+            svc.setToolsJsonGguf(toolsJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set GGUF tools JSON", e)
+            false
+        }
+    }
+
+    fun clearGgufTools() {
+        try {
+            service?.clearToolsGguf()
+            Log.i(TAG, "Cleared GGUF tools")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear GGUF tools", e)
+        }
+    }
+
     // ==================== Diffusion Methods ====================
 
     /**
