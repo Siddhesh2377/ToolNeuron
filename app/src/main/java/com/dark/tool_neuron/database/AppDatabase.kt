@@ -128,7 +128,6 @@ abstract class AppDatabase : RoomDatabase() {
                         transportType TEXT NOT NULL,
                         apiKey TEXT,
                         isEnabled INTEGER NOT NULL,
-                        connectionStatus TEXT NOT NULL,
                         lastError TEXT,
                         createdAt INTEGER NOT NULL,
                         updatedAt INTEGER NOT NULL,

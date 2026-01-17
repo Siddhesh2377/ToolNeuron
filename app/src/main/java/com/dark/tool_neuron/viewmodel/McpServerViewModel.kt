@@ -24,9 +24,7 @@ import javax.inject.Inject
  */
 data class McpServerUiState(
     val server: McpServer,
-    val connectionStatus: McpConnectionStatus = McpConnectionStatus.DISCONNECTED,
-    val isTesting: Boolean = false,
-    val lastTestResult: McpTestResult? = null
+    val connectionStatus: McpConnectionStatus = McpConnectionStatus.DISCONNECTED
 )
 
 /**

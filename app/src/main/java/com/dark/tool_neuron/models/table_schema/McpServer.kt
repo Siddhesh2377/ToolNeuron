@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.models.table_schema
 
 import androidx.room.Entity
+import androidx.room.Ignore
 import androidx.room.PrimaryKey
 
 /**
@@ -12,7 +13,7 @@ enum class McpTransportType {
 }
 
 /**
- * Connection status of an MCP server
+ * Connection status of an MCP server (runtime only, not persisted)
  */
 enum class McpConnectionStatus {
     DISCONNECTED,
@@ -44,9 +45,6 @@ data class McpServer(
     
     /** Whether the server is enabled */
     val isEnabled: Boolean = true,
-    
-    /** Current connection status (not persisted, managed at runtime) */
-    val connectionStatus: McpConnectionStatus = McpConnectionStatus.DISCONNECTED,
     
     /** Last error message if connection failed */
     val lastError: String? = null,

@@ -39,6 +39,9 @@ import com.dark.tool_neuron.viewmodel.McpServerViewModel
 import java.text.SimpleDateFormat
 import java.util.*
 
+// Success color for connected/successful states
+private val SuccessGreen = Color(0xFF4CAF50)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun McpServersScreen(
@@ -451,7 +454,7 @@ private fun ServerCard(
 private fun StatusIndicator(status: McpConnectionStatus, isTesting: Boolean) {
     val color = when {
         isTesting -> MaterialTheme.colorScheme.tertiary
-        status == McpConnectionStatus.CONNECTED -> Color(0xFF4CAF50) // Green
+        status == McpConnectionStatus.CONNECTED -> SuccessGreen
         status == McpConnectionStatus.ERROR -> MaterialTheme.colorScheme.error
         status == McpConnectionStatus.CONNECTING -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
@@ -576,6 +579,9 @@ private fun AddEditServerDialog(
             Spacer(modifier = Modifier.height(rDp(16.dp)))
 
             // URL field
+            val isInsecureUrl = url.startsWith("http://") && !url.startsWith("https://")
+            val showSecurityWarning = isInsecureUrl && apiKey.isNotBlank()
+            
             OutlinedTextField(
                 value = url,
                 onValueChange = { 
@@ -590,10 +596,38 @@ private fun AddEditServerDialog(
                 leadingIcon = {
                     Icon(Icons.Default.Link, contentDescription = null)
                 },
-                isError = url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://"),
-                supportingText = if (url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://")) {
-                    { Text("URL must start with http:// or https://") }
+                trailingIcon = if (showSecurityWarning) {
+                    {
+                        Icon(
+                            Icons.Default.Warning,
+                            contentDescription = "Security warning",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 } else null,
+                isError = url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://"),
+                supportingText = when {
+                    url.isNotBlank() && !url.startsWith("http://") && !url.startsWith("https://") -> {
+                        { Text("URL must start with http:// or https://") }
+                    }
+                    showSecurityWarning -> {
+                        { 
+                            Text(
+                                "Warning: Using HTTP with an API key is insecure. Use HTTPS for secure connections.",
+                                color = MaterialTheme.colorScheme.error
+                            ) 
+                        }
+                    }
+                    isInsecureUrl -> {
+                        { 
+                            Text(
+                                "Consider using HTTPS for secure connections",
+                                color = MaterialTheme.colorScheme.tertiary
+                            ) 
+                        }
+                    }
+                    else -> null
+                },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
             )
 
@@ -751,7 +785,7 @@ private fun TestResultCard(result: McpTestResult) {
                     imageVector = if (result.success) Icons.Default.CheckCircle else Icons.Default.Error,
                     contentDescription = null,
                     tint = if (result.success) {
-                        Color(0xFF4CAF50)
+                        SuccessGreen
                     } else {
                         MaterialTheme.colorScheme.error
                     },
@@ -762,7 +796,7 @@ private fun TestResultCard(result: McpTestResult) {
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = if (result.success) {
-                        Color(0xFF4CAF50)
+                        SuccessGreen
                     } else {
                         MaterialTheme.colorScheme.error
                     }

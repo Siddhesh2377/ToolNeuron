@@ -42,6 +42,9 @@ class McpClientService @Inject constructor() {
         private const val TAG = "McpClientService"
         private const val CONNECT_TIMEOUT_SECONDS = 15L
         private const val READ_TIMEOUT_SECONDS = 30L
+        private const val MCP_PROTOCOL_VERSION = "2024-11-05"
+        private const val CLIENT_NAME = "ToolNeuron"
+        private const val CLIENT_VERSION = "1.0.0"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
     }
     
@@ -63,11 +66,11 @@ class McpClientService @Inject constructor() {
                 put("id", 1)
                 put("method", "initialize")
                 put("params", JSONObject().apply {
-                    put("protocolVersion", "2024-11-05")
+                    put("protocolVersion", MCP_PROTOCOL_VERSION)
                     put("capabilities", JSONObject())
                     put("clientInfo", JSONObject().apply {
-                        put("name", "ToolNeuron")
-                        put("version", "1.0.0")
+                        put("name", CLIENT_NAME)
+                        put("version", CLIENT_VERSION)
                     })
                 })
             }

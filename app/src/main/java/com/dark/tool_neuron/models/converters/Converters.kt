@@ -3,7 +3,6 @@ package com.dark.tool_neuron.models.converters
 import androidx.room.TypeConverter
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
-import com.dark.tool_neuron.models.table_schema.McpConnectionStatus
 import com.dark.tool_neuron.models.table_schema.McpTransportType
 
 class Converters {
@@ -24,10 +23,4 @@ class Converters {
     
     @TypeConverter
     fun toMcpTransportType(value: String): McpTransportType = McpTransportType.valueOf(value)
-    
-    @TypeConverter
-    fun fromMcpConnectionStatus(value: McpConnectionStatus): String = value.name
-    
-    @TypeConverter
-    fun toMcpConnectionStatus(value: String): McpConnectionStatus = McpConnectionStatus.valueOf(value)
 }
