@@ -109,12 +109,12 @@ data: {"result":{"tools":[{"name":"google_docs_create_document_from_text","descr
             McpToolInfo(
                 name = "google_docs_create_document_from_text",
                 description = "Create a new document from text. Also supports limited HTML.",
-                inputSchema = """{"type":"object","properties":{"title":{"type":"string","description":"Document Name"},"file":{"type":"string","description":"Document Content"}},"required":["instructions"]}"""
+                inputSchema = """{"type":"object","properties":{"instructions":{"type":"string","description":"Instructions for running this tool"},"title":{"type":"string","description":"Document Name"},"file":{"type":"string","description":"Document Content"}},"required":["instructions"]}"""
             ),
             McpToolInfo(
                 name = "google_docs_find_a_document",
                 description = "Search for a specific document by name.",
-                inputSchema = """{"type":"object","properties":{"title":{"type":"string","description":"Document Name"}},"required":["instructions"]}"""
+                inputSchema = """{"type":"object","properties":{"instructions":{"type":"string","description":"Instructions for running this tool"},"title":{"type":"string","description":"Document Name"}},"required":["instructions"]}"""
             )
         )
         
