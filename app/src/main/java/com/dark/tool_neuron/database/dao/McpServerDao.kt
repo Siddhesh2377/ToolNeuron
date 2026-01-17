@@ -29,10 +29,10 @@ interface McpServerDao {
     suspend fun deleteServerById(id: String)
     
     @Query("UPDATE mcp_servers SET isEnabled = :isEnabled, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateServerEnabled(id: String, isEnabled: Boolean, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateServerEnabled(id: String, isEnabled: Boolean, updatedAt: Long)
     
     @Query("UPDATE mcp_servers SET lastConnectedAt = :timestamp, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateLastConnected(id: String, timestamp: Long, updatedAt: Long = System.currentTimeMillis())
+    suspend fun updateLastConnected(id: String, timestamp: Long, updatedAt: Long)
     
     @Query("SELECT COUNT(*) FROM mcp_servers")
     fun getServerCount(): Flow<Int>

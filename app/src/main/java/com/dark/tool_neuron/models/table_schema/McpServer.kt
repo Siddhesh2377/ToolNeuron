@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.models.table_schema
 
 import androidx.room.Entity
-import androidx.room.Ignore
 import androidx.room.PrimaryKey
 
 /**

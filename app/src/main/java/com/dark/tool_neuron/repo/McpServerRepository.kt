@@ -72,7 +72,7 @@ class McpServerRepository @Inject constructor(
 
     /**
      * Delete an MCP server
-     */
+    */
     suspend fun deleteServer(id: String) {
         mcpServerDao.deleteServerById(id)
         // Remove from runtime status tracking
@@ -83,7 +83,7 @@ class McpServerRepository @Inject constructor(
      * Toggle server enabled/disabled state
      */
     suspend fun setServerEnabled(id: String, enabled: Boolean) {
-        mcpServerDao.updateServerEnabled(id, enabled)
+        mcpServerDao.updateServerEnabled(id, enabled, System.currentTimeMillis())
         if (!enabled) {
             // When disabled, set status to disconnected
             updateConnectionStatus(id, McpConnectionStatus.DISCONNECTED)
@@ -101,7 +101,8 @@ class McpServerRepository @Inject constructor(
      * Update last connected timestamp
      */
     suspend fun updateLastConnected(id: String) {
-        mcpServerDao.updateLastConnected(id, System.currentTimeMillis())
+        val now = System.currentTimeMillis()
+        mcpServerDao.updateLastConnected(id, now, now)
     }
 
     /**
