@@ -1,7 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-import java.io.FileInputStream
-import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.library)
@@ -38,12 +36,14 @@ android {
             )
         }
     }
+
     externalNativeBuild {
         cmake {
             path("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -54,6 +54,7 @@ android {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
+
     packaging {
         jniLibs {
             useLegacyPackaging = true
@@ -62,7 +63,7 @@ android {
 }
 
 dependencies {
-    implementation("org.lz4:lz4-java:1.8.0")
+    implementation(libs.lz4.java)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.material)

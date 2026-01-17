@@ -34,7 +34,8 @@ android {
         release {
             isMinifyEnabled = true
             proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro"
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
             )
         }
     }
@@ -59,6 +60,10 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            pickFirsts += setOf(
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so"
+            )
         }
         resources {
             excludes += setOf(
@@ -76,79 +81,68 @@ android {
     }
 }
 
-
 dependencies {
-    implementation("com.google.dagger:hilt-android:2.57.2")
-    ksp("com.google.dagger:hilt-android-compiler:2.57.2")
+    // Dependency Injection
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation(libs.androidx.hilt.navigation.compose)
 
-    // Hilt Navigation Compose
-    implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
-
-    // WorkManager for background tasks
-    implementation("androidx.work:work-runtime-ktx:2.11.0")
-    implementation ("org.apache.commons:commons-compress:1.28.0")
-    implementation ("org.tukaani:xz:1.11")
+    // Background Tasks & Networking
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
     implementation(libs.okhttp)
+    implementation(libs.okhttp.logging.interceptor)
 
-    // Document Parsing Libraries
-    // Apache POI for Excel and Word files
-    implementation("org.apache.poi:poi:5.2.5")
-    implementation("org.apache.poi:poi-ooxml:5.2.5")
-    implementation("org.apache.poi:poi-scratchpad:5.2.5") // For legacy .doc files
-
-    // PDFBox-Android for PDF parsing (Android-compatible port)
-    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
-
-    // EPUB parsing - using local JAR file
+    // Document Parsing
+    implementation(libs.poi)
+    implementation(libs.poi.ooxml)
+    implementation(libs.poi.scratchpad)
+    implementation(libs.pdfbox.android)
     implementation(files("../libs/epublib-core-3.1.jar"))
+    implementation(libs.slf4j.android)
 
-    // SLF4J Android binding for EPUB library
-    implementation("org.slf4j:slf4j-android:1.7.36")
-
-    //Data-Ops
-    implementation(libs.room.ktx)
-    implementation(libs.room.runtime)
-    implementation(libs.androidx.compose.runtime)
+    // Database & Storage
+    implementation(libs.androidx.room.ktx)
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
     implementation(libs.androidx.datastore.preferences)
-    ksp(libs.room.compiler)
-    // Retrofit for API calls
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    // OkHttp for logging
-    implementation(libs.logging.interceptor)
-    implementation(libs.kotlinx.serialization.json)
 
-    //Projects
+    // Serialization & API
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+
+    // Local Projects & AI Libraries
     implementation(":ai_gguf-release@aar")
     implementation(":ai_sd-release@aar")
+    //implementation(":runanywhere-core-onnx-release@aar")
+    //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))
     implementation(project(":neuron-packet"))
 
-    // Core Android
+    // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)
-
-    // ViewModel
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
-    // Compose
+    // Jetpack Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation("androidx.navigation:navigation-compose:2.7.7")
-
-    // Material (for XML themes)
-    implementation(libs.androidx.material)
-
-    // Material 3 (for Compose)
-    implementation(libs.androidx.material3)
-    implementation(libs.androidx.material.icons)
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.runtime)
     implementation(libs.androidx.compose.ui.text)
+    implementation(libs.androidx.navigation.compose)
+
+    // Material Design
+    implementation(libs.androidx.material)
+    implementation(libs.androidx.material3)
+    implementation(libs.androidx.material.icons.extended)
 
     // Debug
-    debugImplementation(libs.androidx.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.tooling)
 }
 
 fun getProperty(value: String): String {

@@ -13,9 +13,9 @@ pluginManagement {
         flatDir {
             dir("${rootDir.path}/libs")
         }
-
     }
 }
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
