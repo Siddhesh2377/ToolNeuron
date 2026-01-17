@@ -89,6 +89,7 @@ fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onModelEditor: () -> Unit,
     onVaultManagerClick: () -> Unit,
+    onMcpServersClick: () -> Unit,
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
@@ -103,14 +104,23 @@ fun HomeScreen(
     ModalNavigationDrawer(
         drawerState = drawerState, drawerContent = {
             ModalDrawerSheet {
-                HomeDrawerScreen(onVaultManagerClick = {
-                    onVaultManagerClick()
-                }, onChatSelected = {
-                    chatViewModel.loadChat(it)
-                    scope.launch {
-                        drawerState.close()
+                HomeDrawerScreen(
+                    onVaultManagerClick = {
+                        onVaultManagerClick()
+                    },
+                    onMcpServersClick = {
+                        scope.launch {
+                            drawerState.close()
+                        }
+                        onMcpServersClick()
+                    },
+                    onChatSelected = {
+                        chatViewModel.loadChat(it)
+                        scope.launch {
+                            drawerState.close()
+                        }
                     }
-                })
+                )
             }
         }) {
         Scaffold(
