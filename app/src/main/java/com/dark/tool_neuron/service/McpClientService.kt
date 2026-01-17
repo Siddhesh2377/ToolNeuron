@@ -303,28 +303,26 @@ class McpClientService @Inject constructor() {
         server: McpServer,
         toolName: String,
         arguments: Map<String, Any>
-    ): Result<String> = withContext(Dispatchers.IO) {
-        return@withContext callToolInternal(server, toolName, JSONObject(arguments))
-    }
+    ): Result<String> = callToolInternal(server, toolName, JSONObject(arguments))
 
     suspend fun callTool(
         server: McpServer,
         toolName: String,
         argumentsJson: String
-    ): Result<String> = withContext(Dispatchers.IO) {
+    ): Result<String> {
         val parsedArguments = try {
             if (argumentsJson.isBlank()) JSONObject() else JSONObject(argumentsJson)
         } catch (e: Exception) {
-            return@withContext Result.failure(Exception("Invalid tool arguments JSON: ${e.message}"))
+            return Result.failure(Exception("Invalid tool arguments JSON: ${e.message}"))
         }
-        return@withContext callToolInternal(server, toolName, parsedArguments)
+        return callToolInternal(server, toolName, parsedArguments)
     }
 
-    private fun callToolInternal(
+    private suspend fun callToolInternal(
         server: McpServer,
         toolName: String,
         arguments: JSONObject
-    ): Result<String> {
+    ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val callToolRequest = JSONObject().apply {
                 put("jsonrpc", "2.0")
@@ -347,13 +345,13 @@ class McpClientService @Inject constructor() {
             }
             
             val response = httpClient.newCall(requestBuilder.build()).execute()
-            
+
             if (!response.isSuccessful) {
-                return Result.failure(Exception("Server returned: ${response.code}"))
+                return@withContext Result.failure(Exception("Server returned: ${response.code}"))
             }
             
             val rawResponseBody = response.body?.string()
-                ?: return Result.failure(Exception("Empty response"))
+                ?: return@withContext Result.failure(Exception("Empty response"))
             
             // Parse response based on transport type
             val responseBody = parseResponse(rawResponseBody, server.transportType)
@@ -361,15 +359,15 @@ class McpClientService @Inject constructor() {
             
             if (jsonResponse.has("error")) {
                 val error = jsonResponse.getJSONObject("error")
-                return Result.failure(Exception(error.optString("message", "Unknown error")))
+                return@withContext Result.failure(Exception(error.optString("message", "Unknown error")))
             }
             
             val result = jsonResponse.optJSONObject("result")
-            return Result.success(result?.toString() ?: responseBody)
+            return@withContext Result.success(result?.toString() ?: responseBody)
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to call tool: ${e.message}", e)
-            return Result.failure(e)
+            return@withContext Result.failure(e)
         }
     }
 }
