@@ -241,7 +241,7 @@ class McpClientService @Inject constructor() {
     /**
      * List available tools from an MCP server
      */
-    private suspend fun listTools(server: McpServer): List<McpToolInfo> = withContext(Dispatchers.IO) {
+    suspend fun listTools(server: McpServer): List<McpToolInfo> = withContext(Dispatchers.IO) {
         try {
             val listToolsRequest = JSONObject().apply {
                 put("jsonrpc", "2.0")
@@ -303,6 +303,25 @@ class McpClientService @Inject constructor() {
         server: McpServer,
         toolName: String,
         arguments: Map<String, Any>
+    ): Result<String> = callToolInternal(server, toolName, JSONObject(arguments))
+
+    suspend fun callTool(
+        server: McpServer,
+        toolName: String,
+        argumentsJson: String
+    ): Result<String> {
+        val parsedArguments = try {
+            if (argumentsJson.isBlank()) JSONObject() else JSONObject(argumentsJson)
+        } catch (e: Exception) {
+            return Result.failure(Exception("Invalid tool arguments JSON: ${e.message}"))
+        }
+        return callToolInternal(server, toolName, parsedArguments)
+    }
+
+    private suspend fun callToolInternal(
+        server: McpServer,
+        toolName: String,
+        arguments: JSONObject
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val callToolRequest = JSONObject().apply {
@@ -311,7 +330,7 @@ class McpClientService @Inject constructor() {
                 put("method", "tools/call")
                 put("params", JSONObject().apply {
                     put("name", toolName)
-                    put("arguments", JSONObject(arguments))
+                    put("arguments", arguments)
                 })
             }
             
@@ -326,7 +345,7 @@ class McpClientService @Inject constructor() {
             }
             
             val response = httpClient.newCall(requestBuilder.build()).execute()
-            
+
             if (!response.isSuccessful) {
                 return@withContext Result.failure(Exception("Server returned: ${response.code}"))
             }
@@ -344,11 +363,11 @@ class McpClientService @Inject constructor() {
             }
             
             val result = jsonResponse.optJSONObject("result")
-            Result.success(result?.toString() ?: responseBody)
-            
+            return@withContext Result.success(result?.toString() ?: responseBody)
+
         } catch (e: Exception) {
             Log.e(TAG, "Failed to call tool: ${e.message}", e)
-            Result.failure(e)
+            return@withContext Result.failure(e)
         }
     }
 }

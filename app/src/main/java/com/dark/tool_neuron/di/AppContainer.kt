@@ -4,7 +4,9 @@ import android.app.Application
 import android.content.Context
 import com.dark.tool_neuron.database.AppDatabase
 import com.dark.tool_neuron.repo.ChatRepository
+import com.dark.tool_neuron.repo.McpServerRepository
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.service.McpClientService
 import com.dark.tool_neuron.vault.VaultHelper
 import com.dark.tool_neuron.viewmodel.factory.ChatListViewModelFactory
 import com.dark.tool_neuron.viewmodel.factory.ChatViewModelFactory
@@ -21,6 +23,8 @@ object AppContainer {
     private lateinit var database: AppDatabase
     private lateinit var modelRepository: ModelRepository
     private lateinit var chatRepository: ChatRepository
+    private lateinit var mcpServerRepository: McpServerRepository
+    private lateinit var mcpClientService: McpClientService
     private lateinit var llmModelViewModelFactory: LLMModelViewModelFactory
     private lateinit var chatListViewModelFactory: ChatListViewModelFactory
     private lateinit var chatViewModelFactory: ChatViewModelFactory
@@ -38,10 +42,17 @@ object AppContainer {
         )
 
         chatRepository = ChatRepository()
+        mcpServerRepository = McpServerRepository(database.mcpServerDao())
+        mcpClientService = McpClientService()
 
         llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
-        chatViewModelFactory = ChatViewModelFactory(chatManager, generationManager)
+        chatViewModelFactory = ChatViewModelFactory(
+            chatManager,
+            generationManager,
+            mcpServerRepository,
+            mcpClientService
+        )
 
         initVault(context)
     }

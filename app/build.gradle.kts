@@ -143,6 +143,10 @@ dependencies {
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Tests
+    testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }
 
 fun getProperty(value: String): String {

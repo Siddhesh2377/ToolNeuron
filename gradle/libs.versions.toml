@@ -33,6 +33,7 @@ xz = "1.11"
 androidx-espresso-core = "3.7.0"
 androidx-junit = "1.3.0"
 junit = "4.13.2"
+org-json = "20240303"
 
 [libraries]
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidx-activity-compose" }
@@ -77,6 +78,7 @@ xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "androidx-espresso-core" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidx-junit" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+org-json = { group = "org.json", name = "json", version.ref = "org-json" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

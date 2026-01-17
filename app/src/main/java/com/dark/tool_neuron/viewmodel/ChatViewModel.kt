@@ -13,7 +13,12 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.models.table_schema.McpServer
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.repo.McpServerRepository
+import com.dark.tool_neuron.service.McpClientService
+import com.dark.tool_neuron.service.McpToolMapper
+import com.dark.tool_neuron.service.McpToolReference
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
 import com.dark.tool_neuron.worker.DiffusionConfig
@@ -26,12 +31,15 @@ import jakarta.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 @HiltViewModel
 class ChatViewModel @Inject constructor(
     private val chatManager: ChatManager,
-    private val generationManager: GenerationManager
+    private val generationManager: GenerationManager,
+    private val mcpServerRepository: McpServerRepository,
+    private val mcpClientService: McpClientService
 ) : ViewModel() {
 
     private val _messages = mutableStateListOf<Messages>()
@@ -102,6 +110,13 @@ class ChatViewModel @Inject constructor(
 
     private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
+
+    private data class ToolCallInfo(
+        val name: String,
+        val argsJson: String
+    )
+
+    private var mcpToolRegistry: Map<String, McpToolReference> = emptyMap()
 
     // ==================== RAG Controls ====================
 
@@ -240,11 +255,13 @@ class ChatViewModel @Inject constructor(
             val tokenBatchSize = 3
 
             try {
+                var pendingToolCall: ToolCallInfo? = null
                 // Prepend RAG context if available
                 val finalPrompt = _currentRagContext.value?.let { ragContext ->
                     "$ragContext\n\n### User Query:\n$prompt"
                 } ?: prompt
 
+                syncMcpTools()
                 generationManager.generateTextStreaming(finalPrompt, maxTokens).collect { event ->
                     when (event) {
                         is GenerationEvent.Token -> {
@@ -265,6 +282,11 @@ class ChatViewModel @Inject constructor(
                         }
 
                         is GenerationEvent.Done -> {
+                            val toolCall = pendingToolCall
+                            if (toolCall != null) {
+                                handleToolCallForNewChat(prompt, toolCall)
+                                return@collect
+                            }
                             _streamingAssistantMessage.value = currentGeneratedContent
                             // Don't set _isGenerating.value = false here
                             // It will be set in resetStreamingState() after messages are added
@@ -279,7 +301,13 @@ class ChatViewModel @Inject constructor(
                             currentMetrics = event.metrics
                         }
 
-                        is GenerationEvent.ToolCall -> {}
+                        is GenerationEvent.ToolCall -> {
+                            pendingToolCall = ToolCallInfo(event.name, event.args)
+                            currentGeneratedContent = ""
+                            tokenBuffer.clear()
+                            tokenCount = 0
+                            _streamingAssistantMessage.value = ""
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -305,6 +333,7 @@ class ChatViewModel @Inject constructor(
             val tokenBatchSize = 3
 
             try {
+                var pendingToolCall: ToolCallInfo? = null
                 var conversationPrompt = generationManager.buildConversationPrompt(
                     _messages, userMessage.content.content
                 )
@@ -314,6 +343,7 @@ class ChatViewModel @Inject constructor(
                     conversationPrompt = "$ragContext\n\n$conversationPrompt"
                 }
 
+                syncMcpTools()
                 generationManager.generateTextStreaming(conversationPrompt, maxTokens)
                     .collect { event ->
                         when (event) {
@@ -335,6 +365,11 @@ class ChatViewModel @Inject constructor(
                             }
 
                             is GenerationEvent.Done -> {
+                                val toolCall = pendingToolCall
+                                if (toolCall != null) {
+                                    handleToolCallExistingChat(chatId, userMessage, toolCall)
+                                    return@collect
+                                }
                                 _streamingAssistantMessage.value = currentGeneratedContent
 
                                 // Add user message first if not already added
@@ -383,7 +418,13 @@ class ChatViewModel @Inject constructor(
                                 currentMetrics = event.metrics
                             }
 
-                            is GenerationEvent.ToolCall -> {}
+                            is GenerationEvent.ToolCall -> {
+                                pendingToolCall = ToolCallInfo(event.name, event.args)
+                                currentGeneratedContent = ""
+                                tokenBuffer.clear()
+                                tokenCount = 0
+                                _streamingAssistantMessage.value = ""
+                            }
                         }
                     }
             } catch (e: Exception) {
@@ -522,6 +563,105 @@ class ChatViewModel @Inject constructor(
         } catch (e: Exception) {
             DiffusionConfig()
         }
+    }
+
+    // ==================== MCP Tool Integration ====================
+
+    private suspend fun syncMcpTools() {
+        try {
+            val enabledServers = mcpServerRepository.getEnabledServers().first()
+            if (enabledServers.isEmpty()) {
+                mcpToolRegistry = emptyMap()
+                LlmModelWorker.clearGgufTools()
+                return
+            }
+
+            val serverTools = mutableMapOf<McpServer, List<com.dark.tool_neuron.service.McpToolInfo>>()
+            enabledServers.forEach { server ->
+                val tools = mcpClientService.listTools(server)
+                if (tools.isNotEmpty()) {
+                    serverTools[server] = tools
+                }
+            }
+
+            if (serverTools.isEmpty()) {
+                mcpToolRegistry = emptyMap()
+                LlmModelWorker.clearGgufTools()
+                return
+            }
+
+            val mapping = McpToolMapper.buildMapping(serverTools)
+            mcpToolRegistry = mapping.toolRegistry
+
+            if (mapping.toolRegistry.isEmpty()) {
+                LlmModelWorker.clearGgufTools()
+                return
+            }
+
+            val success = LlmModelWorker.setGgufToolsJson(mapping.toolsJson)
+            if (!success) {
+                LlmModelWorker.clearGgufTools()
+            }
+        } catch (e: Exception) {
+            val message = "Failed to refresh MCP tools: ${e.message}"
+            _error.value = message
+            AppStateManager.setError(message)
+        }
+    }
+
+    private suspend fun handleToolCallForNewChat(prompt: String, toolCall: ToolCallInfo) {
+        val response = resolveToolCallResponse(toolCall)
+        _streamingAssistantMessage.value = response
+        createChatWithMessages(prompt, response, null)
+    }
+
+    private suspend fun handleToolCallExistingChat(
+        chatId: String,
+        userMessage: Messages,
+        toolCall: ToolCallInfo
+    ) {
+        val response = resolveToolCallResponse(toolCall)
+        _streamingAssistantMessage.value = response
+
+        if (!userMessageAdded) {
+            _messages.add(userMessage)
+            userMessageAdded = true
+        }
+
+        val assistantMessage = Messages(
+            role = Role.Assistant,
+            content = MessageContent(
+                contentType = ContentType.Text,
+                content = response
+            )
+        )
+        _messages.add(assistantMessage)
+
+        chatManager.addAssistantMessage(chatId, response, null)
+        AppStateManager.setGenerationComplete()
+        resetStreamingState()
+    }
+
+    private suspend fun resolveToolCallResponse(toolCall: ToolCallInfo): String {
+        return executeToolCall(toolCall).fold(
+            onSuccess = { result -> formatToolResult(toolCall.name, result) },
+            onFailure = { error ->
+                val message = "Tool ${toolCall.name} failed: ${error.message ?: "Unknown error"}"
+                _error.value = message
+                AppStateManager.setError(message)
+                message
+            }
+        )
+    }
+
+    private suspend fun executeToolCall(toolCall: ToolCallInfo): Result<String> {
+        val reference = mcpToolRegistry[toolCall.name]
+            ?: return Result.failure(Exception("Tool not found: ${toolCall.name}"))
+        return mcpClientService.callTool(reference.server, reference.toolName, toolCall.argsJson)
+    }
+
+    private fun formatToolResult(toolName: String, result: String): String {
+        return "Tool $toolName result:\n$result"
     }
 
     private fun generateImageForNewChat(
