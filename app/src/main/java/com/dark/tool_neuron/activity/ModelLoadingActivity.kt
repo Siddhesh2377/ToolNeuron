@@ -331,6 +331,7 @@ fun ModelLoadingScreen(
                         onUninstall = { uninstallModel() })
 
                     is LoadingState.Error -> ErrorStateView(state.message) { openFilePicker() }
+                    else -> {}
                 }
             }
 

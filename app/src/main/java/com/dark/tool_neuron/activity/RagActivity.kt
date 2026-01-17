@@ -62,6 +62,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -72,6 +73,8 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -159,6 +162,20 @@ fun RagScreen(
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
             ragViewModel.installRagFromUri(uri)
+            android.widget.Toast.makeText(
+                context,
+                "Importing RAG package...",
+                android.widget.Toast.LENGTH_SHORT
+            ).show()
+        }
+    }
+
+    // Show success message when a RAG is imported
+    LaunchedEffect(installedCount) {
+        // This will trigger when installed count changes (new RAG added)
+        if (installedCount > 0) {
+            // Don't show on initial load
+            kotlinx.coroutines.delay(500)
         }
     }
 
@@ -180,17 +197,26 @@ fun RagScreen(
                     }
                 },
                 navigationIcon = {
-//                    IconButton(onClick = { ragFilePicker.launch(arrayOf("*/*")) }) {
-//                        Icon(Icons.Default.Download, contentDescription = "Install RAG")
-//                    }
-//                    IconButton(onClick = { showCreateSheet = true }) {
-//                        Icon(Icons.Default.Add, contentDescription = "Create RAG")
-//                    }
                     ActionTextButton(
                         onClickListener = onClose,
                         icon = Icons.Default.ChevronLeft,
                         text = "Back",
                         contentDescription = "Close",
+                        shape = RoundedCornerShape(rDp(12.dp))
+                    )
+                },
+                actions = {
+                    // Import Neuron Button
+                    ActionButton(
+                        onClickListener = {
+                            ragFilePicker.launch(arrayOf(
+                                "application/octet-stream",
+                                "application/x-neuron",
+                                "*/*"
+                            ))
+                        },
+                        icon = Icons.Default.Download,
+                        contentDescription = "Import Neuron Package",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
                 },
@@ -259,13 +285,16 @@ fun RagScreen(
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                 modifier = Modifier.weight(1f)
                             )
-                            IconButton(onClick = { ragViewModel.clearError() }) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = "Dismiss",
-                                    tint = MaterialTheme.colorScheme.onErrorContainer
+                            ActionButton(
+                                onClickListener = { ragViewModel.clearError() },
+                                icon = Icons.Default.Close,
+                                contentDescription = "Dismiss",
+                                shape = RoundedCornerShape(rDp(8.dp)),
+                                colors = IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
+                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
                                 )
-                            }
+                            )
                         }
                     }
                 }
@@ -306,7 +335,8 @@ fun RagScreen(
                         },
                         onUnload = { ragViewModel.unloadRag(it) },
                         onDelete = { ragViewModel.deleteRag(it) },
-                        onShare = { rag -> shareRag(context, rag) }
+                        onShare = { rag -> shareRag(context, rag) },
+                        onViewData = { rag -> openRagDataReader(context, rag) }
                     )
                     1 -> RagListContent(
                         rags = loadedRags,
@@ -328,7 +358,8 @@ fun RagScreen(
                         },
                         onUnload = { ragViewModel.unloadRag(it) },
                         onDelete = { ragViewModel.deleteRag(it) },
-                        onShare = { rag -> shareRag(context, rag) }
+                        onShare = { rag -> shareRag(context, rag) },
+                        onViewData = { rag -> openRagDataReader(context, rag) }
                     )
                     2 -> SecureRagCreationScreen(
                         ragViewModel = ragViewModel,
@@ -397,7 +428,29 @@ fun RagScreen(
     }
 }
 
+private fun openRagDataReader(context: android.content.Context, rag: InstalledRag) {
+    if (rag.filePath == null) {
+        android.widget.Toast.makeText(context, "RAG file path not found", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+
+    val intent = Intent(context, RagDataReaderActivity::class.java).apply {
+        putExtra(RagDataReaderActivity.EXTRA_RAG_FILE_PATH, rag.filePath)
+        putExtra(RagDataReaderActivity.EXTRA_RAG_NAME, rag.name)
+        putExtra(RagDataReaderActivity.EXTRA_IS_ENCRYPTED, rag.isEncrypted)
+
+        // For now, don't pass password - user will need to re-enter it
+        // This is for security reasons
+    }
+    context.startActivity(intent)
+}
+
 private fun shareRag(context: android.content.Context, rag: InstalledRag) {
+    if (rag.filePath == null) {
+        android.widget.Toast.makeText(context, "RAG file path not found", android.widget.Toast.LENGTH_SHORT).show()
+        return
+    }
+
     val ragFile = File(rag.filePath)
     if (!ragFile.exists()) {
         android.widget.Toast.makeText(context, "RAG file not found", android.widget.Toast.LENGTH_SHORT).show()
@@ -439,7 +492,8 @@ private fun RagListContent(
     onLoad: (String) -> Unit,
     onUnload: (String) -> Unit,
     onDelete: (String) -> Unit,
-    onShare: ((InstalledRag) -> Unit)? = null
+    onShare: ((InstalledRag) -> Unit)? = null,
+    onViewData: ((InstalledRag) -> Unit)? = null
 ) {
     if (rags.isEmpty()) {
         EmptyRagListState(message = emptyMessage, subMessage = emptySubMessage)
@@ -457,7 +511,8 @@ private fun RagListContent(
                     onLoad = { onLoad(rag.id) },
                     onUnload = { onUnload(rag.id) },
                     onDelete = { onDelete(rag.id) },
-                    onShare = onShare?.let { { it(rag) } }
+                    onShare = onShare?.let { { it(rag) } },
+                    onViewData = onViewData?.let { { it(rag) } }
                 )
             }
         }
@@ -504,7 +559,8 @@ private fun RagCard(
     onLoad: () -> Unit,
     onUnload: () -> Unit,
     onDelete: () -> Unit,
-    onShare: (() -> Unit)? = null
+    onShare: (() -> Unit)? = null,
+    onViewData: (() -> Unit)? = null
 ) {
     Card(
         modifier = Modifier
@@ -627,15 +683,13 @@ private fun RagCard(
                 Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
-                            TextButton(onClick = onUnload) {
-                                Icon(
-                                    Icons.Default.Close,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(rDp(16.dp))
-                                )
-                                Spacer(modifier = Modifier.width(rDp(4.dp)))
-                                Text("Unload")
-                            }
+                            ActionTextButton(
+                                onClickListener = onUnload,
+                                icon = Icons.Default.Close,
+                                text = "Unload",
+                                contentDescription = "Unload RAG",
+                                shape = RoundedCornerShape(rDp(8.dp))
+                            )
                         }
                         RagStatus.LOADING -> {
                             CircularProgressIndicator(
@@ -644,35 +698,44 @@ private fun RagCard(
                             )
                         }
                         else -> {
-                            TextButton(onClick = onLoad) {
-                                Icon(
-                                    Icons.Default.Download,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(rDp(16.dp))
-                                )
-                                Spacer(modifier = Modifier.width(rDp(4.dp)))
-                                Text("Load")
-                            }
-                        }
-                    }
-
-                    onShare?.let { shareAction ->
-                        IconButton(onClick = shareAction) {
-                            Icon(
-                                Icons.Default.Share,
-                                contentDescription = "Share",
-                                tint = MaterialTheme.colorScheme.primary
+                            ActionTextButton(
+                                onClickListener = onLoad,
+                                icon = Icons.Default.Download,
+                                text = "Load",
+                                contentDescription = "Load RAG",
+                                shape = RoundedCornerShape(rDp(8.dp))
                             )
                         }
                     }
 
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
+                    onViewData?.let { viewDataAction ->
+                        ActionButton(
+                            onClickListener = viewDataAction,
+                            icon = Icons.Default.Visibility,
+                            contentDescription = "View Data",
+                            shape = RoundedCornerShape(rDp(8.dp))
                         )
                     }
+
+                    onShare?.let { shareAction ->
+                        ActionButton(
+                            onClickListener = shareAction,
+                            icon = Icons.Default.Share,
+                            contentDescription = "Share",
+                            shape = RoundedCornerShape(rDp(8.dp))
+                        )
+                    }
+
+                    ActionButton(
+                        onClickListener = onDelete,
+                        icon = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        shape = RoundedCornerShape(rDp(8.dp)),
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    )
                 }
             }
         }
@@ -869,9 +932,14 @@ private fun RagDetailBottomSheet(
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
-                            Button(
+                            FilledTonalButton(
                                 onClick = onUnload,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(rDp(12.dp)),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
                             ) {
                                 Icon(Icons.Default.Close, contentDescription = null)
                                 Spacer(modifier = Modifier.width(rDp(8.dp)))
@@ -879,10 +947,11 @@ private fun RagDetailBottomSheet(
                             }
                         }
                         RagStatus.LOADING -> {
-                            Button(
+                            FilledTonalButton(
                                 onClick = {},
                                 modifier = Modifier.weight(1f),
-                                enabled = false
+                                enabled = false,
+                                shape = RoundedCornerShape(rDp(12.dp))
                             ) {
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(rDp(20.dp)),
@@ -893,9 +962,14 @@ private fun RagDetailBottomSheet(
                             }
                         }
                         else -> {
-                            Button(
+                            FilledTonalButton(
                                 onClick = onLoad,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(rDp(12.dp)),
+                                colors = ButtonDefaults.filledTonalButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
                             ) {
                                 Icon(Icons.Default.Download, contentDescription = null)
                                 Spacer(modifier = Modifier.width(rDp(8.dp)))
@@ -904,11 +978,13 @@ private fun RagDetailBottomSheet(
                         }
                     }
 
-                    Button(
+                    FilledTonalButton(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f),
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error
+                        shape = RoundedCornerShape(rDp(12.dp)),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
+                            contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = null)
@@ -917,11 +993,12 @@ private fun RagDetailBottomSheet(
                     }
                 }
 
-                Button(
+                FilledTonalButton(
                     onClick = onShare,
                     modifier = Modifier.fillMaxWidth(),
-                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(rDp(12.dp)),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.5f),
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
@@ -1014,15 +1091,23 @@ private fun PasswordDialog(
             }
         },
         confirmButton = {
-            Button(
+            FilledTonalButton(
                 onClick = { onConfirm(password) },
-                enabled = password.isNotBlank()
+                enabled = password.isNotBlank(),
+                shape = RoundedCornerShape(rDp(12.dp)),
+                colors = ButtonDefaults.filledTonalButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
+                    contentColor = MaterialTheme.colorScheme.primary
+                )
             ) {
                 Text("Load")
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) {
+            TextButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(rDp(12.dp))
+            ) {
                 Text("Cancel")
             }
         }

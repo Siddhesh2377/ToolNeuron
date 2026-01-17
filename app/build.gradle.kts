@@ -60,6 +60,19 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/license.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/notice.txt",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module"
+            )
+        }
     }
 }
 
@@ -73,6 +86,21 @@ dependencies {
     implementation ("org.apache.commons:commons-compress:1.28.0")
     implementation ("org.tukaani:xz:1.11")
     implementation(libs.okhttp)
+
+    // Document Parsing Libraries
+    // Apache POI for Excel and Word files
+    implementation("org.apache.poi:poi:5.2.5")
+    implementation("org.apache.poi:poi-ooxml:5.2.5")
+    implementation("org.apache.poi:poi-scratchpad:5.2.5") // For legacy .doc files
+
+    // PDFBox-Android for PDF parsing (Android-compatible port)
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
+    // EPUB parsing - using local JAR file
+    implementation(files("../libs/epublib-core-3.1.jar"))
+
+    // SLF4J Android binding for EPUB library
+    implementation("org.slf4j:slf4j-android:1.7.36")
 
     //Data-Ops
     implementation(libs.room.ktx)

@@ -8,6 +8,7 @@ import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.NeuronNode
+import com.dark.tool_neuron.util.DocumentParser
 import com.neuronpacket.NeuronPacketManager
 import com.neuronpacket.PacketMetadata
 import kotlinx.coroutines.Dispatchers
@@ -129,7 +130,11 @@ class RagRepository(
             val ragInfo = if (openResult.isSuccess) {
                 val info = packetManager.getPacketInfo()
                 val metadata = parseMetadataJson(info?.metadataJson)
+                val isEncrypted = (info?.userCount ?: 0) > 0
+                val loadingMode = info?.loadingMode?.value ?: 0
                 packetManager.close()
+
+                android.util.Log.d("RagRepository", "Imported RAG: isEncrypted=$isEncrypted, userCount=${info?.userCount}")
 
                 InstalledRag(
                     id = ragId,
@@ -145,7 +150,10 @@ class RagRepository(
                     version = metadata?.optString("version") ?: "1.0",
                     tags = metadata?.optString("tags") ?: "",
                     status = RagStatus.INSTALLED,
-                    sizeBytes = destFile.length()
+                    sizeBytes = destFile.length(),
+                    isEncrypted = isEncrypted,
+                    loadingMode = loadingMode,
+                    hasAdminAccess = false // User imported it, they don't have admin access yet
                 )
             } else {
                 InstalledRag(
@@ -154,7 +162,10 @@ class RagRepository(
                     sourceType = RagSourceType.NEURON_PACKET,
                     filePath = destFile.absolutePath,
                     status = RagStatus.INSTALLED,
-                    sizeBytes = destFile.length()
+                    sizeBytes = destFile.length(),
+                    isEncrypted = false,
+                    loadingMode = 0,
+                    hasAdminAccess = false
                 )
             }
 
@@ -264,10 +275,20 @@ class RagRepository(
         tags: List<String> = emptyList()
     ): Result<InstalledRag> = withContext(Dispatchers.IO) {
         try {
-            val inputStream = context.contentResolver.openInputStream(fileUri)
-                ?: return@withContext Result.failure(Exception("Cannot open file"))
+            // Get MIME type from content resolver
+            val mimeType = context.contentResolver.getType(fileUri)
+            android.util.Log.d("RagRepository", "Creating RAG from file with MIME type: $mimeType")
 
-            val content = inputStream.bufferedReader().use { it.readText() }
+            // Parse document using DocumentParser
+            val parseResult = DocumentParser.parseDocument(fileUri, context, mimeType)
+            if (parseResult.isFailure) {
+                return@withContext Result.failure(
+                    parseResult.exceptionOrNull() ?: Exception("Failed to parse document")
+                )
+            }
+
+            val content = parseResult.getOrThrow()
+            android.util.Log.d("RagRepository", "Parsed ${content.length} characters from document")
 
             val addResult = graph.addText(content, name)
             if (addResult.isFailure) {
@@ -500,11 +521,23 @@ class RagRepository(
         onProgress: (Float, String) -> Unit = { _, _ -> }
     ): Result<InstalledRag> = withContext(Dispatchers.IO) {
         try {
-            onProgress(0.1f, "Reading file...")
-            val inputStream = context.contentResolver.openInputStream(fileUri)
-                ?: return@withContext Result.failure(Exception("Cannot open file"))
+            onProgress(0.1f, "Parsing document...")
 
-            val content = inputStream.bufferedReader().use { it.readText() }
+            // Get MIME type from content resolver
+            val mimeType = context.contentResolver.getType(fileUri)
+            val fileType = DocumentParser.getFileTypeName(mimeType)
+            android.util.Log.d("RagRepository", "Creating secure RAG from $fileType file with MIME type: $mimeType")
+
+            // Parse document using DocumentParser
+            val parseResult = DocumentParser.parseDocument(fileUri, context, mimeType)
+            if (parseResult.isFailure) {
+                return@withContext Result.failure(
+                    parseResult.exceptionOrNull() ?: Exception("Failed to parse document")
+                )
+            }
+
+            val content = parseResult.getOrThrow()
+            android.util.Log.d("RagRepository", "Parsed ${content.length} characters from $fileType document")
 
             onProgress(0.3f, "Adding content to graph...")
             val addResult = graph.addText(content, name)

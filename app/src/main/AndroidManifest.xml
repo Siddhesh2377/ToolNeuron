@@ -121,6 +121,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".activity.RagDataReaderActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NeuroVerse"
+            android:windowSoftInputMode="adjustResize"
+            tools:targetApi="33" />
+
         <service
             android:name=".service.LLMService"
             android:enabled="true"
