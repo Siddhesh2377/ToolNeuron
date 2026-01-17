@@ -1,9 +1,7 @@
 package com.dark.tool_neuron.service
 
 import android.util.Log
-import com.dark.tool_neuron.models.table_schema.McpConnectionStatus
 import com.dark.tool_neuron.models.table_schema.McpServer
-import com.dark.tool_neuron.models.table_schema.McpTransportType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
@@ -46,12 +44,31 @@ class McpClientService @Inject constructor() {
         private const val CLIENT_NAME = "ToolNeuron"
         private const val CLIENT_VERSION = "1.0.0"
         private val JSON_MEDIA_TYPE = "application/json".toMediaType()
+        // Accept header must include both JSON and SSE for MCP servers like Zapier
+        private const val ACCEPT_HEADER = "application/json, text/event-stream"
     }
     
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .build()
+    
+    /**
+     * Parse SSE (Server-Sent Events) response format.
+     * SSE responses come as "event: message\ndata: {...json...}"
+     */
+    private fun parseSseResponse(responseBody: String): String {
+        val lines = responseBody.lines()
+        val dataLines = lines.filter { it.startsWith("data:") }
+        
+        return if (dataLines.isNotEmpty()) {
+            // Extract JSON from "data: {...}" format
+            dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
+        } else {
+            // Not SSE format, return as-is
+            responseBody
+        }
+    }
     
     /**
      * Test connection to an MCP server and retrieve server capabilities
@@ -79,7 +96,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(initializeRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "application/json")
+                .addHeader("Accept", ACCEPT_HEADER)
             
             // Add API key if provided
             server.apiKey?.let { key ->
@@ -95,14 +112,16 @@ class McpClientService @Inject constructor() {
                 )
             }
             
-            val responseBody = response.body?.string()
-            if (responseBody.isNullOrBlank()) {
+            val rawResponseBody = response.body?.string()
+            if (rawResponseBody.isNullOrBlank()) {
                 return@withContext McpTestResult(
                     success = false,
                     message = "Server returned empty response"
                 )
             }
             
+            // Parse SSE format if needed
+            val responseBody = parseSseResponse(rawResponseBody)
             val jsonResponse = JSONObject(responseBody)
             
             // Check for JSON-RPC error
@@ -155,7 +174,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(listToolsRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "application/json")
+                .addHeader("Accept", ACCEPT_HEADER)
             
             server.apiKey?.let { key ->
                 requestBuilder.addHeader("Authorization", "Bearer $key")
@@ -167,7 +186,9 @@ class McpClientService @Inject constructor() {
                 return@withContext emptyList()
             }
             
-            val responseBody = response.body?.string() ?: return@withContext emptyList()
+            val rawResponseBody = response.body?.string() ?: return@withContext emptyList()
+            // Parse SSE format if needed
+            val responseBody = parseSseResponse(rawResponseBody)
             val jsonResponse = JSONObject(responseBody)
             
             if (jsonResponse.has("error")) {
@@ -218,7 +239,7 @@ class McpClientService @Inject constructor() {
                 .url(server.url)
                 .post(callToolRequest.toString().toRequestBody(JSON_MEDIA_TYPE))
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "application/json")
+                .addHeader("Accept", ACCEPT_HEADER)
             
             server.apiKey?.let { key ->
                 requestBuilder.addHeader("Authorization", "Bearer $key")
@@ -230,9 +251,11 @@ class McpClientService @Inject constructor() {
                 return@withContext Result.failure(Exception("Server returned: ${response.code}"))
             }
             
-            val responseBody = response.body?.string()
+            val rawResponseBody = response.body?.string()
                 ?: return@withContext Result.failure(Exception("Empty response"))
             
+            // Parse SSE format if needed
+            val responseBody = parseSseResponse(rawResponseBody)
             val jsonResponse = JSONObject(responseBody)
             
             if (jsonResponse.has("error")) {

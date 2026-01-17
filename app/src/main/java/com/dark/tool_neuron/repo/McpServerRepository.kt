@@ -55,7 +55,6 @@ class McpServerRepository @Inject constructor(
             apiKey = apiKey?.trim()?.takeIf { it.isNotEmpty() },
             description = description.trim(),
             isEnabled = true,
-            connectionStatus = McpConnectionStatus.DISCONNECTED,
             createdAt = System.currentTimeMillis(),
             updatedAt = System.currentTimeMillis()
         )

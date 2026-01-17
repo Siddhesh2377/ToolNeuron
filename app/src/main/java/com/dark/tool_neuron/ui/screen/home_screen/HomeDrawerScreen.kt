@@ -79,7 +79,7 @@ fun HomeDrawerScreen(
             ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopBar(
+            DrawerTopBar(
                 onVaultManagerClick,
                 onMcpServersClick,
                 onCreateNewChat = {
@@ -125,7 +125,7 @@ fun HomeDrawerScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TopBar(
+private fun DrawerTopBar(
     onVaultManagerClick: () -> Unit,
     onMcpServersClick: () -> Unit,
     onCreateNewChat: () -> Unit
