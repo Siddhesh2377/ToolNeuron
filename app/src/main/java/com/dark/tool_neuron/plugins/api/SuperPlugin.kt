@@ -12,4 +12,5 @@ class SuperPlugin {
     fun executeTool(toolCall: ToolCall): Result<Any>{
         return Result.success(Any())
     }
+
 }
