@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -59,10 +60,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDrawerScreen(
     onChatSelected: (String) -> Unit,
     onVaultManagerClick: () -> Unit,
+    onNAppClick: () -> Unit = {},
     chatViewModel: com.dark.tool_neuron.viewmodel.ChatViewModel,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
@@ -86,11 +89,34 @@ fun HomeDrawerScreen(
             ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            TopBar(
-                onVaultManagerClick,
-                onCreateNewChat = {
-                    viewModel.createNewChat { chatId ->
-                        onChatSelected(chatId)
+            TopAppBar(
+                title = {
+                    Text(
+                        "Chats",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                actions = {
+                    Row{
+                        ActionButton(
+                            onClickListener = onVaultManagerClick,
+                            icon = R.drawable.smart_temp_message,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
+                        ActionButton(
+                            onClickListener = {
+                                viewModel.createNewChat { chatId ->
+                                    onChatSelected(chatId)
+                                }
+                            },
+                            icon = Icons.Filled.Add,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
+                        ActionButton(
+                            onClickListener = onNAppClick,
+                            icon = Icons.Filled.Psychology,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
                     }
                 }
             )
@@ -141,30 +167,9 @@ fun HomeDrawerScreen(
 @Composable
 private fun TopBar(
     onVaultManagerClick: () -> Unit,
-    onCreateNewChat: () -> Unit
+    onCreateNewChat: () -> Unit,
 ) {
-    TopAppBar(
-        title = {
-            Text(
-                "Chats",
-                style = MaterialTheme.typography.titleLarge
-            )
-        },
-        actions = {
-            Row{
-                ActionButton(
-                    onClickListener = onVaultManagerClick,
-                    icon = R.drawable.smart_temp_message,
-                    modifier = Modifier.padding(end = rDp(6.dp))
-                )
-                ActionButton(
-                    onClickListener = onCreateNewChat,
-                    icon = Icons.Filled.Add,
-                    modifier = Modifier.padding(end = rDp(6.dp))
-                )
-            }
-        }
-    )
+
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)

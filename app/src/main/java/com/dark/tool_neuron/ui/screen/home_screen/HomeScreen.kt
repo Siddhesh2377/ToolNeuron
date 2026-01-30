@@ -114,6 +114,9 @@ fun HomeScreen(
                             drawerState.close()
                         }
                     },
+                    onNAppClick = {
+                        onNAppClick()
+                    },
                     chatViewModel = chatViewModel
                 )
             }

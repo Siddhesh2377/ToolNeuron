@@ -33,6 +33,7 @@ import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
+import com.dark.tool_neuron.ui.screen.AgentsScreen
 import com.mp.n_apps.ui.NAppScreen
 import com.mp.n_apps.ui.NAppViewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -127,6 +128,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object VaultManager: Screen("vault_manager")
     object NApp : Screen("napp")
+    object Agents : Screen("agents")
 }
 
 @Composable
@@ -135,10 +137,11 @@ fun AppNavigation(
     llmModelViewModel: LLMModelViewModel
 ) {
     val navController = rememberNavController()
+    val nappViewModel: NAppViewModel = viewModel()
 
     NavHost(
         navController = navController,
-        startDestination = Screen.NApp.route,
+        startDestination = Screen.Chat.route,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -200,9 +203,10 @@ fun AppNavigation(
         }
 
         composable(Screen.Settings.route) {
-            SettingsScreen(onNavigateBack = {
-                navController.popBackStack()
-            })
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAgents = { navController.navigate(Screen.Agents.route) }
+            )
         }
 
         composable(Screen.VaultManager.route) {
@@ -210,8 +214,15 @@ fun AppNavigation(
         }
 
         composable(Screen.NApp.route) {
-            val nappViewModel: NAppViewModel = viewModel()
             NAppScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onNavigateToAgents = { navController.navigate(Screen.Agents.route) },
+                viewModel = nappViewModel
+            )
+        }
+
+        composable(Screen.Agents.route) {
+            AgentsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 viewModel = nappViewModel
             )

@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +46,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToAgents: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
     // App settings
@@ -304,6 +306,20 @@ fun SettingsScreen(
                     description = "Blur images by default, tap to reveal",
                     checked = imageBlurEnabled,
                     onCheckedChange = { viewModel.setImageBlurEnabled(it) }
+                )
+            }
+
+            // ==================== AI Editor ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "AI Editor") }
+
+            item {
+                StandardCard(
+                    title = "Agent Management",
+                    description = "Configure AI agents, API keys, and models",
+                    icon = Icons.Default.Psychology,
+                    onClick = onNavigateToAgents
                 )
             }
 

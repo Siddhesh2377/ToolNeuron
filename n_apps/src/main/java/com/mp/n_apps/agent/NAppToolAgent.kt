@@ -19,7 +19,7 @@ class NAppToolAgent(
 ) {
     companion object {
         private const val TAG = "NAppToolAgent"
-        private const val MAX_ITERATIONS = 10
+        private const val DEFAULT_MAX_ITERATIONS = 10
         private const val MAX_HISTORY_MESSAGES = 60
     }
 
@@ -32,7 +32,8 @@ class NAppToolAgent(
         apiKey: String,
         baseUrl: String,
         model: String,
-        userMessage: String
+        userMessage: String,
+        maxIterations: Int = DEFAULT_MAX_ITERATIONS
     ): AgentLoopResult {
         val toolLog = mutableListOf<ToolLogEntry>()
         var iteration = 0
@@ -43,13 +44,13 @@ class NAppToolAgent(
         })
         trimHistory()
 
-        onProgressUpdate?.invoke(AgentProgress(0, MAX_ITERATIONS, "Starting..."))
+        onProgressUpdate?.invoke(AgentProgress(0, maxIterations, "Starting..."))
 
-        while (iteration < MAX_ITERATIONS) {
+        while (iteration < maxIterations) {
             iteration++
 
             onProgressUpdate?.invoke(
-                AgentProgress(iteration, MAX_ITERATIONS, "Calling AI (step $iteration)...")
+                AgentProgress(iteration, maxIterations, "Calling AI (step $iteration)...")
             )
 
             // Build messages: system + history
@@ -74,7 +75,7 @@ class NAppToolAgent(
             val response = apiResult.getOrElse { error ->
                 Log.e(TAG, "API call failed at iteration $iteration", error)
                 val isRateLimit = error.message?.contains("429") == true || error.message?.contains("Rate limit") == true
-                onProgressUpdate?.invoke(AgentProgress(iteration, MAX_ITERATIONS, if (isRateLimit) "Rate limited" else "Error"))
+                onProgressUpdate?.invoke(AgentProgress(iteration, maxIterations, if (isRateLimit) "Rate limited" else "Error"))
                 return AgentLoopResult(
                     finalText = "Error: ${error.message}",
                     toolLog = toolLog,
@@ -96,7 +97,7 @@ class NAppToolAgent(
                 })
                 trimHistory()
 
-                onProgressUpdate?.invoke(AgentProgress(iteration, MAX_ITERATIONS, "Done"))
+                onProgressUpdate?.invoke(AgentProgress(iteration, maxIterations, "Done"))
 
                 return AgentLoopResult(
                     finalText = finalText,
@@ -108,7 +109,7 @@ class NAppToolAgent(
 
             // Model wants to call tools — add assistant message with tool_calls to history
             onProgressUpdate?.invoke(
-                AgentProgress(iteration, MAX_ITERATIONS, "Executing ${response.toolCalls.size} tool(s)...")
+                AgentProgress(iteration, maxIterations, "Executing ${response.toolCalls.size} tool(s)...")
             )
 
             conversationHistory.add(JSONObject().apply {
@@ -179,10 +180,10 @@ class NAppToolAgent(
         }
 
         // Max iterations reached
-        onProgressUpdate?.invoke(AgentProgress(MAX_ITERATIONS, MAX_ITERATIONS, "Max steps reached"))
+        onProgressUpdate?.invoke(AgentProgress(maxIterations, maxIterations, "Max steps reached"))
 
         return AgentLoopResult(
-            finalText = "Agent stopped after $MAX_ITERATIONS iterations.",
+            finalText = "Agent stopped after $maxIterations iterations.",
             toolLog = toolLog,
             totalIterations = iteration,
             success = true

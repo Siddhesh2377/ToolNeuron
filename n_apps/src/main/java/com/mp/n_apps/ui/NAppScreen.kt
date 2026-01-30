@@ -48,17 +48,12 @@ import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -67,7 +62,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,13 +83,10 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mp.n_apps.renderer.NAppRenderer
-import com.mp.n_apps.runtime.ExpressionResolver
 
 private enum class IDEMode { CANVAS, CODE, SPLIT }
 private enum class CodeTab { STATE, UI, ACTIONS }
@@ -104,6 +95,7 @@ private enum class CodeTab { STATE, UI, ACTIONS }
 @Composable
 fun NAppScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToAgents: () -> Unit = {},
     viewModel: NAppViewModel
 ) {
     val context = LocalContext.current
@@ -114,9 +106,7 @@ fun NAppScreen(
     val actionsJson by viewModel.actionsJson.collectAsState()
     val isAgentWorking by viewModel.isAgentWorking.collectAsState()
     val agentMessages by viewModel.agentMessages.collectAsState()
-    val apiKey by viewModel.apiKey.collectAsState()
-    val apiUrl by viewModel.apiUrl.collectAsState()
-    val apiModel by viewModel.apiModel.collectAsState()
+    val activeAgent by viewModel.activeAgent.collectAsState()
     val toastMessage by viewModel.toastMessage.collectAsState()
 
     // Workspace state
@@ -128,7 +118,7 @@ fun NAppScreen(
     val agentProgress by viewModel.agentProgress.collectAsState()
 
     var ideMode by remember { mutableStateOf(IDEMode.CANVAS) }
-    var showSettings by remember { mutableStateOf(false) }
+    val hasApiKey = activeAgent?.apiKey?.isNotBlank() == true
     var showAgentChat by remember { mutableStateOf(false) }
     var showToolActivity by remember { mutableStateOf(false) }
     var showProjectPicker by remember { mutableStateOf(false) }
@@ -167,7 +157,7 @@ fun NAppScreen(
                 appName = napp?.manifest?.app?.name ?: "NApp Builder",
                 ideMode = ideMode,
                 onModeChange = { ideMode = it },
-                onSettings = { showSettings = true },
+                onSettings = onNavigateToAgents,
                 onBack = onNavigateBack,
                 showAgentChat = showAgentChat,
                 onToggleChat = { showAgentChat = !showAgentChat },
@@ -190,8 +180,8 @@ fun NAppScreen(
                     agentInput = ""
                 },
                 isAgentWorking = isAgentWorking,
-                hasApiKey = apiKey.isNotBlank(),
-                onSetApiKey = { showSettings = true }
+                hasApiKey = hasApiKey,
+                onSetApiKey = onNavigateToAgents
             )
         }
     ) { padding ->
@@ -249,18 +239,6 @@ fun NAppScreen(
     }
 
     // Bottom sheets
-    if (showSettings) {
-        SettingsBottomSheet(
-            apiKey = apiKey,
-            apiUrl = apiUrl,
-            apiModel = apiModel,
-            onApiKeyChange = { viewModel.updateApiKey(it) },
-            onApiUrlChange = { viewModel.updateApiUrl(it) },
-            onApiModelChange = { viewModel.updateApiModel(it) },
-            onDismiss = { showSettings = false }
-        )
-    }
-
     if (showProjectPicker) {
         ProjectPickerSheet(
             projects = projects,
@@ -1139,111 +1117,3 @@ private fun ErrorStrip(errors: List<String>) {
     }
 }
 
-// ════════════════════════════════════════
-//  SettingsBottomSheet
-// ════════════════════════════════════════
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsBottomSheet(
-    apiKey: String,
-    apiUrl: String,
-    apiModel: String,
-    onApiKeyChange: (String) -> Unit,
-    onApiUrlChange: (String) -> Unit,
-    onApiModelChange: (String) -> Unit,
-    onDismiss: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-    var keyInput by remember { mutableStateOf(apiKey) }
-    var urlInput by remember { mutableStateOf(apiUrl) }
-    var modelInput by remember { mutableStateOf(apiModel) }
-    var showKey by remember { mutableStateOf(false) }
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = "AI Settings",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
-            )
-
-            Text(
-                text = "Configure the AI model endpoint for the app builder agent.",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-
-            OutlinedTextField(
-                value = urlInput,
-                onValueChange = { urlInput = it },
-                label = { Text("API URL") },
-                placeholder = { Text("https://api.groq.com/openai") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = modelInput,
-                onValueChange = { modelInput = it },
-                label = { Text("Model") },
-                placeholder = { Text("openai/gpt-oss-20b") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true
-            )
-
-            OutlinedTextField(
-                value = keyInput,
-                onValueChange = { keyInput = it },
-                label = { Text("API Key") },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                visualTransformation = if (showKey) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { showKey = !showKey }) {
-                        Icon(
-                            imageVector = if (showKey) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = if (showKey) "Hide" else "Show"
-                        )
-                    }
-                }
-            )
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(onClick = onDismiss) {
-                    Text("Cancel")
-                }
-                Spacer(Modifier.width(8.dp))
-                TextButton(
-                    onClick = {
-                        onApiUrlChange(urlInput)
-                        onApiModelChange(modelInput)
-                        onApiKeyChange(keyInput)
-                        onDismiss()
-                    }
-                ) {
-                    Text("Save", fontWeight = FontWeight.SemiBold)
-                }
-            }
-
-            Text(
-                text = "Uses OpenAI-compatible Chat Completions API",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-            )
-        }
-    }
-}

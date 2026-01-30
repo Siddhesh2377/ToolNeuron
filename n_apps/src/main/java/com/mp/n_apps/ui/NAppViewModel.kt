@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.mp.n_apps.agent.AgentProgress
 import com.mp.n_apps.agent.NAppToolAgent
 import com.mp.n_apps.agent.ToolLogEntry
+import com.mp.n_apps.data.AgentConfig
 import com.mp.n_apps.data.NAppDataStore
 import com.mp.n_apps.runtime.NAppRuntime
 import com.mp.n_apps.schema.NApp
@@ -59,14 +60,14 @@ class NAppViewModel : ViewModel() {
     private val _isAgentWorking = MutableStateFlow(false)
     val isAgentWorking: StateFlow<Boolean> = _isAgentWorking.asStateFlow()
 
-    private val _apiKey = MutableStateFlow("")
-    val apiKey: StateFlow<String> = _apiKey.asStateFlow()
+    private val _activeAgent = MutableStateFlow<AgentConfig?>(null)
+    val activeAgent: StateFlow<AgentConfig?> = _activeAgent.asStateFlow()
 
-    private val _apiUrl = MutableStateFlow("")
-    val apiUrl: StateFlow<String> = _apiUrl.asStateFlow()
+    private val _agentConfigs = MutableStateFlow<List<AgentConfig>>(emptyList())
+    val agentConfigs: StateFlow<List<AgentConfig>> = _agentConfigs.asStateFlow()
 
-    private val _apiModel = MutableStateFlow("")
-    val apiModel: StateFlow<String> = _apiModel.asStateFlow()
+    private val _maxRounds = MutableStateFlow(NAppDataStore.DEFAULT_MAX_ROUNDS)
+    val maxRounds: StateFlow<Int> = _maxRounds.asStateFlow()
 
     // ── Toast ──
     private val _toastMessage = MutableStateFlow<String?>(null)
@@ -129,39 +130,36 @@ class NAppViewModel : ViewModel() {
     }
 
     // ════════════════════════════════════════
-    //  API Key
+    //  Agent Config
     // ════════════════════════════════════════
 
     fun initConfig(context: Context) {
         if (dataStore != null) return
         dataStore = NAppDataStore(context)
-        viewModelScope.launch {
-            dataStore!!.apiKey.collect { _apiKey.value = it }
-        }
-        viewModelScope.launch {
-            dataStore!!.apiUrl.collect { _apiUrl.value = it }
-        }
-        viewModelScope.launch {
-            dataStore!!.apiModel.collect { _apiModel.value = it }
-        }
+        viewModelScope.launch { dataStore!!.migrateIfNeeded() }
+        viewModelScope.launch { dataStore!!.activeAgent.collect { _activeAgent.value = it } }
+        viewModelScope.launch { dataStore!!.agents.collect { _agentConfigs.value = it } }
+        viewModelScope.launch { dataStore!!.maxRounds.collect { _maxRounds.value = it } }
     }
 
-    fun updateApiKey(key: String) {
-        viewModelScope.launch {
-            dataStore?.setApiKey(key)
-        }
+    fun addAgent(agent: AgentConfig) {
+        viewModelScope.launch { dataStore?.addAgent(agent) }
     }
 
-    fun updateApiUrl(url: String) {
-        viewModelScope.launch {
-            dataStore?.setApiUrl(url)
-        }
+    fun updateAgentConfig(agent: AgentConfig) {
+        viewModelScope.launch { dataStore?.updateAgent(agent) }
     }
 
-    fun updateApiModel(model: String) {
-        viewModelScope.launch {
-            dataStore?.setApiModel(model)
-        }
+    fun deleteAgentConfig(agentId: String) {
+        viewModelScope.launch { dataStore?.deleteAgent(agentId) }
+    }
+
+    fun setActiveAgent(agentId: String) {
+        viewModelScope.launch { dataStore?.setActiveAgent(agentId) }
+    }
+
+    fun setMaxRounds(rounds: Int) {
+        viewModelScope.launch { dataStore?.setMaxRounds(rounds) }
     }
 
     // ════════════════════════════════════════
@@ -312,7 +310,8 @@ class NAppViewModel : ViewModel() {
     // ════════════════════════════════════════
 
     fun sendAgentCommand(text: String) {
-        if (text.isBlank() || _apiKey.value.isBlank()) return
+        val active = _activeAgent.value
+        if (text.isBlank() || active == null || active.apiKey.isBlank()) return
 
         val currentMessages = _agentMessages.value.toMutableList()
         currentMessages.add(AgentChatMessage(role = "user", content = text))
@@ -326,10 +325,11 @@ class NAppViewModel : ViewModel() {
             val agent = toolAgent
             if (agent != null) {
                 val result = agent.runAgentLoop(
-                    apiKey = _apiKey.value,
-                    baseUrl = _apiUrl.value,
-                    model = _apiModel.value,
-                    userMessage = text
+                    apiKey = active.apiKey,
+                    baseUrl = active.providerUrl,
+                    model = active.modelName,
+                    userMessage = text,
+                    maxIterations = _maxRounds.value
                 )
 
                 _toolLog.value = result.toolLog
