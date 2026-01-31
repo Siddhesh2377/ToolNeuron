@@ -14,11 +14,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.ui.components.BodyLabel
+import com.dark.tool_neuron.ui.components.CaptionText
+import com.dark.tool_neuron.ui.components.SectionDivider
+import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewmodel.memory.VaultInspectorScreen
 import kotlinx.coroutines.launch
 
@@ -74,48 +75,46 @@ fun VaultDashboard() {
                 Column(
                     modifier = Modifier
                         .fillMaxHeight()
-                        .padding(rDp(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                        .padding(rDp(Standards.SpacingLg)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
                 ) {
                     // Header
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = rDp(16.dp)),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                            .padding(vertical = rDp(Standards.SpacingLg)),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(rDp(44.dp))
-                                .clip(RoundedCornerShape(rDp(12.dp)))
+                                .clip(RoundedCornerShape(rDp(Standards.CardCornerRadius)))
                                 .background(MaterialTheme.colorScheme.primaryContainer),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 Icons.Filled.Memory,
                                 contentDescription = null,
-                                modifier = Modifier.size(rDp(24.dp)),
+                                modifier = Modifier.size(rDp(Standards.IconLg)),
                                 tint = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                         Column {
                             Text(
                                 "Memory Vault",
-                                fontSize = rSp(18.sp),
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = ManropeFontFamily
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
                             Text(
                                 "Data Management",
-                                fontSize = rSp(11.sp),
-                                fontFamily = maple,
+                                style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
                     }
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = rDp(8.dp)))
+                    SectionDivider()
 
                     // Navigation items
                     VaultScreen.entries.forEach { screen ->
@@ -128,41 +127,16 @@ fun VaultDashboard() {
 
                     Spacer(Modifier.weight(1f))
 
-                    HorizontalDivider(modifier = Modifier.padding(vertical = rDp(8.dp)))
+                    SectionDivider()
 
                     // Version info
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(rDp(12.dp)),
-                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(rDp(12.dp)),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column {
-                                Text(
-                                    "MemoryVault",
-                                    fontSize = rSp(12.sp),
-                                    fontWeight = FontWeight.Medium,
-                                    fontFamily = ManropeFontFamily
-                                )
-                                Text(
-                                    "v1.0.0",
-                                    fontSize = rSp(10.sp),
-                                    fontFamily = maple,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            Icon(
-                                Icons.Outlined.Info,
-                                contentDescription = null,
-                                modifier = Modifier.size(rDp(16.dp)),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
+                    StandardCard(
+                        title = "MemoryVault",
+                        description = "v1.0.0",
+                        icon = Icons.Outlined.Info,
+                        iconTint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
                 }
             }
         },
@@ -176,7 +150,7 @@ fun VaultDashboard() {
                     })
                 }
                 VaultScreen.MANAGEMENT -> VaultManagementScreen()
-                VaultScreen.LOGGER -> TerminalLoggerScreen()  // New TUI-style logger
+                VaultScreen.LOGGER -> TerminalLoggerScreen()
                 VaultScreen.INSPECTOR -> VaultInspectorScreen()
             }
         }
@@ -201,21 +175,15 @@ fun VaultNavItem(
             Column {
                 Text(
                     screen.title,
-                    fontSize = rSp(14.sp),
-                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal,
-                    fontFamily = ManropeFontFamily
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                 )
-                Text(
-                    screen.description,
-                    fontSize = rSp(10.sp),
-                    fontFamily = maple,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                CaptionText(text = screen.description)
             }
         },
         selected = isSelected,
         onClick = onClick,
-        shape = RoundedCornerShape(rDp(12.dp)),
+        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
         modifier = Modifier.padding(vertical = rDp(2.dp))
     )
 }

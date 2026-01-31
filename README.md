@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Android_12%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-1.2.0-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
+[![Release](https://img.shields.io/badge/Release-1.2.1-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
 <p align="left">
@@ -89,7 +89,7 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 - **Format**: Any GGUF model (Llama 3, Mistral, Gemma, Phi, Qwen, etc.)
 - **Size Range**: 500MB (1B models) to 20GB+ (70B models)
 - **Quantization**: All GGUF quantizations supported (Q2_K, Q4_K_M, Q5_K_S, Q6_K, Q8_0, F16, etc.)
-- **Model Categories**: General, Medical, Research, Coding, Business, Cybersecurity
+- **Model Categories**: General, Medical, Research, Coding, Uncensored, Business, Cybersecurity
 
 ### Performance
 | Device Tier | RAM | Model Size | Speed |
@@ -464,6 +464,7 @@ Comprehensive document parsing with format detection and content extraction.
 - Medical: Healthcare and medical domain models
 - Research: Academic and research-focused models
 - Coding: Programming and code generation models
+- Uncensored: Unfiltered and uncensored models
 - Business: Professional and business domain models
 - Cybersecurity: Security and penetration testing models
 
@@ -959,7 +960,7 @@ A: AES-256-GCM with hardware-backed keys (Android KeyStore) is military-grade en
 A: Yes. Export RAG as `.neuron` packet with encryption enabled. Share the file and password separately. Recipients can import and decrypt with the password.
 
 **Q: How does Text-to-Speech work?**
-A: TTS uses the Supertonic TTS engine running entirely on-device via ONNX Runtime. Download the TTS model from the Model Store, then tap the speak button on any assistant message. You can also enable auto-speak in Settings to have responses read aloud automatically.
+A: TTS uses the Supertonic TTS engine running entirely on-device via ONNX Runtime. Download the TTS model from the Model Store or directly from the Settings screen under the TTS section, then tap the speak button on any assistant message. You can also enable auto-speak in Settings to have responses read aloud automatically.
 
 **Q: Can I use TTS offline?**
 A: Yes. After downloading the TTS model (~100MB), all speech synthesis happens locally with no internet required.

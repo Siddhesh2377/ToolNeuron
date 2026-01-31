@@ -20,6 +20,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -45,6 +47,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.rememberDrawerState
@@ -60,6 +63,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -76,11 +80,13 @@ import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModeToggleSwitch
 import com.dark.tool_neuron.ui.components.ModelListItem
+import com.dark.tool_neuron.ui.components.MemoryOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.viewmodel.MemoryViewModel
 import com.dark.tool_neuron.viewmodel.PluginViewModel
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import com.dark.tool_neuron.worker.GenerationManager
@@ -91,7 +97,6 @@ import kotlinx.coroutines.launch
 @Composable
 fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
-    onModelEditor: () -> Unit,
     onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
     chatViewModel: ChatViewModel,
@@ -133,9 +138,6 @@ fun HomeScreen(
             },
             bottomBar = {
                 BottomBar(
-                    onModelEditor = {
-                        onModelEditor()
-                    },
                     onSettingsClick = {
                         onSettingsClick()
                     },
@@ -204,12 +206,12 @@ fun TopBar(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomBar(
-    onModelEditor: () -> Unit,
     onSettingsClick: () -> Unit,
     chatViewModel: ChatViewModel = hiltViewModel(),
     llmModelViewModel: LLMModelViewModel = hiltViewModel(),
     ragViewModel: RagViewModel = hiltViewModel(),
-    pluginViewModel: PluginViewModel = hiltViewModel()
+    pluginViewModel: PluginViewModel = hiltViewModel(),
+    memoryViewModel: MemoryViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     var value by remember { mutableStateOf("") }
@@ -239,6 +241,13 @@ fun BottomBar(
     val multiTurnEnabled by pluginViewModel.multiTurnEnabled.collectAsStateWithLifecycle()
     val toolCallingConfig by pluginViewModel.toolCallingConfig.collectAsStateWithLifecycle()
     val isToolCallingModelLoaded by pluginViewModel.isToolCallingModelLoaded.collectAsStateWithLifecycle()
+
+    // Memory State
+    val showMemoryOverlay by memoryViewModel.showMemoryOverlay.collectAsStateWithLifecycle()
+    val isMemoryEnabled by memoryViewModel.isMemoryEnabled.collectAsStateWithLifecycle()
+    val memoryResults by memoryViewModel.memoryResults.collectAsStateWithLifecycle()
+    val vaultStats by memoryViewModel.vaultStats.collectAsStateWithLifecycle()
+    val memoryEntryCount by memoryViewModel.memoryEntryCount.collectAsStateWithLifecycle()
 
     // App settings
     val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
@@ -335,6 +344,18 @@ fun BottomBar(
         onMaxTokensPerTurnChange = { pluginViewModel.setMaxTokensPerTurn(it) }
     )
 
+    // Memory Overlay
+    MemoryOverlayBottomSheet(
+        show = showMemoryOverlay,
+        isMemoryEnabled = isMemoryEnabled,
+        vaultStats = vaultStats,
+        memoryResults = memoryResults,
+        memoryEntryCount = memoryEntryCount,
+        onDismiss = { memoryViewModel.dismissMemoryOverlay() },
+        onMemoryEnabledChange = { memoryViewModel.setMemoryEnabled(it) },
+        onRefreshStats = { memoryViewModel.refreshStats() }
+    )
+
     Column {
         AnimatedVisibility(showModelList) {
             LazyColumn(
@@ -413,6 +434,16 @@ fun BottomBar(
                     )
                 }
 
+                // Quick-look chips showing active subsystems
+                QuickLookChipRow(
+                    loadedRagCount = loadedRags.size,
+                    enabledToolCount = enabledPluginNames.size,
+                    isMemoryEnabled = isMemoryEnabled,
+                    onRagChipClick = { ragViewModel.showRagOverlay() },
+                    onToolChipClick = { pluginViewModel.showPluginOverlay() },
+                    onMemoryChipClick = { memoryViewModel.toggleMemoryOverlay() }
+                )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ActionIconSpace)),
@@ -480,6 +511,19 @@ fun BottomBar(
                         )
                     }
 
+                    // Memory Button
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            if (showMemoryOverlay) {
+                                memoryViewModel.dismissMemoryOverlay()
+                            } else {
+                                memoryViewModel.toggleMemoryOverlay()
+                            }
+                        },
+                        checked = showMemoryOverlay,
+                        icon = R.drawable.memory_vault
+                    )
+
                     Spacer(Modifier.weight(1f))
 
                     when (isGenerating) {
@@ -508,27 +552,65 @@ fun BottomBar(
                                                     Log.d("HomeScreen", "RAG: ${rag.name}, enabled: ${rag.isEnabled}, status: ${rag.status}")
                                                 }
 
-                                                if (loadedRags.isNotEmpty()) {
+                                                val hasRags = loadedRags.isNotEmpty()
+                                                val hasMemory = isMemoryEnabled
+
+                                                if (hasRags || hasMemory) {
                                                     val userQuery = value
                                                     value = ""
                                                     scope.launch {
-                                                        Log.d("HomeScreen", "Querying RAGs for: $userQuery")
-                                                        // Query RAG first
-                                                        val ragContext = ragViewModel.queryAndStoreResults(userQuery)
-                                                        // Set RAG context and results in ChatViewModel
-                                                        Log.d("HomeScreen", "RAG context length: ${ragContext.length}, results count: ${ragViewModel.lastRagResults.value.size}")
-                                                        Log.d("HomeScreen", "RAG context: $ragContext")
-                                                        chatViewModel.setRagContext(
-                                                            ragContext.ifBlank { null },
-                                                            ragViewModel.lastRagResults.value
-                                                        )
-                                                        // Now send the message
+                                                        var combinedContext = ""
+
+                                                        // Query Memory Vault if enabled
+                                                        if (hasMemory) {
+                                                            chatViewModel.setProcessingPhase("Querying Memory Vault...")
+                                                            Log.d("HomeScreen", "Querying Memory Vault for: $userQuery")
+                                                            val memoryContext = memoryViewModel.queryMemory(userQuery)
+                                                            if (memoryContext.isNotBlank()) {
+                                                                combinedContext += memoryContext
+                                                                chatViewModel.setMemoryContext(
+                                                                    memoryContext,
+                                                                    memoryViewModel.memoryResults.value
+                                                                )
+                                                            }
+                                                        }
+
+                                                        // Query RAG if loaded
+                                                        if (hasRags) {
+                                                            chatViewModel.setProcessingPhase("Querying RAG...")
+                                                            Log.d("HomeScreen", "Querying RAGs for: $userQuery")
+                                                            val ragContext = ragViewModel.queryAndStoreResults(userQuery)
+                                                            if (combinedContext.isNotBlank()) {
+                                                                combinedContext += "\n$ragContext"
+                                                            } else {
+                                                                combinedContext += ragContext
+                                                            }
+                                                            chatViewModel.setRagContext(
+                                                                ragContext.ifBlank { null },
+                                                                ragViewModel.lastRagResults.value
+                                                            )
+                                                        }
+
+                                                        // Update combined RAG context if memory added
+                                                        if (hasRags && hasMemory && combinedContext.isNotBlank()) {
+                                                            chatViewModel.setRagContext(
+                                                                combinedContext.ifBlank { null },
+                                                                ragViewModel.lastRagResults.value
+                                                            )
+                                                        } else if (!hasRags && hasMemory && combinedContext.isNotBlank()) {
+                                                            chatViewModel.setRagContext(
+                                                                combinedContext.ifBlank { null },
+                                                                emptyList()
+                                                            )
+                                                        }
+
+                                                        chatViewModel.setProcessingPhase("Generating Response...")
                                                         chatViewModel.sendTextMessage(userQuery)
                                                     }
                                                 } else {
-                                                    Log.d("HomeScreen", "No RAGs loaded, sending message without RAG context")
-                                                    // No RAG loaded, send directly
+                                                    Log.d("HomeScreen", "No RAGs or Memory, sending message directly")
                                                     chatViewModel.clearRagContext()
+                                                    chatViewModel.clearMemoryContext()
                                                     chatViewModel.sendTextMessage(value)
                                                     value = ""
                                                 }
@@ -556,6 +638,81 @@ fun BottomBar(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun QuickLookChipRow(
+    loadedRagCount: Int,
+    enabledToolCount: Int,
+    isMemoryEnabled: Boolean,
+    onRagChipClick: () -> Unit,
+    onToolChipClick: () -> Unit,
+    onMemoryChipClick: () -> Unit
+) {
+    val hasAnyActive = loadedRagCount > 0 || enabledToolCount > 0 || isMemoryEnabled
+
+    AnimatedVisibility(visible = hasAnyActive) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(4.dp), vertical = rDp(2.dp)),
+            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ChipSpacing))
+        ) {
+            if (loadedRagCount > 0) {
+                StatusChip(
+                    label = "$loadedRagCount RAG",
+                    color = MaterialTheme.colorScheme.primary,
+                    onClick = onRagChipClick
+                )
+            }
+            if (enabledToolCount > 0) {
+                StatusChip(
+                    label = "$enabledToolCount Tools",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    onClick = onToolChipClick
+                )
+            }
+            if (isMemoryEnabled) {
+                StatusChip(
+                    label = "Memory",
+                    color = MaterialTheme.colorScheme.secondary,
+                    onClick = onMemoryChipClick
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatusChip(
+    label: String,
+    color: Color,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        color = color.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(rDp(Standards.ChipCornerRadius)),
+        modifier = Modifier.height(rDp(Standards.ChipHeight))
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.padding(horizontal = rDp(Standards.ChipHorizontalPadding))
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(rDp(6.dp))
+                    .background(color, RoundedCornerShape(50))
+            )
+            Spacer(Modifier.width(rDp(4.dp)))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = color,
+                fontWeight = FontWeight.Medium
+            )
         }
     }
 }

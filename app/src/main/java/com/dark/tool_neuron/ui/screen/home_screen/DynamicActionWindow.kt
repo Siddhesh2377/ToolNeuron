@@ -52,7 +52,11 @@ enum class DynamicWindowTab {
 @Composable
 fun DynamicActionWindow(
     chatViewModel: ChatViewModel,
-    modelViewModel: LLMModelViewModel
+    modelViewModel: LLMModelViewModel,
+    loadedRagCount: Int = 0,
+    enabledToolCount: Int = 0,
+    isMemoryEnabled: Boolean = false,
+    ttsModelLoaded: Boolean = false
 ) {
     val appState by AppStateManager.appState.collectAsState()
     var selectedTab by remember { mutableStateOf(DynamicWindowTab.STATUS) }
@@ -133,7 +137,14 @@ fun DynamicActionWindow(
                 label = "tab_content"
             ) { tab ->
                 when (tab) {
-                    DynamicWindowTab.STATUS -> StatusTabContent(appState, chatViewModel)
+                    DynamicWindowTab.STATUS -> StatusTabContent(
+                        appState = appState,
+                        chatViewModel = chatViewModel,
+                        loadedRagCount = loadedRagCount,
+                        enabledToolCount = enabledToolCount,
+                        isMemoryEnabled = isMemoryEnabled,
+                        ttsModelLoaded = ttsModelLoaded
+                    )
                     DynamicWindowTab.MODELS -> ModelsTabContent(
                         installedModels,
                         currentModelID,
@@ -148,12 +159,20 @@ fun DynamicActionWindow(
 }
 
 @Composable
-private fun StatusTabContent(appState: AppState, chatViewModel: ChatViewModel) {
-    Box(
+private fun StatusTabContent(
+    appState: AppState,
+    chatViewModel: ChatViewModel,
+    loadedRagCount: Int = 0,
+    enabledToolCount: Int = 0,
+    isMemoryEnabled: Boolean = false,
+    ttsModelLoaded: Boolean = false
+) {
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(min = rDp(120.dp), max = rDp(300.dp))
-            .padding(rDp(16.dp))
+            .heightIn(min = rDp(120.dp), max = rDp(350.dp))
+            .padding(rDp(16.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
         when (appState) {
             is AppState.Welcome -> WelcomeContent()
@@ -166,6 +185,46 @@ private fun StatusTabContent(appState: AppState, chatViewModel: ChatViewModel) {
             is AppState.ExecutingPlugin -> ExecutingPluginContent(appState)
             is AppState.PluginExecutionComplete -> PluginExecutionCompleteContent(appState)
             is AppState.Error -> ErrorContent(appState)
+        }
+
+        // Active Subsystems section
+        val hasActiveSubsystems = loadedRagCount > 0 || enabledToolCount > 0 || isMemoryEnabled || ttsModelLoaded
+        if (hasActiveSubsystems) {
+            com.dark.tool_neuron.ui.components.SectionDivider(label = "Active Subsystems")
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                if (loadedRagCount > 0) {
+                    com.dark.tool_neuron.ui.components.StatusBadge(
+                        text = "RAG ($loadedRagCount)",
+                        isActive = true,
+                        activeColor = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (enabledToolCount > 0) {
+                    com.dark.tool_neuron.ui.components.StatusBadge(
+                        text = "Tools ($enabledToolCount)",
+                        isActive = true,
+                        activeColor = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+                if (isMemoryEnabled) {
+                    com.dark.tool_neuron.ui.components.StatusBadge(
+                        text = "Memory",
+                        isActive = true,
+                        activeColor = MaterialTheme.colorScheme.secondary
+                    )
+                }
+                if (ttsModelLoaded) {
+                    com.dark.tool_neuron.ui.components.StatusBadge(
+                        text = "TTS",
+                        isActive = true,
+                        activeColor = MaterialTheme.colorScheme.tertiary
+                    )
+                }
+            }
         }
     }
 }

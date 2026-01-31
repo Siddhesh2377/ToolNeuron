@@ -23,12 +23,15 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.EmbeddingEngine
+import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
+import com.dark.tool_neuron.ui.screen.SetupScreen
 import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
@@ -41,6 +44,7 @@ import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -119,6 +123,7 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
+    object Setup : Screen("setup")
     object Chat : Screen("chat")
     object Store : Screen("store")
     object Editor : Screen("editor")
@@ -131,11 +136,38 @@ fun AppNavigation(
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    // Determine start destination: check installed models + setup skip flag
+    var startDestination by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        withContext(Dispatchers.IO) {
+            val modelRepository = AppContainer.getModelRepository()
+            val setupDataStore = SetupDataStore(context)
+
+            val models = modelRepository.getAllModels().first()
+            val skipped = setupDataStore.isSetupSkipped.first()
+
+            val hasRequiredModel = models.any {
+                it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+            }
+
+            startDestination = if (hasRequiredModel || skipped) {
+                Screen.Chat.route
+            } else {
+                Screen.Setup.route
+            }
+        }
+    }
+
+    val dest = startDestination ?: return
+
     val navController = rememberNavController()
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Chat.route,
+        startDestination = dest,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -162,6 +194,16 @@ fun AppNavigation(
         }
     ) {
 
+        composable(Screen.Setup.route) {
+            SetupScreen(
+                onSetupComplete = {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(Screen.Setup.route) { inclusive = true }
+                    }
+                }
+            )
+        }
+
         composable(Screen.Editor.route) {
             ModelConfigEditorScreen(onBackClick = {
                 navController.popBackStack()
@@ -170,9 +212,6 @@ fun AppNavigation(
 
         composable(Screen.Chat.route) { _ ->
             HomeScreen(
-                onModelEditor = {
-                    navController.navigate(Screen.Editor.route)
-                },
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
                 },
@@ -196,6 +235,7 @@ fun AppNavigation(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
+                onModelEditor = { navController.navigate(Screen.Editor.route) }
             )
         }
 

@@ -1056,17 +1056,29 @@ private fun EditRepositoryDialog(
                         horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
                     ) {
                         FilterChip(
+                            selected = selectedCategory == ModelCategory.UNCENSORED,
+                            onClick = { selectedCategory = ModelCategory.UNCENSORED },
+                            label = { Text("Uncensored") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
                             selected = selectedCategory == ModelCategory.BUSINESS,
                             onClick = { selectedCategory = ModelCategory.BUSINESS },
                             label = { Text("Business") },
                             modifier = Modifier.weight(1f)
                         )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    ) {
                         FilterChip(
                             selected = selectedCategory == ModelCategory.CYBERSECURITY,
                             onClick = { selectedCategory = ModelCategory.CYBERSECURITY },
                             label = { Text("Cybersecurity") },
                             modifier = Modifier.weight(1f)
                         )
+                        Spacer(modifier = Modifier.weight(1f))
                     }
                 }
             }

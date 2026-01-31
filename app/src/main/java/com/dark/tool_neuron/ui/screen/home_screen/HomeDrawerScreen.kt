@@ -157,14 +157,6 @@ fun HomeDrawerScreen(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun TopBar(
-    onVaultManagerClick: () -> Unit,
-    onCreateNewChat: () -> Unit,
-) {
-
-}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable

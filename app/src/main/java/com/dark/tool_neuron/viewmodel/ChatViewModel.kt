@@ -141,6 +141,21 @@ class ChatViewModel @Inject constructor(
     private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
 
+    // Processing phase indicator
+    private val _currentProcessingPhase = MutableStateFlow<String?>(null)
+    val currentProcessingPhase: StateFlow<String?> = _currentProcessingPhase
+
+    fun setProcessingPhase(phase: String?) {
+        _currentProcessingPhase.value = phase
+    }
+
+    // Memory state
+    private val _currentMemoryContext = MutableStateFlow<String?>(null)
+    val currentMemoryContext: StateFlow<String?> = _currentMemoryContext
+
+    private val _currentMemoryResults = MutableStateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>>(emptyList())
+    val currentMemoryResults: StateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>> = _currentMemoryResults
+
     // ==================== RAG Controls ====================
 
     fun setRagEnabled(enabled: Boolean) {
@@ -155,6 +170,18 @@ class ChatViewModel @Inject constructor(
     fun clearRagContext() {
         _currentRagContext.value = null
         _currentRagResults.value = emptyList()
+    }
+
+    // ==================== Memory Controls ====================
+
+    fun setMemoryContext(context: String, results: List<com.dark.tool_neuron.worker.ScoredVaultContent>) {
+        _currentMemoryContext.value = context
+        _currentMemoryResults.value = results
+    }
+
+    fun clearMemoryContext() {
+        _currentMemoryContext.value = null
+        _currentMemoryResults.value = emptyList()
     }
 
     // ==================== Chat Management ====================
@@ -353,11 +380,22 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Execute tool if detected
+            // Execute tool if detected, then push AI to interpret the result
             if (toolCallDetected) {
                 _streamingAssistantMessage.value = ""
                 currentGeneratedContent = ""
                 handlePluginToolCall(toolCallName, toolCallArgs)
+
+                // Get the tool result data from the last plugin result message
+                val lastPluginResult = _messages.lastOrNull {
+                    it.content.contentType == ContentType.PluginResult
+                }
+                val toolResultData = lastPluginResult?.content?.pluginResultData?.resultData
+
+                if (toolResultData != null) {
+                    // Push AI to generate interpretation of the tool result
+                    generateResponseFromToolResult(conversationMessages, toolResultData, toolCallName)
+                }
             }
 
             _currentToolName.value = null
@@ -465,11 +503,22 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            // Execute tool if detected
+            // Execute tool if detected, then push AI to interpret the result
             if (toolCallDetected) {
                 _streamingAssistantMessage.value = ""
                 currentGeneratedContent = ""
                 handlePluginToolCall(toolCallName, toolCallArgs)
+
+                // Get the tool result data from the last plugin result message
+                val lastPluginResult = _messages.lastOrNull {
+                    it.content.contentType == ContentType.PluginResult
+                }
+                val toolResultData = lastPluginResult?.content?.pluginResultData?.resultData
+
+                if (toolResultData != null) {
+                    // Push AI to generate interpretation of the tool result
+                    generateResponseFromToolResult(conversationMessages, toolResultData, toolCallName)
+                }
             }
 
             _currentToolName.value = null
@@ -503,12 +552,16 @@ class ChatViewModel @Inject constructor(
                 )
                 _messages.add(assistantMessage)
                 chatManager.addAssistantMessage(chatId, filteredContent, currentMetrics, ragResultItems)
-                autoSpeakIfEnabled(filteredContent)
+                AppStateManager.setGenerationComplete()
+                AppStateManager.chatRefreshed()
+                val spokenMsgId = assistantMessage.msgId
+                resetStreamingState()
+                viewModelScope.launch { autoSpeakIfEnabled(filteredContent, spokenMsgId) }
+            } else {
+                AppStateManager.setGenerationComplete()
+                AppStateManager.chatRefreshed()
+                resetStreamingState()
             }
-
-            AppStateManager.setGenerationComplete()
-            AppStateManager.chatRefreshed()
-            resetStreamingState()
         }
     }
 
@@ -677,15 +730,17 @@ class ChatViewModel @Inject constructor(
                                     chatManager.addAssistantMessage(
                                         chatId, filteredContent, currentMetrics, ragResultItems
                                     )
-                                    autoSpeakIfEnabled(filteredContent)
+                                    AppStateManager.setGenerationComplete()
+                                    AppStateManager.chatRefreshed()
+                                    val spokenMsgId = assistantMessage.msgId
+                                    resetStreamingState()
+                                    viewModelScope.launch { autoSpeakIfEnabled(filteredContent, spokenMsgId) }
                                 } else {
                                     Log.d("ChatViewModel", "Skipped empty assistant message (was only tool call syntax)")
+                                    AppStateManager.setGenerationComplete()
+                                    AppStateManager.chatRefreshed()
+                                    resetStreamingState()
                                 }
-
-                                AppStateManager.setGenerationComplete()
-                                AppStateManager.chatRefreshed()
-                                // resetStreamingState will set _isGenerating = false
-                                resetStreamingState()
                             }
 
                             is GenerationEvent.Error -> {
@@ -1049,10 +1104,11 @@ class ChatViewModel @Inject constructor(
                     Log.d("ChatViewModel", "Reloaded ${loadedMessages.size} messages from vault")
                     _messages.clear()
                     _messages.addAll(loadedMessages)
-                    autoSpeakIfEnabled(filteredResponse)
                     AppStateManager.setGenerationComplete()
                     AppStateManager.chatRefreshed()
+                    val spokenMsgId = loadedMessages.lastOrNull { it.role == Role.Assistant }?.msgId
                     resetStreamingState()
+                    viewModelScope.launch { autoSpeakIfEnabled(filteredResponse, spokenMsgId) }
                 }.onFailure { e ->
                     Log.e("ChatViewModel", "Failed to reload chat: ${e.message}")
                     AppStateManager.setGenerationComplete()
@@ -1235,6 +1291,7 @@ class ChatViewModel @Inject constructor(
         currentImageMetrics = null
         userMessageAdded = false
         _currentToolName.value = null
+        _currentProcessingPhase.value = null
         // Clear RAG context and results after message is saved
         _currentRagContext.value = null
         _currentRagResults.value = emptyList()
@@ -1243,6 +1300,7 @@ class ChatViewModel @Inject constructor(
     // ==================== Generation Control ====================
 
     fun stop() {
+        if (TTSManager.isPlaying.value) { TTSManager.stopPlayback() }
         when (_currentGenerationType.value) {
             GenerationManager.ModelType.TEXT_GENERATION -> {
                 generationManager.stopTextGeneration()
@@ -1330,7 +1388,7 @@ class ChatViewModel @Inject constructor(
 
     // ==================== TTS Controls ====================
 
-    private suspend fun autoSpeakIfEnabled(text: String) {
+    private suspend fun autoSpeakIfEnabled(text: String, msgId: String? = null) {
         if (text.isBlank()) return
         val settings = ttsDataStore.settings.first()
         if (!settings.autoSpeak) return
@@ -1343,7 +1401,7 @@ class ChatViewModel @Inject constructor(
             if (!TTSManager.isLoaded()) return
         }
 
-        TTSManager.speak(text = text, settings = settings)
+        TTSManager.speak(text = text, settings = settings, msgId = msgId)
     }
 
     fun speakMessage(message: Messages) {
@@ -1540,6 +1598,56 @@ class ChatViewModel @Inject constructor(
             .lowercase()
             .replace(" ", "_")
             .replace("-", "_")
+    }
+
+    /**
+     * After a tool executes, feed the result back to the LLM so it generates
+     * a natural-language interpretation for the user.
+     */
+    private suspend fun generateResponseFromToolResult(
+        conversationMessages: MutableList<JSONObject>,
+        toolResultData: String,
+        toolName: String
+    ) {
+        // Append the tool result as an assistant context message
+        conversationMessages.add(
+            JSONObject()
+                .put("role", "assistant")
+                .put("content", "Tool '$toolName' returned the following result:\n$toolResultData\n\nPlease summarize and explain this result to the user.")
+        )
+
+        val isStreaming = streamingEnabled.value
+        val config = PluginManager.getToolCallingConfig()
+
+        _streamingAssistantMessage.value = ""
+        currentGeneratedContent = ""
+        currentMetrics = null
+
+        AppStateManager.setGeneratingText()
+
+        try {
+            generationManager.generateMultiTurnStreaming(
+                JSONArray(conversationMessages).toString(), config.maxTokensPerTurn
+            ).collect { event ->
+                when (event) {
+                    is GenerationEvent.Token -> {
+                        currentGeneratedContent += event.text
+                        if (isStreaming) {
+                            _streamingAssistantMessage.value = currentGeneratedContent
+                        }
+                    }
+                    is GenerationEvent.ToolCall -> { /* ignore nested tool calls from interpretation */ }
+                    is GenerationEvent.Done -> { /* handled after collect */ }
+                    is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
+                    is GenerationEvent.Error -> { _error.value = event.message }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("ChatViewModel", "Error generating response from tool result", e)
+        }
+
+        val filteredContent = filterToolCallSyntax(currentGeneratedContent)
+        _streamingAssistantMessage.value = filteredContent
     }
 
     /**

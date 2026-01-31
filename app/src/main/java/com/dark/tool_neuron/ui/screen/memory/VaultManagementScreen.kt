@@ -32,8 +32,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
@@ -47,10 +46,8 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,17 +59,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.ui.components.SectionHeader
+import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -93,12 +90,11 @@ fun VaultManagementScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(title = {
+            CenterAlignedTopAppBar(title = {
                 Text(
                     "Memory Vault Manager",
-                    fontSize = rSp(20.sp),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = ManropeFontFamily
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
                 )
             }, actions = {
                 ActionToggleButton(
@@ -108,7 +104,7 @@ fun VaultManagementScreen(
                     contentDescription = "Auto Refresh"
                 )
 
-                Spacer(Modifier.width(rDp(8.dp)))
+                Spacer(Modifier.width(rDp(Standards.SpacingSm)))
 
                 ActionButton(
                     onClickListener = { viewModel.loadVaultStats() },
@@ -130,9 +126,8 @@ fun VaultManagementScreen(
                     Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = {
                         Text(
                             title,
-                            fontSize = rSp(14.sp),
-                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
-                            fontFamily = ManropeFontFamily
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
                         )
                     })
                 }
@@ -149,19 +144,19 @@ fun VaultManagementScreen(
                     color = MaterialTheme.colorScheme.primaryContainer
                 ) {
                     Row(
-                        modifier = Modifier.padding(rDp(12.dp)),
+                        modifier = Modifier.padding(rDp(Standards.SpacingMd)),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             Icons.Default.Info,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp)),
+                            modifier = Modifier.size(rDp(Standards.IconMd)),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                        Spacer(Modifier.width(rDp(8.dp)))
+                        Spacer(Modifier.width(rDp(Standards.SpacingSm)))
                         Text(
                             viewModel.statusMessage,
-                            fontSize = rSp(12.sp),
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
@@ -189,9 +184,16 @@ fun VaultManagementScreen(
             AlertDialog(onDismissRequest = { viewModel.dismissError() }, icon = {
                 Icon(Icons.Default.Warning, contentDescription = null)
             }, title = {
-                Text("Error", fontSize = rSp(18.sp), fontWeight = FontWeight.Bold)
+                Text(
+                    "Error",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
             }, text = {
-                Text(viewModel.errorMessage, fontSize = rSp(14.sp))
+                Text(
+                    viewModel.errorMessage,
+                    style = MaterialTheme.typography.bodyMedium
+                )
             }, confirmButton = {
                 TextButton(onClick = { viewModel.dismissError() }) {
                     Text("OK")
@@ -221,15 +223,14 @@ fun ChatsTab(viewModel: VaultManagementViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(rDp(Standards.SpacingMd)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
                     "Chats (${viewModel.chatList.size})",
-                    fontSize = rSp(16.sp),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = ManropeFontFamily
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
                 )
 
                 ActionButton(
@@ -242,8 +243,8 @@ fun ChatsTab(viewModel: VaultManagementViewModel) {
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            contentPadding = PaddingValues(rDp(Standards.SpacingLg)),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
             items(viewModel.chatList) { chat ->
                 ChatCard(
@@ -276,15 +277,20 @@ fun SearchTab(viewModel: VaultManagementViewModel) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(rDp(Standards.SpacingMd)),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
             ) {
                 OutlinedTextField(
                     value = viewModel.searchQuery,
                     onValueChange = { viewModel.performSearch(it) },
                     modifier = Modifier.weight(1f),
-                    placeholder = { Text("Search messages...", fontSize = rSp(14.sp)) },
+                    placeholder = {
+                        Text(
+                            "Search messages...",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null)
                     },
@@ -296,7 +302,7 @@ fun SearchTab(viewModel: VaultManagementViewModel) {
                         }
                     },
                     singleLine = true,
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
                 )
             }
         }
@@ -304,14 +310,14 @@ fun SearchTab(viewModel: VaultManagementViewModel) {
         // Search Results
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            contentPadding = PaddingValues(rDp(Standards.SpacingLg)),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
             if (viewModel.searchQuery.isNotEmpty()) {
                 item {
                     Text(
                         "Results (${viewModel.searchResults.size})",
-                        fontSize = rSp(14.sp),
+                        style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -346,17 +352,11 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(rDp(Standards.SpacingLg)),
+        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
     ) {
         item {
-            Text(
-                "Maintenance Operations",
-                fontSize = rSp(18.sp),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary,
-                fontFamily = ManropeFontFamily
-            )
+            SectionHeader(title = "Maintenance Operations")
         }
 
         item {
@@ -377,7 +377,6 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
                 icon = Icons.Default.Face,
                 buttonText = "Backup",
                 onClick = {
-                    // TODO: Implement file picker
                     val path =
                         "/storage/emulated/0/Download/vault_backup_${System.currentTimeMillis()}.mvlt.gz"
                     viewModel.createBackup(path)
@@ -408,40 +407,14 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
         }
 
         item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(rDp(12.dp)),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(rDp(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            "Warning",
-                            fontSize = rSp(16.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                    Text(
-                        "Maintenance operations may take time and temporarily block other operations. " + "Always create a backup before performing destructive operations.",
-                        fontSize = rSp(12.sp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
-                    )
-                }
-            }
+            StandardCard(
+                containerColor = MaterialTheme.colorScheme.errorContainer,
+                icon = Icons.Default.Warning,
+                iconTint = MaterialTheme.colorScheme.onErrorContainer,
+                title = "Warning",
+                description = "Maintenance operations may take time and temporarily block other operations. " +
+                        "Always create a backup before performing destructive operations."
+            )
         }
     }
 }
@@ -450,43 +423,34 @@ fun MaintenanceTab(viewModel: VaultManagementViewModel) {
 fun ChatCard(
     chatInfo: ChatInfo, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit
 ) {
-    Card(
+    StandardCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
-        )
+        containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(16.dp)),
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
             ) {
                 Text(
                     "Chat ID: ${chatInfo.chatId.take(8)}...",
-                    fontSize = rSp(14.sp),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = maple
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     "${chatInfo.messageCount} messages",
-                    fontSize = rSp(12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = ManropeFontFamily
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
                     "Created: ${formatDate(chatInfo.createdAt)}",
-                    fontSize = rSp(11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontFamily = maple
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -505,45 +469,42 @@ fun ChatCard(
 
 @Composable
 fun SearchResultCard(result: MessageSearchResult) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
+    StandardCard {
         Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     if (result.message.role == Role.User) Icons.Default.Person else Icons.Default.Face,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(16.dp))
+                    modifier = Modifier.size(rDp(Standards.IconMd))
                 )
                 Text(
                     result.message.role.name,
-                    fontSize = rSp(12.sp),
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
                 )
                 Spacer(Modifier.weight(1f))
                 Text(
                     formatDate(result.timestamp),
-                    fontSize = rSp(11.sp),
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Text(
                 result.message.content.content.take(150) + if (result.message.content.content.length > 150) "..." else "",
-                fontSize = rSp(13.sp),
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
                 "Chat: ${result.chatId.take(8)}...",
-                fontSize = rSp(11.sp),
+                style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -561,16 +522,13 @@ fun MaintenanceCard(
     progress: Float = 0f,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
+    StandardCard {
         Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
             ) {
                 Icon(
                     icon,
@@ -584,28 +542,26 @@ fun MaintenanceCard(
                 ) {
                     Text(
                         title,
-                        fontSize = rSp(15.sp),
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = ManropeFontFamily
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold
                     )
                     Text(
                         description,
-                        fontSize = rSp(12.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontFamily = ManropeFontFamily
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
             if (isProcessing) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
                     LinearProgressIndicator(
                         progress = { progress },
                         modifier = Modifier.fillMaxWidth(),
                     )
                     Text(
                         "${(progress * 100).toInt()}% Complete",
-                        fontSize = rSp(11.sp),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -617,7 +573,7 @@ fun MaintenanceCard(
                         containerColor = buttonColor.copy(alpha = 0.12f), contentColor = buttonColor
                     )
                 ) {
-                    Text(buttonText, fontSize = rSp(14.sp))
+                    Text(buttonText, style = MaterialTheme.typography.labelLarge)
                 }
             }
         }
@@ -628,15 +584,13 @@ fun MaintenanceCard(
 fun EmptyStateCard(
     icon: androidx.compose.ui.graphics.vector.ImageVector, message: String
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
+    StandardCard {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(32.dp)),
+                .padding(rDp(Standards.SpacingXl)),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
         ) {
             Icon(
                 icon,
@@ -646,7 +600,7 @@ fun EmptyStateCard(
             )
             Text(
                 message,
-                fontSize = rSp(14.sp),
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )

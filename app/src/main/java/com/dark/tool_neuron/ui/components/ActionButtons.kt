@@ -192,19 +192,28 @@ fun MultiActionButton(
                         .size(rDp(Standards.ActionIconSize))
                         .clickable { action.onClick() }
                 ) {
-                    when (action.icon) {
-                        is ActionIcon.Vector -> Icon(
-                            imageVector = action.icon.imageVector,
-                            contentDescription = action.contentDescription,
-                            tint = contentColor,
-                            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                    if (action.isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDp(Standards.ActionIconSize - 12.dp)),
+                            color = contentColor,
+                            strokeWidth = rDp(2.dp),
+                            trackColor = contentColor.copy(alpha = 0.1f)
                         )
-                        is ActionIcon.Resource -> Icon(
-                            painter = painterResource(action.icon.resId),
-                            contentDescription = action.contentDescription,
-                            tint = contentColor,
-                            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
-                        )
+                    } else {
+                        when (action.icon) {
+                            is ActionIcon.Vector -> Icon(
+                                imageVector = action.icon.imageVector,
+                                contentDescription = action.contentDescription,
+                                tint = contentColor,
+                                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                            )
+                            is ActionIcon.Resource -> Icon(
+                                painter = painterResource(action.icon.resId),
+                                contentDescription = action.contentDescription,
+                                tint = contentColor,
+                                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                            )
+                        }
                     }
                 }
 
@@ -362,7 +371,7 @@ fun ActionSwitch(
     width: Dp = rDp(52.dp),
     height: Dp = rDp(Standards.ActionIconSize),
     thumbSize: Dp = rDp(22.dp),
-    shape: Shape = RoundedCornerShape(rDp(6.dp))
+    shape: Shape = RoundedCornerShape(rDp(8.dp))
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -421,8 +430,8 @@ fun ActionSwitch(
                 .offset(x = thumbOffset)
                 .size(thumbSize)
                 .scale(thumbScale)
-                .background(thumbColor, RoundedCornerShape(rDp(4.dp)))
-                .border(rDp(1.dp), trackColor.copy(alpha = 0.15f), RoundedCornerShape(rDp(4.dp)))
+                .background(thumbColor, RoundedCornerShape(rDp(6.dp)))
+                .border(rDp(1.dp), trackColor.copy(alpha = 0.15f), RoundedCornerShape(rDp(6.dp)))
         )
     }
 }

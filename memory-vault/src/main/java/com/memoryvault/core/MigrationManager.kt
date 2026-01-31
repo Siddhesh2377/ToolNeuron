@@ -41,13 +41,8 @@ class MigrationManager(
 
             Log.d(TAG, "Backup created at: ${backupFile.absolutePath}")
 
-            // Phase 2: Create encryption managers
-            Log.d(TAG, "Phase 2: Setting up encryption managers")
-            val oldEM = EncryptionManager(OLD_KEY_ALIAS)
-            val newEM = EncryptionManager(newKeyAlias)
-
-            // Phase 3: Load current header and index with old key
-            Log.d(TAG, "Phase 3: Loading current vault state")
+            // Phase 2: Read header and check keyVersion
+            Log.d(TAG, "Phase 2: Loading current vault state")
             val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
             val header = VaultHeader.fromBytes(headerBytes)
 
@@ -58,6 +53,31 @@ class MigrationManager(
                     backupLocation = backupFile.absolutePath
                 )
             }
+
+            // Phase 3: Determine actual old key alias
+            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            val oldKeyExists = keyStore.containsAlias(OLD_KEY_ALIAS)
+
+            if (!oldKeyExists) {
+                // OLD_KEY_ALIAS was never used — data was encrypted with newKeyAlias.
+                // No re-encryption needed, just bump keyVersion.
+                Log.d(TAG, "Old key alias not found in KeyStore, data already uses current key. Bumping keyVersion.")
+                val updatedHeader = header.copy(
+                    keyVersion = 1,
+                    modifiedTime = System.currentTimeMillis()
+                )
+                vaultFile.writeAt(0, updatedHeader.toBytes())
+
+                return@withContext MigrationResult.Success(
+                    blocksReEncrypted = 0,
+                    backupLocation = backupFile.absolutePath
+                )
+            }
+
+            // Phase 4: Create encryption managers (old key exists, full re-encryption needed)
+            Log.d(TAG, "Phase 4: Setting up encryption managers for re-encryption")
+            val oldEM = EncryptionManager(OLD_KEY_ALIAS)
+            val newEM = EncryptionManager(newKeyAlias)
 
             val metadata = if (header.indexOffset > 0 && header.indexSize > 0) {
                 val encryptedIndexData = vaultFile.readAt(header.indexOffset, header.indexSize.toInt())
@@ -70,8 +90,8 @@ class MigrationManager(
 
             Log.d(TAG, "Loaded ${metadata.size} blocks from index")
 
-            // Phase 4: Re-encrypt each block
-            Log.d(TAG, "Phase 4: Re-encrypting blocks")
+            // Phase 5: Re-encrypt each block
+            Log.d(TAG, "Phase 5: Re-encrypting blocks")
             val totalBlocks = metadata.size
 
             metadata.forEachIndexed { index, meta ->
@@ -108,8 +128,8 @@ class MigrationManager(
                 }
             }
 
-            // Phase 5: Re-encrypt index with new key
-            Log.d(TAG, "Phase 5: Re-encrypting index")
+            // Phase 6: Re-encrypt index with new key
+            Log.d(TAG, "Phase 6: Re-encrypting index")
             val newIndexData = IndexSerializer.serialize(metadata)
             val newEncryptedIndex = newEM.encrypt(newIndexData)
             val newIndexBytes = newEncryptedIndex.toBytes()
@@ -117,8 +137,8 @@ class MigrationManager(
             val newIndexOffset = vaultFile.size()
             vaultFile.writeAt(newIndexOffset, newIndexBytes)
 
-            // Phase 6: Update header with keyVersion = 1
-            Log.d(TAG, "Phase 6: Updating vault header")
+            // Phase 7: Update header with keyVersion = 1
+            Log.d(TAG, "Phase 7: Updating vault header")
             val newHeader = header.copy(
                 keyVersion = 1,
                 indexOffset = newIndexOffset,
@@ -127,9 +147,8 @@ class MigrationManager(
             )
             vaultFile.writeAt(0, newHeader.toBytes())
 
-            // Phase 7: Delete old key from Keystore
-            Log.d(TAG, "Phase 7: Cleaning up old key")
-            val keyStore = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+            // Phase 8: Delete old key from Keystore
+            Log.d(TAG, "Phase 8: Cleaning up old key")
             if (keyStore.containsAlias(OLD_KEY_ALIAS)) {
                 keyStore.deleteEntry(OLD_KEY_ALIAS)
                 Log.d(TAG, "Old key deleted from Keystore")

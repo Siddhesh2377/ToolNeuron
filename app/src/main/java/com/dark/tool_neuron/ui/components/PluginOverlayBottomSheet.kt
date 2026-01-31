@@ -159,12 +159,7 @@ private fun ToolCallingConfigSection(
             .padding(horizontal = rDp(16.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
-        Text(
-            text = "Tool Calling Config",
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
-        )
+        SectionHeader(title = "Tool Calling Config")
 
         // Grammar Mode Toggle
         Surface(
@@ -176,62 +171,30 @@ private fun ToolCallingConfigSection(
                 modifier = Modifier.padding(rDp(12.dp)),
                 verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Grammar Mode",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = if (grammarMode == GrammarMode.STRICT) "Strict: Forces JSON tool output"
-                            else "Lazy: Model chooses text or tool",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Toggle chip for STRICT/LAZY
-                    GrammarModeChip(
-                        mode = grammarMode,
-                        onModeChange = onGrammarModeChange
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                    BodyLabel(
+                        text = "Grammar Mode",
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    CaptionText(
+                        text = if (grammarMode == GrammarMode.STRICT) "Strict: Forces JSON tool output"
+                        else "Lazy: Model chooses text or tool"
+                    )
+                    ActionToggleGroup(
+                        items = listOf(GrammarMode.STRICT, GrammarMode.LAZY),
+                        selectedItem = grammarMode,
+                        onItemSelected = onGrammarModeChange,
+                        itemLabel = { it.name }
                     )
                 }
 
                 // Multi-turn toggle
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Multi-turn",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Allow model to chain multiple tool calls",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Switch(
-                        checked = multiTurnEnabled,
-                        onCheckedChange = onMultiTurnToggle,
-                        colors = SwitchDefaults.colors(
-                            checkedThumbColor = MaterialTheme.colorScheme.primary,
-                            checkedTrackColor = MaterialTheme.colorScheme.primaryContainer
-                        )
-                    )
-                }
+                SwitchRow(
+                    title = "Multi-turn",
+                    description = "Allow model to chain multiple tool calls",
+                    checked = multiTurnEnabled,
+                    onCheckedChange = onMultiTurnToggle
+                )
 
                 // Max Rounds Slider (only visible when multi-turn is enabled)
                 AnimatedVisibility(visible = multiTurnEnabled) {
@@ -330,17 +293,13 @@ private fun PluginOverlayHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            Text(
-                text = "Plugins ( Beta )",
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "$enabledCount of $totalCount enabled",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            SectionHeader(title = "Plugins (Beta)") {
+                InfoBadge(
+                    text = "$enabledCount / $totalCount enabled",
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+                    contentColor = MaterialTheme.colorScheme.tertiary
+                )
+            }
         }
     }
 }

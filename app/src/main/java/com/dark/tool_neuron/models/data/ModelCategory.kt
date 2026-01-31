@@ -5,6 +5,7 @@ enum class ModelCategory {
     MEDICAL,
     RESEARCH,
     CODING,
+    UNCENSORED,
     BUSINESS,
     CYBERSECURITY;
 

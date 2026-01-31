@@ -1,11 +1,14 @@
 package com.dark.tool_neuron.state
 
+import android.util.Log
 import com.dark.tool_neuron.models.state.AppState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 object AppStateManager {
+
+    private const val TAG = "AppStateManager"
 
     private val _appState = MutableStateFlow<AppState>(AppState.Welcome)
     val appState: StateFlow<AppState> = _appState.asStateFlow()
@@ -21,6 +24,15 @@ object AppStateManager {
     private var loadingStartTime: Long = 0
 
     /**
+     * Only emit a new state if it differs from the current value, avoiding redundant recompositions.
+     */
+    private fun setStateIfChanged(newState: AppState) {
+        if (_appState.value != newState) {
+            _appState.value = newState
+        }
+    }
+
+    /**
      * Update when a model starts loading
      */
     fun setLoadingModel(modelName: String, progress: Float = 0f) {
@@ -28,7 +40,7 @@ object AppStateManager {
             loadingStartTime = System.currentTimeMillis()
         }
         currentModelName = modelName
-        _appState.value = AppState.LoadingModel(modelName, progress)
+        setStateIfChanged(AppState.LoadingModel(modelName, progress))
     }
 
     /**
@@ -37,10 +49,10 @@ object AppStateManager {
     fun updateLoadingProgress(progress: Float) {
         val currentState = _appState.value
         if (currentState is AppState.LoadingModel) {
-            _appState.value = AppState.LoadingModel(
+            setStateIfChanged(AppState.LoadingModel(
                 modelName = currentState.modelName,
                 progress = progress.coerceIn(0f, 1f)
-            )
+            ))
         }
     }
 
@@ -50,7 +62,7 @@ object AppStateManager {
     fun setModelLoaded(modelName: String) {
         currentModelName = modelName
         val loadingTime = System.currentTimeMillis() - loadingStartTime
-        println("Model loaded in ${loadingTime}ms")
+        Log.d(TAG, "Model loaded in ${loadingTime}ms")
         updateIdleState()
     }
 
@@ -75,7 +87,7 @@ object AppStateManager {
      */
     fun setGeneratingText() {
         currentModelName?.let {
-            _appState.value = AppState.GeneratingText(it)
+            setStateIfChanged(AppState.GeneratingText(it))
         }
     }
 
@@ -84,7 +96,7 @@ object AppStateManager {
      */
     fun setGeneratingImage() {
         currentModelName?.let {
-            _appState.value = AppState.GeneratingImage(it)
+            setStateIfChanged(AppState.GeneratingImage(it))
         }
     }
 
@@ -93,7 +105,7 @@ object AppStateManager {
      */
     fun setGeneratingAudio() {
         currentModelName?.let {
-            _appState.value = AppState.GeneratingAudio(it)
+            setStateIfChanged(AppState.GeneratingAudio(it))
         }
     }
 
@@ -101,7 +113,7 @@ object AppStateManager {
      * Update when plugin tool execution starts
      */
     fun setExecutingPlugin(pluginName: String, toolName: String) {
-        _appState.value = AppState.ExecutingPlugin(pluginName, toolName)
+        setStateIfChanged(AppState.ExecutingPlugin(pluginName, toolName))
     }
 
     /**
@@ -114,13 +126,13 @@ object AppStateManager {
         executionTimeMs: Long,
         errorMessage: String? = null
     ) {
-        _appState.value = AppState.PluginExecutionComplete(
+        setStateIfChanged(AppState.PluginExecutionComplete(
             pluginName = pluginName,
             toolName = toolName,
             success = success,
             executionTimeMs = executionTimeMs,
             errorMessage = errorMessage
-        )
+        ))
     }
 
     /**
@@ -134,7 +146,7 @@ object AppStateManager {
      * Update when an error occurs
      */
     fun setError(message: String) {
-        _appState.value = AppState.Error(message, currentModelName)
+        setStateIfChanged(AppState.Error(message, currentModelName))
     }
 
     /**
@@ -190,12 +202,12 @@ object AppStateManager {
      * Internal: Determine the correct idle state based on current conditions
      */
     private fun updateIdleState() {
-        _appState.value = when {
+        setStateIfChanged(when {
             currentModelName == null && !hasMessages -> AppState.Welcome
             currentModelName == null && hasMessages -> AppState.NoModelLoaded
             currentModelName != null -> AppState.ModelLoaded(currentModelName!!)
             else -> AppState.Welcome
-        }
+        })
     }
 
     /**

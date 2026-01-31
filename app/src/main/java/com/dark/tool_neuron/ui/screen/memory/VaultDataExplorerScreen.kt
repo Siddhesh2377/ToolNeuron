@@ -39,8 +39,6 @@ import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.LocalOffer
 import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -73,14 +71,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.ui.components.BodyLabel
+import com.dark.tool_neuron.ui.components.CaptionText
+import com.dark.tool_neuron.ui.components.SectionDivider
+import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewmodel.memory.VaultDataExplorerViewModel
 import com.memoryvault.core.BlockType
 import java.text.SimpleDateFormat
@@ -119,9 +118,8 @@ fun VaultDataExplorerScreen(
             CenterAlignedTopAppBar(title = {
                 Text(
                     "Data Explorer",
-                    fontSize = rSp(18.sp),
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = maple
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
             }, navigationIcon = {
                 ActionButton(onClickListener = {
@@ -156,7 +154,7 @@ fun VaultDataExplorerScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp))
+                    .padding(horizontal = rDp(Standards.SpacingLg), vertical = rDp(Standards.SpacingSm))
             )
 
             // Loading indicator
@@ -172,8 +170,8 @@ fun VaultDataExplorerScreen(
             } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(rDp(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    contentPadding = PaddingValues(rDp(Standards.SpacingLg)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                 ) {
                     items(viewModel.filteredItems, key = { it.blockId.toString() }) { metadata ->
                         DataItemCard(
@@ -205,8 +203,8 @@ fun FilterChipsRow(
 ) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = rDp(16.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        contentPadding = PaddingValues(horizontal = rDp(Standards.SpacingLg)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
     ) {
         items(DataFilter.entries) { filter ->
             val count = if (filter == DataFilter.ALL) {
@@ -244,12 +242,11 @@ private fun EnhancedFilterChip(
         label = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ChipSpacing))
             ) {
                 Text(
                     text = filter.label,
-                    fontSize = rSp(13.sp),
-                    fontFamily = ManropeFontFamily,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium
                 )
 
@@ -264,10 +261,10 @@ private fun EnhancedFilterChip(
             Icon(
                 imageVector = filter.icon,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(18.dp))
+                modifier = Modifier.size(rDp(Standards.IconMd))
             )
         },
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(rDp(Standards.SpacingSm)),
         modifier = Modifier
             .scale(animatedScale)
             .animateContentSize(),
@@ -321,7 +318,7 @@ private fun CountBadge(
     )
 
     Surface(
-        shape = RoundedCornerShape(rDp(6.dp)),
+        shape = RoundedCornerShape(rDp(Standards.ChipSpacing)),
         color = animatedBackgroundColor,
         modifier = Modifier
             .animateContentSize()
@@ -329,13 +326,12 @@ private fun CountBadge(
     ) {
         Box(
             modifier = Modifier
-                .padding(horizontal = rDp(6.dp), vertical = rDp(3.dp))
+                .padding(horizontal = rDp(Standards.ChipSpacing), vertical = rDp(3.dp))
                 .defaultMinSize(minWidth = rDp(20.dp)), contentAlignment = Alignment.Center
         ) {
             Text(
                 text = count.toString(),
-                fontSize = rSp(11.sp),
-                fontFamily = maple,
+                style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.SemiBold,
                 color = animatedTextColor
             )
@@ -354,15 +350,14 @@ fun SearchBar(
         placeholder = {
             Text(
                 "Search by content, category, tags...",
-                fontSize = rSp(13.sp),
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.bodySmall
             )
         },
         leadingIcon = {
             Icon(
                 Icons.Default.Search,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(20.dp))
+                modifier = Modifier.size(rDp(Standards.IconMd))
             )
         },
         trailingIcon = {
@@ -371,16 +366,14 @@ fun SearchBar(
                     Icon(
                         Icons.Default.Clear,
                         contentDescription = "Clear",
-                        modifier = Modifier.size(rDp(18.dp))
+                        modifier = Modifier.size(rDp(Standards.IconMd))
                     )
                 }
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(rDp(12.dp)),
-        textStyle = LocalTextStyle.current.copy(
-            fontSize = rSp(14.sp), fontFamily = ManropeFontFamily
-        )
+        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+        textStyle = MaterialTheme.typography.bodyMedium
     )
 }
 
@@ -390,34 +383,25 @@ fun DataItemCard(
 ) {
     val typeInfo = getTypeInfo(metadata.blockType)
 
-    Card(
+    StandardCard(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = rDp(1.dp), pressedElevation = rDp(4.dp)
-        )
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
         ) {
             // Header: Icon + Type + Timestamp + Arrow
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Type icon with gradient background
                 Box(
                     modifier = Modifier
                         .size(rDp(44.dp))
-                        .clip(RoundedCornerShape(rDp(12.dp)))
+                        .clip(RoundedCornerShape(rDp(Standards.CardCornerRadius)))
                         .background(
                             brush = Brush.linearGradient(
                                 colors = listOf(
@@ -442,16 +426,12 @@ fun DataItemCard(
                 ) {
                     Text(
                         typeInfo.label,
-                        fontSize = rSp(14.sp),
+                        style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        fontFamily = ManropeFontFamily,
                         color = MaterialTheme.colorScheme.onSurface
                     )
-                    Text(
-                        formatTimestamp(metadata.timestamp),
-                        fontSize = rSp(11.sp),
-                        fontFamily = maple,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    CaptionText(
+                        text = formatTimestamp(metadata.timestamp)
                     )
                 }
 
@@ -459,7 +439,7 @@ fun DataItemCard(
                 Icon(
                     Icons.Default.ChevronRight,
                     contentDescription = "View details",
-                    modifier = Modifier.size(rDp(20.dp)),
+                    modifier = Modifier.size(rDp(Standards.IconMd)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
             }
@@ -467,20 +447,18 @@ fun DataItemCard(
             // Content preview
             metadata.searchableText?.let { text ->
                 Text(
-                    text = text.take(100) + if (text.length > 100) "…" else "",
-                    fontSize = rSp(13.sp),
-                    fontFamily = ManropeFontFamily,
+                    text = text.take(100) + if (text.length > 100) "..." else "",
+                    style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = rSp(18.sp)
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
             // Metadata chips row
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 MetadataChip(
@@ -511,7 +489,7 @@ fun MetadataChip(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
     ) {
         Icon(
             icon,
@@ -521,8 +499,7 @@ fun MetadataChip(
         )
         Text(
             text,
-            fontSize = rSp(10.sp),
-            fontFamily = maple,
+            style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -537,7 +514,7 @@ fun EmptyDataState(filter: DataFilter) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
         ) {
             Icon(
                 filter.icon,
@@ -547,15 +524,13 @@ fun EmptyDataState(filter: DataFilter) {
             )
             Text(
                 "No ${filter.label.lowercase()} found",
-                fontSize = rSp(16.sp),
-                fontFamily = ManropeFontFamily,
+                style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.Medium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 "Data will appear here once stored in the vault",
-                fontSize = rSp(12.sp),
-                fontFamily = ManropeFontFamily,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
             )
         }
@@ -571,14 +546,14 @@ fun MemoryItemDetailSheet(
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
-        shape = RoundedCornerShape(topStart = rDp(24.dp), topEnd = rDp(24.dp))
+        shape = RoundedCornerShape(topStart = rDp(Standards.SpacingXl), topEnd = rDp(Standards.SpacingXl))
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(20.dp))
+                .padding(horizontal = rDp(Standards.SpacingXl))
                 .padding(bottom = rDp(32.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
         ) {
             // Header
             Row(
@@ -587,35 +562,31 @@ fun MemoryItemDetailSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
                             .size(rDp(48.dp))
-                            .clip(RoundedCornerShape(rDp(12.dp)))
+                            .clip(RoundedCornerShape(rDp(Standards.CardCornerRadius)))
                             .background(typeInfo.color.copy(alpha = 0.12f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             typeInfo.icon,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(24.dp)),
+                            modifier = Modifier.size(rDp(Standards.IconLg)),
                             tint = typeInfo.color
                         )
                     }
                     Column {
                         Text(
                             typeInfo.label,
-                            fontSize = rSp(18.sp),
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = ManropeFontFamily
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
-                        Text(
-                            "ID: ${item.blockId.toString().take(8)}...",
-                            fontSize = rSp(11.sp),
-                            fontFamily = maple,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        CaptionText(
+                            text = "ID: ${item.blockId.toString().take(8)}..."
                         )
                     }
                 }
@@ -629,12 +600,12 @@ fun MemoryItemDetailSheet(
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Delete",
-                        modifier = Modifier.size(rDp(20.dp))
+                        modifier = Modifier.size(rDp(Standards.IconMd))
                     )
                 }
             }
 
-            HorizontalDivider()
+            SectionDivider()
 
             // Details grid
             DetailRow(label = "Created", value = formatTimestampFull(item.timestamp))
@@ -651,24 +622,24 @@ fun MemoryItemDetailSheet(
             }
 
             if (item.tags.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
                     Text(
                         "Tags",
-                        fontSize = rSp(12.sp),
-                        fontFamily = ManropeFontFamily,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                     ) {
                         items(item.tags.toList()) { tag ->
                             SuggestionChip(
                                 onClick = {}, label = {
-                                Text(
-                                    tag, fontSize = rSp(11.sp), fontFamily = maple
-                                )
-                            }, shape = RoundedCornerShape(rDp(6.dp))
+                                    Text(
+                                        tag,
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                }, shape = RoundedCornerShape(rDp(Standards.ChipSpacing))
                             )
                         }
                     }
@@ -676,24 +647,22 @@ fun MemoryItemDetailSheet(
             }
 
             item.searchableText?.let { text ->
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
                     Text(
                         "Content Preview",
-                        fontSize = rSp(12.sp),
-                        fontFamily = ManropeFontFamily,
+                        style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Medium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(rDp(8.dp)),
+                        shape = RoundedCornerShape(rDp(Standards.SpacingSm)),
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
                             text,
-                            fontSize = rSp(12.sp),
-                            fontFamily = maple,
-                            modifier = Modifier.padding(rDp(12.dp)),
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(rDp(Standards.SpacingMd)),
                             maxLines = 6,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -702,20 +671,14 @@ fun MemoryItemDetailSheet(
             }
 
             // Content hash
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
                 Text(
                     "Content Hash",
-                    fontSize = rSp(12.sp),
-                    fontFamily = ManropeFontFamily,
+                    style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    item.contentHash,
-                    fontSize = rSp(10.sp),
-                    fontFamily = maple,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                CaptionText(text = item.contentHash)
             }
         }
     }
@@ -728,12 +691,13 @@ fun DetailRow(label: String, value: String) {
     ) {
         Text(
             label,
-            fontSize = rSp(13.sp),
-            fontFamily = ManropeFontFamily,
+            style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Text(
-            value, fontSize = rSp(13.sp), fontFamily = maple, fontWeight = FontWeight.Medium
+            value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium
         )
     }
 }

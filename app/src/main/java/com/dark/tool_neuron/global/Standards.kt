@@ -13,7 +13,7 @@ object Standards {
     val CardCornerRadius = 12.dp
     val CardPadding = 12.dp
     val CardElevation = 1.dp
-    val CardSmallCornerRadius = 8.dp
+    val CardSmallCornerRadius = 10.dp
 
     // Spacing
     val SpacingXs = 4.dp
@@ -32,4 +32,15 @@ object Standards {
     val IconSm = 14.dp
     val IconMd = 18.dp
     val IconLg = 24.dp
+
+    // Chips
+    val ChipHeight = 24.dp
+    val ChipCornerRadius = 12.dp
+    val ChipHorizontalPadding = 8.dp
+    val ChipIconSize = 14.dp
+    val ChipSpacing = 6.dp
+
+    // Timeline
+    val TimelineNodeSize = 8.dp
+    val TimelineLineWidth = 2.dp
 }

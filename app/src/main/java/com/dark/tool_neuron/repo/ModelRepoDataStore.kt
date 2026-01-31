@@ -39,22 +39,6 @@ class ModelRepositoryDataStore(private val context: Context) {
                 isEnabled = true,
                 category = ModelCategory.MEDICAL
             ),
-            HFModelRepository(
-                id = "contact_doctor_bio_llama_1b",
-                name = "ContactDoctor Bio-Medical LLaMA (1B)",
-                repoPath = "DevQuasar/ContactDoctor.Bio-Medical-Llama-3-2-1B-CoT-012025-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.MEDICAL
-            ),
-            HFModelRepository(
-                id = "qwen2_5_coder_0_5b",
-                name = "Qwen 2.5 Coder (0.5B)",
-                repoPath = "ggml-org/Qwen2.5-Coder-0.5B-Q8_0-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.CODING
-            ),
 
             // GENERAL CATEGORY (2 new repos)
             HFModelRepository(
@@ -92,30 +76,6 @@ class ModelRepositoryDataStore(private val context: Context) {
                 category = ModelCategory.MEDICAL
             ),
             HFModelRepository(
-                id = "qwen3-hippocratesv1",
-                name = "Qwen3 Hippocrates 8B",
-                repoPath = "mradermacher/Qwen3-8B-Hippocratesv1-i1-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.MEDICAL
-            ),
-            HFModelRepository(
-                id = "llama3-openbio",
-                name = "Llama3 OpenBioLLM 8B",
-                repoPath = "mradermacher/Llama3-OpenBioLLM-8B-i1-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.MEDICAL
-            ),
-            HFModelRepository(
-                id = "deepseek-r1-medical",
-                name = "DeepSeek R1 Medical Expert",
-                repoPath = "mradermacher/DeepSeek-R1-Distill-Llama-8B-Medical-Expert-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.MEDICAL
-            ),
-            HFModelRepository(
                 id = "deepseek-r1-drugdetection",
                 name = "DeepSeek R1 Drug Detection 70B",
                 repoPath = "mradermacher/DeepSeek-R1-Distill-Llama-70B-DrugDetection-i1-GGUF",
@@ -134,33 +94,9 @@ class ModelRepositoryDataStore(private val context: Context) {
 
             // RESEARCH CATEGORY (5 new repos)
             HFModelRepository(
-                id = "dler-research",
-                name = "DLER Llama Research 8B",
-                repoPath = "mradermacher/DLER-Llama-Nemotron-8B-Merge-Research-i1-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.RESEARCH
-            ),
-            HFModelRepository(
-                id = "llama3-numermath",
-                name = "Llama3.1 NuminaMath 8B",
-                repoPath = "mradermacher/Llama3.1-8B-NuminaMath-bridge-i1-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.RESEARCH
-            ),
-            HFModelRepository(
                 id = "liquidai-lfm2",
                 name = "LiquidAI LFM2 8B",
                 repoPath = "LiquidAI/LFM2-8B-A1B-GGUF",
-                modelType = ModelType.GGUF,
-                isEnabled = true,
-                category = ModelCategory.RESEARCH
-            ),
-            HFModelRepository(
-                id = "s1-base",
-                name = "S1 Base 8B 128K",
-                repoPath = "mradermacher/S1-Base-1.5-8B-128K-i1-GGUF",
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.RESEARCH
@@ -174,7 +110,7 @@ class ModelRepositoryDataStore(private val context: Context) {
                 category = ModelCategory.RESEARCH
             ),
 
-            // CODING CATEGORY (1 new repo)
+            // CODING CATEGORY
             HFModelRepository(
                 id = "deepseek-coder",
                 name = "DeepSeek Coder 6.7B",
@@ -182,6 +118,24 @@ class ModelRepositoryDataStore(private val context: Context) {
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.CODING
+            ),
+            HFModelRepository(
+                id = "ruvltra-claude-code",
+                name = "Ruvltra Claude Code 0.5B",
+                repoPath = "ruv/ruvltra-claude-code",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.CODING
+            ),
+
+            // UNCENSORED CATEGORY
+            HFModelRepository(
+                id = "gemma3-emophilic",
+                name = "Gemma3 Emophilic 1B",
+                repoPath = "Novaciano/Gemma3-Emophilic-1B-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
             ),
 
             // BUSINESS CATEGORY (2 new repos)
@@ -227,7 +181,11 @@ class ModelRepositoryDataStore(private val context: Context) {
             val json = preferences[MODEL_REPOS_KEY]
             if (json != null) {
                 try {
-                    Json.decodeFromString<List<HFModelRepository>>(json)
+                    val saved = Json.decodeFromString<List<HFModelRepository>>(json)
+                    // Merge any new default repos not yet in saved data
+                    val savedIds = saved.map { it.id }.toSet()
+                    val newDefaults = DEFAULT_REPOSITORIES.filter { it.id !in savedIds }
+                    if (newDefaults.isNotEmpty()) saved + newDefaults else saved
                 } catch (e: Exception) {
                     DEFAULT_REPOSITORIES
                 }

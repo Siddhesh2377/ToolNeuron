@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.ui.ActionIcon
 import com.dark.tool_neuron.models.ui.ActionItem
+import com.dark.tool_neuron.ui.components.MemoryResultsDisplay
 import com.dark.tool_neuron.ui.components.MultiActionButton
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
@@ -93,8 +94,10 @@ fun BodyContent(
     val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
     val currentRagResults by chatViewModel.currentRagResults.collectAsState()
+    val currentMemoryResults by chatViewModel.currentMemoryResults.collectAsState()
     val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
     val currentToolName by chatViewModel.currentToolName.collectAsState()
+    val currentProcessingPhase by chatViewModel.currentProcessingPhase.collectAsState()
     val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsState()
     val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
     val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsState()
@@ -126,9 +129,11 @@ fun BodyContent(
                     imageStep = imageStep,
                     isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
                     ragResults = currentRagResults,
+                    memoryResults = currentMemoryResults,
                     appState = appState,
                     messages = messages,
-                    currentToolName = currentToolName
+                    currentToolName = currentToolName,
+                    processingPhase = currentProcessingPhase
                 )
             } else {
                 LazyColumn(
@@ -199,7 +204,15 @@ fun BodyContent(
                     .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
                 contentAlignment = Alignment.TopCenter
             ) {
-                DynamicActionWindow(chatViewModel, llmModelViewModel)
+                val ragCount by com.dark.tool_neuron.plugins.PluginManager.enabledPluginNames.collectAsState()
+                val ttsLoaded by com.dark.tool_neuron.tts.TTSManager.isModelLoaded.collectAsState()
+
+                DynamicActionWindow(
+                    chatViewModel = chatViewModel,
+                    modelViewModel = llmModelViewModel,
+                    enabledToolCount = ragCount.size,
+                    ttsModelLoaded = ttsLoaded
+                )
             }
         }
     }
@@ -214,9 +227,11 @@ private fun StreamingView(
     imageStep: String,
     isImageGeneration: Boolean,
     ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
+    memoryResults: List<com.dark.tool_neuron.worker.ScoredVaultContent> = emptyList(),
     appState: com.dark.tool_neuron.models.state.AppState,
     messages: List<Messages> = emptyList(),
-    currentToolName: String? = null
+    currentToolName: String? = null,
+    processingPhase: String? = null
 ) {
     val scrollState = rememberScrollState()
 
@@ -246,9 +261,19 @@ private fun StreamingView(
             RagResultsDisplay(results = ragResults)
         }
 
+        // Show Memory results if available
+        if (memoryResults.isNotEmpty()) {
+            MemoryResultsDisplay(results = memoryResults)
+        }
+
         // Show tool results
         messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
             PluginResultCard(message = msg)
+        }
+
+        // Processing phase indicator
+        if (processingPhase != null) {
+            ProcessingPhaseIndicator(phase = processingPhase)
         }
 
         when {
@@ -281,6 +306,29 @@ private fun StreamingView(
         }
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
+    }
+}
+
+@Composable
+private fun ProcessingPhaseIndicator(phase: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp), vertical = rDp(4.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(rDp(16.dp)),
+            strokeWidth = rDp(2.dp),
+            color = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = phase,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium
+        )
     }
 }
 
@@ -818,15 +866,20 @@ private fun MessageActionRow(
     }
 
     val actions = buildList {
-        // TTS Speak / Stop action
-        if (isPlaying || isSynthesizing) {
-            add(ActionItem(
+        // TTS action: 3 states - playing (stop icon), synthesizing (loading spinner), idle (speak icon)
+        when {
+            isPlaying -> add(ActionItem(
                 icon = ActionIcon.Vector(Icons.Default.Stop),
                 onClick = { onStopTTS() },
                 contentDescription = "Stop"
             ))
-        } else {
-            add(ActionItem(
+            isSynthesizing -> add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.volume),
+                onClick = { onStopTTS() },
+                contentDescription = "Synthesizing",
+                isLoading = true
+            ))
+            else -> add(ActionItem(
                 icon = ActionIcon.Resource(R.drawable.volume),
                 onClick = { onSpeak(message) },
                 contentDescription = "Speak"

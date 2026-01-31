@@ -23,6 +23,12 @@ object PluginManager {
     // Registry of all plugins
     private val _plugins = mutableMapOf<String, SuperPlugin>()
 
+    // O(1) tool name -> plugin key lookup cache
+    private val _toolNameToPluginKey = mutableMapOf<String, String>()
+
+    // Cached enabled tool definitions, invalidated on enable/disable
+    private var _cachedEnabledToolDefs: List<ToolDefinitionBuilder>? = null
+
     // Set of enabled plugin names
     private val _enabledPluginNames = MutableStateFlow<Set<String>>(emptySet())
     val enabledPluginNames: StateFlow<Set<String>> = _enabledPluginNames.asStateFlow()
@@ -62,6 +68,13 @@ object PluginManager {
     fun registerPlugin(plugin: SuperPlugin) {
         val pluginInfo = plugin.getPluginInfo()
         _plugins[pluginInfo.name] = plugin
+
+        // Populate tool name -> plugin key cache for O(1) lookup
+        pluginInfo.toolDefinitionBuilder.forEach { toolDef ->
+            _toolNameToPluginKey[toolDef.name.lowercase()] = pluginInfo.name
+        }
+
+        _cachedEnabledToolDefs = null
         updateRegisteredPlugins()
     }
 
@@ -69,17 +82,20 @@ object PluginManager {
      * Enable a plugin
      */
     fun enablePlugin(pluginName: String) {
-        if (_plugins.containsKey(pluginName)) {
-            _enabledPluginNames.value = _enabledPluginNames.value + pluginName
-            syncToolsWithLLM()
-        }
+        if (!_plugins.containsKey(pluginName)) return
+        if (_enabledPluginNames.value.contains(pluginName)) return
+        _enabledPluginNames.value = _enabledPluginNames.value + pluginName
+        _cachedEnabledToolDefs = null
+        syncToolsWithLLM()
     }
 
     /**
      * Disable a plugin
      */
     fun disablePlugin(pluginName: String) {
+        if (!_enabledPluginNames.value.contains(pluginName)) return
         _enabledPluginNames.value = _enabledPluginNames.value - pluginName
+        _cachedEnabledToolDefs = null
         syncToolsWithLLM()
     }
 
@@ -193,12 +209,15 @@ object PluginManager {
     }
 
     /**
-     * Get tool definitions for all enabled plugins
+     * Get tool definitions for all enabled plugins (cached)
      */
     fun getEnabledToolDefinitions(): List<ToolDefinitionBuilder> {
-        return _enabledPluginNames.value.flatMap { pluginName ->
+        _cachedEnabledToolDefs?.let { return it }
+        val defs = _enabledPluginNames.value.flatMap { pluginName ->
             _plugins[pluginName]?.getPluginInfo()?.toolDefinitionBuilder ?: emptyList()
         }
+        _cachedEnabledToolDefs = defs
+        return defs
     }
 
     /**
@@ -214,13 +233,11 @@ object PluginManager {
         val startTime = System.currentTimeMillis()
         Log.d(TAG, "Multi-turn tool call: ${toolCall.name} with args: ${toolCall.arguments}")
 
-        val pluginEntry = _plugins.entries.find { (_, plugin) ->
-            plugin.getPluginInfo().toolDefinitionBuilder.any {
-                it.name.equals(toolCall.name, ignoreCase = true)
-            }
-        }
+        // O(1) lookup via cached tool name -> plugin key map
+        val pluginKey = _toolNameToPluginKey[toolCall.name.lowercase()]
+        val plugin = pluginKey?.let { _plugins[it] }
 
-        if (pluginEntry == null) {
+        if (plugin == null) {
             Log.e(TAG, "Tool not found: ${toolCall.name}")
             return MultiTurnToolResult(
                 toolName = toolCall.name,
@@ -231,7 +248,6 @@ object PluginManager {
             )
         }
 
-        val (_, plugin) = pluginEntry
         val pluginInfo = plugin.getPluginInfo()
 
         if (!isPluginEnabled(pluginInfo.name)) {
@@ -289,15 +305,13 @@ object PluginManager {
 
         Log.d(TAG, "Tool call received: ${toolCall.name} with args: ${toolCall.arguments}")
 
-        val pluginEntry = _plugins.entries.find { (_, plugin) ->
-            plugin.getPluginInfo().toolDefinitionBuilder.any {
-                it.name.equals(toolCall.name, ignoreCase = true)
-            }
-        }
+        // O(1) lookup via cached tool name -> plugin key map
+        val pluginKey = _toolNameToPluginKey[toolCall.name.lowercase()]
+        val plugin = pluginKey?.let { _plugins[it] }
 
-        if (pluginEntry == null) {
+        if (plugin == null) {
             Log.e(TAG, "Tool not found: ${toolCall.name}")
-            Log.d(TAG, "Available tools: ${_plugins.values.flatMap { it.getPluginInfo().toolDefinitionBuilder.map { t -> t.name } }}")
+            Log.d(TAG, "Available tools: ${_toolNameToPluginKey.keys}")
             val metrics = PluginExecutionMetrics(
                 pluginName = "Unknown",
                 toolName = toolCall.name,
@@ -308,7 +322,6 @@ object PluginManager {
             return PluginExecutionResult.Failure(metrics, null)
         }
 
-        val (_, plugin) = pluginEntry
         val pluginInfo = plugin.getPluginInfo()
 
         if (!isPluginEnabled(pluginInfo.name)) {

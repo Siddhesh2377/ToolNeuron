@@ -10,5 +10,6 @@ sealed class ActionIcon {
 data class ActionItem(
     val icon: ActionIcon,
     val onClick: () -> Unit,
-    val contentDescription: String = "Action"
+    val contentDescription: String = "Action",
+    val isLoading: Boolean = false
 )

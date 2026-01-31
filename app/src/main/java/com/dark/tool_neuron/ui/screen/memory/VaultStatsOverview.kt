@@ -26,13 +26,12 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.ui.components.BodyLabel
+import com.dark.tool_neuron.ui.components.CaptionText
+import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
 import com.memoryvault.core.VaultStats
 
 @Composable
@@ -48,8 +47,8 @@ fun VaultStatsOverview(
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+        contentPadding = PaddingValues(rDp(Standards.SpacingLg)),
+        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
     ) {
         // Storage ring chart
         item {
@@ -91,27 +90,20 @@ fun StorageOverviewCard(stats: VaultStats) {
         label = "storage_animation"
     )
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(16.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        )
+    StandardCard(
+        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(20.dp)),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 "Storage Overview",
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
 
-            Spacer(Modifier.height(rDp(20.dp)))
+            Spacer(Modifier.height(rDp(Standards.SpacingXl)))
 
             // Ring chart
             Box(
@@ -119,7 +111,6 @@ fun StorageOverviewCard(stats: VaultStats) {
                 contentAlignment = Alignment.Center
             ) {
                 val primaryColor = MaterialTheme.colorScheme.primary
-                val secondaryColor = MaterialTheme.colorScheme.tertiary
                 val trackColor = MaterialTheme.colorScheme.surfaceVariant
 
                 Canvas(modifier = Modifier.fillMaxSize()) {
@@ -148,20 +139,14 @@ fun StorageOverviewCard(stats: VaultStats) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "${(animatedPercent * 100).toInt()}%",
-                        fontSize = rSp(28.sp),
-                        fontWeight = FontWeight.Bold,
-                        fontFamily = ManropeFontFamily
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        "Used",
-                        fontSize = rSp(12.sp),
-                        fontFamily = maple,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    CaptionText(text = "Used")
                 }
             }
 
-            Spacer(Modifier.height(rDp(20.dp)))
+            Spacer(Modifier.height(rDp(Standards.SpacingXl)))
 
             // Legend
             Row(
@@ -191,7 +176,7 @@ fun StorageLegendItem(
 ) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
     ) {
         Box(
             modifier = Modifier
@@ -200,17 +185,11 @@ fun StorageLegendItem(
                 .background(color)
         )
         Column {
-            Text(
-                label,
-                fontSize = rSp(11.sp),
-                fontFamily = maple,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            CaptionText(text = label)
             Text(
                 value,
-                fontSize = rSp(14.sp),
-                fontWeight = FontWeight.SemiBold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
@@ -219,7 +198,7 @@ fun StorageLegendItem(
 @Composable
 fun QuickStatsRow(stats: VaultStats) {
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
     ) {
         items(
             listOf(
@@ -241,38 +220,29 @@ data class QuickStat(
 
 @Composable
 fun QuickStatCard(stat: QuickStat) {
-    Card(
+    StandardCard(
         modifier = Modifier.width(rDp(120.dp)),
-        shape = RoundedCornerShape(rDp(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
+        containerColor = MaterialTheme.colorScheme.surface
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(16.dp)),
+            modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 stat.icon,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(24.dp)),
+                modifier = Modifier.size(rDp(Standards.IconLg)),
                 tint = MaterialTheme.colorScheme.primary
             )
-            Spacer(Modifier.height(rDp(8.dp)))
+            Spacer(Modifier.height(rDp(Standards.SpacingSm)))
             Text(
                 stat.value,
-                fontSize = rSp(18.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
-            Text(
-                stat.label,
-                fontSize = rSp(10.sp),
-                fontFamily = maple,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center
+            CaptionText(
+                text = stat.label,
+                modifier = Modifier.fillMaxWidth()
             )
         }
     }
@@ -289,21 +259,15 @@ fun ContentBreakdownCard(stats: VaultStats) {
 
     val total = items.sumOf { it.count }.coerceAtLeast(1)
 
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(16.dp))
-    ) {
+    StandardCard {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(20.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
         ) {
             Text(
                 "Content Breakdown",
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
 
             // Horizontal bar chart
@@ -329,7 +293,7 @@ fun ContentBreakdownCard(stats: VaultStats) {
 
             // Legend grid
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -367,56 +331,44 @@ fun ContentTypeItem(
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
     ) {
         Box(
             modifier = Modifier
                 .size(rDp(36.dp))
-                .clip(RoundedCornerShape(rDp(10.dp)))
+                .clip(RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)))
                 .background(item.color.copy(alpha = 0.12f)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 item.icon,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(18.dp)),
+                modifier = Modifier.size(rDp(Standards.IconMd)),
                 tint = item.color
             )
         }
         Column {
             Text(
                 item.count.toString(),
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
-            Text(
-                item.label,
-                fontSize = rSp(11.sp),
-                fontFamily = maple,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            CaptionText(text = item.label)
         }
     }
 }
 
 @Composable
 fun TimeRangeCard(stats: VaultStats) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(16.dp))
-    ) {
+    StandardCard {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(20.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
         ) {
             Text(
                 "Data Timeline",
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
 
             Row(
@@ -450,26 +402,20 @@ fun TimelineItem(
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
     ) {
         Icon(
             icon,
             contentDescription = null,
-            modifier = Modifier.size(rDp(20.dp)),
+            modifier = Modifier.size(rDp(Standards.IconMd)),
             tint = MaterialTheme.colorScheme.primary
         )
         Column {
-            Text(
-                label,
-                fontSize = rSp(11.sp),
-                fontFamily = maple,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            CaptionText(text = label)
             Text(
                 value,
-                fontSize = rSp(12.sp),
-                fontWeight = FontWeight.Medium,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -477,21 +423,15 @@ fun TimelineItem(
 
 @Composable
 fun PerformanceCard(stats: VaultStats) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(16.dp))
-    ) {
+    StandardCard {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(20.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingMd))
         ) {
             Text(
                 "Performance Metrics",
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                fontFamily = ManropeFontFamily
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold
             )
 
             PerformanceRow(
@@ -520,7 +460,7 @@ fun PerformanceRow(
     progress: Float
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -528,14 +468,12 @@ fun PerformanceRow(
         ) {
             Text(
                 label,
-                fontSize = rSp(13.sp),
-                fontFamily = ManropeFontFamily,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
                 value,
-                fontSize = rSp(13.sp),
-                fontFamily = maple,
+                style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium
             )
         }
@@ -558,13 +496,11 @@ fun LoadingState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingLg))
         ) {
             CircularProgressIndicator()
-            Text(
-                "Loading vault statistics...",
-                fontSize = rSp(14.sp),
-                fontFamily = ManropeFontFamily,
+            BodyLabel(
+                text = "Loading vault statistics...",
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
