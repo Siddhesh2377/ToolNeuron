@@ -127,6 +127,7 @@ dependencies {
     implementation(project(":neuron-packet"))
     implementation(project(":n_apps"))
 
+
     // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
