@@ -183,11 +183,61 @@ object PluginManager {
     }
 
     /**
-     * Get human-readable tool descriptions for plan generation prompt
+     * Get human-readable tool descriptions with parameter info for LLM prompts
      */
     fun getToolDescriptionsText(): String {
+        return getEnabledToolDefinitions().joinToString("\n\n") { toolDef ->
+            val openAI = toolDef.build().toOpenAIFormat()
+            val name = openAI.optString("name", toolDef.name)
+            val desc = openAI.optString("description", "")
+            val params = openAI.optJSONObject("parameters")
+            val props = params?.optJSONObject("properties")
+            val required = params?.optJSONArray("required")
+            val requiredSet = mutableSetOf<String>()
+            if (required != null) {
+                for (i in 0 until required.length()) requiredSet.add(required.getString(i))
+            }
+
+            if (props != null && props.length() > 0) {
+                val paramLines = props.keys().asSequence().joinToString("\n") { key ->
+                    val p = props.getJSONObject(key)
+                    val type = p.optString("type", "string")
+                    val pDesc = p.optString("description", "")
+                    val req = if (requiredSet.contains(key)) "REQUIRED" else "optional"
+                    "    $key ($type, $req): $pDesc"
+                }
+                "- $name: $desc\n  Params:\n$paramLines"
+            } else {
+                "- $name: $desc"
+            }
+        }
+    }
+
+    /**
+     * Get compact tool signatures for Phase 2 (tool call generation)
+     */
+    fun getToolSignaturesText(): String {
         return getEnabledToolDefinitions().joinToString("\n") { toolDef ->
-            "- ${toolDef.name}: ${toolDef.build().description}"
+            val openAI = toolDef.build().toOpenAIFormat()
+            val name = openAI.optString("name", toolDef.name)
+            val params = openAI.optJSONObject("parameters")
+            val props = params?.optJSONObject("properties")
+            val required = params?.optJSONArray("required")
+            val requiredSet = mutableSetOf<String>()
+            if (required != null) {
+                for (i in 0 until required.length()) requiredSet.add(required.getString(i))
+            }
+
+            if (props != null && props.length() > 0) {
+                val paramStr = props.keys().asSequence().joinToString(", ") { key ->
+                    val type = props.getJSONObject(key).optString("type", "string")
+                    val opt = if (requiredSet.contains(key)) "" else "?"
+                    "$key$opt: $type"
+                }
+                "$name($paramStr)"
+            } else {
+                "$name()"
+            }
         }
     }
 

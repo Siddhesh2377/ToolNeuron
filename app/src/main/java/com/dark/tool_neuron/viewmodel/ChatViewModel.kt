@@ -354,17 +354,15 @@ class ChatViewModel @Inject constructor(
         _agentPlan.value = plan
         Log.d(TAG, "Agent plan: $plan")
 
-        // Phase 2: Tool Selection + Execution
-        // Always proceed — grammar-constrained generation is the reliable gate
+        // Phase 2: Bounded generate-execute loop
         _agentPhase.value = AgentPhase.Executing
         _streamingAssistantMessage.value = ""
-        Log.d(TAG, "Agent Phase 2: Generating tool calls")
-        val toolCalls = generateToolCalls(fullPrompt, plan)
-        Log.d(TAG, "Agent tool calls: ${toolCalls.size} calls")
+        Log.d(TAG, "Agent Phase 2: Generate → Execute loop")
+        val steps = executeAgentLoop(fullPrompt, plan)
+        Log.d(TAG, "Agent execution complete: ${steps.size} steps executed")
 
-        // If grammar produced zero tool calls, the model has nothing to execute.
-        // Fall back to simple text generation instead of an empty summary.
-        if (toolCalls.isEmpty()) {
+        // If no tools were executed, fall back to simple text generation
+        if (steps.isEmpty()) {
             Log.d(TAG, "No tool calls generated, falling back to simple flow")
             _agentPhase.value = AgentPhase.Idle
             _agentPlan.value = null
@@ -372,9 +370,6 @@ class ChatViewModel @Inject constructor(
             simpleFlow(prompt, ragContext, maxTokens, isNewChat)
             return
         }
-
-        val steps = executePlanSteps(toolCalls)
-        Log.d(TAG, "Agent execution complete: ${steps.size} steps executed")
 
         // Phase 3: Summary
         _agentPhase.value = AgentPhase.Summarizing
@@ -396,10 +391,10 @@ class ChatViewModel @Inject constructor(
         PluginManager.clearGrammar()
         val toolDescriptions = PluginManager.getToolDescriptionsText()
         val systemPrompt = buildString {
-            appendLine("You have these tools:")
+            appendLine("Available tools:")
             appendLine(toolDescriptions)
             appendLine()
-            appendLine("Write a brief 1-2 sentence plan: which tools to call and in what order to fulfill the user's request.")
+            appendLine("Write a 1-2 sentence plan: which tools to call and what arguments to pass. Be specific and concise.")
         }
         val messages = listOf(
             JSONObject().put("role", "system").put("content", systemPrompt),
@@ -408,120 +403,152 @@ class ChatViewModel @Inject constructor(
         return generatePlainText(messages, maxTokens = 150)
     }
 
-    /** Phase 2a: Generate all tool calls in a single LLM call (with grammar). */
-    private suspend fun generateToolCalls(prompt: String, plan: String): List<Pair<String, String>> {
-        PluginManager.restoreGrammar()
-        val systemPrompt = "Plan: $plan\nCall the tools needed to execute this plan."
-        val messages = listOf(
-            JSONObject().put("role", "system").put("content", systemPrompt),
-            JSONObject().put("role", "user").put("content", prompt)
-        )
-        return generateAndCollectToolCalls(messages, maxTokens = 300)
-    }
-
-    /** Phase 2b: Execute each tool call deterministically. */
-    private suspend fun executePlanSteps(
-        toolCalls: List<Pair<String, String>>
+    /**
+     * Phase 2: Bounded generate → execute loop.
+     * Each round: generate 1 tool call (grammar-constrained) → execute it → feed result back.
+     * Stops when: no tool call generated, duplicate detected, or max rounds reached.
+     */
+    private suspend fun executeAgentLoop(
+        prompt: String,
+        plan: String,
+        maxRounds: Int = 5
     ): List<ToolChainStepData> {
         val steps = mutableListOf<ToolChainStepData>()
         val seenCalls = mutableSetOf<String>()
         _toolChainSteps.value = emptyList()
-        _maxToolChainRounds.value = toolCalls.size
+        _maxToolChainRounds.value = maxRounds
 
-        for ((index, tc) in toolCalls.withIndex()) {
-            val (rawName, rawArgs) = tc
-            val callKey = "${rawName.lowercase()}:${rawArgs.hashCode()}"
-            if (callKey in seenCalls) {
-                Log.w(TAG, "Duplicate tool call detected, skipping: $rawName")
-                continue
+        val toolSignatures = PluginManager.getToolSignaturesText()
+        val truncatedPlan = plan.take(200)
+
+        for (round in 1..maxRounds) {
+            // Generate next tool call
+            PluginManager.restoreGrammar()
+            val systemPrompt = buildString {
+                appendLine("Tools: $toolSignatures")
+                appendLine("Plan: $truncatedPlan")
+                if (steps.isNotEmpty()) {
+                    appendLine("Done so far:")
+                    steps.forEach { s ->
+                        appendLine("- ${s.toolName}: ${s.result.take(150)}")
+                    }
+                    appendLine("Call the NEXT tool, or stop if done.")
+                } else {
+                    appendLine("Call the first tool with ALL required arguments.")
+                }
             }
-            seenCalls.add(callKey)
-
-            _currentToolChainRound.value = index + 1
-
-            // Parse and execute
-            val parsed = extractToolCallFromArgs(rawName, rawArgs)
-            if (parsed == null) {
-                Log.e(TAG, "Failed to parse tool call: $rawName")
-                steps.add(ToolChainStepData(
-                    round = index + 1,
-                    toolName = rawName,
-                    pluginName = "Unknown",
-                    args = rawArgs.take(500),
-                    result = "Failed to parse arguments",
-                    executionTimeMs = 0,
-                    success = false
-                ))
-                _toolChainSteps.value = steps.toList()
-                continue
-            }
-
-            val (toolName, argsObj) = parsed
-            val normalizedName = normalizeToolName(toolName)
-            _currentToolName.value = normalizedName
-            AppStateManager.setExecutingPlugin("", normalizedName)
-
-            val toolCall = ToolCall(name = normalizedName, arguments = argsObj)
-            val result = PluginManager.executeToolForMultiTurn(toolCall)
-
-            val isSuccess = !result.isError
-            if (isSuccess) {
-                AppStateManager.setPluginExecutionComplete(
-                    pluginName = result.pluginName,
-                    toolName = normalizedName,
-                    success = true,
-                    executionTimeMs = result.executionTimeMs
-                )
-            } else {
-                AppStateManager.setPluginExecutionComplete(
-                    pluginName = result.pluginName,
-                    toolName = normalizedName,
-                    success = false,
-                    executionTimeMs = result.executionTimeMs,
-                    errorMessage = result.resultJson
-                )
+            val messages = listOf(
+                JSONObject().put("role", "system").put("content", systemPrompt),
+                JSONObject().put("role", "user").put("content", prompt)
+            )
+            Log.d(TAG, "Agent loop round $round: generating tool call")
+            val toolCalls = generateAndCollectToolCalls(messages, maxTokens = 300)
+            if (toolCalls.isEmpty()) {
+                Log.d(TAG, "Agent loop round $round: no tool call generated, stopping")
+                break
             }
 
-            steps.add(ToolChainStepData(
-                round = index + 1,
-                toolName = normalizedName,
-                pluginName = result.pluginName,
-                args = rawArgs.take(500),
-                result = result.resultJson.take(500),
-                executionTimeMs = result.executionTimeMs,
-                success = isSuccess
-            ))
-            _toolChainSteps.value = steps.toList()
+            // Process each tool call from this generation (usually 1)
+            var generatedDuplicate = false
+            for ((rawName, rawArgs) in toolCalls) {
+                val callKey = "${rawName.lowercase()}:${rawArgs.hashCode()}"
+                if (callKey in seenCalls) {
+                    Log.w(TAG, "Duplicate tool call detected, stopping loop: $rawName")
+                    generatedDuplicate = true
+                    break
+                }
+                seenCalls.add(callKey)
 
-            // Add plugin result message for in-memory UI display
-            if (result.rawData != null) {
-                val resultData = PluginResultData(
-                    pluginName = result.pluginName,
-                    toolName = normalizedName,
-                    inputParams = argsObj.toString(),
-                    resultData = result.resultJson,
-                    success = isSuccess
-                )
-                val pluginMessage = Messages(
-                    role = Role.Assistant,
-                    content = MessageContent(
-                        contentType = ContentType.PluginResult,
-                        content = "Plugin '${result.pluginName}' executed tool '$normalizedName'",
-                        pluginResultData = resultData
-                    ),
-                    pluginMetrics = PluginExecutionMetrics(
+                _currentToolChainRound.value = steps.size + 1
+
+                // Parse
+                val parsed = extractToolCallFromArgs(rawName, rawArgs)
+                if (parsed == null) {
+                    Log.e(TAG, "Failed to parse tool call: $rawName")
+                    steps.add(ToolChainStepData(
+                        round = steps.size + 1,
+                        toolName = rawName,
+                        pluginName = "Unknown",
+                        args = rawArgs.take(500),
+                        result = "Failed to parse arguments",
+                        executionTimeMs = 0,
+                        success = false
+                    ))
+                    _toolChainSteps.value = steps.toList()
+                    continue
+                }
+
+                // Execute
+                val (toolName, argsObj) = parsed
+                val normalizedName = normalizeToolName(toolName)
+                _currentToolName.value = normalizedName
+                AppStateManager.setExecutingPlugin("", normalizedName)
+
+                val toolCall = ToolCall(name = normalizedName, arguments = argsObj)
+                val result = PluginManager.executeToolForMultiTurn(toolCall)
+
+                val isSuccess = !result.isError
+                if (isSuccess) {
+                    AppStateManager.setPluginExecutionComplete(
                         pluginName = result.pluginName,
                         toolName = normalizedName,
+                        success = true,
+                        executionTimeMs = result.executionTimeMs
+                    )
+                } else {
+                    AppStateManager.setPluginExecutionComplete(
+                        pluginName = result.pluginName,
+                        toolName = normalizedName,
+                        success = false,
                         executionTimeMs = result.executionTimeMs,
+                        errorMessage = result.resultJson
+                    )
+                }
+
+                steps.add(ToolChainStepData(
+                    round = steps.size + 1,
+                    toolName = normalizedName,
+                    pluginName = result.pluginName,
+                    args = rawArgs.take(500),
+                    result = result.resultJson.take(500),
+                    executionTimeMs = result.executionTimeMs,
+                    success = isSuccess
+                ))
+                _toolChainSteps.value = steps.toList()
+                Log.d(TAG, "Agent loop round $round: executed ${normalizedName} (${result.executionTimeMs}ms)")
+
+                // Add plugin result message for in-memory UI display
+                if (result.rawData != null) {
+                    val resultData = PluginResultData(
+                        pluginName = result.pluginName,
+                        toolName = normalizedName,
+                        inputParams = argsObj.toString(),
+                        resultData = result.resultJson,
                         success = isSuccess
                     )
-                )
-                if (!userMessageAdded && currentUserMessage != null) {
-                    _messages.add(currentUserMessage!!)
-                    userMessageAdded = true
+                    val pluginMessage = Messages(
+                        role = Role.Assistant,
+                        content = MessageContent(
+                            contentType = ContentType.PluginResult,
+                            content = "Plugin '${result.pluginName}' executed tool '$normalizedName'",
+                            pluginResultData = resultData
+                        ),
+                        pluginMetrics = PluginExecutionMetrics(
+                            pluginName = result.pluginName,
+                            toolName = normalizedName,
+                            executionTimeMs = result.executionTimeMs,
+                            success = isSuccess
+                        )
+                    )
+                    if (!userMessageAdded && currentUserMessage != null) {
+                        _messages.add(currentUserMessage!!)
+                        userMessageAdded = true
+                    }
+                    _messages.add(pluginMessage)
                 }
-                _messages.add(pluginMessage)
             }
+
+            if (generatedDuplicate) break
 
             // Brief pause to show step in UI
             kotlinx.coroutines.delay(300)
