@@ -737,24 +737,32 @@ class ChatViewModel @Inject constructor(
 
     // ==================== LLM Generation Helpers ====================
 
-    /** Generate plain text (no grammar/tool detection). Streams to UI. */
+    /** Generate plain text (no grammar/tool detection). Streams to UI with batching. */
     private suspend fun generatePlainText(
         messages: List<JSONObject>,
         maxTokens: Int
     ): String {
         val jsonArray = JSONArray(messages)
-        var result = ""
+        val resultBuilder = StringBuilder()
         currentMetrics = null
+        var lastEmitTime = 0L
 
         generationManager.generateMultiTurnStreaming(
             jsonArray.toString(), maxTokens
         ).collect { event ->
             when (event) {
                 is GenerationEvent.Token -> {
-                    result += event.text
-                    _streamingAssistantMessage.value = result
+                    resultBuilder.append(event.text)
+                    val now = System.currentTimeMillis()
+                    if (now - lastEmitTime >= 50) {
+                        _streamingAssistantMessage.value = resultBuilder.toString()
+                        lastEmitTime = now
+                    }
                 }
-                is GenerationEvent.Done -> { /* complete */ }
+                is GenerationEvent.Done -> {
+                    // Final emit to ensure UI has complete text
+                    _streamingAssistantMessage.value = resultBuilder.toString()
+                }
                 is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
                 is GenerationEvent.Error -> {
                     Log.e(TAG, "Generation error: ${event.message}")
@@ -766,7 +774,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-        return result.trim()
+        return resultBuilder.toString().trim()
     }
 
     /** Generate with grammar and collect all tool calls from a single generation. */

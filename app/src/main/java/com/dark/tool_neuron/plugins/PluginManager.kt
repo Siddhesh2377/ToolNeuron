@@ -22,6 +22,9 @@ object PluginManager {
 
     private const val TAG = "PluginManager"
 
+    // Web Search is treated as a system tool with its own toggle
+    const val WEB_SEARCH_PLUGIN_NAME = "Web Search"
+
     // Known tool-calling model IDs
     private val TOOL_CALLING_MODEL_IDS = setOf(
         "ruvltra-claude-code-0.5b"
@@ -53,6 +56,10 @@ object PluginManager {
     // Set of enabled plugin names
     private val _enabledPluginNames = MutableStateFlow<Set<String>>(emptySet())
     val enabledPluginNames: StateFlow<Set<String>> = _enabledPluginNames.asStateFlow()
+
+    // Web Search enabled state (independent toggle)
+    private val _isWebSearchEnabled = MutableStateFlow(false)
+    val isWebSearchEnabled: StateFlow<Boolean> = _isWebSearchEnabled.asStateFlow()
 
     // List of registered plugins
     private val _registeredPlugins = MutableStateFlow<List<PluginInfo>>(emptyList())
@@ -104,11 +111,22 @@ object PluginManager {
     }
 
     /**
-     * Enable a plugin
+     * Enable a plugin. Non-WebSearch plugins are single-select:
+     * enabling one disables all other non-WebSearch plugins.
      */
     fun enablePlugin(pluginName: String) {
         if (!_plugins.containsKey(pluginName)) return
-        if (_enabledPluginNames.value.contains(pluginName)) return
+
+        // Single-select for non-WebSearch plugins
+        if (pluginName != WEB_SEARCH_PLUGIN_NAME) {
+            val toDisable = _enabledPluginNames.value.filter {
+                it != WEB_SEARCH_PLUGIN_NAME && it != pluginName
+            }
+            if (toDisable.isNotEmpty()) {
+                _enabledPluginNames.value = _enabledPluginNames.value - toDisable
+            }
+        }
+
         _enabledPluginNames.value += pluginName
         _cachedEnabledToolDefs = null
         syncToolsWithLLM()
@@ -120,6 +138,9 @@ object PluginManager {
     fun disablePlugin(pluginName: String) {
         if (!_enabledPluginNames.value.contains(pluginName)) return
         _enabledPluginNames.value -= pluginName
+        if (pluginName == WEB_SEARCH_PLUGIN_NAME) {
+            _isWebSearchEnabled.value = false
+        }
         _cachedEnabledToolDefs = null
         syncToolsWithLLM()
     }
@@ -132,6 +153,26 @@ object PluginManager {
             enablePlugin(pluginName)
         } else {
             disablePlugin(pluginName)
+        }
+    }
+
+    /**
+     * Toggle Web Search independently (system tool)
+     */
+    fun enableWebSearch(enabled: Boolean) {
+        _isWebSearchEnabled.value = enabled
+        if (enabled) {
+            if (!_enabledPluginNames.value.contains(WEB_SEARCH_PLUGIN_NAME)) {
+                _enabledPluginNames.value += WEB_SEARCH_PLUGIN_NAME
+                _cachedEnabledToolDefs = null
+                syncToolsWithLLM()
+            }
+        } else {
+            if (_enabledPluginNames.value.contains(WEB_SEARCH_PLUGIN_NAME)) {
+                _enabledPluginNames.value -= WEB_SEARCH_PLUGIN_NAME
+                _cachedEnabledToolDefs = null
+                syncToolsWithLLM()
+            }
         }
     }
 

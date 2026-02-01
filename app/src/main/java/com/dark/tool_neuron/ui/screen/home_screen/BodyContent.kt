@@ -61,6 +61,8 @@ import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
 import java.util.Base64
 
@@ -70,6 +72,11 @@ data class ParsedMessage(
 )
 
 suspend fun parseThinkingTags(content: String): ParsedMessage = withContext(Dispatchers.IO) {
+    // Fast path: skip regex if no think tags present
+    if (!content.contains("<think>")) {
+        return@withContext ParsedMessage(null, content.trim())
+    }
+
     val thinkingRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
     val thinkingMatch = thinkingRegex.find(content)
 
@@ -246,8 +253,16 @@ private fun StreamingView(
 ) {
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(assistantMessage, streamingImage, messages.size, appState, agentPhase, toolChainSteps.size) {
-        scrollState.animateScrollTo(scrollState.maxValue)
+    @OptIn(FlowPreview::class)
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            // Combine all scroll-triggering values
+            Triple(assistantMessage.length, messages.size, toolChainSteps.size)
+        }
+        .debounce(150)
+        .collect {
+            scrollState.animateScrollTo(scrollState.maxValue)
+        }
     }
 
     Column(

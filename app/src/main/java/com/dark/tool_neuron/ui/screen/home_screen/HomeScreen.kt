@@ -30,7 +30,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
@@ -63,6 +65,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -74,8 +77,11 @@ import com.dark.tool_neuron.R
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.activity.ModelLoadingActivity
 import com.dark.tool_neuron.activity.RagActivity
+import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
+import com.dark.tool_neuron.ui.components.ActionSwitch
+import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.components.AnimatedTitle
 import com.dark.tool_neuron.ui.components.ModeToggleSwitch
@@ -83,6 +89,7 @@ import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.components.MemoryOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.RagOverlayBottomSheet
+import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -126,15 +133,12 @@ fun HomeScreen(
             containerColor = MaterialTheme.colorScheme.background,
             modifier = Modifier.fillMaxSize(),
             topBar = {
-                TopBar( onStoreButtonClicked = {
-                    onStoreButtonClicked()
-                }, onMenuClick = {
-                    scope.launch {
-                        drawerState.open()
-                    }
-                }, showDynamicWindow = {
-                    chatViewModel.showDynamicWindow()
-                })
+                TopBar(
+                    onStoreButtonClicked = { onStoreButtonClicked() },
+                    onMenuClick = { scope.launch { drawerState.open() } },
+                    onSettingsClick = { onSettingsClick() },
+                    showDynamicWindow = { chatViewModel.showDynamicWindow() }
+                )
             },
             bottomBar = {
                 BottomBar(
@@ -155,6 +159,7 @@ fun HomeScreen(
 @Composable
 fun TopBar(
     onMenuClick: () -> Unit,
+    onSettingsClick: () -> Unit,
     showDynamicWindow: () -> Unit,
     onStoreButtonClicked: () -> Unit
 ) {
@@ -188,6 +193,11 @@ fun TopBar(
         )
     }, actions = {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            ActionButton(
+                onClickListener = { onSettingsClick() },
+                icon = Icons.Outlined.Settings,
+                modifier = Modifier.padding(end = rDp(6.dp))
+            )
             ActionButton(
                 onClickListener = {
                     onStoreButtonClicked()
@@ -249,12 +259,19 @@ fun BottomBar(
     val vaultStats by memoryViewModel.vaultStats.collectAsStateWithLifecycle()
     val memoryEntryCount by memoryViewModel.memoryEntryCount.collectAsStateWithLifecycle()
 
+    // Web Search & non-WebSearch plugins
+    val isWebSearchEnabled by pluginViewModel.isWebSearchEnabled.collectAsStateWithLifecycle()
+    val nonWebSearchPlugins by pluginViewModel.nonWebSearchPlugins.collectAsStateWithLifecycle()
+
     // App settings
     val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
     val toolCallingEnabled by appSettingsDataStore.toolCallingEnabled.collectAsStateWithLifecycle(initialValue = true)
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
+
+    // More Options overlay state
+    var showMoreOptions by remember { mutableStateOf(false) }
 
     // Track if any model is loaded
     val isModelLoaded = currentModelID.isNotEmpty()
@@ -322,10 +339,10 @@ fun BottomBar(
         }
     )
 
-    // Plugin Overlay
+    // Plugin Overlay (excludes Web Search — it has its own toggle)
     PluginOverlayBottomSheet(
         show = showPluginOverlay,
-        plugins = registeredPlugins,
+        plugins = nonWebSearchPlugins,
         enabledPluginNames = enabledPluginNames,
         expandedPluginIds = expandedPluginIds,
         grammarMode = grammarMode,
@@ -437,11 +454,41 @@ fun BottomBar(
                 // Quick-look chips showing active subsystems
                 QuickLookChipRow(
                     loadedRagCount = loadedRags.size,
-                    enabledToolCount = enabledPluginNames.size,
+                    enabledToolCount = enabledPluginNames.filter { it != "Web Search" }.size,
                     isMemoryEnabled = isMemoryEnabled,
+                    isWebSearchEnabled = isWebSearchEnabled,
+                    activePluginName = enabledPluginNames.firstOrNull { it != "Web Search" },
                     onRagChipClick = { ragViewModel.showRagOverlay() },
                     onToolChipClick = { pluginViewModel.showPluginOverlay() },
-                    onMemoryChipClick = { memoryViewModel.toggleMemoryOverlay() }
+                    onMemoryChipClick = { memoryViewModel.toggleMemoryOverlay() },
+                    onWebSearchChipClick = { pluginViewModel.toggleWebSearch(false) }
+                )
+
+                // More Options overlay (above action row, like model list)
+                MoreOptionsOverlay(
+                    show = showMoreOptions,
+                    isMemoryEnabled = isMemoryEnabled,
+                    onMemoryToggle = { memoryViewModel.setMemoryEnabled(it) },
+                    onManageMemory = {
+                        showMoreOptions = false
+                        memoryViewModel.toggleMemoryOverlay()
+                    },
+                    loadedRagCount = loadedRags.size,
+                    onRagManage = {
+                        showMoreOptions = false
+                        ragViewModel.showRagOverlay()
+                    },
+                    nonWebSearchPlugins = nonWebSearchPlugins,
+                    enabledPluginNames = enabledPluginNames,
+                    isToolCallingModelLoaded = isToolCallingModelLoaded,
+                    toolCallingEnabled = toolCallingEnabled,
+                    onPluginToggle = { name, enabled ->
+                        pluginViewModel.togglePluginEnabled(name, enabled)
+                    },
+                    onManagePlugins = {
+                        showMoreOptions = false
+                        pluginViewModel.showPluginOverlay()
+                    }
                 )
 
                 Row(
@@ -449,7 +496,7 @@ fun BottomBar(
                     horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ActionIconSpace)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Mode toggle switch (Text/Image)
+                    // 1. Mode toggle switch (Text/Image)
                     ModeToggleSwitch(
                         isImageMode = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
                         onModeChange = { isImageMode ->
@@ -464,14 +511,14 @@ fun BottomBar(
                         modifier = Modifier.padding(start = rDp(12.dp))
                     )
 
-                    // Settings
-                    ActionButton(
-                        onClickListener = { onSettingsClick() },
-                        icon = Icons.Outlined.Settings,
-                        modifier = Modifier.padding(start = rDp(6.dp))
+                    // 2. More Options
+                    ActionToggleButton(
+                        onCheckedChange = { showMoreOptions = !showMoreOptions },
+                        checked = showMoreOptions,
+                        icon = Icons.Outlined.Tune
                     )
 
-                    // Model selector
+                    // 3. Model selector
                     ActionToggleButton(
                         onCheckedChange = {
                             if (showModelList) {
@@ -482,50 +529,19 @@ fun BottomBar(
                         }, checked = showModelList, icon = R.drawable.ai_model
                     )
 
-                    // RAG Button
-                    ActionToggleButton(
-                        onCheckedChange = {
-                            if (showRagOverlay) {
-                                ragViewModel.hideRagOverlay()
-                            } else {
-                                ragViewModel.showRagOverlay()
-                            }
-                        },
-                        checked = showRagOverlay,
-                        icon = R.drawable.rag
-                    )
-
-                    // Plugin Button (hidden when tool calling disabled in settings)
+                    // 4. Web Search Toggle
                     if (toolCallingEnabled) {
                         ActionToggleButton(
-                            onCheckedChange = {
-                                if (showPluginOverlay) {
-                                    pluginViewModel.hidePluginOverlay()
-                                } else {
-                                    pluginViewModel.showPluginOverlay()
-                                }
-                            },
-                            checked = showPluginOverlay,
+                            onCheckedChange = { pluginViewModel.toggleWebSearch(!isWebSearchEnabled) },
+                            checked = isWebSearchEnabled,
                             enabled = isToolCallingModelLoaded,
-                            icon = R.drawable.tools
+                            icon = Icons.Outlined.Language
                         )
                     }
 
-                    // Memory Button
-                    ActionToggleButton(
-                        onCheckedChange = {
-                            if (showMemoryOverlay) {
-                                memoryViewModel.dismissMemoryOverlay()
-                            } else {
-                                memoryViewModel.toggleMemoryOverlay()
-                            }
-                        },
-                        checked = showMemoryOverlay,
-                        icon = R.drawable.memory_vault
-                    )
-
                     Spacer(Modifier.weight(1f))
 
+                    // 5. Send/Stop
                     when (isGenerating) {
                         true -> {
                             ActionProgressButton(
@@ -544,14 +560,10 @@ fun BottomBar(
                             ActionButton(
                                 onClickListener = {
                                     if (value.isNotBlank()) {
+                                        // Close overlays on send
+                                        showMoreOptions = false
                                         when (currentGenerationType) {
                                             GenerationManager.ModelType.TEXT_GENERATION -> {
-                                                // Check if RAG is enabled and there are loaded RAGs
-                                                Log.d("HomeScreen", "Loaded RAGs count: ${loadedRags.size}")
-                                                loadedRags.forEach { rag ->
-                                                    Log.d("HomeScreen", "RAG: ${rag.name}, enabled: ${rag.isEnabled}, status: ${rag.status}")
-                                                }
-
                                                 val hasRags = loadedRags.isNotEmpty()
                                                 val hasMemory = isMemoryEnabled
 
@@ -561,10 +573,8 @@ fun BottomBar(
                                                     scope.launch {
                                                         var combinedContext = ""
 
-                                                        // Query Memory Vault if enabled
                                                         if (hasMemory) {
                                                             chatViewModel.setProcessingPhase("Querying Memory Vault...")
-                                                            Log.d("HomeScreen", "Querying Memory Vault for: $userQuery")
                                                             val memoryContext = memoryViewModel.queryMemory(userQuery)
                                                             if (memoryContext.isNotBlank()) {
                                                                 combinedContext += memoryContext
@@ -575,10 +585,8 @@ fun BottomBar(
                                                             }
                                                         }
 
-                                                        // Query RAG if loaded
                                                         if (hasRags) {
                                                             chatViewModel.setProcessingPhase("Querying RAG...")
-                                                            Log.d("HomeScreen", "Querying RAGs for: $userQuery")
                                                             val ragContext = ragViewModel.queryAndStoreResults(userQuery)
                                                             if (combinedContext.isNotBlank()) {
                                                                 combinedContext += "\n$ragContext"
@@ -591,7 +599,6 @@ fun BottomBar(
                                                             )
                                                         }
 
-                                                        // Update combined RAG context if memory added
                                                         if (hasRags && hasMemory && combinedContext.isNotBlank()) {
                                                             chatViewModel.setRagContext(
                                                                 combinedContext.ifBlank { null },
@@ -608,7 +615,6 @@ fun BottomBar(
                                                         chatViewModel.sendTextMessage(userQuery)
                                                     }
                                                 } else {
-                                                    Log.d("HomeScreen", "No RAGs or Memory, sending message directly")
                                                     chatViewModel.clearRagContext()
                                                     chatViewModel.clearMemoryContext()
                                                     chatViewModel.sendTextMessage(value)
@@ -620,9 +626,7 @@ fun BottomBar(
                                                 chatViewModel.sendImageRequest(value)
                                                 value = ""
                                             }
-                                            GenerationManager.ModelType.AUDIO_GENERATION -> {
-                                                // TTS handled via settings overlay, not text input
-                                            }
+                                            GenerationManager.ModelType.AUDIO_GENERATION -> {}
                                         }
                                     }
                                 },
@@ -647,11 +651,14 @@ private fun QuickLookChipRow(
     loadedRagCount: Int,
     enabledToolCount: Int,
     isMemoryEnabled: Boolean,
+    isWebSearchEnabled: Boolean = false,
+    activePluginName: String? = null,
     onRagChipClick: () -> Unit,
     onToolChipClick: () -> Unit,
-    onMemoryChipClick: () -> Unit
+    onMemoryChipClick: () -> Unit,
+    onWebSearchChipClick: () -> Unit = {}
 ) {
-    val hasAnyActive = loadedRagCount > 0 || enabledToolCount > 0 || isMemoryEnabled
+    val hasAnyActive = loadedRagCount > 0 || enabledToolCount > 0 || isMemoryEnabled || isWebSearchEnabled || activePluginName != null
 
     AnimatedVisibility(visible = hasAnyActive) {
         Row(
@@ -667,9 +674,16 @@ private fun QuickLookChipRow(
                     onClick = onRagChipClick
                 )
             }
-            if (enabledToolCount > 0) {
+            if (isWebSearchEnabled) {
                 StatusChip(
-                    label = "$enabledToolCount Tools",
+                    label = "Web Search",
+                    color = MaterialTheme.colorScheme.tertiary,
+                    onClick = onWebSearchChipClick
+                )
+            }
+            if (activePluginName != null) {
+                StatusChip(
+                    label = activePluginName,
                     color = MaterialTheme.colorScheme.tertiary,
                     onClick = onToolChipClick
                 )
@@ -779,4 +793,153 @@ private fun PasswordDialogBottomBar(
             }
         }
     )
+}
+
+@Composable
+private fun MoreOptionsOverlay(
+    show: Boolean,
+    // Memory
+    isMemoryEnabled: Boolean,
+    onMemoryToggle: (Boolean) -> Unit,
+    onManageMemory: () -> Unit,
+    // RAG
+    loadedRagCount: Int,
+    onRagManage: () -> Unit,
+    // Plugin
+    nonWebSearchPlugins: List<PluginInfo>,
+    enabledPluginNames: Set<String>,
+    isToolCallingModelLoaded: Boolean,
+    toolCallingEnabled: Boolean,
+    onPluginToggle: (String, Boolean) -> Unit,
+    onManagePlugins: () -> Unit
+) {
+    AnimatedVisibility(visible = show) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(8.dp))
+                .padding(bottom = rDp(8.dp))
+                .background(
+                    MaterialTheme.colorScheme.primary.copy(0.04f)
+                        .compositeOver(MaterialTheme.colorScheme.background),
+                    shape = RoundedCornerShape(rDp(10.dp))
+                )
+                .padding(rDp(12.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        ) {
+            // Memory toggle
+            SwitchRow(
+                title = "Memory",
+                description = "Query personal knowledge vault",
+                iconRes = R.drawable.memory_vault,
+                checked = isMemoryEnabled,
+                onCheckedChange = onMemoryToggle
+            )
+
+            // RAG section
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = rDp(Standards.CardPadding), vertical = rDp(Standards.SpacingSm)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.rag),
+                            contentDescription = null,
+                            modifier = Modifier.size(rDp(Standards.IconMd)),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Column {
+                            Text(
+                                text = "RAG",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (loadedRagCount > 0) "$loadedRagCount loaded" else "None loaded",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                            )
+                        }
+                    }
+                    ActionTextButton(
+                        onClickListener = onRagManage,
+                        icon = R.drawable.rag,
+                        text = "Manage"
+                    )
+                }
+            }
+
+            // Plugin section (only if tool calling enabled)
+            if (toolCallingEnabled && nonWebSearchPlugins.isNotEmpty()) {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                    shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(rDp(Standards.CardPadding)),
+                        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                    ) {
+                        Text(
+                            text = "Plugin (select one)",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+
+                        nonWebSearchPlugins.forEach { plugin ->
+                            val isEnabled = enabledPluginNames.contains(plugin.name)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = rDp(2.dp)),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = plugin.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Medium,
+                                        color = if (isToolCallingModelLoaded) MaterialTheme.colorScheme.onSurface
+                                        else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                                    )
+                                    Text(
+                                        text = "${plugin.toolDefinitionBuilder.size} tools",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                    )
+                                }
+                                ActionSwitch(
+                                    checked = isEnabled,
+                                    onCheckedChange = { onPluginToggle(plugin.name, !isEnabled) },
+                                    enabled = isToolCallingModelLoaded
+                                )
+                            }
+                        }
+
+                        ActionTextButton(
+                            onClickListener = onManagePlugins,
+                            icon = R.drawable.tools,
+                            text = "Configure"
+                        )
+                    }
+                }
+            }
+        }
+    }
 }
