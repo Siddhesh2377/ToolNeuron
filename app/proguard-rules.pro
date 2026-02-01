@@ -13,6 +13,15 @@
 -keep class com.dark.tool_neuron.engine.** { *; }
 -keep class com.dark.tool_neuron.service.** { *; }
 -keep class com.dark.tool_neuron.util.** { *; }
+-keep class com.dark.tool_neuron.utils.** { *; }
+-keep class com.dark.tool_neuron.plugins.** { *; }
+-keep class com.dark.tool_neuron.tts.** { *; }
+-keep class com.dark.tool_neuron.di.** { *; }
+-keep class com.dark.tool_neuron.vault.** { *; }
+-keep class com.dark.tool_neuron.data.** { *; }
+-keep class com.dark.tool_neuron.data_packs.** { *; }
+-keep class com.dark.tool_neuron.state.** { *; }
+-keep class com.dark.tool_neuron.global.** { *; }
 -keep class com.dark.plugins.api.** { *; }
 
 # Network data classes (for Retrofit)
@@ -45,6 +54,7 @@
 -keep class * extends com.dark.tool_neuron.models.state.AppState { *; }
 -keep class * extends com.dark.tool_neuron.models.plugins.ToolState { *; }
 -keep class * extends com.dark.tool_neuron.service.ModelDownloadService$DownloadState { *; }
+-keep class * extends com.dark.tool_neuron.plugins.PluginExecutionResult { *; }
 
 -keepclassmembers enum * {
     <fields>;
@@ -116,7 +126,20 @@
 -keep class com.mp.ai_core.** { *; }
 -keep class com.mp.ai_gguf.** { *; }
 -keep class com.dark.ai_module.** { *; }
+-keep class com.dark.ai_sd.** { *; }
 -keep class com.android.tools.mlkit.** { *; }
+
+# -- Supertonic TTS (AAR with JNI callbacks) --
+-keep class com.mp.ai_supertonic_tts.** { *; }
+-keep interface com.mp.ai_supertonic_tts.callback.TTSCallback { *; }
+-keepclassmembers class com.mp.ai_supertonic_tts.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+-keepclassmembers interface com.mp.ai_supertonic_tts.** {
+    *;
+}
 
 # Keep all callback interfaces and their methods (critical for JNI)
 -keep interface com.mp.ai_gguf.models.EmbeddingCallback { *; }
@@ -141,6 +164,22 @@
 -keepclassmembers interface com.mp.ai_gguf.models.** {
     *;
 }
+
+# -- Plugins (data classes used in type checks, sealed hierarchies, SuperPlugin interface) --
+-keep class com.dark.tool_neuron.plugins.api.SuperPlugin { *; }
+-keepclassmembers class com.dark.tool_neuron.plugins.** {
+    *;
+}
+-keep class com.dark.tool_neuron.plugins.PluginManager$MultiTurnToolResult { *; }
+
+# -- Vault (serialization helper + data classes) --
+-keepclassmembers class com.dark.tool_neuron.vault.** {
+    *;
+}
+
+# -- Hilt DI modules & qualifiers --
+-keep @dagger.Module class com.dark.tool_neuron.di.** { *; }
+-keep @javax.inject.Qualifier class com.dark.tool_neuron.di.** { *; }
 
 # -- RAG & NeuronGraph --
 -keep class com.dark.tool_neuron.neuron_example.** { *; }
