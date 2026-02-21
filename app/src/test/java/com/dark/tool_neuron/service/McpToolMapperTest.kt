@@ -35,4 +35,20 @@ class McpToolMapperTest {
         assertEquals(server, reference?.server)
         assertEquals("send-email", reference?.toolName)
     }
+
+    @Test
+    fun sanitizeIdentifierCollapsesConsecutiveSpecialChars() {
+        assertEquals("my_tool", McpToolMapper.sanitizeIdentifier("My--Tool"))
+        assertEquals("a_b", McpToolMapper.sanitizeIdentifier("a---b"))
+        assertEquals("hello_world", McpToolMapper.sanitizeIdentifier("  hello   world  "))
+        assertEquals("test", McpToolMapper.sanitizeIdentifier("---test---"))
+        assertEquals("a_b_c", McpToolMapper.sanitizeIdentifier("a..b..c"))
+    }
+
+    @Test
+    fun sanitizeIdentifierHandlesEdgeCases() {
+        assertEquals("mcp", McpToolMapper.sanitizeIdentifier("").ifBlank { "mcp" })
+        assertEquals("abc123", McpToolMapper.sanitizeIdentifier("ABC123"))
+        assertEquals("tool_name_v2", McpToolMapper.sanitizeIdentifier("tool-name-v2"))
+    }
 }

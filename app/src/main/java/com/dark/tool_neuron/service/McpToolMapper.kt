@@ -18,6 +18,7 @@ object McpToolMapper {
     fun sanitizeIdentifier(value: String): String {
         return value.lowercase()
             .replace(Regex("[^a-z0-9]+"), "_")
+            .replace(Regex("_+"), "_")
             .trim('_')
     }
 

@@ -282,7 +282,11 @@ class ChatViewModel @Inject constructor(
                         }
 
                         is GenerationEvent.Done -> {
-                            val toolCall = pendingToolCall
+                            var toolCall = pendingToolCall
+                            // Fallback: try parsing text as tool call if no ToolCall event was emitted
+                            if (toolCall == null && mcpToolRegistry.isNotEmpty()) {
+                                toolCall = tryParseToolCallFromText(currentGeneratedContent)
+                            }
                             if (toolCall != null) {
                                 handleToolCallForNewChat(prompt, toolCall)
                                 return@collect
@@ -365,7 +369,11 @@ class ChatViewModel @Inject constructor(
                             }
 
                             is GenerationEvent.Done -> {
-                                val toolCall = pendingToolCall
+                                var toolCall = pendingToolCall
+                                // Fallback: try parsing text as tool call if no ToolCall event was emitted
+                                if (toolCall == null && mcpToolRegistry.isNotEmpty()) {
+                                    toolCall = tryParseToolCallFromText(currentGeneratedContent)
+                                }
                                 if (toolCall != null) {
                                     handleToolCallExistingChat(chatId, userMessage, toolCall)
                                     return@collect
@@ -603,6 +611,8 @@ class ChatViewModel @Inject constructor(
                 LlmModelWorker.clearGgufTools()
             }
         } catch (e: Exception) {
+            mcpToolRegistry = emptyMap()
+            LlmModelWorker.clearGgufTools()
             val message = "Failed to refresh MCP tools: ${e.message}"
             _error.value = message
             AppStateManager.setError(message)
@@ -655,13 +665,53 @@ class ChatViewModel @Inject constructor(
     }
 
     private suspend fun executeToolCall(toolCall: ToolCallInfo): Result<String> {
-        val reference = mcpToolRegistry[toolCall.name]
-            ?: return Result.failure(Exception("Tool not found: ${toolCall.name}"))
+        var reference = mcpToolRegistry[toolCall.name]
+
+        // Retry once if registry may not be populated yet
+        if (reference == null) {
+            try {
+                syncMcpTools()
+                reference = mcpToolRegistry[toolCall.name]
+            } catch (e: Exception) {
+                return Result.failure(
+                    Exception("Failed to sync MCP tools for ${toolCall.name}: ${e.message}", e)
+                )
+            }
+        }
+
+        if (reference == null) {
+            return Result.failure(Exception("Tool not found: ${toolCall.name}"))
+        }
+
         return mcpClientService.callTool(reference.server, reference.toolName, toolCall.argsJson)
     }
 
     private fun formatToolResult(toolName: String, result: String): String {
         return "Tool $toolName result:\n$result"
+    }
+
+    /**
+     * Attempt to parse a tool call from raw text output.
+     * Handles cases where the native grammar fails to emit a ToolCall event
+     * and instead outputs JSON text directly.
+     */
+    private fun tryParseToolCallFromText(text: String): ToolCallInfo? {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return null
+
+        return try {
+            val json = org.json.JSONObject(trimmed)
+            val name = json.optString("name", "").ifBlank { return null }
+            val args = json.optJSONObject("arguments")?.toString()
+                ?: json.optString("arguments", "").ifBlank { "{}" }
+
+            // Only accept if the tool name is in our registry
+            if (mcpToolRegistry.containsKey(name)) {
+                ToolCallInfo(name, args)
+            } else null
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun generateImageForNewChat(

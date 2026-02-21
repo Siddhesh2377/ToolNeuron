@@ -60,16 +60,12 @@ class McpClientService @Inject constructor() {
         .build()
     
     /**
-     * Clean up resources associated with the underlying OkHttpClient.
-     * This should be called when the McpClientService is no longer needed.
+     * Clean up idle resources without destroying the singleton OkHttpClient.
+     * Only evicts idle connections — the client remains usable for future requests.
      */
     fun close() {
         try {
-            // Shut down the executor service used by the dispatcher
-            httpClient.dispatcher.executorService.shutdown()
-            // Evict all connections from the connection pool
             httpClient.connectionPool.evictAll()
-            // Close any configured cache
             httpClient.cache?.close()
         } catch (e: Exception) {
             Log.w(TAG, "Error while closing OkHttpClient resources", e)
@@ -125,10 +121,15 @@ class McpClientService @Inject constructor() {
                 // Multiple data lines in same event should be joined with newlines per SSE spec
                 val joinedData = dataLines.joinToString("\n") { it.removePrefix("data:").trim() }
                 
-                // Validate that the joined data is valid JSON to avoid propagating malformed JSON-RPC
+                // Validate that the joined data is a valid JSON-RPC response
                 return try {
-                    JSONObject(joinedData)
-                    joinedData
+                    val json = JSONObject(joinedData)
+                    if (!json.has("jsonrpc") || (!json.has("result") && !json.has("error") && !json.has("id"))) {
+                        Log.w(TAG, "SSE data missing JSON-RPC fields; returning raw response")
+                        responseBody
+                    } else {
+                        joinedData
+                    }
                 } catch (e: Exception) {
                     Log.w(TAG, "SSE data is not valid JSON; returning raw SSE response body", e)
                     responseBody
@@ -263,6 +264,7 @@ class McpClientService @Inject constructor() {
             val response = httpClient.newCall(requestBuilder.build()).execute()
             
             if (!response.isSuccessful) {
+                Log.w(TAG, "listTools failed for '${server.name}': HTTP ${response.code} ${response.message}")
                 return@withContext emptyList()
             }
             
@@ -272,6 +274,8 @@ class McpClientService @Inject constructor() {
             val jsonResponse = JSONObject(responseBody)
             
             if (jsonResponse.has("error")) {
+                val error = jsonResponse.getJSONObject("error")
+                Log.w(TAG, "listTools JSON-RPC error for '${server.name}': ${error.optString("message", "Unknown")}")
                 return@withContext emptyList()
             }
             
@@ -291,7 +295,7 @@ class McpClientService @Inject constructor() {
             tools
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to list tools: ${e.message}", e)
+            Log.e(TAG, "Failed to list tools for '${server.name}': ${e.message}", e)
             emptyList()
         }
     }
