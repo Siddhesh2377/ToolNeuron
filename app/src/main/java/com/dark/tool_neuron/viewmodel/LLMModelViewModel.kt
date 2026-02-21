@@ -102,7 +102,8 @@ class LLMModelViewModel @Inject constructor(
             appSettings.saveLastModelId(model.id)
 
             // Update tool calling model state and sync tools
-            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(model.modelName)
+            val nativeSupports = LlmModelWorker.isToolCallingSupportedGguf()
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(nativeSupports)
             com.dark.tool_neuron.plugins.PluginManager.syncToolsWithLLM()
         } else {
             AppStateManager.setError("Failed to load GGUF model")
@@ -176,7 +177,7 @@ class LLMModelViewModel @Inject constructor(
 
             _currentModelID.value = ""
             _currentModelType.value = null
-            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(null)
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(false)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -189,11 +190,11 @@ class LLMModelViewModel @Inject constructor(
                 when (_currentModelType.value) {
                     ProviderType.GGUF -> {
                         LlmModelWorker.unloadGgufModel()
-                        LlmModelWorker._currentGgufModelId.value = null // ADD THIS
+                        LlmModelWorker._currentGgufModelId.value = null
                     }
                     ProviderType.DIFFUSION -> {
                         LlmModelWorker.stopDiffusionBackend()
-                        LlmModelWorker._currentDiffusionModelId.value = null // ADD THIS
+                        LlmModelWorker._currentDiffusionModelId.value = null
                     }
                     else -> {}
                 }
@@ -203,6 +204,52 @@ class LLMModelViewModel @Inject constructor(
                 AppStateManager.setModelUnloaded()
             } catch (e: Exception) {
                 AppStateManager.setError(e.message ?: "Failed to unload model")
+            }
+        }
+    }
+
+    /**
+     * Delete a model from the database and optionally from disk.
+     * If the model is currently loaded, it will be unloaded first.
+     */
+    fun deleteModel(model: Model, deleteFile: Boolean = true) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // Unload if this is the currently loaded model
+                if (_currentModelID.value == model.id) {
+                    unloadCurrentModel()
+                    delay(300)
+                }
+
+                // Delete associated config
+                val config = repository.getConfigByModelId(model.id)
+                if (config != null) {
+                    repository.deleteConfig(config)
+                }
+
+                // Delete model file from disk if requested
+                if (deleteFile && model.pathType != PathType.CONTENT_URI) {
+                    try {
+                        val modelFile = java.io.File(model.modelPath)
+                        if (modelFile.exists()) {
+                            if (modelFile.isDirectory) {
+                                modelFile.deleteRecursively()
+                            } else {
+                                modelFile.delete()
+                            }
+                            Log.d("LLMModelVM", "Deleted model file: ${model.modelPath}")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("LLMModelVM", "Failed to delete model file: ${e.message}")
+                    }
+                }
+
+                // Delete from database
+                repository.deleteModel(model)
+                Log.d("LLMModelVM", "Model deleted: ${model.modelName}")
+            } catch (e: Exception) {
+                Log.e("LLMModelVM", "Failed to delete model: ${e.message}")
+                AppStateManager.setError("Failed to delete model: ${e.message}")
             }
         }
     }

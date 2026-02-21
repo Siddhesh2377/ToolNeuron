@@ -25,11 +25,6 @@ object PluginManager {
     // Web Search is treated as a system tool with its own toggle
     const val WEB_SEARCH_PLUGIN_NAME = "Web Search"
 
-    // Known tool-calling model IDs
-    private val TOOL_CALLING_MODEL_IDS = setOf(
-        "ruvltra-claude-code-0.5b"
-    )
-
     const val TOOL_CALLING_MODEL_ID = "ruvltra-claude-code-0.5b"
     val TOOL_CALLING_MODEL = HuggingFaceModel(
         id = "ruvltra-claude-code-0.5b",
@@ -97,16 +92,10 @@ object PluginManager {
     /**
      * Update whether the loaded model supports tool calling.
      * Should be called when a model is loaded or unloaded.
+     * @param nativeSupports true if the model natively supports tool calling (has a chat template)
      */
-    fun setToolCallingModelLoaded(modelName: String?) {
-        val modelSupportsToolCalling = modelName != null && (
-                TOOL_CALLING_MODEL_IDS.any { modelName.contains(it, ignoreCase = true) } ||
-                modelName.contains("Code", ignoreCase = true) ||
-                modelName.contains("tool", ignoreCase = true) ||
-                modelName.contains("qwen", ignoreCase = true)
-        )
-        // If bypass is enabled, always report as loaded when any model is present
-        _isToolCallingModelLoaded.value = modelSupportsToolCalling || (_toolCallingBypassEnabled.value && modelName != null)
+    fun setToolCallingModelLoaded(nativeSupports: Boolean) {
+        _isToolCallingModelLoaded.value = nativeSupports || _toolCallingBypassEnabled.value
     }
 
     /**

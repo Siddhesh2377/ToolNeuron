@@ -4,16 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,7 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -31,20 +23,34 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,6 +59,18 @@ import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 
+/** Set to false to skip syntax highlighting in code blocks (improves scroll performance). */
+val LocalCodeHighlightEnabled = compositionLocalOf { true }
+
+/** Colors extracted once from MaterialTheme — passed to non-composable formatters to avoid
+ *  reading theme state inside every Text(), which would trigger recomposition on every frame. */
+@Immutable
+data class InlineColors(
+    val codeBg: Color,
+    val highlightBg: Color,
+    val mathColor: Color
+)
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MarkdownText(
@@ -60,42 +78,82 @@ fun MarkdownText(
 ) {
     val parsedContent = remember(text) { parseMarkdown(text) }
 
+    // Read theme colors ONCE — these flow to all children as stable params.
+    val colors = InlineColors(
+        codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+        mathColor = MaterialTheme.colorScheme.primary
+    )
+
     Column(
-        modifier = modifier.padding(horizontal = rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        modifier = modifier.padding(horizontal = rDp(4.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
     ) {
         parsedContent.forEach { element ->
-            when (element) {
-                is MarkdownElement.Heading1 -> Heading1(element.text)
-                is MarkdownElement.Heading2 -> Heading2(element.text)
-                is MarkdownElement.Heading3 -> Heading3(element.text)
-                is MarkdownElement.Heading4 -> Heading4(element.text)
-                is MarkdownElement.Heading5 -> Heading5(element.text)
-                is MarkdownElement.Heading6 -> Heading6(element.text)
-                is MarkdownElement.Body -> BodyText(element.text)
-                is MarkdownElement.BulletPoint -> BulletPoint(element.text, element.level)
-                is MarkdownElement.NumberedPoint -> NumberedPoint(element.text, element.number)
-                is MarkdownElement.Quote -> BlockQuote(element.text, element.level)
-                is MarkdownElement.CodeBlock -> CodeBlockExpanded(element.code, element.language)
-                is MarkdownElement.InlineCode -> InlineCodeText(element.text)
-                is MarkdownElement.Table -> TableView(
-                    element.headers,
-                    element.rows,
-                    element.alignments
-                )
-
-                is MarkdownElement.MathBlock -> MathBlockView(element.expression, element.isTypst)
-                is MarkdownElement.InlineMath -> InlineMathView(element.expression, element.isTypst)
-                is MarkdownElement.Divider -> HorizontalDivider(
-                    modifier = Modifier.padding(vertical = rDp(8.dp)),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-            }
+            MarkdownElementView(element, colors)
         }
     }
 }
 
-private sealed class MarkdownElement {
+/**
+ * Lazy version of MarkdownText — emits each markdown element as a separate LazyList item.
+ * Only visible items are composed, dramatically improving scroll performance for long messages.
+ *
+ * Use this instead of [MarkdownText] when the content is inside a [LazyColumn].
+ */
+fun LazyListScope.lazyMarkdownItems(
+    text: String,
+    keyPrefix: String,
+    modifier: Modifier = Modifier
+) {
+    val elements = parseMarkdown(text)
+
+    items(
+        count = elements.size,
+        key = { index -> "${keyPrefix}-md-$index" },
+        contentType = { index -> elements[index]::class.simpleName }
+    ) { index ->
+        val scheme = MaterialTheme.colorScheme
+        val colors = remember(scheme) {
+            InlineColors(
+                codeBg = scheme.surfaceVariant.copy(alpha = 0.5f),
+                highlightBg = scheme.primary.copy(alpha = 0.3f),
+                mathColor = scheme.primary
+            )
+        }
+        Box(modifier = modifier) {
+            MarkdownElementView(elements[index], colors)
+        }
+    }
+}
+
+/** Renders a single [MarkdownElement]. Shared by both [MarkdownText] and [lazyMarkdownItems]. */
+@Composable
+private fun MarkdownElementView(element: MarkdownElement, colors: InlineColors) {
+    when (element) {
+        is MarkdownElement.Heading1 -> Heading1(element.text, colors)
+        is MarkdownElement.Heading2 -> Heading2(element.text, colors)
+        is MarkdownElement.Heading3 -> Heading3(element.text, colors)
+        is MarkdownElement.Heading4 -> Heading4(element.text, colors)
+        is MarkdownElement.Heading5 -> Heading5(element.text, colors)
+        is MarkdownElement.Heading6 -> Heading6(element.text, colors)
+        is MarkdownElement.Body -> BodyText(element.text, colors)
+        is MarkdownElement.BulletPoint -> BulletPoint(element.text, element.level, colors)
+        is MarkdownElement.NumberedPoint -> NumberedPoint(element.text, element.number, colors)
+        is MarkdownElement.Quote -> BlockQuote(element.text, element.level, colors)
+        is MarkdownElement.CodeBlock -> CodeBlockExpanded(element.code, element.language)
+        is MarkdownElement.InlineCode -> InlineCodeText(element.text)
+        is MarkdownElement.Table -> TableView(element.headers, element.rows, element.alignments, colors)
+        is MarkdownElement.MathBlock -> MathBlockView(element.expression, element.isTypst)
+        is MarkdownElement.InlineMath -> InlineMathView(element.expression, element.isTypst)
+        is MarkdownElement.Divider -> HorizontalDivider(
+            modifier = Modifier.padding(vertical = rDp(4.dp)),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
+internal sealed class MarkdownElement {
     data class Heading1(val text: String) : MarkdownElement()
     data class Heading2(val text: String) : MarkdownElement()
     data class Heading3(val text: String) : MarkdownElement()
@@ -121,7 +179,7 @@ private sealed class MarkdownElement {
     object Divider : MarkdownElement()
 }
 
-private fun parseMarkdown(text: String): List<MarkdownElement> {
+internal fun parseMarkdown(text: String): List<MarkdownElement> {
     val elements = mutableListOf<MarkdownElement>()
     val lines = text.lines()
     var i = 0
@@ -346,27 +404,44 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 elements.add(MarkdownElement.Quote(text, level))
             }
 
-            line.startsWith("|") && i + 1 < lines.size && lines[i + 1].contains("|") -> {
-                val headers = line.split("|").filter { it.isNotBlank() }.map { it.trim() }
+            line.startsWith("|") && i + 1 < lines.size && isTableSeparator(lines[i + 1]) -> {
+                val headers = parseTableRow(line)
                 i++
                 val alignmentLine = lines[i]
-                val alignments = alignmentLine.split("|").filter { it.isNotBlank() }.map {
-                    when {
-                        it.trim().startsWith(":") && it.trim()
-                            .endsWith(":") -> MarkdownElement.Table.Alignment.CENTER
-
-                        it.trim().endsWith(":") -> MarkdownElement.Table.Alignment.RIGHT
-                        else -> MarkdownElement.Table.Alignment.LEFT
+                val alignments = alignmentLine.split("|")
+                    .filter { it.isNotBlank() }
+                    .map { cell ->
+                        val trimmed = cell.trim()
+                        when {
+                            trimmed.startsWith(":") && trimmed.endsWith(":") ->
+                                MarkdownElement.Table.Alignment.CENTER
+                            trimmed.endsWith(":") ->
+                                MarkdownElement.Table.Alignment.RIGHT
+                            else -> MarkdownElement.Table.Alignment.LEFT
+                        }
                     }
-                }
                 i++
                 val rows = mutableListOf<List<String>>()
-                while (i < lines.size && lines[i].startsWith("|")) {
-                    rows.add(lines[i].split("|").filter { it.isNotBlank() }.map { it.trim() })
+                while (i < lines.size && lines[i].trimStart().startsWith("|")) {
+                    val row = parseTableRow(lines[i])
+                    // Pad/trim row to match header column count
+                    val normalized = when {
+                        row.size < headers.size -> row + List(headers.size - row.size) { "" }
+                        row.size > headers.size -> row.take(headers.size)
+                        else -> row
+                    }
+                    rows.add(normalized)
                     i++
                 }
                 i--
-                elements.add(MarkdownElement.Table(headers, rows, alignments))
+                // Ensure alignments match column count
+                val finalAlignments = when {
+                    alignments.size < headers.size ->
+                        alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+                    alignments.size > headers.size -> alignments.take(headers.size)
+                    else -> alignments
+                }
+                elements.add(MarkdownElement.Table(headers, rows, finalAlignments))
             }
 
             line == "---" || line == "___" || line == "***" -> elements.add(MarkdownElement.Divider)
@@ -376,6 +451,26 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
     }
 
     return elements
+}
+
+/** Check if a line is a valid markdown table separator (e.g., |---|:---:|---:|) */
+private fun isTableSeparator(line: String): Boolean {
+    val trimmed = line.trim()
+    if (!trimmed.contains("|")) return false
+    val cells = trimmed.split("|").filter { it.isNotBlank() }
+    return cells.isNotEmpty() && cells.all { cell ->
+        cell.trim().matches(Regex("^:?-{1,}:?$"))
+    }
+}
+
+/** Parse a markdown table row into a list of cell strings, handling edge pipes. */
+private fun parseTableRow(line: String): List<String> {
+    val trimmed = line.trim()
+    // Remove leading/trailing pipe if present, then split
+    val inner = trimmed
+        .removePrefix("|")
+        .removeSuffix("|")
+    return inner.split("|").map { it.trim() }
 }
 
 /**
@@ -532,91 +627,100 @@ private fun processLatexCellContent(cell: String): String {
 }
 
 @Composable
-private fun Heading1(text: String) {
+private fun Heading1(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 28.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(8.dp))
-    )
-}
-
-@Composable
-private fun Heading2(text: String) {
-    Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
         fontSize = 24.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(7.dp))
-    )
-}
-
-@Composable
-private fun Heading3(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(6.dp))
-    )
-}
-
-@Composable
-private fun Heading4(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(5.dp))
-    )
-}
-
-@Composable
-private fun Heading5(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground,
+        fontWeight = FontWeight.Bold,
+        color = LocalContentColor.current,
         modifier = Modifier.padding(vertical = rDp(4.dp))
     )
 }
 
 @Composable
-private fun Heading6(text: String) {
+private fun Heading2(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
+        fontSize = 20.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = LocalContentColor.current,
         modifier = Modifier.padding(vertical = rDp(3.dp))
     )
 }
 
 @Composable
-private fun BodyText(text: String) {
+private fun Heading3(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Normal,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-        lineHeight = 22.sp
+        fontSize = 17.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(2.dp))
     )
 }
 
 @Composable
-private fun processInlineFormatting(text: String) = buildAnnotatedString {
+private fun Heading4(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(2.dp))
+    )
+}
+
+@Composable
+private fun Heading5(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(1.dp))
+    )
+}
+
+@Composable
+private fun Heading6(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current.copy(alpha = 0.87f),
+        modifier = Modifier.padding(vertical = rDp(1.dp))
+    )
+}
+
+@Composable
+private fun BodyText(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Normal,
+        color = LocalContentColor.current.copy(alpha = 0.87f),
+        lineHeight = 20.sp
+    )
+}
+
+/** Cached wrapper — call from @Composable contexts. Returns a remembered AnnotatedString. */
+@Composable
+private fun cachedInlineFormatting(text: String, colors: InlineColors): AnnotatedString {
+    return remember(text, colors) { buildInlineFormatted(text, colors) }
+}
+
+/**
+ * Pure function — NO @Composable, NO MaterialTheme reads.
+ * All colors are passed in via [InlineColors] so this never triggers recomposition.
+ */
+private fun buildInlineFormatted(text: String, colors: InlineColors): AnnotatedString = buildAnnotatedString {
     var i = 0
     val chars = text.toCharArray()
 
@@ -693,8 +797,8 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                     withStyle(
                         SpanStyle(
                             fontFamily = maple,
-                            background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            fontSize = 13.sp
+                            background = colors.codeBg,
+                            fontSize = 12.sp
                         )
                     ) {
                         append(" ${text.substring(i + 1, end)} ")
@@ -722,11 +826,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
             i + 1 < chars.size && chars[i] == '=' && chars[i + 1] == '=' -> {
                 val end = text.indexOf("==", i + 2)
                 if (end != -1) {
-                    withStyle(
-                        SpanStyle(
-                            background = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        )
-                    ) {
+                    withStyle(SpanStyle(background = colors.highlightBg)) {
                         append(text.substring(i + 2, end))
                     }
                     i = end + 2
@@ -745,7 +845,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                         SpanStyle(
                             fontFamily = maple,
                             fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.primary
+                            color = colors.mathColor
                         )
                     ) {
                         append(rendered)
@@ -766,7 +866,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                         SpanStyle(
                             fontFamily = maple,
                             fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.primary
+                            color = colors.mathColor
                         )
                     ) {
                         append(rendered)
@@ -779,87 +879,96 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
             }
 
             else -> {
-                append(chars[i])
-                i++
+                val c = chars[i]
+                if (c.isHighSurrogate() && i + 1 < chars.size && chars[i + 1].isLowSurrogate()) {
+                    // Keep surrogate pairs together (emojis, non-BMP chars)
+                    append(c)
+                    append(chars[i + 1])
+                    i += 2
+                } else {
+                    append(c)
+                    i++
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BulletPoint(text: String, level: Int) {
+private fun BulletPoint(text: String, level: Int, colors: InlineColors) {
     Row(
-        modifier = Modifier.padding(start = rDp((8 + level * 16).dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        modifier = Modifier.padding(start = rDp((4 + level * 12).dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Text(
             text = "•",
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = rDp(2.dp))
+            modifier = Modifier.padding(top = rDp(1.dp))
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun NumberedPoint(text: String, number: String) {
+private fun NumberedPoint(text: String, number: String, colors: InlineColors) {
     Row(
-        modifier = Modifier.padding(start = rDp(8.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        modifier = Modifier.padding(start = rDp(4.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Text(
             text = "$number.",
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = rDp(2.dp))
+            modifier = Modifier.padding(top = rDp(1.dp))
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun BlockQuote(text: String, level: Int) {
+private fun BlockQuote(text: String, level: Int, colors: InlineColors) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = rDp(((level - 1) * 12).dp))
-            .clip(RoundedCornerShape(rDp(8.dp)))
+            .padding(start = rDp(((level - 1) * 10).dp))
+            .clip(RoundedCornerShape(rDp(6.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(rDp(12.dp)), horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(rDp(8.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Box(
             modifier = Modifier
-                .width(rDp(3.dp))
-                .height(rDp(20.dp))
+                .width(rDp(2.dp))
+                .height(rDp(18.dp))
                 .background(MaterialTheme.colorScheme.primary)
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
@@ -870,152 +979,299 @@ private fun InlineCodeText(text: String) {
     Text(
         text = text,
         fontFamily = maple,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Normal,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+        color = LocalContentColor.current.copy(alpha = 0.85f),
         modifier = Modifier
             .clip(RoundedCornerShape(rDp(4.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .padding(horizontal = rDp(5.dp), vertical = rDp(1.dp))
     )
 }
 
+/**
+ * Canvas-drawn table — measures all text once, then draws everything in a single Canvas pass.
+ * Much faster than composable Row/Column/Text trees (no composable overhead per cell).
+ */
 @Composable
 private fun TableView(
     headers: List<String>,
     rows: List<List<String>>,
-    alignments: List<MarkdownElement.Table.Alignment>
+    alignments: List<MarkdownElement.Table.Alignment>,
+    colors: InlineColors
 ) {
-    val columnCount = headers.size.coerceAtLeast(1)
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    val altRowBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.10f)
+    val textColor = LocalContentColor.current
+    val dimTextColor = textColor.copy(alpha = 0.87f)
+    val colCount = headers.size.coerceAtLeast(1)
+    val density = LocalDensity.current
+    val cellPadH = with(density) { rDp(8.dp).toPx() }
+    val cellPadV = with(density) { rDp(6.dp).toPx() }
+    val dividerWidth = with(density) { rDp(1.dp).toPx() }
+    val cornerRadius = with(density) { rDp(8.dp).toPx() }
 
-    Box(
+    val textMeasurer = rememberTextMeasurer()
+
+    val headerStyle = TextStyle(
+        fontFamily = ManropeFontFamily,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = textColor,
+        lineHeight = 17.sp
+    )
+    val cellStyle = TextStyle(
+        fontFamily = ManropeFontFamily,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Normal,
+        color = dimTextColor,
+        lineHeight = 17.sp
+    )
+
+    // Pre-measure all cells. We do this inside a BoxWithConstraints to know max width.
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .horizontalScroll(rememberScrollState())
+            .clip(RoundedCornerShape(rDp(8.dp)))
     ) {
-        Column(
-            modifier = Modifier
-                .widthIn(min = rDp(200.dp))
-                .clip(RoundedCornerShape(rDp(10.dp)))
-                .border(
-                    width = rDp(1.dp),
-                    color = MaterialTheme.colorScheme.outlineVariant,
-                    shape = RoundedCornerShape(rDp(10.dp))
+        val totalWidth = with(density) { maxWidth.toPx() }
+        val colWidth = (totalWidth - dividerWidth * (colCount - 1)) / colCount
+        val cellTextWidth = (colWidth - cellPadH * 2).coerceAtLeast(1f).toInt()
+
+        // Measure header texts (with inline formatting: bold, italic, code, etc.)
+        val headerMeasured = remember(headers, cellTextWidth, colors) {
+            headers.map { h ->
+                textMeasurer.measure(
+                    text = buildInlineFormatted(h, colors),
+                    style = headerStyle,
+                    maxLines = 3,
+                    constraints = androidx.compose.ui.unit.Constraints(
+                        maxWidth = cellTextWidth
+                    )
                 )
-        ) {
-            // Header row
-            Row(
-                modifier = Modifier
-                    .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                    .padding(rDp(12.dp))
-            ) {
-                headers.forEachIndexed { index, header ->
-                    val alignment = alignments.getOrNull(index) ?: MarkdownElement.Table.Alignment.LEFT
-                    Text(
-                        text = header,
-                        fontFamily = ManropeFontFamily,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onBackground,
-                        textAlign = when (alignment) {
-                            MarkdownElement.Table.Alignment.LEFT -> TextAlign.Start
-                            MarkdownElement.Table.Alignment.CENTER -> TextAlign.Center
-                            MarkdownElement.Table.Alignment.RIGHT -> TextAlign.End
-                        },
-                        modifier = Modifier
-                            .widthIn(min = rDp(80.dp))
-                            .padding(horizontal = rDp(8.dp))
+            }
+        }
+
+        // Measure body texts (with inline formatting)
+        val rowsMeasured = remember(rows, cellTextWidth, colors) {
+            rows.map { row ->
+                (0 until colCount).map { colIndex ->
+                    val cell = row.getOrElse(colIndex) { "" }
+                    textMeasurer.measure(
+                        text = buildInlineFormatted(cell, colors),
+                        style = cellStyle,
+                        maxLines = 5,
+                        constraints = androidx.compose.ui.unit.Constraints(
+                            maxWidth = cellTextWidth
+                        )
                     )
                 }
             }
+        }
 
-            // Data rows
-            rows.forEach { row ->
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Row(
-                    modifier = Modifier.padding(rDp(12.dp))
-                ) {
-                    row.forEachIndexed { index, cell ->
-                        val alignment = alignments.getOrNull(index) ?: MarkdownElement.Table.Alignment.LEFT
-                        Text(
-                            text = cell,
-                            fontFamily = ManropeFontFamily,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Normal,
-                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-                            textAlign = when (alignment) {
-                                MarkdownElement.Table.Alignment.LEFT -> androidx.compose.ui.text.style.TextAlign.Start
-                                MarkdownElement.Table.Alignment.CENTER -> androidx.compose.ui.text.style.TextAlign.Center
-                                MarkdownElement.Table.Alignment.RIGHT -> androidx.compose.ui.text.style.TextAlign.End
-                            },
-                            modifier = Modifier
-                                .widthIn(min = rDp(80.dp))
-                                .padding(horizontal = rDp(8.dp))
-                        )
-                    }
+        // Compute row heights
+        val headerRowHeight = remember(headerMeasured) {
+            (headerMeasured.maxOfOrNull { it.size.height } ?: 0) + (cellPadV * 2)
+        }
+        val rowHeights = remember(rowsMeasured) {
+            rowsMeasured.map { cells ->
+                (cells.maxOfOrNull { it.size.height } ?: 0) + (cellPadV * 2)
+            }
+        }
+        val totalHeight = headerRowHeight + rowHeights.sum() +
+                dividerWidth * rows.size // horizontal dividers between rows
+
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(with(density) { totalHeight.toDp() })
+                .drawBehind {
+                    // Outer border
+                    drawRoundRect(
+                        color = outlineColor,
+                        size = Size(totalWidth, totalHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = dividerWidth)
+                    )
                 }
+        ) {
+            var y = 0f
+
+            // --- Header row ---
+            drawRect(
+                color = headerBg,
+                topLeft = Offset(0f, 0f),
+                size = Size(totalWidth, headerRowHeight)
+            )
+            drawTableRow(
+                measuredCells = headerMeasured,
+                colCount = colCount,
+                colWidth = colWidth,
+                cellPadH = cellPadH,
+                cellPadV = cellPadV,
+                dividerWidth = dividerWidth,
+                rowY = y,
+                rowHeight = headerRowHeight,
+                alignments = alignments,
+                outlineColor = outlineColor
+            )
+            y += headerRowHeight
+
+            // --- Data rows ---
+            rowsMeasured.forEachIndexed { rowIndex, cells ->
+                // Horizontal divider
+                drawRect(
+                    color = outlineColor.copy(alpha = 0.4f),
+                    topLeft = Offset(0f, y),
+                    size = Size(totalWidth, dividerWidth)
+                )
+                y += dividerWidth
+
+                val rh = rowHeights[rowIndex]
+
+                // Alternating row bg
+                if (rowIndex % 2 == 1) {
+                    drawRect(
+                        color = altRowBg,
+                        topLeft = Offset(0f, y),
+                        size = Size(totalWidth, rh)
+                    )
+                }
+
+                drawTableRow(
+                    measuredCells = cells,
+                    colCount = colCount,
+                    colWidth = colWidth,
+                    cellPadH = cellPadH,
+                    cellPadV = cellPadV,
+                    dividerWidth = dividerWidth,
+                    rowY = y,
+                    rowHeight = rh,
+                    alignments = alignments,
+                    outlineColor = outlineColor
+                )
+                y += rh
             }
         }
     }
 }
 
+/** Draw a single table row's cells + vertical dividers onto the Canvas. */
+private fun DrawScope.drawTableRow(
+    measuredCells: List<androidx.compose.ui.text.TextLayoutResult>,
+    colCount: Int,
+    colWidth: Float,
+    cellPadH: Float,
+    cellPadV: Float,
+    dividerWidth: Float,
+    rowY: Float,
+    rowHeight: Float,
+    alignments: List<MarkdownElement.Table.Alignment>,
+    outlineColor: Color
+) {
+    for (colIndex in 0 until colCount) {
+        val cellX = colIndex * (colWidth + dividerWidth)
+
+        // Vertical divider (between columns)
+        if (colIndex > 0) {
+            drawRect(
+                color = outlineColor.copy(alpha = 0.3f),
+                topLeft = Offset(cellX - dividerWidth, rowY),
+                size = Size(dividerWidth, rowHeight)
+            )
+        }
+
+        if (colIndex < measuredCells.size) {
+            val measured = measuredCells[colIndex]
+            val align = alignments.getOrNull(colIndex) ?: MarkdownElement.Table.Alignment.LEFT
+            val textWidth = measured.size.width.toFloat()
+            val availableWidth = colWidth - cellPadH * 2
+
+            val offsetX = when (align) {
+                MarkdownElement.Table.Alignment.CENTER -> cellX + cellPadH + (availableWidth - textWidth).coerceAtLeast(0f) / 2
+                MarkdownElement.Table.Alignment.RIGHT -> cellX + cellPadH + (availableWidth - textWidth).coerceAtLeast(0f)
+                else -> cellX + cellPadH
+            }
+
+            drawText(
+                textLayoutResult = measured,
+                topLeft = Offset(offsetX, rowY + cellPadV)
+            )
+        }
+    }
+}
+
+/**
+ * Code block — collapsed = ultra-light header only (no theme resolution, no text measurement).
+ * Syntax highlighting / text rendering only happens when expanded.
+ */
 @Composable
 private fun CodeBlockExpanded(code: String, language: String) {
     var isExpanded by remember { mutableStateOf(false) }
     val context = LocalContext.current
-    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // Lightweight colors for header — no full theme resolution needed
+    val headerBg = remember(isDark) {
+        if (isDark) Color(0xFF282C34) else Color(0xFFF5F5F5)
+    }
+    val headerFg = remember(isDark) {
+        if (isDark) Color(0xFFABB2BF) else Color(0xFF383A42)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .clip(RoundedCornerShape(rDp(8.dp)))
+            .background(headerBg.copy(alpha = 0.85f))
     ) {
+        // Compact header: language label + copy/expand buttons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(10.dp)),
+                .padding(horizontal = rDp(10.dp), vertical = rDp(6.dp)),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ActionButton(
                     onClickListener = {},
                     icon = R.drawable.code,
                     contentDescription = "Code",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f)
                     )
                 )
                 if (language.isNotEmpty()) {
                     Text(
                         text = language.uppercase(),
                         fontFamily = maple,
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        color = headerFg.copy(alpha = 0.5f)
                     )
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+            Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
                 ActionButton(
                     onClickListener = {
+                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         val clip = ClipData.newPlainText(language, code)
                         clipboardManager.setPrimaryClip(clip)
-                        Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
                     },
                     icon = R.drawable.copy,
                     contentDescription = "Copy",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f)
                     )
                 )
                 ActionToggleButton(
@@ -1023,50 +1279,67 @@ private fun CodeBlockExpanded(code: String, language: String) {
                     onCheckedChange = { isExpanded = !isExpanded },
                     icon = if (isExpanded) R.drawable.up else R.drawable.down,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        checkedContainerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
-                        checkedContentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f),
+                        checkedContainerColor = headerFg.copy(0.15f),
+                        checkedContentColor = headerFg.copy(0.8f)
                     )
                 )
             }
         }
 
-        AnimatedVisibility(
-            visible = isExpanded, enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(), exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
-        ) {
-            Column {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(rDp(12.dp))
-                ) {
-                    Text(
-                        text = code,
-                        fontFamily = maple,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                        lineHeight = 20.sp
-                    )
-                }
-            }
+        // Only compose the code content when expanded — zero cost when collapsed
+        if (isExpanded) {
+            CodeBlockContent(code, language, headerFg, headerBg)
         }
     }
+}
+
+/** Deferred code content — only composed when the block is expanded. */
+@Composable
+private fun CodeBlockContent(code: String, language: String, fg: Color, bg: Color) {
+    val highlightEnabled = LocalCodeHighlightEnabled.current
+    val syntaxTheme = resolveSyntaxTheme()
+
+    val highlighted = remember(code, language, highlightEnabled) {
+        if (highlightEnabled && language.isNotBlank()) highlightCode(code, language, syntaxTheme)
+        else null
+    }
+
+    HorizontalDivider(color = fg.copy(alpha = 0.1f))
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp))
+    ) {
+        if (highlighted != null) {
+            Text(
+                text = highlighted,
+                fontFamily = maple,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                lineHeight = 18.sp
+            )
+        } else {
+            Text(
+                text = code,
+                fontFamily = maple,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                color = fg,
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+/** Quick luminance check (no full Color.luminance() overhead). */
+private fun Color.luminance(): Float {
+    return 0.299f * red + 0.587f * green + 0.114f * blue
 }
 
 /**
@@ -1716,6 +1989,12 @@ private val mathSymbols = mapOf(
     "#arrow.b" to "↓"
 )
 
+/** Pre-sorted by key length (longest first) so that longer LaTeX commands are matched before
+ *  shorter prefixes (e.g. "\alpha" before "\alp"). Computed once and cached. */
+private val sortedMathSymbols: List<Pair<String, String>> by lazy {
+    mathSymbols.entries.sortedByDescending { it.key.length }.map { it.key to it.value }
+}
+
 // Superscript Unicode mappings - extended coverage
 private val superscriptMap = mapOf(
     '0' to '⁰',
@@ -2209,8 +2488,8 @@ private fun renderMathToUnicode(expression: String): String {
     // Handle left/right delimiters
     result = processDelimiters(result)
 
-    // Replace LaTeX/Typst symbols with Unicode
-    mathSymbols.entries.sortedByDescending { it.key.length }.forEach { (latex, unicode) ->
+    // Replace LaTeX/Typst symbols with Unicode (pre-sorted by key length, longest first)
+    sortedMathSymbols.forEach { (latex, unicode) ->
         result = result.replace(latex, unicode)
     }
 
@@ -2452,36 +2731,31 @@ private fun MathBlockView(expression: String, isTypst: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
+            .clip(RoundedCornerShape(rDp(8.dp)))
             .background(bgColor)
     ) {
-        // Header with icon
+        // Compact header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = rDp(10.dp), vertical = rDp(5.dp)),
+            horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "∑",
-                    fontFamily = maple,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = mathColor
-                )
-                Text(
-                    text = if (isTypst) "TYPST" else "MATH",
-                    fontFamily = maple,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                )
-            }
+            Text(
+                text = "∑",
+                fontFamily = maple,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = mathColor
+            )
+            Text(
+                text = if (isTypst) "TYPST" else "MATH",
+                fontFamily = maple,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = LocalContentColor.current.copy(alpha = 0.5f)
+            )
         }
 
         HorizontalDivider(
@@ -2493,16 +2767,17 @@ private fun MathBlockView(expression: String, isTypst: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(rDp(16.dp)), contentAlignment = Alignment.Center
+                .padding(rDp(10.dp)),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = renderedMath,
                 fontFamily = maple,
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onBackground,
-                lineHeight = 28.sp
+                color = LocalContentColor.current,
+                lineHeight = 24.sp
             )
         }
     }
@@ -2515,13 +2790,13 @@ private fun InlineMathView(expression: String, isTypst: Boolean) {
     Text(
         text = renderedMath,
         fontFamily = maple,
-        fontSize = 15.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight.Normal,
         fontStyle = FontStyle.Italic,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
             .clip(RoundedCornerShape(rDp(4.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .padding(horizontal = rDp(5.dp), vertical = rDp(1.dp))
     )
 }

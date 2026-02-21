@@ -46,17 +46,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .map { models -> models.any { it.providerType == ProviderType.TTS } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
-    // Tool calling model install state - check if a GGUF model with "Code" in name is installed
+    // Tool calling model install state — any GGUF model can support tool calling
+    // (actual compatibility is checked at load time via native chat-template detection)
     val hasToolCallingModel: StateFlow<Boolean> = modelRepository.getAllModels()
         .map { models ->
-            models.any { model ->
-                model.providerType == ProviderType.GGUF && (
-                    model.modelName.contains("Code", ignoreCase = true) ||
-                    model.modelName.contains("tool", ignoreCase = true) ||
-                    model.modelName.contains("qwen", ignoreCase = true) ||
-                    model.id.contains(PluginManager.TOOL_CALLING_MODEL_ID, ignoreCase = true)
-                )
-            }
+            models.any { model -> model.providerType == ProviderType.GGUF }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
@@ -84,6 +78,12 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     val loadTTSOnStart: StateFlow<Boolean> = appSettingsDataStore.loadTTSOnStart
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val codeHighlightEnabled: StateFlow<Boolean> = appSettingsDataStore.codeHighlightEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val aiMemoryEnabled: StateFlow<Boolean> = appSettingsDataStore.aiMemoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
     // TTS settings
@@ -128,6 +128,14 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setLoadTTSOnStart(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateLoadTTSOnStart(enabled) }
+    }
+
+    fun setCodeHighlightEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateCodeHighlightEnabled(enabled) }
+    }
+
+    fun setAiMemoryEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateAiMemoryEnabled(enabled) }
     }
 
     // TTS settings updaters

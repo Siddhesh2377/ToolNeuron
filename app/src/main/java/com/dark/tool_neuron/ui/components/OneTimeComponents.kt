@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowOutward
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.SubdirectoryArrowLeft
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -26,6 +27,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.painterResource
@@ -115,8 +119,38 @@ fun TitleRow(
 
 @Composable
 fun ModelListItem(
-    modifier: Modifier, model: Model, isLoaded: Boolean, onClickListener: (Model) -> Unit
+    modifier: Modifier,
+    model: Model,
+    isLoaded: Boolean,
+    onClickListener: (Model) -> Unit,
+    onDeleteListener: ((Model) -> Unit)? = null
 ) {
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    if (showDeleteConfirm) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            title = { Text("Delete Model") },
+            text = { Text("Delete \"${model.modelName}\"? This will remove the model file from storage.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        onDeleteListener?.invoke(model)
+                    },
+                    colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) { Text("Delete") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = { showDeleteConfirm = false }
+                ) { Text("Cancel") }
+            }
+        )
+    }
+
     Card(
         modifier = modifier, colors = CardDefaults.cardColors(
             containerColor = if (isLoaded) MaterialTheme.colorScheme.primary.copy(0.12f)
@@ -160,32 +194,50 @@ fun ModelListItem(
                 }
             }
 
-            androidx.compose.animation.Crossfade(
-                targetState = isLoaded,
-                label = "button_state"
-            ) { loaded ->
-                if (loaded) {
-                    ActionTextButton(
-                        onClickListener = { onClickListener(model) },
-                        icon = Icons.Default.SubdirectoryArrowLeft,
-                        text = "Unload",
-                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
-                            contentColor = MaterialTheme.colorScheme.error
-                        ),
-                        shape = RoundedCornerShape(rDp(8.dp))
-                    )
-                } else {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (onDeleteListener != null && !isLoaded) {
                     ActionButton(
-                        onClickListener = { onClickListener(model) },
-                        icon = Icons.Default.ArrowOutward,
-                        contentDescription = "Load",
+                        onClickListener = { showDeleteConfirm = true },
+                        icon = Icons.Default.Delete,
+                        contentDescription = "Delete",
                         shape = RoundedCornerShape(rDp(8.dp)),
                         colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
-                            contentColor = MaterialTheme.colorScheme.primary
+                            containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
+                            contentColor = MaterialTheme.colorScheme.error
                         )
                     )
+                }
+
+                androidx.compose.animation.Crossfade(
+                    targetState = isLoaded,
+                    label = "button_state"
+                ) { loaded ->
+                    if (loaded) {
+                        ActionTextButton(
+                            onClickListener = { onClickListener(model) },
+                            icon = Icons.Default.SubdirectoryArrowLeft,
+                            text = "Unload",
+                            colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
+                                contentColor = MaterialTheme.colorScheme.error
+                            ),
+                            shape = RoundedCornerShape(rDp(8.dp))
+                        )
+                    } else {
+                        ActionButton(
+                            onClickListener = { onClickListener(model) },
+                            icon = Icons.Default.ArrowOutward,
+                            contentDescription = "Load",
+                            shape = RoundedCornerShape(rDp(8.dp)),
+                            colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
+                                contentColor = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
                 }
             }
         }

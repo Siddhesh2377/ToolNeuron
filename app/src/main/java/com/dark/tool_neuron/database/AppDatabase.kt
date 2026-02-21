@@ -7,17 +7,22 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.dark.tool_neuron.database.dao.AiMemoryDao
 import com.dark.tool_neuron.database.dao.ModelConfigDao
 import com.dark.tool_neuron.database.dao.ModelDao
+import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.database.dao.RagDao
 import com.dark.tool_neuron.models.converters.Converters
+import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.models.table_schema.Persona
+import java.util.UUID
 
 @Database(
-    entities = [Model::class, ModelConfig::class, InstalledRag::class],
-    version = 4,
+    entities = [Model::class, ModelConfig::class, InstalledRag::class, Persona::class, AiMemory::class],
+    version = 6,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -25,6 +30,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun modelDao(): ModelDao
     abstract fun modelConfigDao(): ModelConfigDao
     abstract fun ragDao(): RagDao
+    abstract fun personaDao(): PersonaDao
+    abstract fun aiMemoryDao(): AiMemoryDao
 
     companion object {
         @Volatile
@@ -114,6 +121,102 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Create personas table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS personas (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL,
+                        avatar TEXT NOT NULL,
+                        system_prompt TEXT NOT NULL,
+                        greeting TEXT NOT NULL,
+                        is_default INTEGER NOT NULL,
+                        created_at INTEGER NOT NULL
+                    )
+                """.trimIndent())
+
+                // Create ai_memories table
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS ai_memories (
+                        id TEXT PRIMARY KEY NOT NULL,
+                        fact TEXT NOT NULL,
+                        category TEXT NOT NULL,
+                        source_chat_id TEXT,
+                        created_at INTEGER NOT NULL,
+                        updated_at INTEGER NOT NULL,
+                        last_accessed_at INTEGER NOT NULL,
+                        access_count INTEGER NOT NULL,
+                        embedding BLOB
+                    )
+                """.trimIndent())
+
+                // Index on ai_memories.category
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_ai_memories_category ON ai_memories (category)")
+
+                // Seed default personas
+                seedDefaultPersonas(db)
+            }
+        }
+
+        private val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Add character card columns to personas table
+                db.execSQL("ALTER TABLE personas ADD COLUMN description TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE personas ADD COLUMN personality TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE personas ADD COLUMN scenario TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE personas ADD COLUMN example_messages TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE personas ADD COLUMN alternate_greetings TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE personas ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
+                db.execSQL("ALTER TABLE personas ADD COLUMN avatar_uri TEXT")
+                db.execSQL("ALTER TABLE personas ADD COLUMN creator_notes TEXT NOT NULL DEFAULT ''")
+                // Migrate legacy systemPrompt into description
+                db.execSQL("UPDATE personas SET description = system_prompt WHERE system_prompt != '' AND description = ''")
+            }
+        }
+
+        private fun seedDefaultPersonas(db: SupportSQLiteDatabase) {
+            val now = System.currentTimeMillis()
+
+            db.execSQL(
+                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(UUID.randomUUID().toString(), "Assistant", "", "", "", now)
+            )
+            db.execSQL(
+                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(),
+                    "Luna",
+                    "\uD83C\uDF19",
+                    "You are Luna, a warm and curious companion. You speak with gentle enthusiasm, use expressive language, and genuinely care about the user's feelings. You ask thoughtful follow-up questions, celebrate their wins, and offer comfort when they're down. You're playful but never dismissive, and you remember what matters to them.",
+                    "Hey there! I'm Luna. What's on your mind today?",
+                    now + 1
+                )
+            )
+            db.execSQL(
+                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(),
+                    "CodeBuddy",
+                    "\uD83D\uDCBB",
+                    "You are CodeBuddy, a focused and efficient programming assistant. You give concise, practical answers with code examples. You prefer showing over telling. When debugging, you think step-by-step. You know multiple languages but always match the user's tech stack. You avoid unnecessary pleasantries and get straight to the solution.",
+                    "What are we building?",
+                    now + 2
+                )
+            )
+            db.execSQL(
+                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(),
+                    "Sage",
+                    "\uD83D\uDCDA",
+                    "You are Sage, a thoughtful advisor who gives balanced, well-considered perspectives. You explore multiple angles before offering guidance. You ask clarifying questions to understand the full picture. You draw from diverse knowledge to give nuanced advice. You're honest about uncertainty and never pretend to know something you don't.",
+                    "I'm here to help you think things through. What's the situation?",
+                    now + 3
+                )
+            )
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -121,8 +224,14 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "llm_models_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-                    .fallbackToDestructiveMigration()
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+                    .addCallback(object : Callback() {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            super.onCreate(db)
+                            seedDefaultPersonas(db)
+                        }
+                    })
+                    .fallbackToDestructiveMigration(true)
                     .build()
                 INSTANCE = instance
                 instance

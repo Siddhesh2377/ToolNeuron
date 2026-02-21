@@ -3,6 +3,8 @@ package com.dark.tool_neuron.di
 import android.app.Application
 import android.content.Context
 import com.dark.tool_neuron.database.AppDatabase
+import com.dark.tool_neuron.database.dao.AiMemoryDao
+import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.vault.VaultHelper
@@ -51,16 +53,16 @@ object AppContainer {
 
     private fun initVault(context: Context) {
         appScope.launch {
-            try {
-                VaultHelper.initialize(context)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                // Retry once after a short delay
-                kotlinx.coroutines.delay(500)
+            val maxRetries = 3
+            for (attempt in 1..maxRetries) {
                 try {
                     VaultHelper.initialize(context)
-                } catch (retryException: Exception) {
-                    retryException.printStackTrace()
+                    break
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    if (attempt < maxRetries) {
+                        kotlinx.coroutines.delay(500L * attempt)
+                    }
                 }
             }
         }
@@ -105,4 +107,10 @@ object AppContainer {
      * Exposes the vault readiness StateFlow for UI observation
      */
     val vaultReadyState = VaultHelper.isReady
+
+    fun getPersonaDao(): PersonaDao = database.personaDao()
+
+    fun getAiMemoryDao(): AiMemoryDao = database.aiMemoryDao()
+
+    fun getGenerationManager(): GenerationManager = generationManager
 }

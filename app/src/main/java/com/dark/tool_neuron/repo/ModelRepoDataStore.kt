@@ -22,7 +22,7 @@ class ModelRepositoryDataStore(private val context: Context) {
         private val MODEL_REPOS_KEY = stringPreferencesKey("model_repositories")
 
         val DEFAULT_REPOSITORIES = listOf(
-            // === TEXT GENERATION: 3 curated repos ===
+            // === GENERAL ===
             HFModelRepository(
                 id = "qwen2_5_0_5b_instruct",
                 name = "Qwen 2.5 Instruct (0.5B)",
@@ -40,12 +40,37 @@ class ModelRepositoryDataStore(private val context: Context) {
                 category = ModelCategory.GENERAL
             ),
             HFModelRepository(
-                id = "unsloth-deepseek-r1",
-                name = "DeepSeek R1 Qwen3 8B",
-                repoPath = "unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF",
+                id = "liquidai-lfm2-350m",
+                name = "LFM2 350M",
+                repoPath = "LiquidAI/LFM2-350M-GGUF",
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.GENERAL
+            ),
+            // === UNCENSORED ===
+            HFModelRepository(
+                id = "gemma3-emophilic-1b",
+                name = "Gemma3 Emophilic (1B)",
+                repoPath = "Novaciano/Gemma3-Emophilic-1B-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
+            ),
+            HFModelRepository(
+                id = "gemma3-emotional-1b",
+                name = "Gemma3 Emotional (1B)",
+                repoPath = "mradermacher/Gemma3-Emotional-1B-i1-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
+            ),
+            HFModelRepository(
+                id = "sex-roleplay-1b",
+                name = "SEX ROLEPLAY 3.2 (1B)",
+                repoPath = "mradermacher/SEX_ROLEPLAY-3.2-1B-i1-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
             )
         )
     }

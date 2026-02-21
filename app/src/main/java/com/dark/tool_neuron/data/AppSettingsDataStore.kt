@@ -21,8 +21,11 @@ class AppSettingsDataStore(private val context: Context) {
         private val TOOL_CALLING_BYPASS_ENABLED = booleanPreferencesKey("tool_calling_bypass_enabled")
         private val IMAGE_BLUR_ENABLED = booleanPreferencesKey("image_blur_enabled")
         private val LOAD_TTS_ON_START = booleanPreferencesKey("load_tts_on_start")
+        private val CODE_HIGHLIGHT_ENABLED = booleanPreferencesKey("code_highlight_enabled")
         private val LAST_CHAT_ID = stringPreferencesKey("last_chat_id")
         private val LAST_MODEL_ID = stringPreferencesKey("last_model_id")
+        private val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
+        private val AI_MEMORY_ENABLED = booleanPreferencesKey("ai_memory_enabled")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -49,6 +52,9 @@ class AppSettingsDataStore(private val context: Context) {
         prefs[LOAD_TTS_ON_START] ?: true
     }
 
+    val codeHighlightEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[CODE_HIGHLIGHT_ENABLED] ?: true
+    }
 
     suspend fun updateStreamingEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[STREAMING_ENABLED] = enabled }
@@ -72,6 +78,10 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateLoadTTSOnStart(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[LOAD_TTS_ON_START] = enabled }
+    }
+
+    suspend fun updateCodeHighlightEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[CODE_HIGHLIGHT_ENABLED] = enabled }
     }
 
     val lastChatId: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->
@@ -100,6 +110,28 @@ class AppSettingsDataStore(private val context: Context) {
                 prefs.remove(LAST_MODEL_ID)
             }
         }
+    }
+
+    val activePersonaId: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[ACTIVE_PERSONA_ID]
+    }
+
+    suspend fun saveActivePersonaId(personaId: String?) {
+        context.appSettingsDataStore.edit { prefs ->
+            if (personaId != null) {
+                prefs[ACTIVE_PERSONA_ID] = personaId
+            } else {
+                prefs.remove(ACTIVE_PERSONA_ID)
+            }
+        }
+    }
+
+    val aiMemoryEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[AI_MEMORY_ENABLED] ?: true
+    }
+
+    suspend fun updateAiMemoryEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[AI_MEMORY_ENABLED] = enabled }
     }
 
 }

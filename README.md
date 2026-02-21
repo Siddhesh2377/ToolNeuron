@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Android_12%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-1.2.1-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
+[![Release](https://img.shields.io/badge/Release-2.0.0-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
 <p align="left">
@@ -15,7 +15,7 @@
   </a>
 </p>
 
-ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, and sophisticated memory management. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
+ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, AI character cards (TavernAI v2 compatible), persistent AI memory, and sophisticated memory management. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
 
 [Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
 [Join Discord](https://discord.gg/mVPwHDhrAP) ·
@@ -35,7 +35,11 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 **On-Device TTS**: Text-to-speech with 10 voices, 5 languages, adjustable speed and quality — all processed locally.
 
-**Plugin System**: Built-in web search, calculator, and developer utilities — extensible with custom plugins.
+**AI Character Cards**: Full TavernAI v2 compatible persona system — import/export character cards, avatar images, template variables (`{{char}}`/`{{user}}`), and post-history reinforcement for consistent roleplay.
+
+**Persistent AI Memory**: Mem0-inspired memory system that learns about you across conversations — automatic fact extraction, deduplication, forgetting curve, and persona-aware filtering.
+
+**Plugin System**: 7 built-in plugins — web search, file manager, calculator, clipboard, date/time, device info, and developer utilities — extensible with custom plugins.
 
 **Advanced Features**: Function calling, multi-modal generation, customizable inference parameters, and concurrent model downloads.
 
@@ -47,6 +51,8 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 - [Text Generation](#text-generation)
 - [Image Generation](#image-generation)
 - [Text-to-Speech (TTS)](#text-to-speech-tts)
+- [AI Personas & Character Cards](#ai-personas--character-cards)
+- [AI Memory System](#ai-memory-system)
 - [Plugin System](#plugin-system)
 - [RAG System (Document Intelligence)](#rag-system-document-intelligence)
 - [Memory Vault (Secure Storage)](#memory-vault-secure-storage)
@@ -69,17 +75,72 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 | Feature | Description |
 |---------|-------------|
-| **Text Generation** | Run any GGUF model locally (Llama, Mistral, Gemma, Phi, etc.) with streaming output |
+| **Text Generation** | Run any GGUF model locally (Llama, Mistral, Gemma, Phi, Qwen, etc.) with streaming output |
 | **Image Generation** | Stable Diffusion 1.5 with censored & uncensored variants, inpainting support |
 | **Text-to-Speech** | On-device TTS with 10 voices, 5 languages, adjustable speed and denoising steps |
-| **Plugin System** | Web search, calculator, and dev utils plugins with tool calling integration |
-| **RAG System** | Document injection with semantic search, encrypted knowledge bases, multi-source support |
+| **AI Character Cards** | TavernAI v2 compatible personas with import/export, avatar images, template vars, post-history reinforcement |
+| **AI Memory** | Persistent memory across conversations — automatic fact extraction, deduplication, forgetting curve |
+| **Plugin System** | 7 plugins (web search, file manager, calculator, clipboard, date/time, device info, dev utils) with tool calling |
+| **RAG System** | Document injection with hybrid search (BM25 + vector + RRF + MMR), encrypted knowledge bases |
 | **Memory Vault** | Hardware-backed AES-256-GCM encryption, WAL crash recovery, LZ4 compression |
 | **Document Processing** | Parse PDF, Word (.doc/.docx), Excel (.xls/.xlsx), EPUB, and plain text |
-| **Model Store** | Browse and download models from HuggingFace repositories in-app |
-| **Function Calling** | Tool/function calling with grammar-based optimization |
+| **Model Store** | Browse and download models from HuggingFace — General, Coding, Medical, Uncensored categories |
+| **Function Calling** | Grammar-constrained tool calling with multi-turn agent execution (up to 5 rounds) |
 | **Secure Storage** | Content deduplication, three-tier caching, automatic defragmentation |
 | **No Permissions** | Load models without storage permissions using Android SAF |
+
+---
+
+## AI Personas & Character Cards
+
+Full character card system compatible with **TavernAI v2 / SillyTavern** format. Create, edit, import, and export AI personas with rich personality definitions.
+
+### Character Card Fields
+
+| Field | Description |
+|-------|-------------|
+| **Name** | Character's display name |
+| **Avatar** | Image or emoji avatar (stored locally) |
+| **Description** | Character background, lore, and traits |
+| **Personality** | Core personality traits (PList or prose) |
+| **Scenario** | Current scene or context |
+| **First Message** | Opening greeting |
+| **Alternate Greetings** | Multiple greeting variations |
+| **Example Messages** | Dialogue samples for style calibration |
+| **Tags** | Categorization tags |
+| **Creator Notes** | Author notes (not sent to model) |
+| **System Prompt** | Legacy raw system prompt (fallback) |
+
+### Key Features
+- **Template Variables**: `{{char}}` resolves to persona name, `{{user}}` resolves to "User" — applied throughout system prompt and messages
+- **Identity Framing**: Automatic "You are {{char}}" directive prevents the model from confusing character/user identity
+- **Post-History Reinforcement**: Compressed personality reminder injected after chat history (most influential position for small models, based on SillyTavern/MiniMax research)
+- **TavernAI v2 Import/Export**: Import `.json` character cards from SillyTavern, Chub.ai, or any TavernAI v2 source. Export your personas to share
+- **Avatar Images**: Pick images from gallery, stored locally in app files (no external URI permissions needed)
+- **Default Personas**: Ships with Assistant, Luna, CodeBuddy, and Sage
+
+### How It Works
+System prompt is assembled from structured fields: description + personality + scenario + example messages. If no structured fields exist, falls back to raw `systemPrompt`. The post-history instruction is injected right before the model generates, providing maximum influence on small on-device models.
+
+---
+
+## AI Memory System
+
+Persistent memory that lets the AI **remember facts about you** across conversations. Inspired by [Mem0](https://github.com/mem0ai/mem0).
+
+### How It Works
+1. After each conversation turn, the **MemoryExtractor** uses the loaded LLM to extract user facts
+2. Facts are deduplicated using **Jaccard similarity** (threshold 0.7) with AUDN cycle (Add/Update/Delete/Noop)
+3. Stored memories are injected into the system prompt as context for future conversations
+4. **Persona-aware**: When a character persona is active, the extractor filters out roleplay traits — only real user facts are saved
+
+### Memory Features
+- **Automatic Extraction**: Facts extracted from conversations without user intervention
+- **Categories**: Personal, Preference, Work, Interest, General
+- **Forgetting Curve**: Memories decay over time based on access frequency and recency
+- **Memory Browser**: View, search, filter, edit, and delete memories from the AI Memory screen
+- **Manual Memories**: Add custom facts the AI should remember
+- **Source Tracking**: Each memory links back to the conversation it came from
 
 ---
 
@@ -179,7 +240,7 @@ All TTS preferences are persisted and configurable from the Settings screen:
 
 Extensible plugin architecture that integrates with LLM tool calling. Plugins execute locally and render custom UI for results.
 
-### Built-in Plugins
+### Built-in Plugins (7)
 
 #### Web Search
 - **Engine**: DuckDuckGo search with configurable result count (5–10)
@@ -187,11 +248,30 @@ Extensible plugin architecture that integrates with LLM tool calling. Plugins ex
 - **Safe Search**: Optional safe search filtering
 - **Custom UI**: Rich display of search results and scraped content
 
+#### File Manager
+- **File Operations**: List files, read text files, create files
+- **Document Reading**: PDF and DOCX parsing via DocumentParser
+- **Search**: Find files by name across app directories
+
 #### Calculator
 - **Expressions**: Supports +, -, *, /, ^, %, parentheses
 - **Functions**: sqrt, sin, cos, tan, asin, acos, atan, log, log10, ln, abs, ceil, floor, round
 - **Constants**: pi, e
 - **Unit Conversion**: Length (m, km, mi, ft, in...), weight (kg, lb, oz...), time (s, min, h, day), data (b, kb, mb, gb, tb), temperature (C, F, K)
+
+#### Clipboard
+- **Read**: Access current clipboard content
+- **Write**: Copy text to system clipboard
+
+#### Date & Time
+- **Current Time**: Get date/time with timezone support
+- **Arithmetic**: Add/subtract days, hours, minutes from dates
+- **Timezone Conversion**: Convert between any timezones
+
+#### Device Info
+- **System**: OS version, device model, CPU architecture
+- **Resources**: RAM usage, battery level, storage available
+- **Network**: Connectivity status
 
 #### Dev Utils
 - **Text Transforms**: uppercase, lowercase, reverse, title_case, snake_case, camel_case, trim
@@ -728,12 +808,13 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 - SHA-256 content deduplication
 - Full-text and semantic search indices
 
-**Database Schema**:
+**Database Schema** (Room v6, 5 entities):
 - Models table (GGUF/SD metadata)
 - ModelConfig table (loading + inference params)
 - InstalledRAGs table (RAG metadata with status)
-- Chat/Message tables (conversation history)
-- DataStore (preferences)
+- Personas table (character cards with TavernAI v2 fields)
+- AiMemories table (extracted user facts with categories, embeddings, forgetting curve)
+- DataStore (preferences — settings, active persona, TTS config)
 
 ### Performance Benchmarks
 
@@ -845,32 +926,78 @@ cd ToolNeuron
 
 ## Roadmap
 
-### Version 1.2.0 (Current - January 2026)
-- ✅ Text generation with any GGUF model
-- ✅ Image generation with SD 1.5
-- ✅ HuggingFace repository integration
-- ✅ Encrypted Memory Vault with WAL
-- ✅ RAG system with document injection
-- ✅ Secure RAG creation with encryption
-- ✅ Document processing (PDF, Word, Excel, EPUB)
-- ✅ Model configuration editor
-- ✅ Concurrent model downloads
-- ✅ Function calling support
-- ✅ Inpainting support
-- ✅ Text-to-Speech (10 voices, 5 languages, NNAPI, auto-speak)
-- ✅ Plugin system with UI (web search, calculator, dev utils)
-- ✅ Settings screen with persistent preferences
-- ✅ On-demand TTS model loading
+### Version 2.0.0 (Current - February 2026)
 
-### Version 1.3 (Q2 2026)
+**AI Personas & Character Cards**:
+- ✅ TavernAI v2 compatible character card system
+- ✅ Full character editor (description, personality, scenario, example messages, alternate greetings, tags)
+- ✅ Avatar image support (local storage, Coil 3)
+- ✅ Template variables (`{{char}}`, `{{user}}`)
+- ✅ Identity framing and post-history reinforcement for small models
+- ✅ TavernAI v2 JSON import/export
+- ✅ Default personas (Assistant, Luna, CodeBuddy, Sage)
+
+**AI Memory System**:
+- ✅ Persistent cross-conversation memory (Mem0-inspired)
+- ✅ Automatic fact extraction via LLM
+- ✅ AUDN deduplication (Jaccard similarity)
+- ✅ Persona-aware extraction (filters out roleplay traits)
+- ✅ Memory categories (Personal, Preference, Work, Interest, General)
+- ✅ Forgetting curve with access-based reinforcement
+- ✅ Memory browser screen (search, filter, edit, delete)
+
+**Enhanced Chat Experience**:
+- ✅ Thinking mode toggle for supported models
+- ✅ Regenerate last message
+- ✅ Code syntax highlighting (toggleable)
+- ✅ Improved markdown rendering with LazyList integration
+- ✅ Character card quick-access in bottom bar
+
+**RAG Pipeline Improvements**:
+- ✅ Hybrid retrieval: FTS4 BM25 + vector search + RRF + MMR
+- ✅ Confidence gating for low-quality results
+- ✅ RAG enable/disable toggle per chat session
+- ✅ Improved RAG management UX
+
+**Model Store Updates**:
+- ✅ Uncensored model category with curated repos
+- ✅ LiquidAI LFM2-350M added
+- ✅ Qwen3 8B added
+
+**Stability & Fixes**:
+- ✅ UTF-8 stream decoding fix (smart quotes, accented characters)
+- ✅ Surrogate pair handling for emoji above U+FFFF
+- ✅ Database migration v4 → v5 → v6
+- ✅ Improved UI across all screens (Model Store, RAG Creation, Settings, Home)
+
+### Previous Releases
+
+**Version 1.2.0 (January 2026)**:
+- Text generation with any GGUF model
+- Image generation with SD 1.5
+- HuggingFace repository integration
+- Encrypted Memory Vault with WAL
+- RAG system with document injection
+- Secure RAG creation with encryption
+- Document processing (PDF, Word, Excel, EPUB)
+- Model configuration editor
+- Concurrent model downloads
+- Function calling support
+- Inpainting support
+- Text-to-Speech (10 voices, 5 languages, NNAPI, auto-speak)
+- Plugin system with UI (web search, calculator, dev utils)
+- Settings screen with persistent preferences
+
+### Upcoming
+
+**Version 2.1 (Q2 2026)**:
 - 🚧 Speech-to-Text (STT) support
 - 📋 Multi-modal support (vision models like LLaVA, BakLLaVA)
 - 📋 Code execution plugin with sandboxing
 - 📋 Advanced memory clustering and insights
 - 📋 Conversation summarization
-- 📋 Thread-based conversation organization
 
-### Version 1.4 (Q3 2026)
+**Version 2.2 (Q3 2026)**:
 - Additional model formats (ONNX, TFLite, CoreML)
 - Desktop companion app (Windows, macOS, Linux)
 - Cloud sync with end-to-end encryption (optional)
@@ -886,8 +1013,10 @@ cd ToolNeuron
 | **Text Generation** | Any GGUF model | Cloud only | Limited models |
 | **Image Generation** | SD 1.5 offline | Cloud only | Rare |
 | **Text-to-Speech** | On-device, 10 voices | Cloud-based | Rare |
-| **Plugin System** | Web search, calc, dev utils | Cloud-based | None |
-| **RAG System** | Full offline RAG | Cloud-based | Basic or none |
+| **Character Cards** | TavernAI v2 compatible | N/A | SillyTavern only |
+| **AI Memory** | Persistent cross-session | Some cloud apps | None |
+| **Plugin System** | 7 built-in plugins | Cloud-based | None |
+| **RAG System** | Hybrid BM25+Vector+RRF | Cloud-based | Basic or none |
 | **Document Processing** | PDF/Word/Excel/EPUB | Cloud upload | Limited |
 | **Privacy** | Complete offline | Server logging | Varies |
 | **Encryption** | AES-256-GCM + WAL | N/A | Rare |
@@ -895,7 +1024,7 @@ cd ToolNeuron
 | **Internet Required** | No (after models) | Yes | Varies |
 | **Open Source** | Apache 2.0 | Proprietary | Varies |
 | **Storage Permissions** | Not needed (SAF) | N/A | Usually needed |
-| **Function Calling** | Yes | Yes | Rare |
+| **Function Calling** | Grammar-constrained multi-turn | Yes | Rare |
 | **Model Store** | In-app HF browser | N/A | Manual download |
 
 ---
@@ -1072,6 +1201,7 @@ ToolNeuron stands on the shoulders of giants:
 
 ### Libraries
 - [ONNX Runtime](https://onnxruntime.ai/) - TTS model inference
+- [Coil 3](https://coil-kt.github.io/coil/) - Image loading for avatar images
 - [Jsoup](https://jsoup.org/) - HTML parsing for web search plugin
 - [Apache POI](https://poi.apache.org/) - Microsoft document parsing
 - [PDFBox-Android](https://github.com/TomRoush/PdfBox-Android) - PDF processing
@@ -1082,6 +1212,8 @@ ToolNeuron stands on the shoulders of giants:
 - [Retrofit](https://square.github.io/retrofit/) - Type-safe HTTP client
 
 ### Inspiration
+- [SillyTavern](https://github.com/SillyTavern/SillyTavern) - Character card format and post-history instruction techniques
+- [Mem0](https://github.com/mem0ai/mem0) - AI memory architecture (AUDN cycle, extraction patterns)
 - Privacy-first movement
 - Open source community
 - User feedback and feature requests
@@ -1133,6 +1265,6 @@ We take security seriously and will respond promptly.
 
 ---
 
-**License**: Apache 2.0 · **Version**: 1.2.0 · **Platform**: Android 12+
+**License**: Apache 2.0 · **Version**: 2.0.0 · **Platform**: Android 12+
 
 </div>

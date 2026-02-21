@@ -15,6 +15,7 @@ import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.QueryResult
+import com.dark.tool_neuron.neuron_example.RetrievalConfidence
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -100,6 +101,10 @@ class RagViewModel @Inject constructor(
     // Last RAG query results for display
     private val _lastRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val lastRagResults: StateFlow<List<RagQueryDisplayResult>> = _lastRagResults
+
+    // Retrieval confidence from last query
+    private val _retrievalConfidence = MutableStateFlow<RetrievalConfidence?>(null)
+    val retrievalConfidence: StateFlow<RetrievalConfidence?> = _retrievalConfidence
 
     init {
         // Sync database state with in-memory state on startup
@@ -219,6 +224,7 @@ class RagViewModel @Inject constructor(
 
                 if (result.isSuccess) {
                     _loadedCount.value = ragRepository.getLoadedRagCount()
+                    _isRagEnabledForChat.value = true
                     Log.d("RagViewModel", "RAG loaded successfully, total loaded: ${_loadedCount.value}")
                 } else {
                     Log.e("RagViewModel", "Error loading RAG: ${result.exceptionOrNull()?.message}")
@@ -238,7 +244,9 @@ class RagViewModel @Inject constructor(
     fun unloadRag(ragId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             ragRepository.unloadGraph(ragId)
-            _loadedCount.value = ragRepository.getLoadedRagCount()
+            val remaining = ragRepository.getLoadedRagCount()
+            _loadedCount.value = remaining
+            if (remaining == 0) _isRagEnabledForChat.value = false
         }
     }
 
@@ -246,6 +254,7 @@ class RagViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             ragRepository.unloadAllRags()
             _loadedCount.value = 0
+            _isRagEnabledForChat.value = false
         }
     }
 
@@ -522,63 +531,57 @@ class RagViewModel @Inject constructor(
     // ==================== Query with Display Results ====================
 
     suspend fun queryAndStoreResults(query: String, topK: Int = 5): String {
-        // Query all loaded RAGs - no need to check isRagEnabledForChat here
-        // The caller (HomeScreen) already checks if loadedRags is not empty
-        val results = queryRags(query, topK)
-        if (results.isEmpty()) {
+        // Use the advanced retrieval pipeline
+        val aggregated = ragRepository.queryAllLoadedGraphsWithPipeline(query, topK)
+
+        if (aggregated.ragResults.isEmpty()) {
             Log.w("RagViewModel", "No RAG results found for query: $query")
             _lastRagResults.value = emptyList()
+            _retrievalConfidence.value = null
             return ""
         }
 
+        // Store confidence for UI
+        _retrievalConfidence.value = aggregated.overallConfidence
+
         // Store results for UI display
         val displayResults = mutableListOf<RagQueryDisplayResult>()
-        val contextBuilder = StringBuilder()
-        contextBuilder.append("### Relevant Context from Knowledge Base:\n\n")
-
-        for ((rag, queryResults) in results) {
-            if (queryResults.isNotEmpty()) {
-                Log.d("RagViewModel", "RAG '${rag.name}' returned ${queryResults.size} results")
-                contextBuilder.append("**From ${rag.name}:**\n")
-                for ((index, result) in queryResults.withIndex()) {
-                    val score = result.score
-                    val scorePercent = (score * 100).toInt()
-                    val contentPreview = result.node.content.take(500)
-
-                    // Log detailed match info
-                    Log.d("RagViewModel", "  Result ${index + 1}: score=${"%.3f".format(score)} ($scorePercent%), " +
-                            "content=${result.node.content.take(100)}...")
-
-                    contextBuilder.append("- [$scorePercent% match] $contentPreview\n")
-
-                    // Include connected nodes for more context
-                    if (result.connectedNodes.isNotEmpty()) {
-                        Log.d("RagViewModel", "    + ${result.connectedNodes.size} connected nodes")
-                        for (connectedNode in result.connectedNodes.take(2)) {
-                            contextBuilder.append("  Related: ${connectedNode.content.take(200)}\n")
-                        }
-                    }
-
-                    displayResults.add(
-                        RagQueryDisplayResult(
-                            ragName = rag.name,
-                            content = result.node.content,
-                            score = score,
-                            nodeId = result.node.id
-                        )
+        for ((rag, retrievalResult) in aggregated.ragResults) {
+            for (result in retrievalResult.results) {
+                displayResults.add(
+                    RagQueryDisplayResult(
+                        ragName = rag.name,
+                        content = result.node.content,
+                        score = result.score,
+                        nodeId = result.node.id
                     )
-                }
-                contextBuilder.append("\n")
+                )
             }
         }
-
         _lastRagResults.value = displayResults.sortedByDescending { it.score }
-        Log.d("RagViewModel", "RAG context length: ${contextBuilder.length} chars, ${displayResults.size} results")
+
+        // Build context with confidence-aware prefix
+        val contextBuilder = StringBuilder()
+        when (aggregated.overallConfidence) {
+            RetrievalConfidence.HIGH -> {
+                contextBuilder.append("### Relevant Knowledge:\n")
+            }
+            RetrievalConfidence.MEDIUM -> {
+                contextBuilder.append("### Relevant Knowledge:\n")
+            }
+            RetrievalConfidence.LOW -> {
+                contextBuilder.append("### Relevant Knowledge (uncertain — retrieved context may not fully answer the question):\n")
+            }
+        }
+        contextBuilder.append(aggregated.combinedContext)
+
+        Log.d("RagViewModel", "RAG context: ${contextBuilder.length} chars, ${displayResults.size} results, confidence=${aggregated.overallConfidence}")
         return contextBuilder.toString()
     }
 
     fun clearRagResults() {
         _lastRagResults.value = emptyList()
+        _retrievalConfidence.value = null
     }
 
     // ==================== Secure RAG Creation ====================

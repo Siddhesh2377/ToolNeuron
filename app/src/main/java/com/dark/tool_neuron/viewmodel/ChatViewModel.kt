@@ -12,6 +12,8 @@ import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
+import com.dark.tool_neuron.models.table_schema.Persona
+import com.dark.tool_neuron.worker.MemoryExtractor
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MessageContent
@@ -148,6 +150,18 @@ class ChatViewModel @Inject constructor(
     private val _currentGenerationType = MutableStateFlow(GenerationManager.ModelType.TEXT_GENERATION)
     val currentGenerationType: StateFlow<GenerationManager.ModelType> = _currentGenerationType
 
+    // Thinking mode toggle — when enabled, adds /think to system prompt for supported models
+    private val _thinkingModeEnabled = MutableStateFlow(false)
+    val thinkingModeEnabled: StateFlow<Boolean> = _thinkingModeEnabled.asStateFlow()
+
+    fun toggleThinkingMode() {
+        _thinkingModeEnabled.value = !_thinkingModeEnabled.value
+    }
+
+    fun setThinkingMode(enabled: Boolean) {
+        _thinkingModeEnabled.value = enabled
+    }
+
     // Model state
     val isTextModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isImageModelLoaded = LlmModelWorker.isDiffusionModelLoaded
@@ -160,9 +174,6 @@ class ChatViewModel @Inject constructor(
     val ttsAvailableVoices = TTSManager.availableVoices
 
     // RAG state
-    private val _isRagEnabled = MutableStateFlow(false)
-    val isRagEnabled: StateFlow<Boolean> = _isRagEnabled
-
     private val _currentRagContext = MutableStateFlow<String?>(null)
     val currentRagContext: StateFlow<String?> = _currentRagContext
 
@@ -183,6 +194,21 @@ class ChatViewModel @Inject constructor(
 
     private val _currentMemoryResults = MutableStateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>>(emptyList())
     val currentMemoryResults: StateFlow<List<com.dark.tool_neuron.worker.ScoredVaultContent>> = _currentMemoryResults
+
+    // AI Persona state
+    private val _activePersona = MutableStateFlow<Persona?>(null)
+    val activePersona: StateFlow<Persona?> = _activePersona.asStateFlow()
+
+    // AI Memory state
+    val aiMemoryEnabled: StateFlow<Boolean> = appSettings.aiMemoryEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    private val memoryExtractor: MemoryExtractor by lazy {
+        MemoryExtractor(
+            aiMemoryDao = AppContainer.getAiMemoryDao(),
+            generationManager = generationManager
+        )
+    }
 
     // ==================== Auto-restore last chat ====================
 
@@ -211,13 +237,18 @@ class ChatViewModel @Inject constructor(
                 appSettings.saveLastChatId(chatId)
             }
         }
+
+        // Load active persona
+        viewModelScope.launch {
+            appSettings.activePersonaId.collect { personaId ->
+                _activePersona.value = if (personaId != null) {
+                    AppContainer.getPersonaDao().getById(personaId)
+                } else null
+            }
+        }
     }
 
     // ==================== RAG Controls ====================
-
-    fun setRagEnabled(enabled: Boolean) {
-        _isRagEnabled.value = enabled
-    }
 
     fun setRagContext(context: String?, results: List<RagQueryDisplayResult> = emptyList()) {
         _currentRagContext.value = context
@@ -239,6 +270,14 @@ class ChatViewModel @Inject constructor(
     fun clearMemoryContext() {
         _currentMemoryContext.value = null
         _currentMemoryResults.value = emptyList()
+    }
+
+    // ==================== Persona Controls ====================
+
+    fun setActivePersona(personaId: String?) {
+        viewModelScope.launch {
+            appSettings.saveActivePersonaId(personaId)
+        }
     }
 
     // ==================== Chat Management ====================
@@ -335,7 +374,7 @@ class ChatViewModel @Inject constructor(
                 val isNewChat = isNewConversation
                 val hasTools = PluginManager.hasEnabledTools()
                         && PluginManager.isToolCallingModelLoaded.value
-                val ragContext = if (_isRagEnabled.value) _currentRagContext.value else null
+                val ragContext = _currentRagContext.value
 
                 // For existing chats, save user message upfront
                 if (!isNewChat) {
@@ -370,17 +409,78 @@ class ChatViewModel @Inject constructor(
     fun sendTextMessage(prompt: String) = sendChat(prompt)
 
     /**
+     * Regenerate the last assistant response.
+     * Removes the last assistant message and re-sends the last user prompt.
+     */
+    fun regenerateLastMessage() {
+        if (!generationManager.isTextModelLoaded()) {
+            _error.value = "Please load a text generation model first"
+            return
+        }
+        if (_isGenerating.value) return
+
+        val chatId = _currentChatId.value ?: return
+
+        // Find the last user message to get the prompt
+        val lastUserMsg = _messages.lastOrNull { it.role == Role.User }
+        if (lastUserMsg == null) {
+            _error.value = "No user message to regenerate from"
+            return
+        }
+
+        // Remove the last assistant message from in-memory list immediately
+        val lastAssistantMsg = _messages.lastOrNull { it.role == Role.Assistant }
+        if (lastAssistantMsg != null) {
+            _messages.remove(lastAssistantMsg)
+        }
+
+        val prompt = lastUserMsg.content.content
+
+        // Set up generation state without creating a new user message
+        _isGenerating.value = true
+        _streamingUserMessage.value = prompt
+        _streamingAssistantMessage.value = ""
+        userMessageAdded = true // already added — skip re-adding user message
+        currentGeneratedContent = ""
+        currentMetrics = null
+        _error.value = null
+
+        generationJob = viewModelScope.launch {
+            try {
+                // Await vault deletion before starting generation (prevents race condition)
+                if (lastAssistantMsg != null) {
+                    chatManager.deleteMessage(lastAssistantMsg.msgId)
+                }
+                val maxTokens = getCurrentModelMaxTokens()
+                val hasTools = PluginManager.hasEnabledTools()
+                        && PluginManager.isToolCallingModelLoaded.value
+                val ragContext = _currentRagContext.value
+
+                when {
+                    hasTools -> agentFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true)
+                    else -> simpleFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in regenerateLastMessage", e)
+                _error.value = e.message
+                AppStateManager.setError(e.message ?: "Unknown error")
+                resetStreamingState()
+            }
+        }
+    }
+
+    /**
      * Read the maxTokens setting from the currently loaded model's config.
      * Falls back to 2048 if config is unavailable.
      */
     private suspend fun getCurrentModelMaxTokens(): Int {
-        val modelId = LlmModelWorker.currentGgufModelId.value ?: return 2048
+        val modelId = LlmModelWorker.currentGgufModelId.value ?: return 4096
         val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
         if (config?.modelInferenceParams != null) {
             val schema = GgufEngineSchema.fromJson(null, config.modelInferenceParams)
             return schema.inferenceParams.maxTokens
         }
-        return 2048
+        return 4096
     }
 
     // ==================== Agent Flow (Plan → Execute → Summarize) ====================
@@ -389,7 +489,8 @@ class ChatViewModel @Inject constructor(
         prompt: String,
         ragContext: String?,
         maxTokens: Int,
-        isNewChat: Boolean
+        isNewChat: Boolean,
+        isRegeneration: Boolean = false
     ) {
         val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
 
@@ -408,13 +509,13 @@ class ChatViewModel @Inject constructor(
         val steps = executeAgentLoop(fullPrompt, plan)
         Log.d(TAG, "Agent execution complete: ${steps.size} steps executed")
 
-        // If no tools were executed, fall back to simple text generation
-        if (steps.isEmpty()) {
-            Log.d(TAG, "No tool calls generated, falling back to simple flow")
+        // If no tools were executed or all failed, fall back to simple text generation
+        if (steps.isEmpty() || steps.all { !it.success }) {
+            Log.d(TAG, "No successful tool calls, falling back to simple flow")
             _agentPhase.value = AgentPhase.Idle
             _agentPlan.value = null
             PluginManager.clearGrammar()
-            simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+            simpleFlow(prompt, ragContext, maxTokens, isNewChat, isRegeneration)
             return
         }
 
@@ -431,6 +532,18 @@ class ChatViewModel @Inject constructor(
 
         // Persist
         persistAgentChat(prompt, isNewChat, plan, steps, summary)
+
+        // Background memory extraction after agent response
+        if (aiMemoryEnabled.value && summary.isNotBlank()) {
+            val chatId = _currentChatId.value
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    memoryExtractor.extractAndStore(prompt, summary, chatId, _activePersona.value?.name)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Memory extraction failed: ${e.message}")
+                }
+            }
+        }
     }
 
     /** Phase 1: Generate a brief plan describing which tools to use. */
@@ -462,10 +575,12 @@ class ChatViewModel @Inject constructor(
     ): List<ToolChainStepData> {
         val steps = mutableListOf<ToolChainStepData>()
         val seenCalls = mutableSetOf<String>()
+        var consecutiveFailures = 0
         _toolChainSteps.value = emptyList()
         _maxToolChainRounds.value = maxRounds
 
         val toolSignatures = PluginManager.getToolSignaturesText()
+        val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
         val truncatedPlan = plan.take(200)
 
         for (round in 1..maxRounds) {
@@ -524,12 +639,39 @@ class ChatViewModel @Inject constructor(
                         success = false
                     ))
                     _toolChainSteps.value = steps.toList()
+                    consecutiveFailures++
+                    if (consecutiveFailures >= 2) {
+                        Log.w(TAG, "2 consecutive failures, stopping agent loop")
+                        break
+                    }
                     continue
                 }
 
                 // Execute
                 val (toolName, argsObj) = parsed
                 val normalizedName = normalizeToolName(toolName)
+
+                // Validate tool name against enabled tools
+                if (normalizedName.lowercase() !in enabledNames) {
+                    Log.w(TAG, "Hallucinated tool name '$normalizedName', not in enabled tools: $enabledNames")
+                    steps.add(ToolChainStepData(
+                        round = steps.size + 1,
+                        toolName = normalizedName,
+                        pluginName = "Unknown",
+                        args = rawArgs.take(500),
+                        result = "Tool not found: $normalizedName",
+                        executionTimeMs = 0,
+                        success = false
+                    ))
+                    _toolChainSteps.value = steps.toList()
+                    consecutiveFailures++
+                    if (consecutiveFailures >= 2) {
+                        Log.w(TAG, "2 consecutive failures, stopping agent loop")
+                        break
+                    }
+                    continue
+                }
+
                 _currentToolName.value = normalizedName
                 AppStateManager.setExecutingPlugin("", normalizedName)
 
@@ -538,6 +680,7 @@ class ChatViewModel @Inject constructor(
 
                 val isSuccess = !result.isError
                 if (isSuccess) {
+                    consecutiveFailures = 0
                     AppStateManager.setPluginExecutionComplete(
                         pluginName = result.pluginName,
                         toolName = normalizedName,
@@ -545,6 +688,7 @@ class ChatViewModel @Inject constructor(
                         executionTimeMs = result.executionTimeMs
                     )
                 } else {
+                    consecutiveFailures++
                     AppStateManager.setPluginExecutionComplete(
                         pluginName = result.pluginName,
                         toolName = normalizedName,
@@ -565,6 +709,11 @@ class ChatViewModel @Inject constructor(
                 ))
                 _toolChainSteps.value = steps.toList()
                 Log.d(TAG, "Agent loop round $round: executed ${normalizedName} (${result.executionTimeMs}ms)")
+
+                if (consecutiveFailures >= 2) {
+                    Log.w(TAG, "2 consecutive failures, stopping agent loop")
+                    break
+                }
 
                 // Add plugin result message for in-memory UI display
                 if (result.rawData != null) {
@@ -597,7 +746,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            if (generatedDuplicate) break
+            if (generatedDuplicate || consecutiveFailures >= 2) break
 
             // Brief pause to show step in UI
             kotlinx.coroutines.delay(300)
@@ -726,10 +875,13 @@ class ChatViewModel @Inject constructor(
         prompt: String,
         ragContext: String?,
         maxTokens: Int,
-        isNewChat: Boolean
+        isNewChat: Boolean,
+        isRegeneration: Boolean = false
     ) {
         AppStateManager.setGeneratingText()
         val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
+
+        var responseForMemory: String? = null
 
         if (isNewChat) {
             // Build conversation messages with memory
@@ -737,12 +889,13 @@ class ChatViewModel @Inject constructor(
             val response = generatePlainText(conversationMessages, maxTokens)
             val filteredResponse = filterToolCallSyntax(response)
             _streamingAssistantMessage.value = filteredResponse
+            responseForMemory = filteredResponse
             createChatWithMessages(prompt, filteredResponse, currentMetrics)
         } else {
             val chatId = _currentChatId.value ?: return
 
             // Build existing conversation messages
-            val conversationMessages = buildExistingConversationMessages(fullPrompt)
+            val conversationMessages = buildExistingConversationMessages(fullPrompt, isRegeneration)
             val response = generatePlainText(conversationMessages, maxTokens)
             val filteredResponse = filterToolCallSyntax(response)
             _streamingAssistantMessage.value = filteredResponse
@@ -762,6 +915,7 @@ class ChatViewModel @Inject constructor(
             }
 
             if (filteredResponse.isNotBlank()) {
+                responseForMemory = filteredResponse
                 val assistantMessage = Messages(
                     role = Role.Assistant,
                     content = MessageContent(contentType = ContentType.Text, content = filteredResponse),
@@ -780,9 +934,60 @@ class ChatViewModel @Inject constructor(
                 resetStreamingState()
             }
         }
+
+        // Background memory extraction after response
+        if (aiMemoryEnabled.value && responseForMemory != null) {
+            val chatId = _currentChatId.value
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    memoryExtractor.extractAndStore(prompt, responseForMemory, chatId, _activePersona.value?.name)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Memory extraction failed: ${e.message}")
+                }
+            }
+        }
     }
 
     // ==================== LLM Generation Helpers ====================
+
+    /**
+     * Detect if text ends with a repeating pattern (common with small models).
+     * Returns the index to trim to (keep one copy of the pattern), or -1 if no repetition.
+     */
+    private fun detectRepetitionTrimIndex(
+        text: String,
+        minPatternLen: Int = 20,
+        minRepeats: Int = 3,
+        maxCheckLen: Int = 600
+    ): Int {
+        if (text.length < minPatternLen * minRepeats) return -1
+
+        val checkLen = minOf(text.length, maxCheckLen)
+        val startOffset = text.length - checkLen
+        val window = text.substring(startOffset)
+
+        for (patternLen in minPatternLen until checkLen / minRepeats) {
+            val pattern = window.substring(window.length - patternLen)
+            var count = 1
+            var pos = window.length - patternLen * 2
+
+            while (pos >= 0) {
+                if (window.substring(pos, pos + patternLen) == pattern) {
+                    count++
+                    pos -= patternLen
+                } else {
+                    break
+                }
+            }
+
+            if (count >= minRepeats) {
+                // Keep content up to end of first occurrence of the pattern
+                val repeatStartInWindow = window.length - patternLen * count
+                return startOffset + repeatStartInWindow + patternLen
+            }
+        }
+        return -1
+    }
 
     /** Generate plain text (no grammar/tool detection). Streams to UI with batching. */
     private suspend fun generatePlainText(
@@ -793,6 +998,8 @@ class ChatViewModel @Inject constructor(
         val resultBuilder = StringBuilder()
         currentMetrics = null
         var lastEmitTime = 0L
+        var lastRepCheckLen = 0
+        var repetitionTrimIndex = -1
 
         generationManager.generateMultiTurnStreaming(
             jsonArray.toString(), maxTokens
@@ -804,6 +1011,17 @@ class ChatViewModel @Inject constructor(
                     if (now - lastEmitTime >= 50) {
                         _streamingAssistantMessage.value = resultBuilder.toString()
                         lastEmitTime = now
+                    }
+
+                    // Periodically check for repetition loops (every ~80 new chars)
+                    if (repetitionTrimIndex < 0 && resultBuilder.length - lastRepCheckLen >= 80) {
+                        lastRepCheckLen = resultBuilder.length
+                        val trimIdx = detectRepetitionTrimIndex(resultBuilder.toString())
+                        if (trimIdx >= 0) {
+                            Log.w(TAG, "Repetition loop detected at ~$trimIdx chars, stopping generation")
+                            repetitionTrimIndex = trimIdx
+                            generationManager.stopTextGeneration()
+                        }
                     }
                 }
                 is GenerationEvent.Done -> {
@@ -821,7 +1039,17 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-        return resultBuilder.toString().trim()
+
+        var result = resultBuilder.toString().trim()
+
+        // Trim repetitive tail if detected during streaming
+        if (repetitionTrimIndex in 1 until result.length) {
+            Log.d(TAG, "Trimming repetitive output: keeping ${repetitionTrimIndex} of ${result.length} chars")
+            result = result.substring(0, repetitionTrimIndex).trim()
+            _streamingAssistantMessage.value = result
+        }
+
+        return result
     }
 
     /** Generate with grammar and collect all tool calls from a single generation. */
@@ -855,9 +1083,17 @@ class ChatViewModel @Inject constructor(
         // Fallback: parse text if no ToolCall events were received
         if (toolCalls.isEmpty() && text.isNotBlank()) {
             Log.d(TAG, "No ToolCall events, trying text parsing fallback")
+            val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
             parseToolCallsFromText(text)?.let { parsed ->
-                toolCalls.addAll(parsed)
-                Log.d(TAG, "Fallback parsed ${parsed.size} tool calls from text")
+                // Filter against enabled tools to reject hallucinated names
+                val valid = parsed.filter { (name, _) ->
+                    normalizeToolName(name).lowercase() in enabledNames
+                }
+                if (valid.size < parsed.size) {
+                    Log.w(TAG, "Filtered out ${parsed.size - valid.size} hallucinated tool calls from fallback parsing")
+                }
+                toolCalls.addAll(valid)
+                Log.d(TAG, "Fallback parsed ${valid.size} valid tool calls from text")
             }
         }
 
@@ -905,21 +1141,58 @@ class ChatViewModel @Inject constructor(
      * Read the system prompt from the currently loaded model's config.
      * Returns empty string if no system prompt is configured.
      */
-    private suspend fun getCurrentModelSystemPrompt(): String {
+    private suspend fun getCurrentModelSystemPrompt(userQuery: String = ""): String {
         val modelId = LlmModelWorker.currentGgufModelId.value ?: return ""
         val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
-        if (config?.modelInferenceParams != null) {
+        val basePrompt = if (config?.modelInferenceParams != null) {
             val schema = GgufEngineSchema.fromJson(null, config.modelInferenceParams)
-            return schema.inferenceParams.systemPrompt
+            schema.inferenceParams.systemPrompt
+        } else ""
+
+        // Inject thinking mode directive if enabled
+        val thinkingDirective = if (_thinkingModeEnabled.value) "/think" else "/no_think"
+
+        // Build persona prompt from structured character card fields
+        val activePersona = _activePersona.value
+        val rawPersonaPrompt = activePersona?.buildEffectiveSystemPrompt()?.takeIf { it.isNotBlank() } ?: ""
+        // Apply {{char}}/{{user}} template variables
+        val personaPrompt = if (rawPersonaPrompt.isNotEmpty() && activePersona != null) {
+            activePersona.applyTemplateVars(rawPersonaPrompt)
+        } else rawPersonaPrompt
+
+        // Build memory block
+        val memoryBlock = if (aiMemoryEnabled.value && userQuery.isNotBlank()) {
+            try {
+                memoryExtractor.buildMemoryBlock(userQuery)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to build memory block: ${e.message}")
+                ""
+            }
+        } else ""
+
+        // Assemble: thinkingDirective + persona + memory + model system prompt
+        return buildString {
+            append(thinkingDirective)
+            if (personaPrompt.isNotEmpty()) {
+                append("\n")
+                append(personaPrompt)
+            }
+            if (memoryBlock.isNotEmpty()) {
+                append("\n\n")
+                append(memoryBlock)
+            }
+            if (basePrompt.isNotEmpty()) {
+                append("\n\n")
+                append(basePrompt)
+            }
         }
-        return ""
     }
 
     /** Build conversation messages for new chat (with optional memory). */
     private suspend fun buildConversationMessages(userPrompt: String): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
         // Prepend system prompt from model config if configured
-        val systemPrompt = getCurrentModelSystemPrompt()
+        val systemPrompt = getCurrentModelSystemPrompt(userQuery = userPrompt)
         if (systemPrompt.isNotEmpty()) {
             messages.add(JSONObject().put("role", "system").put("content", systemPrompt))
         }
@@ -939,15 +1212,22 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
+        // Post-history character reinforcement (most influential position for small models)
+        injectPostHistoryInstruction(messages)
         messages.add(JSONObject().put("role", "user").put("content", userPrompt))
-        return messages
+        return sanitizeRoleAlternation(messages)
     }
 
-    /** Build conversation messages for existing chat. */
-    private suspend fun buildExistingConversationMessages(userPrompt: String): List<JSONObject> {
+    /** Build conversation messages for existing chat.
+     *  @param isRegeneration when true, the user prompt is already in _messages so skip appending it again.
+     */
+    private suspend fun buildExistingConversationMessages(
+        userPrompt: String,
+        isRegeneration: Boolean = false
+    ): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
         // Prepend system prompt from model config if configured
-        val systemPrompt = getCurrentModelSystemPrompt()
+        val systemPrompt = getCurrentModelSystemPrompt(userQuery = userPrompt)
         if (systemPrompt.isNotEmpty()) {
             messages.add(JSONObject().put("role", "system").put("content", systemPrompt))
         }
@@ -967,8 +1247,45 @@ class ChatViewModel @Inject constructor(
                 }
             }
         }
-        messages.add(JSONObject().put("role", "user").put("content", userPrompt))
-        return messages
+        // Post-history character reinforcement (most influential position for small models)
+        injectPostHistoryInstruction(messages)
+        if (!isRegeneration) {
+            messages.add(JSONObject().put("role", "user").put("content", userPrompt))
+        }
+        return sanitizeRoleAlternation(messages)
+    }
+
+    /**
+     * Inject post-history character reinforcement as a system message right before the
+     * user's latest message. Research shows this is the most influential position for
+     * maintaining character consistency in small models (SillyTavern/MiniMax approach).
+     */
+    private fun injectPostHistoryInstruction(messages: MutableList<JSONObject>) {
+        val persona = _activePersona.value ?: return
+        val raw = persona.buildPostHistoryInstruction().takeIf { it.isNotBlank() } ?: return
+        val instruction = persona.applyTemplateVars(raw)
+        messages.add(JSONObject().put("role", "system").put("content", instruction))
+    }
+
+    /** Ensure no two consecutive messages share the same role (required by llama.cpp chat templates). */
+    private fun sanitizeRoleAlternation(messages: List<JSONObject>): List<JSONObject> {
+        if (messages.size <= 1) return messages
+        val result = mutableListOf(messages.first())
+        for (i in 1 until messages.size) {
+            val current = messages[i]
+            val previous = result.last()
+            if (current.getString("role") == previous.getString("role")
+                && current.getString("role") != "system") {
+                // Merge: append current content to previous
+                val merged = previous.getString("content") + "\n" + current.getString("content")
+                result[result.lastIndex] = JSONObject()
+                    .put("role", previous.getString("role"))
+                    .put("content", merged)
+            } else {
+                result.add(current)
+            }
+        }
+        return result
     }
 
     // ==================== Tool Call Parsing Utilities ====================

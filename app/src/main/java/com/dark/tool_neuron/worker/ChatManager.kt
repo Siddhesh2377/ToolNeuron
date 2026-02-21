@@ -22,12 +22,15 @@ class ChatManager {
 
     /**
      * Ensures vault is ready before executing an operation.
-     * Waits up to 10 seconds for vault initialization.
+     * Waits up to 30 seconds for vault initialization.
+     * If vault is not initialized, triggers re-initialization via AppContainer.
      */
     private suspend fun <T> withVaultReady(block: suspend () -> T): Result<T> {
         return try {
             if (!VaultHelper.isInitialized()) {
-                val ready = VaultHelper.awaitReady(timeoutMs = 10000)
+                // Trigger re-initialization if needed
+                com.dark.tool_neuron.di.AppContainer.ensureVaultInitialized()
+                val ready = VaultHelper.awaitReady(timeoutMs = 30000)
                 if (!ready) {
                     return Result.failure(IllegalStateException("Vault initialization timed out"))
                 }

@@ -25,7 +25,7 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.InsertDriveFile
+import androidx.compose.material.icons.automirrored.outlined.InsertDriveFile
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.Refresh
@@ -68,7 +68,7 @@ import java.util.Locale
 enum class DataFilter(val label: String, val icon: ImageVector, val type: BlockType?) {
     ALL("All", Icons.Outlined.Layers, null),
     MESSAGES("Messages", Icons.Outlined.ChatBubbleOutline, BlockType.MESSAGE),
-    FILES("Files", Icons.Outlined.InsertDriveFile, BlockType.FILE),
+    FILES("Files", Icons.AutoMirrored.Outlined.InsertDriveFile, BlockType.FILE),
     EMBEDDINGS("Vectors", Icons.Outlined.Hub, BlockType.EMBEDDING),
     CUSTOM("Custom", Icons.Outlined.DataObject, BlockType.CUSTOM_DATA)
 }
@@ -469,7 +469,7 @@ data class TypeInfo(
 fun getTypeInfo(type: BlockType): TypeInfo {
     return when (type) {
         BlockType.MESSAGE -> TypeInfo("Message", Icons.Outlined.ChatBubbleOutline, MaterialTheme.colorScheme.primary)
-        BlockType.FILE -> TypeInfo("File", Icons.Outlined.InsertDriveFile, MaterialTheme.colorScheme.tertiary)
+        BlockType.FILE -> TypeInfo("File", Icons.AutoMirrored.Outlined.InsertDriveFile, MaterialTheme.colorScheme.tertiary)
         BlockType.EMBEDDING -> TypeInfo("Embedding", Icons.Outlined.Hub, MaterialTheme.colorScheme.secondary)
         BlockType.CUSTOM_DATA -> TypeInfo("Custom", Icons.Outlined.DataObject, MaterialTheme.colorScheme.error)
         BlockType.REFERENCE -> TypeInfo("Reference", Icons.Outlined.Link, MaterialTheme.colorScheme.outline)

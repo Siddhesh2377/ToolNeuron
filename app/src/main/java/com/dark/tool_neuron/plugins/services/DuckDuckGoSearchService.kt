@@ -171,7 +171,7 @@ class DuckDuckGoSearchService {
                         throw IOException("HTTP ${response.code}: ${response.message}")
                     }
 
-                    val html = response.body?.string() ?: throw IOException("Empty response body")
+                    val html = response.body.string()
 
                     // Check if we got blocked or captcha
                     if (html.contains("detected unusual traffic") ||
@@ -241,7 +241,7 @@ class DuckDuckGoSearchService {
                     throw IOException("HTTP ${response.code}")
                 }
 
-                val html = response.body?.string() ?: throw IOException("Empty response")
+                val html = response.body.string()
                 val results = parseLiteResults(html, maxResults)
                 val searchTime = System.currentTimeMillis() - startTime
 
@@ -285,7 +285,7 @@ class DuckDuckGoSearchService {
                     throw IOException("HTTP ${response.code}")
                 }
 
-                val jsonString = response.body?.string() ?: "{}"
+                val jsonString = response.body.string()
                 val results = parseJsonResults(jsonString, query, maxResults)
                 val searchTime = System.currentTimeMillis() - startTime
 
@@ -579,7 +579,7 @@ class DuckDuckGoSearchService {
                         throw IOException("HTTP ${response.code}: ${response.message}")
                     }
 
-                    val jsonString = response.body?.string() ?: "{}"
+                    val jsonString = response.body.string()
                     val json = JSONObject(jsonString)
 
                     val answer = buildString {

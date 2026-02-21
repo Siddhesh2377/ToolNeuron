@@ -41,7 +41,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.FilterList
-import androidx.compose.material.icons.outlined.Sort
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -262,7 +262,7 @@ fun VaultInspectorScreen(
                     Box {
                         ActionButton(
                             onClickListener = { showSortMenu = true },
-                            icon = Icons.Outlined.Sort,
+                            icon = Icons.AutoMirrored.Outlined.Sort,
                             contentDescription = "Sort",
                             shape = CircleShape,
                             colors = IconButtonDefaults.filledIconButtonColors(

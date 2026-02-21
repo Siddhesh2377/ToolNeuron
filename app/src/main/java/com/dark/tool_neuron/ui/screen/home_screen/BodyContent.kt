@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
+import android.content.ClipData
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
@@ -21,12 +22,13 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -52,6 +54,7 @@ import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.ui.components.AgentExecutionView
 import com.dark.tool_neuron.ui.components.MarkdownText
+import com.dark.tool_neuron.ui.components.lazyMarkdownItems
 import com.dark.tool_neuron.ui.components.PluginResultCard
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
@@ -62,6 +65,7 @@ import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
 import java.util.Base64
@@ -155,25 +159,60 @@ fun BodyContent(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = rDp(8.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
                 ) {
-                    items(
-                        count = messages.size,
-                        key = { index ->
-                            val msg = messages[index]
-                            "${msg.msgId}-${index}"
-                        },
-                        contentType = { index -> messages[index].role }
-                    ) { index ->
-                        MessageBubble(
-                            message = messages[index],
-                            ttsPlayingMsgId = ttsPlayingMsgId,
-                            ttsIsPlaying = ttsIsPlaying,
-                            ttsSynthesizing = ttsSynthesizing,
-                            ttsModelLoaded = ttsModelLoaded,
-                            onSpeak = { chatViewModel.speakMessage(it) },
-                            onStopTTS = { chatViewModel.stopTTS() }
-                        )
+                    val lastAssistantIndex = messages.indexOfLast { it.role == Role.Assistant }
+
+                    messages.forEachIndexed { index, message ->
+                        when (message.role) {
+                            Role.User -> {
+                                item(key = "${message.msgId}-user") {
+                                    UserMessageBubble(message)
+                                }
+                            }
+                            else -> {
+                                val isLastAssistant = index == lastAssistantIndex
+                                // Header: RAG, tool chain, thinking, image/plugin
+                                item(key = "${message.msgId}-header") {
+                                    AssistantMessageHeader(message)
+                                }
+                                // Markdown content — each element is a lazy item
+                                if (message.content.contentType == ContentType.Text) {
+                                    val parsedText = message.content.content
+                                        .let { raw ->
+                                            // Strip <think>...</think> for the markdown items
+                                            if (raw.contains("<think>")) {
+                                                raw.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
+                                            } else raw
+                                        }
+                                    if (parsedText.isNotEmpty()) {
+                                        lazyMarkdownItems(
+                                            text = parsedText,
+                                            keyPrefix = message.msgId,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp)
+                                        )
+                                    }
+                                }
+                                // Footer: metrics + action row
+                                item(key = "${message.msgId}-footer") {
+                                    AssistantMessageFooter(
+                                        message = message,
+                                        ttsPlayingMsgId = ttsPlayingMsgId,
+                                        ttsIsPlaying = ttsIsPlaying,
+                                        ttsSynthesizing = ttsSynthesizing,
+                                        ttsModelLoaded = ttsModelLoaded,
+                                        onSpeak = { chatViewModel.speakMessage(it) },
+                                        onStopTTS = { chatViewModel.stopTTS() },
+                                        onRegenerate = if (isLastAssistant) {
+                                            { chatViewModel.regenerateLastMessage() }
+                                        } else null,
+                                        isRegenerateEnabled = !isGenerating
+                                    )
+                                }
+                            }
+                        }
                     }
                     item {
                         Spacer(modifier = Modifier.height(rDp(16.dp)))
@@ -564,30 +603,6 @@ private fun EmptyMessagesState() {
 }
 
 @Composable
-private fun MessageBubble(
-    message: Messages,
-    ttsPlayingMsgId: String? = null,
-    ttsIsPlaying: Boolean = false,
-    ttsSynthesizing: Boolean = false,
-    ttsModelLoaded: Boolean = false,
-    onSpeak: (Messages) -> Unit = {},
-    onStopTTS: () -> Unit = {}
-) {
-    when (message.role) {
-        Role.User -> UserMessageBubble(message)
-        else -> AssistantMessageBubble(
-            message = message,
-            ttsPlayingMsgId = ttsPlayingMsgId,
-            ttsIsPlaying = ttsIsPlaying,
-            ttsSynthesizing = ttsSynthesizing,
-            ttsModelLoaded = ttsModelLoaded,
-            onSpeak = onSpeak,
-            onStopTTS = onStopTTS
-        )
-    }
-}
-
-@Composable
 private fun UserMessageBubble(message: Messages) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -596,6 +611,7 @@ private fun UserMessageBubble(message: Messages) {
         Surface(
             shape = RoundedCornerShape(rDp(12.dp)),
             color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier
                 .padding(horizontal = rDp(8.dp), vertical = rDp(5.dp))
                 .widthIn(max = rDp(280.dp))
@@ -613,62 +629,26 @@ private fun UserMessageBubble(message: Messages) {
     }
 }
 
+/** Header part of assistant message: RAG results, tool chain, thinking block, non-text content. */
 @Composable
-private fun AssistantMessageBubble(
-    message: Messages,
-    ttsPlayingMsgId: String? = null,
-    ttsIsPlaying: Boolean = false,
-    ttsSynthesizing: Boolean = false,
-    ttsModelLoaded: Boolean = false,
-    onSpeak: (Messages) -> Unit = {},
-    onStopTTS: () -> Unit = {}
-) {
-    val showMetrics = remember(message.decodingMetrics) {
-        message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
-    }
-
-    val showImageMetrics = remember(message.imageMetrics) {
-        message.imageMetrics != null
-    }
-
-    val showMemoryMetrics = remember(message.memoryMetrics) {
-        message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
-    }
-
+private fun AssistantMessageHeader(message: Messages) {
     val hasRagResults = remember(message.ragResults) {
         message.ragResults?.isNotEmpty() == true
     }
-
     val hasToolChainSteps = remember(message.toolChainSteps) {
         message.toolChainSteps?.isNotEmpty() == true
     }
 
-    val parsedMessage by produceState(
-        initialValue = ParsedMessage(null, message.content.content),
-        key1 = message.content.content
-    ) {
-        value = parseThinkingTags(message.content.content)
-    }
-
-    val isTextContent = message.content.contentType == ContentType.Text
-    val isThisMessagePlaying = ttsPlayingMsgId == message.msgId && ttsIsPlaying
-    val isThisMessageSynthesizing = ttsPlayingMsgId == message.msgId && ttsSynthesizing
-
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = rDp(8.dp)),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
-        // Show RAG results if available (before the response)
         if (hasRagResults) {
             message.ragResults?.let { results ->
                 SavedRagResultsDisplay(results = results)
             }
         }
 
-        // Show agent execution view for new messages (with agentPlan),
-        // fall back to old ToolChainDisplay for backward compat
         if (message.agentPlan != null) {
             AgentExecutionView(
                 plan = message.agentPlan,
@@ -678,65 +658,97 @@ private fun AssistantMessageBubble(
             )
         } else if (hasToolChainSteps) {
             message.toolChainSteps?.let { steps ->
-                ToolChainDisplay(
-                    steps = steps,
-                    isLive = false
-                )
+                ToolChainDisplay(steps = steps, isLive = false)
             }
         }
 
+        // Non-text content types
         when (message.content.contentType) {
-            ContentType.Image -> {
-                ImageMessageBubble(message)
-            }
-            ContentType.PluginResult -> {
-                PluginResultCard(message = message)
-            }
+            ContentType.Image -> ImageMessageBubble(message)
+            ContentType.PluginResult -> PluginResultCard(message = message)
             else -> {
-                if (parsedMessage.thinkingContent != null) {
-                    ThinkingBlock(parsedMessage.thinkingContent!!)
-                }
-
-                if (parsedMessage.actualContent.isNotEmpty()) {
-                    SelectionContainer{
-                        MarkdownText(
-                            text = parsedMessage.actualContent,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(4.dp))
-                        )
+                // Thinking block (markdown body is handled by lazyMarkdownItems)
+                val thinkingContent by produceState<String?>(
+                    initialValue = null,
+                    key1 = message.content.content
+                ) {
+                    if (message.content.content.contains("<think>")) {
+                        value = parseThinkingTags(message.content.content).thinkingContent
                     }
                 }
+                thinkingContent?.let { ThinkingBlock(it) }
             }
         }
+    }
+}
 
+/** Footer part of assistant message: metrics + action row. */
+@Composable
+private fun AssistantMessageFooter(
+    message: Messages,
+    ttsPlayingMsgId: String?,
+    ttsIsPlaying: Boolean,
+    ttsSynthesizing: Boolean,
+    ttsModelLoaded: Boolean,
+    onSpeak: (Messages) -> Unit,
+    onStopTTS: () -> Unit,
+    onRegenerate: (() -> Unit)?,
+    isRegenerateEnabled: Boolean
+) {
+    val showMetrics = remember(message.decodingMetrics) {
+        message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
+    }
+    val showImageMetrics = remember(message.imageMetrics) {
+        message.imageMetrics != null
+    }
+    val showMemoryMetrics = remember(message.memoryMetrics) {
+        message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
+    }
+    val isTextContent = message.content.contentType == ContentType.Text
+    val isThisMessagePlaying = ttsPlayingMsgId == message.msgId && ttsIsPlaying
+    val isThisMessageSynthesizing = ttsPlayingMsgId == message.msgId && ttsSynthesizing
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+    ) {
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics, message.memoryMetrics)
             }
         }
-
         if (showImageMetrics) {
             message.imageMetrics?.let { metrics ->
                 ImageMetricsDisplay(metrics)
             }
         }
-
         if (showMemoryMetrics && !showMetrics) {
             message.memoryMetrics?.let { metrics ->
                 MemoryMetricsDisplay(metrics)
             }
         }
-
-        // Action row: TTS speak + Copy (only for text messages with content)
-        if (isTextContent && parsedMessage.actualContent.isNotEmpty()) {
-            MessageActionRow(
-                message = message,
-                textContent = parsedMessage.actualContent,
-                isPlaying = isThisMessagePlaying,
-                isSynthesizing = isThisMessageSynthesizing,
-                ttsModelLoaded = ttsModelLoaded,
-                onSpeak = onSpeak,
-                onStopTTS = onStopTTS
-            )
+        if (isTextContent && message.content.content.isNotEmpty()) {
+            // Strip thinking tags for the text content passed to action row
+            val textContent = remember(message.content.content) {
+                if (message.content.content.contains("<think>")) {
+                    message.content.content.replace(
+                        Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), ""
+                    ).trim()
+                } else message.content.content
+            }
+            if (textContent.isNotEmpty()) {
+                MessageActionRow(
+                    message = message,
+                    textContent = textContent,
+                    isPlaying = isThisMessagePlaying,
+                    isSynthesizing = isThisMessageSynthesizing,
+                    ttsModelLoaded = ttsModelLoaded,
+                    onSpeak = onSpeak,
+                    onStopTTS = onStopTTS,
+                    onRegenerate = onRegenerate,
+                    isRegenerateEnabled = isRegenerateEnabled
+                )
+            }
         }
     }
 }
@@ -750,9 +762,12 @@ private fun MessageActionRow(
     isSynthesizing: Boolean,
     ttsModelLoaded: Boolean,
     onSpeak: (Messages) -> Unit,
-    onStopTTS: () -> Unit
+    onStopTTS: () -> Unit,
+    onRegenerate: (() -> Unit)? = null,
+    isRegenerateEnabled: Boolean = true
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
     var showCopied by remember { mutableStateOf(false) }
 
     LaunchedEffect(showCopied) {
@@ -794,10 +809,20 @@ private fun MessageActionRow(
             add(ActionItem(
                 icon = ActionIcon.Resource(R.drawable.copy),
                 onClick = {
-                    clipboardManager.setText(AnnotatedString(textContent))
+                    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("message", textContent))) }
                     showCopied = true
                 },
                 contentDescription = "Copy"
+            ))
+        }
+
+        // Regenerate action (always visible, disabled during generation)
+        if (onRegenerate != null) {
+            add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.Refresh),
+                onClick = { if (isRegenerateEnabled) onRegenerate() },
+                contentDescription = "Regenerate",
+                enabled = isRegenerateEnabled
             ))
         }
     }

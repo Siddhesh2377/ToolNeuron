@@ -32,6 +32,9 @@ import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.SetupScreen
+import com.dark.tool_neuron.ui.screen.AiMemoryScreen
+import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
+import com.dark.tool_neuron.ui.screen.PersonaScreen
 import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
@@ -129,6 +132,11 @@ sealed class Screen(val route: String) {
     object Editor : Screen("editor")
     object Settings : Screen("settings")
     object VaultManager: Screen("vault_manager")
+    object Personas : Screen("personas")
+    object PersonaEditor : Screen("persona_editor/{personaId}") {
+        fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
+    }
+    object AiMemory : Screen("ai_memory")
 }
 
 @Composable
@@ -221,6 +229,9 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
+                onCharacterClick = {
+                    navController.navigate(Screen.Personas.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -235,12 +246,59 @@ fun AppNavigation(
         composable(Screen.Settings.route) {
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
-                onModelEditor = { navController.navigate(Screen.Editor.route) }
+                onModelEditor = { navController.navigate(Screen.Editor.route) },
+                onPersonasClick = { navController.navigate(Screen.Personas.route) },
+                onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) }
             )
         }
 
         composable(Screen.VaultManager.route) {
             VaultDashboard(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Personas.route) {
+            val activePersonaId by chatViewModel.activePersona.collectAsState()
+            PersonaScreen(
+                activePersonaId = activePersonaId?.id,
+                onPersonaSelected = { personaId -> chatViewModel.setActivePersona(personaId) },
+                onEditPersona = { personaId ->
+                    navController.navigate(Screen.PersonaEditor.createRoute(personaId))
+                },
+                onCreatePersona = {
+                    navController.navigate(Screen.PersonaEditor.createRoute(null))
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.PersonaEditor.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("personaId") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = "new"
+                }
+            )
+        ) { backStackEntry ->
+            val personaId = backStackEntry.arguments?.getString("personaId")
+                ?.takeIf { it != "new" }
+            PersonaEditorScreen(
+                personaId = personaId,
+                onNavigateBack = { navController.popBackStack() },
+                onDeleted = {
+                    // If deleted persona was active, clear selection
+                    if (personaId != null && chatViewModel.activePersona.value?.id == personaId) {
+                        chatViewModel.setActivePersona(null)
+                    }
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.AiMemory.route) {
+            AiMemoryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
     }
 }

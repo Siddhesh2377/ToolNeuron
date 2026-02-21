@@ -31,17 +31,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -52,22 +50,21 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
+import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -96,8 +93,18 @@ import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.models.ui.ActionIcon
+import com.dark.tool_neuron.models.ui.ActionItem
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
+import com.dark.tool_neuron.ui.components.ActionSwitch
+import com.dark.tool_neuron.ui.components.CaptionText
+import com.dark.tool_neuron.ui.components.MultiActionButton
+import com.dark.tool_neuron.ui.components.SectionHeader
+import com.dark.tool_neuron.ui.components.StandardCard
+import com.dark.tool_neuron.ui.components.StatusBadge
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.utils.SizeCategory
@@ -142,7 +149,7 @@ fun ModelStoreScreen(
                 TopAppBar(title = { Text("Model Store") }, navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.Default.ArrowBack,
+                        icon = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back"
                     )
                 }, actions = {
@@ -167,7 +174,7 @@ fun ModelStoreScreen(
                 .padding(padding)
         ) {
             // Tab Row
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTab.ordinal,
                 containerColor = MaterialTheme.colorScheme.background,
                 contentColor = MaterialTheme.colorScheme.primary
@@ -412,8 +419,8 @@ private fun InstalledModelsTab(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
             items(models, key = { it.id }) { model ->
                 InstalledModelCard(
@@ -461,7 +468,6 @@ private fun InstalledModelsTab(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun InstalledModelCard(
     model: Model,
@@ -469,118 +475,82 @@ private fun InstalledModelCard(
     onShowDetails: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
+    Surface(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = rDp(2.dp)),
-        shape = RoundedCornerShape(rDp(12.dp))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
     ) {
-        Column(
-            modifier = Modifier.padding(rDp(16.dp))
+        Row(
+            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = model.modelName,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Spacer(modifier = Modifier.height(rDp(4.dp)))
-                    Text(
-                        text = model.providerType.name,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                ) {
-                    IconButton(
-                        onClick = onShowDetails,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Info,
-                            contentDescription = "Show Details"
-                        )
+            // Provider type icon
+            Icon(
+                painter = painterResource(
+                    when (model.providerType) {
+                        ProviderType.GGUF -> R.drawable.smart_temp_message
+                        else -> R.drawable.vl_models
                     }
+                ),
+                contentDescription = null,
+                modifier = Modifier.size(rDp(Standards.IconMd)),
+                tint = if (model.isActive) MaterialTheme.colorScheme.primary
+                       else MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
-                    if (isDeleting) {
-                        Box(
-                            modifier = Modifier.size(rDp(40.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator(
-                                modifier = Modifier.size(rDp(24.dp))
-                            )
-                        }
-                    } else {
-                        IconButton(
-                            onClick = onDelete,
-                            colors = IconButtonDefaults.filledIconButtonColors(
-                                containerColor = MaterialTheme.colorScheme.errorContainer,
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = "Delete Model"
-                            )
-                        }
-                    }
+            // Name + subtitle
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = model.modelName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                val modelFile = File(model.modelPath)
+                val sizeText = if (modelFile.exists()) {
+                    val sizeInMB = modelFile.length() / (1024 * 1024)
+                    "${model.providerType.name}  ·  ${sizeInMB} MB"
+                } else {
+                    model.providerType.name
                 }
+                CaptionText(text = sizeText)
             }
 
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            // Status dot
+            StatusBadge(
+                text = if (model.isActive) "Active" else "",
+                isActive = model.isActive
+            )
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
-            ) {
-                AssistChip(
-                    onClick = {},
-                    label = {
-                        Text(
-                            text = if (model.isActive) "Active" else "Inactive",
-                            style = MaterialTheme.typography.labelSmall
-                        )
-                    },
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp))
-                        )
-                    }
-                )
-
-                val modelFile = File(model.modelPath)
-                if (modelFile.exists()) {
-                    val sizeInMB = modelFile.length() / (1024 * 1024)
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                text = "${sizeInMB}MB",
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(
-                                imageVector = Icons.Default.Storage,
-                                contentDescription = null,
-                                modifier = Modifier.size(rDp(16.dp))
-                            )
-                        }
+            // Actions
+            if (isDeleting) {
+                Box(
+                    modifier = Modifier.size(rDp(Standards.ActionIconSize)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(rDp(Standards.IconMd)),
+                        strokeWidth = rDp(2.dp),
+                        color = MaterialTheme.colorScheme.primary
                     )
                 }
+            } else {
+                MultiActionButton(
+                    actions = listOf(
+                        ActionItem(
+                            icon = ActionIcon.Vector(Icons.Default.Info),
+                            onClick = onShowDetails,
+                            contentDescription = "Details"
+                        ),
+                        ActionItem(
+                            icon = ActionIcon.Vector(Icons.Default.Delete),
+                            onClick = onDelete,
+                            contentDescription = "Delete"
+                        )
+                    )
+                )
             }
         }
     }
@@ -611,10 +581,7 @@ private fun ModelDetailsDialog(
                 val modelFile = File(model.modelPath)
                 if (modelFile.exists()) {
                     val sizeInMB = modelFile.length() / (1024 * 1024)
-                    DetailRow("Size", "${sizeInMB}MB")
-                    DetailRow("Exists", "Yes")
-                } else {
-                    DetailRow("Exists", "No")
+                    DetailRow("Size", "${sizeInMB} MB")
                 }
             }
         },
@@ -653,8 +620,8 @@ private fun SettingsTab(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+        contentPadding = PaddingValues(horizontal = rDp(Standards.SpacingLg), vertical = rDp(Standards.SpacingSm)),
+        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
     ) {
         // Device Info Section
         item {
@@ -663,20 +630,16 @@ private fun SettingsTab(
 
         // Repositories Section
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Model Repositories",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-                IconButton(onClick = { showAddDialog = true }) {
-                    Icon(Icons.Default.Add, "Add Repository")
+            SectionHeader(
+                title = "Model Repositories",
+                action = {
+                    ActionButton(
+                        onClickListener = { showAddDialog = true },
+                        icon = Icons.Default.Add,
+                        contentDescription = "Add Repository"
+                    )
                 }
-            }
+            )
         }
 
         items(repositories, key = { it.id }) { repo ->
@@ -712,40 +675,49 @@ private fun SettingsTab(
 
 @Composable
 private fun DeviceInfoCard(deviceInfo: Map<String, String>) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
-        ), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.prompt),
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(20.dp)),
-                    tint = MaterialTheme.colorScheme.primary
+    var expanded by remember { mutableStateOf(false) }
+    val entries = deviceInfo.entries.toList()
+    val previewEntries = entries.take(3)
+    val remainingEntries = entries.drop(3)
+
+    StandardCard(
+        title = "Device Information",
+        iconRes = R.drawable.prompt,
+        trailing = {
+            if (remainingEntries.isNotEmpty()) {
+                ActionButton(
+                    onClickListener = { expanded = !expanded },
+                    icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) "Collapse" else "Expand"
                 )
-                Text(
-                    text = "Device Information",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold
+            }
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+            previewEntries.forEach { (key, value) ->
+                DeviceInfoRow(
+                    label = key.replaceFirstChar {
+                        if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
+                    },
+                    value = value
                 )
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
-
-            deviceInfo.forEach { (key, value) ->
-                DeviceInfoRow(label = key.replaceFirstChar {
-                    if (it.isLowerCase()) it.titlecase(
-                        Locale.ROOT
-                    ) else it.toString()
-                }, value = value)
+            AnimatedVisibility(
+                visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+                    remainingEntries.forEach { (key, value) ->
+                        DeviceInfoRow(
+                            label = key.replaceFirstChar {
+                                if (it.isLowerCase()) it.titlecase(Locale.ROOT) else it.toString()
+                            },
+                            value = value
+                        )
+                    }
+                }
             }
         }
     }
@@ -769,7 +741,6 @@ private fun DeviceInfoRow(label: String, value: String) {
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RepositoryCard(
     repository: HFModelRepository,
@@ -779,137 +750,108 @@ private fun RepositoryCard(
     onValidate: () -> Unit,
     onDelete: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(10.dp))
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)),
+        onClick = onValidate
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(12.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
         ) {
-            // Top row: Name, validation status, edit, toggle, delete
+            // Row 1: validation dot + name + actions + switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = repository.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold
+                // Validation status dot
+                val dotColor = when (validationResult) {
+                    is ValidationResult.Valid -> MaterialTheme.colorScheme.primary
+                    is ValidationResult.Invalid -> MaterialTheme.colorScheme.error
+                    is ValidationResult.Checking -> MaterialTheme.colorScheme.tertiary
+                    null -> MaterialTheme.colorScheme.outlineVariant
+                }
+                if (validationResult is ValidationResult.Checking) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(rDp(10.dp)),
+                        strokeWidth = rDp(1.5.dp),
+                        color = dotColor
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(rDp(6.dp))
+                            .background(dotColor, RoundedCornerShape(50))
                     )
                 }
 
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Validation status icon
-                    when (validationResult) {
-                        is ValidationResult.Valid -> {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = "Valid",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(rDp(18.dp))
-                            )
-                        }
-                        is ValidationResult.Invalid -> {
-                            Icon(
-                                imageVector = Icons.Default.Error,
-                                contentDescription = "Invalid",
-                                tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(rDp(18.dp))
-                            )
-                        }
-                        is ValidationResult.Checking -> {
-                            LoadingIndicator(
-                                modifier = Modifier.size(rDp(18.dp))
-                            )
-                        }
-                        null -> {}
-                    }
+                // Repo name
+                Text(
+                    text = repository.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    color = if (repository.isEnabled) MaterialTheme.colorScheme.onSurface
+                            else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                )
 
-                    // Edit button
-                    ActionButton(
-                        onClickListener = onEdit,
-                        icon = Icons.Default.Edit,
-                        contentDescription = "Edit"
-                    )
-
-                    // Toggle switch
-                    Switch(
-                        checked = repository.isEnabled,
-                        onCheckedChange = { onToggle() }
-                    )
-
-                    // Delete button
-                    IconButton(onClick = onDelete) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
-                            tint = MaterialTheme.colorScheme.error
+                // Grouped Edit + Delete
+                MultiActionButton(
+                    actions = listOf(
+                        ActionItem(
+                            icon = ActionIcon.Vector(Icons.Default.Edit),
+                            onClick = onEdit,
+                            contentDescription = "Edit"
+                        ),
+                        ActionItem(
+                            icon = ActionIcon.Vector(Icons.Default.Delete),
+                            onClick = onDelete,
+                            contentDescription = "Delete"
                         )
-                    }
-                }
+                    )
+                )
+
+                // Toggle
+                ActionSwitch(
+                    checked = repository.isEnabled,
+                    onCheckedChange = { onToggle() }
+                )
             }
 
-            // Repository path
-            Text(
-                text = repository.repoPath,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontFamily = maple
-            )
-
-            // Bottom row: Category chip, GGUF count, validate button
+            // Row 2: repo path + category + GGUF count (inline)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Category chip
-                    AssistChip(
-                        onClick = {},
-                        label = {
-                            Text(
-                                text = repository.category.displayName,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        },
-                        modifier = Modifier.height(rDp(28.dp))
+                Text(
+                    text = repository.repoPath,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontFamily = maple,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                CaptionText(text = "·")
+                CaptionText(text = repository.category.displayName)
+
+                if (validationResult is ValidationResult.Valid) {
+                    CaptionText(text = "·")
+                    CaptionText(
+                        text = "${validationResult.ggufFileCount} GGUF",
+                        color = MaterialTheme.colorScheme.primary
                     )
-
-                    // GGUF file count if validated
-                    if (validationResult is ValidationResult.Valid) {
-                        Text(
-                            text = "${validationResult.ggufFileCount} GGUF files",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else if (validationResult is ValidationResult.Invalid) {
-                        Text(
-                            text = validationResult.reason,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                }
-
-                // Validate button
-                TextButton(
-                    onClick = onValidate,
-                    enabled = validationResult !is ValidationResult.Checking
-                ) {
-                    Text(
-                        text = "Validate",
-                        style = MaterialTheme.typography.labelSmall
+                } else if (validationResult is ValidationResult.Invalid) {
+                    CaptionText(text = "·")
+                    CaptionText(
+                        text = validationResult.reason,
+                        color = MaterialTheme.colorScheme.error
                     )
                 }
             }
@@ -1155,7 +1097,7 @@ fun SearchAppBar(
         )
     }, navigationIcon = {
         IconButton(onClick = onCloseSearch) {
-            Icon(Icons.Default.ArrowBack, "Close search")
+            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close search")
         }
     })
 }

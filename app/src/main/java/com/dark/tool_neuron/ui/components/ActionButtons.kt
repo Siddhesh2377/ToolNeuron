@@ -186,31 +186,35 @@ fun MultiActionButton(
             verticalAlignment = Alignment.CenterVertically
         ) {
             actions.forEachIndexed { index, action ->
+                val tint = if (action.enabled) contentColor else contentColor.copy(alpha = 0.3f)
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
                         .size(rDp(Standards.ActionIconSize))
-                        .clickable { action.onClick() }
+                        .then(
+                            if (action.enabled) Modifier.clickable { action.onClick() }
+                            else Modifier
+                        )
                 ) {
                     if (action.isLoading) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(rDp(Standards.ActionIconSize - 12.dp)),
-                            color = contentColor,
+                            color = tint,
                             strokeWidth = rDp(2.dp),
-                            trackColor = contentColor.copy(alpha = 0.1f)
+                            trackColor = tint.copy(alpha = 0.1f)
                         )
                     } else {
                         when (action.icon) {
                             is ActionIcon.Vector -> Icon(
                                 imageVector = action.icon.imageVector,
                                 contentDescription = action.contentDescription,
-                                tint = contentColor,
+                                tint = tint,
                                 modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
                             )
                             is ActionIcon.Resource -> Icon(
                                 painter = painterResource(action.icon.resId),
                                 contentDescription = action.contentDescription,
-                                tint = contentColor,
+                                tint = tint,
                                 modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
                             )
                         }

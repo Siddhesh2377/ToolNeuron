@@ -11,5 +11,6 @@ data class ActionItem(
     val icon: ActionIcon,
     val onClick: () -> Unit,
     val contentDescription: String = "Action",
-    val isLoading: Boolean = false
+    val isLoading: Boolean = false,
+    val enabled: Boolean = true
 )

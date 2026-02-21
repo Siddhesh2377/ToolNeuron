@@ -63,6 +63,8 @@ import kotlin.math.roundToInt
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
     onModelEditor: () -> Unit = {},
+    onPersonasClick: () -> Unit = {},
+    onAiMemoryClick: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
     // App settings
@@ -72,6 +74,8 @@ fun SettingsScreen(
     val toolCallingBypassEnabled by viewModel.toolCallingBypassEnabled.collectAsStateWithLifecycle()
     val imageBlurEnabled by viewModel.imageBlurEnabled.collectAsStateWithLifecycle()
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
+    val codeHighlightEnabled by viewModel.codeHighlightEnabled.collectAsStateWithLifecycle()
+    val aiMemoryEnabled by viewModel.aiMemoryEnabled.collectAsStateWithLifecycle()
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -138,8 +142,8 @@ fun SettingsScreen(
                     title = "Tool Calling",
                     description = when {
                         toolCallingBypassEnabled -> "Bypass enabled — tool calling available for all models"
-                        hasToolCallingModel -> "Enable tool/plugin calling for supported models"
-                        else -> "Tool calling model required — download below or enable bypass"
+                        hasToolCallingModel -> "Any model with a chat template can use tools"
+                        else -> "Install a GGUF model to enable tool calling"
                     },
                     checked = toolCallingEnabled && canEnableToolCalling,
                     onCheckedChange = { viewModel.setToolCallingEnabled(it) },
@@ -147,10 +151,10 @@ fun SettingsScreen(
                 )
             }
 
-            // Download tool calling model card — only visible when no tool calling model is installed
-            if (!hasToolCallingModel && !toolCallingBypassEnabled) {
+            // Download recommended tool calling model card — only visible when no GGUF model is installed
+            if (!hasToolCallingModel) {
                 item {
-                    StandardCard(title = "Tool Calling Model Required") {
+                    StandardCard(title = "Recommended Tool Calling Model") {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -266,16 +270,74 @@ fun SettingsScreen(
                             )
                         }
                         Text(
-                            text = "Allow tool calling with any model. This may cause errors or unexpected behavior if the model doesn't support tool calling format.",
+                            text = "Force tool calling on models without a chat template. May cause errors or unexpected output.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
                         SwitchRow(
                             title = "Enable Bypass",
-                            description = if (toolCallingBypassEnabled) "Tool calling enabled for all models" else "Only supported models can use tools",
+                            description = if (toolCallingBypassEnabled) "Tool calling forced for all models" else "Only models with chat templates can use tools",
                             checked = toolCallingBypassEnabled,
                             onCheckedChange = { viewModel.setToolCallingBypassEnabled(it) },
                             titleColor = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            }
+
+            // ==================== AI Personality & Memory ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "AI Personality & Memory") }
+
+            item {
+                Surface(
+                    onClick = onPersonasClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(rDp(8.dp)),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(modifier = Modifier.padding(rDp(16.dp))) {
+                        Text(
+                            "Personas",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "Choose or create AI personalities with custom behavior",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            item {
+                SwitchRow(
+                    title = "AI Memory",
+                    description = "Remember facts about you across conversations",
+                    checked = aiMemoryEnabled,
+                    onCheckedChange = { viewModel.setAiMemoryEnabled(it) }
+                )
+            }
+
+            item {
+                Surface(
+                    onClick = onAiMemoryClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(rDp(8.dp)),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(modifier = Modifier.padding(rDp(16.dp))) {
+                        Text(
+                            "View Memories",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "See, search, and manage what the AI remembers about you",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
@@ -301,6 +363,20 @@ fun SettingsScreen(
                     description = "Remember previous messages in conversation (faster without)",
                     checked = chatMemoryEnabled,
                     onCheckedChange = { viewModel.setChatMemoryEnabled(it) }
+                )
+            }
+
+            // ==================== Chat ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Chat") }
+
+            item {
+                SwitchRow(
+                    title = "Code Syntax Highlighting",
+                    description = "Colorize code blocks based on language (disable for faster scrolling)",
+                    checked = codeHighlightEnabled,
+                    onCheckedChange = { viewModel.setCodeHighlightEnabled(it) }
                 )
             }
 

@@ -942,7 +942,7 @@ private fun ExportDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Tabs
-                TabRow(selectedTabIndex = currentTab) {
+                SecondaryTabRow(selectedTabIndex = currentTab) {
                     Tab(
                         selected = currentTab == 0,
                         onClick = { currentTab = 0 },
