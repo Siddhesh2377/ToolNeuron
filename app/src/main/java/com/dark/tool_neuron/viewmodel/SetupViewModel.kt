@@ -23,11 +23,6 @@ enum class SetupOption {
     POWER_MODE
 }
 
-enum class SetupPhase {
-    INTRO,
-    SETUP
-}
-
 class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     private val setupDataStore = SetupDataStore(application)
@@ -35,9 +30,6 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     private val modelRepository = AppContainer.getModelRepository()
 
     val downloadStates = ModelDownloadService.downloadStates
-
-    private val _setupPhase = MutableStateFlow(SetupPhase.INTRO)
-    val setupPhase: StateFlow<SetupPhase> = _setupPhase
 
     private val _selectedOption = MutableStateFlow<SetupOption?>(null)
     val selectedOption: StateFlow<SetupOption?> = _selectedOption
@@ -148,6 +140,7 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                         it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
                     }
                     if (hasTextOrImage) {
+                        setupDataStore.completeSetup()
                         _setupComplete.value = true
                     }
                 }
@@ -176,33 +169,23 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             currentStates.containsKey(textModel.id) && currentStates.containsKey(ttsModel.id) -> {
                 _selectedOption.value = SetupOption.TEXT_TTS
                 _primaryModelId.value = textModel.id
-                _setupPhase.value = SetupPhase.SETUP
             }
             currentStates.containsKey(textModel.id) -> {
                 _selectedOption.value = SetupOption.TEXT
                 _primaryModelId.value = textModel.id
-                _setupPhase.value = SetupPhase.SETUP
             }
             currentStates.containsKey(textUncensoredModel.id) -> {
                 _selectedOption.value = SetupOption.TEXT_UNCENSORED
                 _primaryModelId.value = textUncensoredModel.id
-                _setupPhase.value = SetupPhase.SETUP
             }
             currentStates.containsKey(imageModelId) -> {
                 _selectedOption.value = SetupOption.IMAGE_GEN
                 _primaryModelId.value = imageModelId
-                _setupPhase.value = SetupPhase.SETUP
             }
         }
     }
 
     // ==================== Actions ====================
-
-    fun advanceFromIntro() {
-        if (_setupPhase.value == SetupPhase.INTRO) {
-            _setupPhase.value = SetupPhase.SETUP
-        }
-    }
 
     fun selectOption(option: SetupOption) {
         if (_selectedOption.value != null) return

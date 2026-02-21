@@ -177,13 +177,15 @@ abstract class AppDatabase : RoomDatabase() {
 
         private fun seedDefaultPersonas(db: SupportSQLiteDatabase) {
             val now = System.currentTimeMillis()
+            val cols = "id, name, avatar, system_prompt, greeting, is_default, created_at, description, personality, scenario, example_messages, alternate_greetings, tags, creator_notes"
+            val placeholders = "?, ?, ?, ?, ?, 1, ?, '', '', '', '', '[]', '[]', ''"
 
             db.execSQL(
-                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(UUID.randomUUID().toString(), "Assistant", "", "", "", now)
             )
             db.execSQL(
-                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
                     UUID.randomUUID().toString(),
                     "Luna",
@@ -194,7 +196,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             )
             db.execSQL(
-                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
                     UUID.randomUUID().toString(),
                     "CodeBuddy",
@@ -205,7 +207,7 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             )
             db.execSQL(
-                "INSERT INTO personas (id, name, avatar, system_prompt, greeting, is_default, created_at) VALUES (?, ?, ?, ?, ?, 1, ?)",
+                "INSERT INTO personas ($cols) VALUES ($placeholders)",
                 arrayOf<Any>(
                     UUID.randomUUID().toString(),
                     "Sage",

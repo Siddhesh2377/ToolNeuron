@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.activity
 
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,24 +18,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.di.AppContainer
-import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.enums.ProviderType
-import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
+import com.dark.tool_neuron.ui.screen.AiMemoryScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
-import com.dark.tool_neuron.ui.screen.SetupScreen
-import com.dark.tool_neuron.ui.screen.AiMemoryScreen
 import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
 import com.dark.tool_neuron.ui.screen.PersonaScreen
+import com.dark.tool_neuron.ui.screen.SetupScreen
 import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.WelcomeScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -53,7 +50,6 @@ import kotlinx.coroutines.withContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    private lateinit var termsDataStore: TermsDataStore
 
     @Inject
     lateinit var ragRepository: com.dark.tool_neuron.repo.RagRepository
@@ -61,8 +57,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        termsDataStore = TermsDataStore(this)
 
         // Bind LLM service after activity is created (Android 14+ requirement)
         LlmModelWorker.bindService(applicationContext)
@@ -80,38 +74,48 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val context = this
-
             NeuroVerseTheme {
-                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
-                val scope = rememberCoroutineScope()
+                val context = this@MainActivity
 
-                // Start background download if model not present
+                // Compute start destination from onboarding state + installed models
+                var startDestination by remember { mutableStateOf<String?>(null) }
+                var hasModelsInstalled by remember { mutableStateOf(false) }
+
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        if (!EmbeddingEngine.isModelDownloaded(context)) {
-                            LlmModelWorker.startEmbeddingModelDownload(context)
+                        val termsDataStore = TermsDataStore(context)
+                        val setupDataStore = SetupDataStore(context)
+                        val modelRepository = AppContainer.getModelRepository()
+
+                        val termsAccepted = termsDataStore.hasAcceptedTerms.first()
+                        val setupDone = setupDataStore.isSetupDone.first()
+                        val models = modelRepository.getAllModels().first()
+
+                        val hasModel = models.any {
+                            it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                        }
+                        hasModelsInstalled = hasModel
+
+                        startDestination = when {
+                            // Terms not accepted: returning user (has models) goes to terms directly, new user gets full onboarding
+                            !termsAccepted && hasModel -> Screen.Terms.route
+                            !termsAccepted -> Screen.Welcome.route
+
+                            // Terms accepted but setup not done and no models: go to setup
+                            !setupDone && !hasModel -> Screen.OnboardingSetup.route
+
+                            // Everything done
+                            else -> Screen.Chat.route
                         }
                     }
                 }
 
-                if (!hasAcceptedTerms) {
-                    TermsAndConditionsScreen(
-                        onAccept = {
-                            scope.launch {
-                                termsDataStore.acceptTerms()
-                            }
-                        }
-                    )
-                } else {
-                    val chatViewModel: ChatViewModel = hiltViewModel()
-                    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
+                val dest = startDestination ?: return@NeuroVerseTheme
 
-                    AppNavigation(
-                        chatViewModel = chatViewModel,
-                        llmModelViewModel = llmModelViewModel
-                    )
-                }
+                AppNavigation(
+                    startDestination = dest,
+                    hasModelsInstalled = hasModelsInstalled
+                )
             }
         }
     }
@@ -126,12 +130,17 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
-    object Setup : Screen("setup")
+    // Onboarding (flat routes so any can be used as startDestination)
+    object Welcome : Screen("welcome")
+    object Terms : Screen("terms")
+    object OnboardingSetup : Screen("setup")
+
+    // Main app
     object Chat : Screen("chat")
     object Store : Screen("store")
     object Editor : Screen("editor")
     object Settings : Screen("settings")
-    object VaultManager: Screen("vault_manager")
+    object VaultManager : Screen("vault_manager")
     object Personas : Screen("personas")
     object PersonaEditor : Screen("persona_editor/{personaId}") {
         fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
@@ -141,41 +150,20 @@ sealed class Screen(val route: String) {
 
 @Composable
 fun AppNavigation(
-    chatViewModel: ChatViewModel,
-    llmModelViewModel: LLMModelViewModel
+    startDestination: String,
+    hasModelsInstalled: Boolean
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // Determine start destination: check installed models + setup skip flag
-    var startDestination by remember { mutableStateOf<String?>(null) }
-
-    LaunchedEffect(Unit) {
-        withContext(Dispatchers.IO) {
-            val modelRepository = AppContainer.getModelRepository()
-            val setupDataStore = SetupDataStore(context)
-
-            val models = modelRepository.getAllModels().first()
-            val skipped = setupDataStore.isSetupSkipped.first()
-
-            val hasRequiredModel = models.any {
-                it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
-            }
-
-            startDestination = if (hasRequiredModel || skipped) {
-                Screen.Chat.route
-            } else {
-                Screen.Setup.route
-            }
-        }
-    }
-
-    val dest = startDestination ?: return
-
+    val scope = rememberCoroutineScope()
     val navController = rememberNavController()
+
+    // Activity-scoped ViewModels for shared state between Chat and Personas
+    val chatViewModel: ChatViewModel = hiltViewModel()
+    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
 
     NavHost(
         navController = navController,
-        startDestination = dest,
+        startDestination = startDestination,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -202,22 +190,46 @@ fun AppNavigation(
         }
     ) {
 
-        composable(Screen.Setup.route) {
-            SetupScreen(
-                onSetupComplete = {
-                    navController.navigate(Screen.Chat.route) {
-                        popUpTo(Screen.Setup.route) { inclusive = true }
+        // ============ ONBOARDING SCREENS ============
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onContinue = {
+                    navController.navigate(Screen.Terms.route)
+                }
+            )
+        }
+
+        composable(Screen.Terms.route) {
+            val termsDataStore = remember { TermsDataStore(context) }
+            TermsAndConditionsScreen(
+                onAccept = {
+                    scope.launch {
+                        termsDataStore.acceptTerms()
+                    }
+                    if (hasModelsInstalled) {
+                        // Returning user: skip setup, go to chat
+                        navController.navigate(Screen.Chat.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } else {
+                        // New user: proceed to setup
+                        navController.navigate(Screen.OnboardingSetup.route)
                     }
                 }
             )
         }
 
-        composable(Screen.Editor.route) {
-            ModelConfigEditorScreen(onBackClick = {
-                navController.popBackStack()
-            })
+        composable(Screen.OnboardingSetup.route) {
+            SetupScreen(
+                onSetupComplete = {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
         }
 
+        // ============ MAIN APP ROUTES ============
         composable(Screen.Chat.route) { _ ->
             HomeScreen(
                 onSettingsClick = {
@@ -235,6 +247,12 @@ fun AppNavigation(
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
+        }
+
+        composable(Screen.Editor.route) {
+            ModelConfigEditorScreen(onBackClick = {
+                navController.popBackStack()
+            })
         }
 
         composable(Screen.Store.route) {

@@ -18,6 +18,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -78,10 +79,13 @@ fun SecureRagCreationScreen(
 
     val embeddingStatus by ragViewModel.embeddingStatus.collectAsStateWithLifecycle()
     val isEmbeddingReady by ragViewModel.isEmbeddingInitialized.collectAsStateWithLifecycle()
+    val isEmbeddingDownloaded by ragViewModel.isEmbeddingModelDownloaded.collectAsStateWithLifecycle()
+    val isEmbeddingDownloading by ragViewModel.isEmbeddingModelDownloading.collectAsStateWithLifecycle()
+    val downloadProgress by ragViewModel.embeddingDownloadProgress.collectAsStateWithLifecycle()
 
-    // Auto-initialize embedding engine when this screen is shown
-    LaunchedEffect(Unit) {
-        if (!ragViewModel.isEmbeddingReady) {
+    // Auto-initialize if model is downloaded but not initialized
+    LaunchedEffect(isEmbeddingDownloaded) {
+        if (isEmbeddingDownloaded && !ragViewModel.isEmbeddingReady) {
             ragViewModel.initializeEmbeddingFromFiles()
         }
     }
@@ -142,11 +146,15 @@ fun SecureRagCreationScreen(
         contentPadding = PaddingValues(horizontal = rDp(16.dp), vertical = rDp(12.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
-        // Embedding status — only if NOT ready
+        // Embedding model card — shown when model needs download, is downloading, or needs init
         if (!isEmbeddingReady) {
             item {
-                EmbeddingStatusCard(
+                EmbeddingModelCard(
+                    isDownloaded = isEmbeddingDownloaded,
+                    isDownloading = isEmbeddingDownloading,
+                    downloadProgress = downloadProgress,
                     status = embeddingStatus,
+                    onDownload = { ragViewModel.startEmbeddingDownload() },
                     onInitialize = { ragViewModel.initializeEmbeddingFromFiles() }
                 )
             }
@@ -656,53 +664,128 @@ private fun FileDropZone(
 // ==================== Supporting Composables ====================
 
 @Composable
-private fun EmbeddingStatusCard(
+private fun EmbeddingModelCard(
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Float,
     status: String,
+    onDownload: () -> Unit,
     onInitialize: () -> Unit
 ) {
+    val containerColor = when {
+        isDownloading -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+        isDownloaded -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
+    val iconTint = when {
+        isDownloading -> MaterialTheme.colorScheme.primary
+        isDownloaded -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
-        ),
-        shape = RoundedCornerShape(rDp(10.dp))
+        colors = CardDefaults.cardColors(containerColor = containerColor),
+        shape = RoundedCornerShape(rDp(12.dp))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(10.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(rDp(14.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                    Icons.Default.Warning,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
-                    tint = MaterialTheme.colorScheme.error
-                )
-                Column {
-                    Text(
-                        "Embedding Model",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = when {
+                            isDownloading -> Icons.Default.CloudDownload
+                            isDownloaded -> Icons.Default.Memory
+                            else -> Icons.Default.CloudDownload
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(22.dp)),
+                        tint = iconTint
                     )
-                    Text(
-                        status,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column {
+                        Text(
+                            "Embedding Model",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = when {
+                                isDownloading -> status
+                                isDownloaded -> "Downloaded — tap Initialize"
+                                else -> "Required for RAG features"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                when {
+                    isDownloading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDp(24.dp)),
+                            strokeWidth = rDp(2.5f.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    isDownloaded -> {
+                        FilledTonalButton(
+                            onClick = onInitialize,
+                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                        ) {
+                            Text("Initialize", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    else -> {
+                        FilledTonalButton(
+                            onClick = onDownload,
+                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(rDp(16.dp))
+                            )
+                            Spacer(modifier = Modifier.width(rDp(4.dp)))
+                            Text("Download", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
                 }
             }
-            TextButton(
-                onClick = onInitialize,
-                contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(4.dp))
-            ) {
-                Text("Initialize", style = MaterialTheme.typography.labelMedium)
+
+            // Download progress bar
+            if (isDownloading && downloadProgress > 0f) {
+                LinearProgressIndicator(
+                    progress = { downloadProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDp(4.dp))
+                        .clip(RoundedCornerShape(rDp(2.dp))),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            } else if (isDownloading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDp(4.dp))
+                        .clip(RoundedCornerShape(rDp(2.dp))),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
             }
         }
     }

@@ -18,10 +18,12 @@ import com.dark.tool_neuron.neuron_example.QueryResult
 import com.dark.tool_neuron.neuron_example.RetrievalConfidence
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagRepository
+import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +72,12 @@ class RagViewModel @Inject constructor(
     private val _isEmbeddingModelDownloading = MutableStateFlow(false)
     val isEmbeddingModelDownloading: StateFlow<Boolean> = _isEmbeddingModelDownloading
 
+    private val _isEmbeddingModelDownloaded = MutableStateFlow(false)
+    val isEmbeddingModelDownloaded: StateFlow<Boolean> = _isEmbeddingModelDownloaded
+
+    private val _embeddingDownloadProgress = MutableStateFlow(0f)
+    val embeddingDownloadProgress: StateFlow<Float> = _embeddingDownloadProgress
+
     // Chat list for creating RAG from chats
     private val _availableChats = MutableStateFlow<List<ChatInfo>>(emptyList())
     val availableChats: StateFlow<List<ChatInfo>> = _availableChats
@@ -114,6 +122,7 @@ class RagViewModel @Inject constructor(
         }
 
         refreshCounts()
+        _isEmbeddingModelDownloaded.value = EmbeddingEngine.isModelDownloaded(context)
         _isEmbeddingInitialized.value = embeddingEngine.isInitialized()
         if (embeddingEngine.isInitialized()) {
             _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
@@ -127,16 +136,111 @@ class RagViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val workManager = WorkManager.getInstance(context)
-                val workInfos = workManager.getWorkInfosByTag(com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG).get()
+                val workInfos = workManager.getWorkInfosByTag(
+                    com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG
+                ).get()
 
-                if (workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
+                val activeWork = workInfos.any {
+                    it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+                }
+
+                if (activeWork) {
                     _isEmbeddingModelDownloading.value = true
                     _embeddingStatus.value = "Downloading embedding model..."
+                    // Start polling for completion
+                    pollDownloadCompletion()
                 } else {
                     _isEmbeddingModelDownloading.value = false
                 }
             } catch (e: Exception) {
                 Log.e("RagViewModel", "Failed to check download status", e)
+            }
+        }
+    }
+
+    fun startEmbeddingDownload() {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_isEmbeddingModelDownloading.value) return@launch
+            if (EmbeddingEngine.isModelDownloaded(context)) {
+                _isEmbeddingModelDownloaded.value = true
+                initializeEmbeddingFromFiles()
+                return@launch
+            }
+
+            _isEmbeddingModelDownloading.value = true
+            _embeddingDownloadProgress.value = 0f
+            _embeddingStatus.value = "Starting download..."
+
+            LlmModelWorker.startEmbeddingModelDownload(context)
+            pollDownloadCompletion()
+        }
+    }
+
+    private fun pollDownloadCompletion() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val modelFile = EmbeddingEngine.getModelPath(context)
+
+            while (_isEmbeddingModelDownloading.value) {
+                delay(1500)
+
+                // Check if file appeared (download complete)
+                if (modelFile.exists() && modelFile.length() > 0) {
+                    _isEmbeddingModelDownloaded.value = true
+                    _isEmbeddingModelDownloading.value = false
+                    _embeddingDownloadProgress.value = 1f
+                    _embeddingStatus.value = "Download complete"
+                    // Auto-initialize after download
+                    initializeEmbeddingFromFiles()
+                    return@launch
+                }
+
+                // Check WorkManager state
+                try {
+                    val workManager = WorkManager.getInstance(context)
+                    val workInfos = workManager.getWorkInfosByTag(
+                        com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG
+                    ).get()
+
+                    val running = workInfos.any {
+                        it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+                    }
+                    val failed = workInfos.any { it.state == WorkInfo.State.FAILED }
+
+                    if (failed) {
+                        _isEmbeddingModelDownloading.value = false
+                        _embeddingDownloadProgress.value = 0f
+                        _embeddingStatus.value = "Download failed"
+                        _error.value = "Embedding model download failed. Tap to retry."
+                        return@launch
+                    }
+
+                    if (!running) {
+                        // Work finished — check if file exists
+                        if (modelFile.exists() && modelFile.length() > 0) {
+                            _isEmbeddingModelDownloaded.value = true
+                            _isEmbeddingModelDownloading.value = false
+                            _embeddingDownloadProgress.value = 1f
+                            _embeddingStatus.value = "Download complete"
+                            initializeEmbeddingFromFiles()
+                        } else {
+                            _isEmbeddingModelDownloading.value = false
+                            _embeddingDownloadProgress.value = 0f
+                            _embeddingStatus.value = "Download failed"
+                        }
+                        return@launch
+                    }
+
+                    // Estimate progress from partial file size (~23MB model)
+                    val partialFile = modelFile
+                    if (partialFile.exists()) {
+                        val estimatedSize = 23_000_000L
+                        val progress = (partialFile.length().toFloat() / estimatedSize).coerceIn(0f, 0.99f)
+                        _embeddingDownloadProgress.value = progress
+                        _embeddingStatus.value = "Downloading... ${(progress * 100).toInt()}%"
+                    }
+                } catch (e: Exception) {
+                    Log.e("RagViewModel", "Error polling download status", e)
+                }
             }
         }
     }
