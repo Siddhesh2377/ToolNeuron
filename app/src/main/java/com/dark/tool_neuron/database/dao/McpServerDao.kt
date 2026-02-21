@@ -39,4 +39,7 @@ interface McpServerDao {
     
     @Query("SELECT COUNT(*) FROM mcp_servers WHERE isEnabled = 1")
     fun getEnabledServerCount(): Flow<Int>
+
+    @Query("SELECT * FROM mcp_servers ORDER BY name ASC")
+    suspend fun getAllServersSnapshot(): List<McpServer>
 }

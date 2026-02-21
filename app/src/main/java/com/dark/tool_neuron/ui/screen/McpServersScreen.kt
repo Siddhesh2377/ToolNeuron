@@ -46,6 +46,7 @@ private val SuccessGreen = Color(0xFF4CAF50)
 @Composable
 fun McpServersScreen(
     onBackClick: () -> Unit,
+    onStoreClick: () -> Unit = {},
     viewModel: McpServerViewModel = hiltViewModel()
 ) {
     val servers by viewModel.servers.collectAsStateWithLifecycle()
@@ -85,6 +86,11 @@ fun McpServersScreen(
                     )
                 },
                 actions = {
+                    ActionButton(
+                        onClickListener = onStoreClick,
+                        icon = Icons.Default.Store,
+                        modifier = Modifier.padding(end = rDp(4.dp))
+                    )
                     ActionButton(
                         onClickListener = { viewModel.showAddServerDialog() },
                         icon = Icons.Default.Add,

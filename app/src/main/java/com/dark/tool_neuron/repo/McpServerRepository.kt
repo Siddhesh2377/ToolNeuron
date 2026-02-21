@@ -145,9 +145,21 @@ class McpServerRepository @Inject constructor(
     fun getEnabledServerCount(): Flow<Int> = mcpServerDao.getEnabledServerCount()
 
     /**
+     * Get all servers as a one-shot snapshot (non-Flow)
+     */
+    suspend fun getAllServersSnapshot(): List<McpServer> = mcpServerDao.getAllServersSnapshot()
+
+    /**
      * Get the current connection status for a server
      */
     fun getConnectionStatus(serverId: String): McpConnectionStatus {
         return _connectionStatuses.value[serverId] ?: McpConnectionStatus.DISCONNECTED
+    }
+
+    /**
+     * Add a pre-built McpServer directly (used by MCP Store).
+     */
+    suspend fun addServerDirect(server: McpServer) {
+        mcpServerDao.insertServer(server)
     }
 }

@@ -61,7 +61,13 @@ data class McpServer(
     val description: String = "",
     
     /** Custom headers as JSON string (e.g., for additional auth) */
-    val customHeadersJson: String? = null
+    val customHeadersJson: String? = null,
+    
+    /** Whether this server runs locally (e.g., via Termux) */
+    val isLocal: Boolean = false,
+    
+    /** ID of the MCP Store entry this server was installed from */
+    val sourceStoreId: String? = null
 ) {
     companion object {
         fun generateId(): String = java.util.UUID.randomUUID().toString()

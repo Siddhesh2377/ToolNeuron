@@ -27,6 +27,7 @@ import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
 import com.dark.tool_neuron.ui.screen.McpServersScreen
+import com.dark.tool_neuron.ui.screen.McpStoreScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
@@ -123,6 +124,7 @@ sealed class Screen(val route: String) {
     object Editor : Screen("editor")
     object VaultManager: Screen("vault_manager")
     object McpServers: Screen("mcp_servers")
+    object McpStore: Screen("mcp_store")
 }
 
 @Composable
@@ -203,9 +205,14 @@ fun AppNavigation(
         }
 
         composable(Screen.McpServers.route) {
-            McpServersScreen(onBackClick = {
-                navController.popBackStack()
-            })
+            McpServersScreen(
+                onBackClick = { navController.popBackStack() },
+                onStoreClick = { navController.navigate(Screen.McpStore.route) }
+            )
+        }
+
+        composable(Screen.McpStore.route) {
+            McpStoreScreen(onBackClick = { navController.popBackStack() })
         }
     }
 }

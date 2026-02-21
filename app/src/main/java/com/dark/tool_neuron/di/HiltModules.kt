@@ -5,6 +5,7 @@
     import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
     import com.dark.tool_neuron.repo.McpServerRepository
+    import com.dark.tool_neuron.repo.McpStoreRepository
     import com.dark.tool_neuron.repo.ModelRepository
     import com.dark.tool_neuron.repo.RagRepository
     import com.dark.tool_neuron.service.McpClientService
@@ -73,6 +74,18 @@
         fun provideMcpServerRepository(database: AppDatabase): McpServerRepository {
             return McpServerRepository(
                 mcpServerDao = database.mcpServerDao()
+            )
+        }
+
+        @Provides
+        @Singleton
+        fun provideMcpStoreRepository(
+            @ApplicationContext context: Context,
+            mcpServerRepository: McpServerRepository
+        ): McpStoreRepository {
+            return McpStoreRepository(
+                context = context,
+                mcpServerRepository = mcpServerRepository
             )
         }
     }
