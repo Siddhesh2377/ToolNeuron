@@ -11,7 +11,11 @@ import org.json.JSONObject
 import java.io.File
 import java.util.UUID
 
-class MemoryVault(context: Context) {
+class MemoryVault(
+    context: Context,
+    private val keyAlias: String,
+    val migrationListener: MigrationListener? = null
+) {
     private val vaultDir = File(context.filesDir, "memory_vault")
     private val vaultFile = VaultFile(File(vaultDir, "vault.mvlt"))
     private val walFile = File(vaultDir, "vault.wal")
@@ -34,11 +38,16 @@ class MemoryVault(context: Context) {
     private var initialized = false
 
     init {
+        // Validate keyAlias configuration
+        require(keyAlias != "sample_val") {
+            "Invalid keyAlias configuration. Please set ALIAS in local.properties or environment variables."
+        }
+
         vaultDir.mkdirs()
         writer = BlockWriter(vaultFile)
         reader = BlockReader(vaultFile)
         walManager = WALManager(walFile)
-        encryptionManager = EncryptionManager()
+        encryptionManager = EncryptionManager(keyAlias)
         contentProcessor = ContentProcessor(encryptionManager)
         index = VaultIndex()
         fullTextIndex = FullTextIndex()
@@ -56,9 +65,48 @@ class MemoryVault(context: Context) {
             vaultFile.open()
             walManager.open()
 
+            // Handle fresh vault - use new key from start
             if (!vaultFile.exists() || vaultFile.size() == 0L) {
-                val header = VaultHeader()
+                val header = VaultHeader(keyVersion = 1)  // Fresh vaults use new key
                 vaultFile.writeAt(0, header.toBytes())
+                initialized = true
+                return@withContext
+            }
+
+            // Check if migration is needed
+            val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
+            val header = VaultHeader.fromBytes(headerBytes)
+
+            if (header.keyVersion.toInt() == 0) {
+                // Migration needed
+                Log.d("MemoryVault", "Encryption key migration needed")
+                migrationListener?.onMigrationStarted()
+
+                try {
+                    val migrationManager = MigrationManager(vaultFile, reader, vaultDir)
+                    val result = migrationManager.migrate(
+                        newKeyAlias = keyAlias,
+                        onProgress = { percent ->
+                            migrationListener?.onMigrationProgress(percent)
+                        }
+                    )
+
+                    when (result) {
+                        is MigrationResult.Success -> {
+                            Log.d("MemoryVault", "Migration completed: ${result.blocksReEncrypted} blocks re-encrypted")
+                            migrationListener?.onMigrationComplete()
+                        }
+                        is MigrationResult.Failure -> {
+                            Log.e("MemoryVault", "Migration failed", result.error)
+                            migrationListener?.onMigrationFailed(result.error)
+                            throw result.error
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e("MemoryVault", "Migration failed with exception", e)
+                    migrationListener?.onMigrationFailed(e)
+                    throw e
+                }
             }
 
             val uncommitted = walManager.getUncommittedEntries()
@@ -483,24 +531,25 @@ class MemoryVault(context: Context) {
     }
 
     private suspend fun checkpoint() {
-        Log.d("MemoryVault", "Checkpoint started")
+        //Log.d("MemoryVault", "Checkpoint started")
         try {
             val metadata = index.getAllMetadata()
-            Log.d("MemoryVault", "Checkpointing ${metadata.size} items")
+            //Log.d("MemoryVault", "Checkpointing ${metadata.size} items")
 
             // Serialize first
             val indexData = IndexSerializer.serialize(metadata)
-            Log.d("MemoryVault", "Serialized index: ${indexData.size} bytes")
+            //Log.d("MemoryVault", "Serialized index: ${indexData.size} bytes")
 
             // Then encrypt
             val encryptedData = encryptionManager.encrypt(indexData)
             val finalData = encryptedData.toBytes()
-            Log.d("MemoryVault", "Encrypted index: ${finalData.size} bytes")
+           // Log.d("MemoryVault", "Encrypted index: ${finalData.size} bytes")
 
             val indexOffset = vaultFile.size()
             vaultFile.writeAt(indexOffset, finalData)
 
             val header = VaultHeader(
+                keyVersion = 1,  // Always use new key for checkpoints
                 indexOffset = indexOffset,
                 indexSize = finalData.size.toLong(),
                 modifiedTime = System.currentTimeMillis()
@@ -521,19 +570,19 @@ class MemoryVault(context: Context) {
         val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
         val header = VaultHeader.fromBytes(headerBytes)
 
-        Log.d("MemoryVault", "Loading index: offset=${header.indexOffset}, size=${header.indexSize}")
+        //Log.d("MemoryVault", "Loading index: offset=${header.indexOffset}, size=${header.indexSize}")
 
         if (header.indexOffset > 0 && header.indexSize > 0) {
             try {
                 val encryptedIndexData = vaultFile.readAt(header.indexOffset, header.indexSize.toInt())
 
-                Log.d("MemoryVault", "Read encrypted index: ${encryptedIndexData.size} bytes")
+             //   Log.d("MemoryVault", "Read encrypted index: ${encryptedIndexData.size} bytes")
 
                 // Decrypt first
                 val encryptedData = EncryptedData.fromBytes(encryptedIndexData)
                 val decryptedIndexData = encryptionManager.decrypt(encryptedData)
 
-                Log.d("MemoryVault", "Decrypted index: ${decryptedIndexData.size} bytes")
+            //    Log.d("MemoryVault", "Decrypted index: ${decryptedIndexData.size} bytes")
 
                 // Then deserialize
                 val metadata = IndexSerializer.deserialize(decryptedIndexData)
@@ -545,7 +594,7 @@ class MemoryVault(context: Context) {
                     }
                 }
 
-                Log.d("MemoryVault", "Loaded ${metadata.size} items from index")
+           //     Log.d("MemoryVault", "Loaded ${metadata.size} items from index")
             } catch (e: Exception) {
                 Log.e("MemoryVault", "Failed to load index", e)
                 // If load fails, start fresh

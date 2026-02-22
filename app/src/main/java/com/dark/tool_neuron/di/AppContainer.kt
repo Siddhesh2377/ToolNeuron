@@ -3,6 +3,8 @@ package com.dark.tool_neuron.di
 import android.app.Application
 import android.content.Context
 import com.dark.tool_neuron.database.AppDatabase
+import com.dark.tool_neuron.database.dao.AiMemoryDao
+import com.dark.tool_neuron.database.dao.PersonaDao
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.McpServerRepository
 import com.dark.tool_neuron.repo.ModelRepository
@@ -32,9 +34,12 @@ object AppContainer {
     private val appScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val chatManager = ChatManager()
     private var generationManager = GenerationManager()
-    private var vaultInitialized = false
+
+    // Keep track of context for re-initialization if needed
+    private lateinit var appContext: Context
 
     fun init(context: Context, application: Application) {
+        appContext = context.applicationContext
         database = AppDatabase.getDatabase(context)
 
         modelRepository = ModelRepository(
@@ -47,36 +52,44 @@ object AppContainer {
 
         llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
-        chatViewModelFactory = ChatViewModelFactory(
-            chatManager,
-            generationManager,
-            mcpServerRepository,
-            mcpClientService
-        )
+        chatViewModelFactory = ChatViewModelFactory(context, chatManager, generationManager)
 
         initVault(context)
     }
 
     private fun initVault(context: Context) {
         appScope.launch {
-            try {
-                VaultHelper.initialize(context)
-                vaultInitialized = true
-            } catch (e: Exception) {
-                e.printStackTrace()
+            val maxRetries = 3
+            for (attempt in 1..maxRetries) {
+                try {
+                    VaultHelper.initialize(context)
+                    break
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                    if (attempt < maxRetries) {
+                        kotlinx.coroutines.delay(500L * attempt)
+                    }
+                }
             }
         }
     }
 
+    /**
+     * Re-initialize vault if needed (e.g., after configuration change or process death)
+     * This can be called from Activities/Fragments to ensure vault is ready
+     */
+    fun ensureVaultInitialized() {
+        if (!VaultHelper.isInitialized() && ::appContext.isInitialized) {
+            initVault(appContext)
+        }
+    }
+
     fun shutdown() {
-        if (vaultInitialized) {
-            appScope.launch {
-                try {
-                    VaultHelper.close()
-                    vaultInitialized = false
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                }
+        appScope.launch {
+            try {
+                VaultHelper.close()
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
     }
@@ -87,6 +100,10 @@ object AppContainer {
 
     fun getChatRepository(): ChatRepository = chatRepository
 
+    fun getMcpServerRepository(): McpServerRepository = mcpServerRepository
+
+    fun getMcpClientService(): McpClientService = mcpClientService
+
     fun getLLMModelViewModelFactory(): LLMModelViewModelFactory = llmModelViewModelFactory
 
     fun getChatListViewModelFactory(): ChatListViewModelFactory = chatListViewModelFactory
@@ -94,5 +111,16 @@ object AppContainer {
     fun getChatViewModelFactory(): ChatViewModelFactory = chatViewModelFactory
 
 
-    fun isVaultReady(): Boolean = vaultInitialized
+    fun isVaultReady(): Boolean = VaultHelper.isInitialized()
+
+    /**
+     * Exposes the vault readiness StateFlow for UI observation
+     */
+    val vaultReadyState = VaultHelper.isReady
+
+    fun getPersonaDao(): PersonaDao = database.personaDao()
+
+    fun getAiMemoryDao(): AiMemoryDao = database.aiMemoryDao()
+
+    fun getGenerationManager(): GenerationManager = generationManager
 }

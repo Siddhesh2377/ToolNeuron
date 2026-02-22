@@ -5,17 +5,13 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -27,13 +23,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.models.table_schema.RagSourceType
-import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.components.ActionTextButton
-import com.dark.tool_neuron.ui.components.ActionToggleButton
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.util.DocumentParser
 import com.dark.tool_neuron.viewmodel.RagViewModel
@@ -82,10 +75,22 @@ fun SecureRagCreationScreen(
     var state by remember { mutableStateOf(RagCreationState()) }
     var showAddUserDialog by remember { mutableStateOf(false) }
     var showPasswordVisibility by remember { mutableStateOf(false) }
+    var showAdvanced by remember { mutableStateOf(false) }
 
     val embeddingStatus by ragViewModel.embeddingStatus.collectAsStateWithLifecycle()
     val isEmbeddingReady by ragViewModel.isEmbeddingInitialized.collectAsStateWithLifecycle()
+    val isEmbeddingDownloaded by ragViewModel.isEmbeddingModelDownloaded.collectAsStateWithLifecycle()
+    val isEmbeddingDownloading by ragViewModel.isEmbeddingModelDownloading.collectAsStateWithLifecycle()
+    val downloadProgress by ragViewModel.embeddingDownloadProgress.collectAsStateWithLifecycle()
 
+    // Auto-initialize if model is downloaded but not initialized
+    LaunchedEffect(isEmbeddingDownloaded) {
+        if (isEmbeddingDownloaded && !ragViewModel.isEmbeddingReady) {
+            ragViewModel.initializeEmbeddingFromFiles()
+        }
+    }
+
+    // File picker for all supported formats
     val filePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
@@ -94,77 +99,343 @@ fun SecureRagCreationScreen(
                 uri,
                 Intent.FLAG_GRANT_READ_URI_PERMISSION
             )
-            state = state.copy(fileUri = uri)
+            state = state.copy(fileUri = uri, sourceType = RagSourceType.FILE)
+            // Auto-populate name from filename if empty
+            if (state.name.isBlank()) {
+                val fileName = uri.lastPathSegment
+                    ?.substringAfterLast('/')
+                    ?.substringBeforeLast('.') ?: ""
+                if (fileName.isNotBlank()) {
+                    state = state.copy(name = fileName)
+                }
+            }
+            // Auto-detect document type from MIME
+            val mimeType = context.contentResolver.getType(uri)
+            if (mimeType != null) {
+                val detected = DocumentType.entries.find { docType ->
+                    docType.mimeTypes.any { it == mimeType }
+                }
+                if (detected != null) {
+                    state = state.copy(selectedDocumentType = detected)
+                }
+            }
         }
     }
+
+    // Determine effective source type
+    val effectiveSourceType = when {
+        state.fileUri != null -> RagSourceType.FILE
+        state.content.isNotBlank() -> RagSourceType.TEXT
+        state.sourceType != null -> state.sourceType
+        else -> null
+    }
+
+    val canCreate = !state.isCreating && state.name.isNotBlank() &&
+            isEmbeddingReady && when (effectiveSourceType) {
+        RagSourceType.TEXT -> state.content.isNotBlank()
+        RagSourceType.FILE -> state.fileUri != null
+        RagSourceType.CHAT -> state.chatId != null
+        else -> false
+    } && (!state.isEncrypted || state.adminPassword.isNotBlank())
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
             .imePadding(),
-        contentPadding = PaddingValues(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+        contentPadding = PaddingValues(horizontal = rDp(16.dp), vertical = rDp(12.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
+        // Embedding model card — shown when model needs download, is downloading, or needs init
+        if (!isEmbeddingReady) {
+            item {
+                EmbeddingModelCard(
+                    isDownloaded = isEmbeddingDownloaded,
+                    isDownloading = isEmbeddingDownloading,
+                    downloadProgress = downloadProgress,
+                    status = embeddingStatus,
+                    onDownload = { ragViewModel.startEmbeddingDownload() },
+                    onInitialize = { ragViewModel.initializeEmbeddingFromFiles() }
+                )
+            }
+        }
+
+        // Name field
         item {
-            EmbeddingStatusCard(
-                isReady = isEmbeddingReady,
-                status = embeddingStatus,
-                onInitialize = { ragViewModel.initializeEmbeddingFromFiles() }
+            OutlinedTextField(
+                value = state.name,
+                onValueChange = { state = state.copy(name = it) },
+                label = { Text("Name") },
+                placeholder = { Text("My Knowledge Base") },
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                shape = RoundedCornerShape(rDp(12.dp)),
+                leadingIcon = {
+                    Icon(
+                        Icons.AutoMirrored.Filled.Label,
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(20.dp)),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             )
         }
 
+        // Content text area
         item {
-            Text(
-                "Source Type",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+            OutlinedTextField(
+                value = state.content,
+                onValueChange = {
+                    state = state.copy(content = it)
+                    if (it.isNotBlank() && state.fileUri != null) {
+                        state = state.copy(fileUri = null, sourceType = RagSourceType.TEXT)
+                    }
+                },
+                label = { Text("Content") },
+                placeholder = { Text("Paste or type your knowledge here...") },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = rDp(120.dp)),
+                minLines = 4,
+                shape = RoundedCornerShape(rDp(12.dp))
             )
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
+        }
+
+        // Divider with "or"
+        item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                SourceTypeButton(
-                    title = "Text",
-                    icon = Icons.Default.Description,
-                    isSelected = state.sourceType == RagSourceType.TEXT,
-                    onClick = { state = state.copy(sourceType = RagSourceType.TEXT) },
-                    modifier = Modifier.weight(1f)
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
-                SourceTypeButton(
-                    title = "File",
-                    icon = Icons.Default.Folder,
-                    isSelected = state.sourceType == RagSourceType.FILE,
-                    onClick = { state = state.copy(sourceType = RagSourceType.FILE) },
-                    modifier = Modifier.weight(1f)
+                Text(
+                    "  or  ",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
-                SourceTypeButton(
-                    title = "Chat",
-                    icon = Icons.AutoMirrored.Filled.Chat,
-                    isSelected = state.sourceType == RagSourceType.CHAT,
-                    onClick = { state = state.copy(sourceType = RagSourceType.CHAT) },
-                    modifier = Modifier.weight(1f)
+                HorizontalDivider(
+                    modifier = Modifier.weight(1f),
+                    color = MaterialTheme.colorScheme.outlineVariant
                 )
             }
         }
 
-        if (state.sourceType != null) {
+        // File drop zone card with dashed border
+        item {
+            FileDropZone(
+                fileUri = state.fileUri,
+                documentType = state.selectedDocumentType,
+                onPickFile = {
+                    filePicker.launch(arrayOf(
+                        "text/plain",
+                        DocumentParser.MimeTypes.PDF,
+                        DocumentParser.MimeTypes.DOCX,
+                        DocumentParser.MimeTypes.DOC,
+                        DocumentParser.MimeTypes.XLSX,
+                        DocumentParser.MimeTypes.XLS,
+                        DocumentParser.MimeTypes.EPUB
+                    ))
+                },
+                onClearFile = {
+                    state = state.copy(fileUri = null, sourceType = null)
+                },
+                context = context
+            )
+        }
+
+        // Creation progress
+        if (state.isCreating) {
             item {
-                OutlinedTextField(
-                    value = state.name,
-                    onValueChange = { state = state.copy(name = it) },
-                    label = { Text("Name") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp))
+                CreationProgressCard(
+                    progress = state.creationProgress,
+                    status = state.creationStatus
                 )
             }
+        }
 
+        // Create button
+        item {
+            Button(
+                onClick = {
+                    if (!canCreate) return@Button
+                    scope.launch {
+                        state = state.copy(
+                            isCreating = true,
+                            creationProgress = 0f,
+                            creationStatus = "Starting..."
+                        )
+
+                        val finalSourceType = effectiveSourceType ?: return@launch
+                        val tags = state.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
+
+                        if (state.isEncrypted) {
+                            when (finalSourceType) {
+                                RagSourceType.TEXT -> {
+                                    ragViewModel.createSecureRagFromText(
+                                        name = state.name,
+                                        description = state.description,
+                                        text = state.content,
+                                        domain = state.domain,
+                                        tags = tags,
+                                        adminPassword = state.adminPassword,
+                                        readOnlyUsers = state.readOnlyUsers,
+                                        loadingMode = state.loadingMode,
+                                        onProgress = { progress, status ->
+                                            state = state.copy(
+                                                creationProgress = progress,
+                                                creationStatus = status
+                                            )
+                                        },
+                                        onComplete = { result ->
+                                            state = state.copy(isCreating = false)
+                                            if (result.isSuccess) onRagCreated()
+                                        }
+                                    )
+                                }
+                                RagSourceType.FILE -> {
+                                    state.fileUri?.let { uri ->
+                                        ragViewModel.createSecureRagFromFile(
+                                            name = state.name,
+                                            description = state.description,
+                                            fileUri = uri,
+                                            domain = state.domain,
+                                            tags = tags,
+                                            adminPassword = state.adminPassword,
+                                            readOnlyUsers = state.readOnlyUsers,
+                                            loadingMode = state.loadingMode,
+                                            onProgress = { progress, status ->
+                                                state = state.copy(
+                                                    creationProgress = progress,
+                                                    creationStatus = status
+                                                )
+                                            },
+                                            onComplete = { result ->
+                                                state = state.copy(isCreating = false)
+                                                if (result.isSuccess) onRagCreated()
+                                            }
+                                        )
+                                    }
+                                }
+                                else -> state = state.copy(isCreating = false)
+                            }
+                        } else {
+                            when (finalSourceType) {
+                                RagSourceType.TEXT -> {
+                                    ragViewModel.createRagFromText(
+                                        name = state.name,
+                                        description = state.description,
+                                        text = state.content,
+                                        domain = state.domain,
+                                        tags = tags
+                                    ) { result ->
+                                        state = state.copy(isCreating = false)
+                                        if (result.isSuccess) onRagCreated()
+                                    }
+                                }
+                                RagSourceType.FILE -> {
+                                    state.fileUri?.let { uri ->
+                                        ragViewModel.createRagFromFile(
+                                            name = state.name,
+                                            description = state.description,
+                                            fileUri = uri,
+                                            domain = state.domain,
+                                            tags = tags
+                                        ) { result ->
+                                            state = state.copy(isCreating = false)
+                                            if (result.isSuccess) onRagCreated()
+                                        }
+                                    }
+                                }
+                                else -> state = state.copy(isCreating = false)
+                            }
+                        }
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(rDp(48.dp)),
+                enabled = canCreate,
+                shape = RoundedCornerShape(rDp(12.dp)),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            ) {
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = null,
+                    modifier = Modifier.size(rDp(20.dp))
+                )
+                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                Text(
+                    text = when {
+                        state.isCreating -> "Creating..."
+                        canCreate -> "Create RAG"
+                        state.name.isBlank() && effectiveSourceType == null -> "Enter name & add content"
+                        state.name.isBlank() -> "Enter a name"
+                        !isEmbeddingReady -> "Embedding not ready"
+                        effectiveSourceType == null -> "Add content or pick a file"
+                        else -> "Fill required fields"
+                    },
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
+
+        // Advanced Options toggle
+        item {
+            Surface(
+                onClick = { showAdvanced = !showAdvanced },
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(rDp(10.dp))
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = rDp(14.dp), vertical = rDp(10.dp)),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Tune,
+                            contentDescription = null,
+                            modifier = Modifier.size(rDp(18.dp)),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "Advanced Options",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    Icon(
+                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(20.dp)),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // Advanced section
+        if (showAdvanced) {
             item {
                 OutlinedTextField(
                     value = state.description,
                     onValueChange = { state = state.copy(description = it) },
                     label = { Text("Description") },
+                    placeholder = { Text("What is this RAG about?") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
                     shape = RoundedCornerShape(rDp(12.dp))
@@ -181,151 +452,56 @@ fun SecureRagCreationScreen(
                         onValueChange = { state = state.copy(domain = it) },
                         label = { Text("Domain") },
                         modifier = Modifier.weight(1f),
+                        singleLine = true,
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
                     OutlinedTextField(
                         value = state.tags,
                         onValueChange = { state = state.copy(tags = it) },
                         label = { Text("Tags") },
+                        placeholder = { Text("comma, separated") },
                         modifier = Modifier.weight(1f),
+                        singleLine = true,
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
                 }
             }
 
-            when (state.sourceType) {
-                RagSourceType.TEXT -> {
-                    item {
-                        OutlinedTextField(
-                            value = state.content,
-                            onValueChange = { state = state.copy(content = it) },
-                            label = { Text("Content") },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 6,
-                            shape = RoundedCornerShape(rDp(12.dp))
-                        )
-                    }
-                }
-                RagSourceType.FILE -> {
-                    item {
-                        Text(
-                            "Document Type",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Spacer(modifier = Modifier.height(rDp(8.dp)))
-
-                        // Document type selector
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                        ) {
-                            DocumentType.entries.take(3).forEach { docType ->
-                                FilterChip(
-                                    selected = state.selectedDocumentType == docType,
-                                    onClick = {
-                                        state = state.copy(
-                                            selectedDocumentType = docType,
-                                            fileUri = null // Reset file selection when type changes
-                                        )
-                                    },
-                                    label = { Text(docType.label) },
-                                    leadingIcon = {
-                                        Icon(
-                                            docType.icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(rDp(16.dp))
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(rDp(4.dp)))
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                        ) {
-                            DocumentType.entries.drop(3).forEach { docType ->
-                                FilterChip(
-                                    selected = state.selectedDocumentType == docType,
-                                    onClick = {
-                                        state = state.copy(
-                                            selectedDocumentType = docType,
-                                            fileUri = null // Reset file selection when type changes
-                                        )
-                                    },
-                                    label = { Text(docType.label) },
-                                    leadingIcon = {
-                                        Icon(
-                                            docType.icon,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(rDp(16.dp))
-                                        )
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-
-                    item {
-                        val selectedFileName = state.fileUri?.lastPathSegment ?: "Select ${state.selectedDocumentType.label} File"
-                        val mimeType = state.fileUri?.let { context.contentResolver.getType(it) }
-
-                        Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
-                            ActionTextButton(
-                                onClickListener = {
-                                    // Launch file picker with only the selected document type
-                                    filePicker.launch(state.selectedDocumentType.mimeTypes)
-                                },
-                                icon = state.selectedDocumentType.icon,
-                                text = selectedFileName,
-                                shape = RoundedCornerShape(rDp(12.dp)),
-                                modifier = Modifier.fillMaxWidth()
-                            )
-
-                            if (state.fileUri != null) {
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-                                    ),
-                                    shape = RoundedCornerShape(rDp(8.dp))
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(rDp(12.dp)),
-                                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
+            // Document type selector (only when file is selected)
+            if (state.fileUri != null) {
+                item {
+                    Text(
+                        "Document Type",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(rDp(6.dp)))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                    ) {
+                        DocumentType.entries.forEach { docType ->
+                            FilterChip(
+                                selected = state.selectedDocumentType == docType,
+                                onClick = { state = state.copy(selectedDocumentType = docType) },
+                                label = { Text(docType.label, style = MaterialTheme.typography.labelSmall) },
+                                leadingIcon = if (state.selectedDocumentType == docType) {
+                                    {
                                         Icon(
                                             Icons.Default.Check,
                                             contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary
+                                            modifier = Modifier.size(rDp(14.dp))
                                         )
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                "File: ${state.fileUri?.lastPathSegment}",
-                                                style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.SemiBold
-                                            )
-                                            Text(
-                                                "Type: ${DocumentParser.getFileTypeName(mimeType)}",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
                                     }
-                                }
-                            }
+                                } else null
+                            )
                         }
                     }
                 }
-                else -> {}
             }
 
+            // Encryption section
             item {
                 EncryptionSection(
                     state = state,
@@ -335,149 +511,10 @@ fun SecureRagCreationScreen(
                     onAddUser = { showAddUserDialog = true }
                 )
             }
-
-            if (state.isCreating) {
-                item {
-                    CreationProgressCard(
-                        progress = state.creationProgress,
-                        status = state.creationStatus
-                    )
-                }
-            }
-
-            item {
-                val canCreate = !state.isCreating && state.name.isNotBlank() &&
-                        isEmbeddingReady && when (state.sourceType) {
-                    RagSourceType.TEXT -> state.content.isNotBlank()
-                    RagSourceType.FILE -> state.fileUri != null
-                    RagSourceType.CHAT -> state.chatId != null
-                    else -> false
-                } && (!state.isEncrypted || state.adminPassword.isNotBlank())
-
-                ActionTextButton(
-                    onClickListener = {
-                        scope.launch {
-                            state = state.copy(
-                                isCreating = true,
-                                creationProgress = 0f,
-                                creationStatus = "Starting..."
-                            )
-
-                            val tags = state.tags.split(",").map { it.trim() }.filter { it.isNotBlank() }
-
-                            if (state.isEncrypted) {
-                                when (state.sourceType) {
-                                    RagSourceType.TEXT -> {
-                                        ragViewModel.createSecureRagFromText(
-                                            name = state.name,
-                                            description = state.description,
-                                            text = state.content,
-                                            domain = state.domain,
-                                            tags = tags,
-                                            adminPassword = state.adminPassword,
-                                            readOnlyUsers = state.readOnlyUsers,
-                                            loadingMode = state.loadingMode,
-                                            onProgress = { progress, status ->
-                                                state = state.copy(
-                                                    creationProgress = progress,
-                                                    creationStatus = status
-                                                )
-                                            },
-                                            onComplete = { result ->
-                                                state = state.copy(isCreating = false)
-                                                if (result.isSuccess) {
-                                                    onRagCreated()
-                                                }
-                                            }
-                                        )
-                                    }
-                                    RagSourceType.FILE -> {
-                                        state.fileUri?.let { uri ->
-                                            ragViewModel.createSecureRagFromFile(
-                                                name = state.name,
-                                                description = state.description,
-                                                fileUri = uri,
-                                                domain = state.domain,
-                                                tags = tags,
-                                                adminPassword = state.adminPassword,
-                                                readOnlyUsers = state.readOnlyUsers,
-                                                loadingMode = state.loadingMode,
-                                                onProgress = { progress, status ->
-                                                    state = state.copy(
-                                                        creationProgress = progress,
-                                                        creationStatus = status
-                                                    )
-                                                },
-                                                onComplete = { result ->
-                                                    state = state.copy(isCreating = false)
-                                                    if (result.isSuccess) {
-                                                        onRagCreated()
-                                                    }
-                                                }
-                                            )
-                                        }
-                                    }
-                                    else -> {
-                                        state = state.copy(isCreating = false)
-                                    }
-                                }
-                            } else {
-                                when (state.sourceType) {
-                                    RagSourceType.TEXT -> {
-                                        ragViewModel.createRagFromText(
-                                            name = state.name,
-                                            description = state.description,
-                                            text = state.content,
-                                            domain = state.domain,
-                                            tags = tags
-                                        ) { result ->
-                                            state = state.copy(isCreating = false)
-                                            if (result.isSuccess) {
-                                                onRagCreated()
-                                            }
-                                        }
-                                    }
-                                    RagSourceType.FILE -> {
-                                        state.fileUri?.let { uri ->
-                                            ragViewModel.createRagFromFile(
-                                                name = state.name,
-                                                description = state.description,
-                                                fileUri = uri,
-                                                domain = state.domain,
-                                                tags = tags
-                                            ) { result ->
-                                                state = state.copy(isCreating = false)
-                                                if (result.isSuccess) {
-                                                    onRagCreated()
-                                                }
-                                            }
-                                        }
-                                    }
-                                    else -> {
-                                        state = state.copy(isCreating = false)
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    icon = Icons.Default.Add,
-                    text = if (canCreate) "Create RAG" else "Fill Required Fields",
-                    shape = RoundedCornerShape(rDp(12.dp)),
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = if (canCreate) {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.primary,
-                            contentColor = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
-                        ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                )
-            }
         }
+
+        // Bottom spacer
+        item { Spacer(modifier = Modifier.height(rDp(16.dp))) }
     }
 
     if (showAddUserDialog) {
@@ -491,106 +528,265 @@ fun SecureRagCreationScreen(
     }
 }
 
+// ==================== File Drop Zone ====================
+
 @Composable
-private fun EmbeddingStatusCard(
-    isReady: Boolean,
-    status: String,
-    onInitialize: () -> Unit
+private fun FileDropZone(
+    fileUri: Uri?,
+    documentType: DocumentType,
+    onPickFile: () -> Unit,
+    onClearFile: () -> Unit,
+    context: android.content.Context
 ) {
-    Card(
+    val borderColor = if (fileUri != null)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+    else
+        MaterialTheme.colorScheme.outlineVariant
+
+    val bgColor = if (fileUri != null)
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.08f)
+    else
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+
+    Surface(
+        onClick = if (fileUri == null) onPickFile else ({}),
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isReady)
-                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-            else
-                MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(rDp(12.dp)),
+        color = bgColor,
+        border = BorderStroke(
+            width = rDp(1.5f.dp),
+            color = borderColor
+        )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(12.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.weight(1f)
+        if (fileUri == null) {
+            // Empty state — pick file prompt
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = rDp(20.dp), horizontal = rDp(16.dp)),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
             ) {
                 Icon(
-                    if (isReady) Icons.Default.Check else Icons.Default.Warning,
+                    Icons.Default.UploadFile,
                     contentDescription = null,
-                    tint = if (isReady)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.error
+                    modifier = Modifier.size(rDp(32.dp)),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                 )
-                Column {
-                    Text(
-                        "Embedding Model",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold
+                Text(
+                    "Pick a file",
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "PDF, Word, Excel, EPUB, or plain text",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                )
+            }
+        } else {
+            // File selected state
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(rDp(12.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp))
+            ) {
+                // File type icon
+                Surface(
+                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    shape = RoundedCornerShape(rDp(8.dp))
+                ) {
+                    Icon(
+                        documentType.icon,
+                        contentDescription = null,
+                        modifier = Modifier
+                            .padding(rDp(8.dp))
+                            .size(rDp(22.dp)),
+                        tint = MaterialTheme.colorScheme.primary
                     )
+                }
+
+                // File info
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        status,
-                        style = MaterialTheme.typography.bodySmall,
+                        text = fileUri.lastPathSegment ?: "Selected file",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    val mimeType = context.contentResolver.getType(fileUri)
+                    Text(
+                        text = DocumentParser.getFileTypeName(mimeType),
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-            if (!isReady) {
-                TextButton(onClick = onInitialize) {
-                    Text("Initialize")
+
+                // Change file button
+                FilledTonalIconButton(
+                    onClick = onPickFile,
+                    modifier = Modifier.size(rDp(32.dp)),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.SwapHoriz,
+                        contentDescription = "Change file",
+                        modifier = Modifier.size(rDp(16.dp))
+                    )
+                }
+
+                // Remove file button
+                FilledTonalIconButton(
+                    onClick = onClearFile,
+                    modifier = Modifier.size(rDp(32.dp)),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Remove file",
+                        modifier = Modifier.size(rDp(16.dp))
+                    )
                 }
             }
         }
     }
 }
 
+// ==================== Supporting Composables ====================
+
 @Composable
-private fun SourceTypeButton(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
+private fun EmbeddingModelCard(
+    isDownloaded: Boolean,
+    isDownloading: Boolean,
+    downloadProgress: Float,
+    status: String,
+    onDownload: () -> Unit,
+    onInitialize: () -> Unit
 ) {
+    val containerColor = when {
+        isDownloading -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f)
+        isDownloaded -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
+        else -> MaterialTheme.colorScheme.surfaceContainerHigh
+    }
+
+    val iconTint = when {
+        isDownloading -> MaterialTheme.colorScheme.primary
+        isDownloaded -> MaterialTheme.colorScheme.tertiary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+
     Card(
-        modifier = modifier
-            .height(rDp(80.dp))
-            .clickable { onClick() },
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primaryContainer
-            else
-                MaterialTheme.colorScheme.surfaceVariant
-        ),
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         shape = RoundedCornerShape(rDp(12.dp))
     ) {
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(rDp(12.dp)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+                .fillMaxWidth()
+                .padding(rDp(14.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(rDp(24.dp)),
-                tint = if (isSelected)
-                    MaterialTheme.colorScheme.primary
-                else
-                    MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Spacer(modifier = Modifier.height(rDp(4.dp)))
-            Text(
-                title,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Icon(
+                        imageVector = when {
+                            isDownloading -> Icons.Default.CloudDownload
+                            isDownloaded -> Icons.Default.Memory
+                            else -> Icons.Default.CloudDownload
+                        },
+                        contentDescription = null,
+                        modifier = Modifier.size(rDp(22.dp)),
+                        tint = iconTint
+                    )
+                    Column {
+                        Text(
+                            "Embedding Model",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = when {
+                                isDownloading -> status
+                                isDownloaded -> "Downloaded — tap Initialize"
+                                else -> "Required for RAG features"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                when {
+                    isDownloading -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(rDp(24.dp)),
+                            strokeWidth = rDp(2.5f.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    isDownloaded -> {
+                        FilledTonalButton(
+                            onClick = onInitialize,
+                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                        ) {
+                            Text("Initialize", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    else -> {
+                        FilledTonalButton(
+                            onClick = onDownload,
+                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                        ) {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = null,
+                                modifier = Modifier.size(rDp(16.dp))
+                            )
+                            Spacer(modifier = Modifier.width(rDp(4.dp)))
+                            Text("Download", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+
+            // Download progress bar
+            if (isDownloading && downloadProgress > 0f) {
+                LinearProgressIndicator(
+                    progress = { downloadProgress },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDp(4.dp))
+                        .clip(RoundedCornerShape(rDp(2.dp))),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            } else if (isDownloading) {
+                LinearProgressIndicator(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDp(4.dp))
+                        .clip(RoundedCornerShape(rDp(2.dp))),
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                )
+            }
         }
     }
 }
@@ -603,7 +799,7 @@ private fun EncryptionSection(
     onTogglePasswordVisibility: () -> Unit,
     onAddUser: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -612,12 +808,12 @@ private fun EncryptionSection(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Encryption",
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    "Secure your RAG with password-based encryption",
-                    style = MaterialTheme.typography.bodySmall,
+                    "Password-protect this RAG",
+                    style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -628,12 +824,13 @@ private fun EncryptionSection(
         }
 
         AnimatedVisibility(visible = state.isEncrypted) {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
                 OutlinedTextField(
                     value = state.adminPassword,
                     onValueChange = { onStateChange(state.copy(adminPassword = it)) },
                     label = { Text("Admin Password") },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     visualTransformation = if (showPasswordVisibility)
                         VisualTransformation.None
                     else
@@ -668,9 +865,12 @@ private fun EncryptionSection(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
-                        Icon(Icons.Default.Storage, contentDescription = null)
+                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
                         Spacer(modifier = Modifier.width(rDp(4.dp)))
-                        Text(if (state.loadingMode == LoadingMode.EMBEDDED) "Embedded" else "Transient")
+                        Text(
+                            if (state.loadingMode == LoadingMode.EMBEDDED) "Embedded" else "Transient",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
 
                     OutlinedButton(
@@ -678,9 +878,9 @@ private fun EncryptionSection(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = null)
+                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
                         Spacer(modifier = Modifier.width(rDp(4.dp)))
-                        Text("Add User")
+                        Text("Add User", style = MaterialTheme.typography.labelMedium)
                     }
                 }
 
@@ -688,37 +888,30 @@ private fun EncryptionSection(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         ),
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(rDp(10.dp))
                     ) {
-                        Column(modifier = Modifier.padding(rDp(12.dp))) {
+                        Column(modifier = Modifier.padding(rDp(10.dp))) {
                             Text(
-                                "Additional Users (${state.readOnlyUsers.size})",
+                                "Users (${state.readOnlyUsers.size})",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(modifier = Modifier.height(rDp(8.dp)))
+                            Spacer(modifier = Modifier.height(rDp(6.dp)))
                             state.readOnlyUsers.forEach { user ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = rDp(4.dp)),
+                                        .padding(vertical = rDp(3.dp)),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            user.label,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                        Text(
-                                            "Password: ${"•".repeat(user.password.length.coerceAtMost(8))}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
+                                    Text(
+                                        user.label,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                     Surface(
                                         color = if (user.permissions == Permission.ADMIN)
                                             MaterialTheme.colorScheme.primaryContainer
@@ -729,11 +922,7 @@ private fun EncryptionSection(
                                         Text(
                                             user.permissions.name,
                                             style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.SemiBold,
-                                            modifier = Modifier.padding(
-                                                horizontal = rDp(8.dp),
-                                                vertical = rDp(4.dp)
-                                            )
+                                            modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
                                         )
                                     }
                                 }
@@ -754,38 +943,40 @@ private fun CreationProgressCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
         ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(rDp(10.dp))
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp)),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(rDp(14.dp)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
             CircularProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.size(rDp(48.dp))
+                modifier = Modifier.size(rDp(36.dp)),
+                strokeWidth = rDp(3.dp)
             )
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
-            Text(
-                status,
-                style = MaterialTheme.typography.bodyMedium,
-                textAlign = TextAlign.Center
-            )
-            if (progress > 0f) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.primary
+                    status,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
                 )
+                if (progress > 0f) {
+                    Text(
+                        "${(progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
         }
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun AddUserDialog(
     onDismiss: () -> Unit,
@@ -800,9 +991,9 @@ private fun AddUserDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add User") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
                 Text(
-                    text = "Add a user who can access this RAG with their own password",
+                    text = "Add a user who can access this RAG",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -810,17 +1001,17 @@ private fun AddUserDialog(
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("User Label") },
-                    placeholder = { Text("e.g., Reader, Guest, John") },
+                    label = { Text("Label") },
+                    placeholder = { Text("e.g., Reader, Guest") },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     shape = RoundedCornerShape(rDp(12.dp))
                 )
 
                 OutlinedTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("User Password") },
-                    placeholder = { Text("Password for this user") },
+                    label = { Text("Password") },
                     visualTransformation = if (showPassword)
                         VisualTransformation.None
                     else
@@ -834,13 +1025,8 @@ private fun AddUserDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
                     shape = RoundedCornerShape(rDp(12.dp))
-                )
-
-                Text(
-                    text = "Permission Level",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
                 )
 
                 Row(
@@ -858,15 +1044,6 @@ private fun AddUserDialog(
                         label = { Text("Admin") }
                     )
                 }
-
-                Text(
-                    text = if (selectedPermission == Permission.READ)
-                        "Can only read and query the RAG"
-                    else
-                        "Full admin access",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
             }
         },
         confirmButton = {

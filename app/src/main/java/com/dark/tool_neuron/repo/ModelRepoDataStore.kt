@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.dark.tool_neuron.models.data.HFModelRepository
+import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
@@ -21,30 +22,56 @@ class ModelRepositoryDataStore(private val context: Context) {
         private val MODEL_REPOS_KEY = stringPreferencesKey("model_repositories")
 
         val DEFAULT_REPOSITORIES = listOf(
+            // === GENERAL ===
             HFModelRepository(
                 id = "qwen2_5_0_5b_instruct",
                 name = "Qwen 2.5 Instruct (0.5B)",
                 repoPath = "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
-                modelType = ModelType.GGUF
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
             ),
             HFModelRepository(
-                id = "pars_medical_llama_3b",
-                name = "Pars Medical LLaMA (3B)",
-                repoPath = "HexQuant/Pars-Medical-o1-Llama-FFT-GGUF",
-                modelType = ModelType.GGUF
+                id = "unsloth-qwen3",
+                name = "Qwen3 8B",
+                repoPath = "unsloth/Qwen3-8B-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
             ),
             HFModelRepository(
-                id = "contact_doctor_bio_llama_1b",
-                name = "ContactDoctor Bio-Medical LLaMA (1B)",
-                repoPath = "DevQuasar/ContactDoctor.Bio-Medical-Llama-3-2-1B-CoT-012025-GGUF",
-                modelType = ModelType.GGUF
+                id = "liquidai-lfm2-350m",
+                name = "LFM2 350M",
+                repoPath = "LiquidAI/LFM2-350M-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            ),
+            // === UNCENSORED ===
+            HFModelRepository(
+                id = "gemma3-emophilic-1b",
+                name = "Gemma3 Emophilic (1B)",
+                repoPath = "Novaciano/Gemma3-Emophilic-1B-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
             ),
             HFModelRepository(
-                id = "qwen2_5_coder_0_5b",
-                name = "Qwen 2.5 Coder (0.5B)",
-                repoPath = "ggml-org/Qwen2.5-Coder-0.5B-Q8_0-GGUF",
-                modelType = ModelType.GGUF
+                id = "gemma3-emotional-1b",
+                name = "Gemma3 Emotional (1B)",
+                repoPath = "mradermacher/Gemma3-Emotional-1B-i1-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
             ),
+            HFModelRepository(
+                id = "sex-roleplay-1b",
+                name = "SEX ROLEPLAY 3.2 (1B)",
+                repoPath = "mradermacher/SEX_ROLEPLAY-3.2-1B-i1-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.UNCENSORED
+            )
         )
     }
 
@@ -53,7 +80,11 @@ class ModelRepositoryDataStore(private val context: Context) {
             val json = preferences[MODEL_REPOS_KEY]
             if (json != null) {
                 try {
-                    Json.decodeFromString<List<HFModelRepository>>(json)
+                    val saved = Json.decodeFromString<List<HFModelRepository>>(json)
+                    // Merge any new default repos not yet in saved data
+                    val savedIds = saved.map { it.id }.toSet()
+                    val newDefaults = DEFAULT_REPOSITORIES.filter { it.id !in savedIds }
+                    if (newDefaults.isNotEmpty()) saved + newDefaults else saved
                 } catch (e: Exception) {
                     DEFAULT_REPOSITORIES
                 }
@@ -83,6 +114,13 @@ class ModelRepositoryDataStore(private val context: Context) {
         saveRepositories(current.map {
             if (it.id == repoId) it.copy(isEnabled = !it.isEnabled)
             else it
+        })
+    }
+
+    suspend fun updateRepository(repo: HFModelRepository) {
+        val current = repositories.first()
+        saveRepositories(current.map {
+            if (it.id == repo.id) repo else it
         })
     }
 }

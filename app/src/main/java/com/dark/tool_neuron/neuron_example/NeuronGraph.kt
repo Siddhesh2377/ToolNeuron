@@ -411,6 +411,7 @@ class NeuronGraph(
 ) {
     private val nodes = mutableMapOf<String, NeuronNode>()
     private val mutex = Mutex()
+    private var searchIndex: ChunkSearchIndex? = null
 
     val nodeCount: Int get() = nodes.size
     val edgeCount: Int get() = nodes.values.sumOf { it.edges.size } / 2  // Edges counted twice
@@ -432,6 +433,32 @@ class NeuronGraph(
     fun getAllNodes(): List<NeuronNode> = nodes.values.toList()
 
     fun getNode(id: String): NeuronNode? = nodes[id]
+
+    internal fun getNodesMap(): Map<String, NeuronNode> = nodes
+
+    /**
+     * Rebuild the FTS5 search index from all current nodes.
+     * Called after deserialize() and after adding new nodes.
+     */
+    private fun rebuildSearchIndex() {
+        try {
+            searchIndex?.close()
+            val index = ChunkSearchIndex()
+            index.populate(nodes.values)
+            searchIndex = index
+        } catch (e: Exception) {
+            android.util.Log.e("NeuronGraph", "Failed to build FTS5 index: ${e.message}")
+            searchIndex = null
+        }
+    }
+
+    /**
+     * Clean up FTS5 resources.
+     */
+    fun close() {
+        searchIndex?.close()
+        searchIndex = null
+    }
 
     // ========================================================================
     // Add Content
@@ -470,6 +497,9 @@ class NeuronGraph(
             // Add sequential edges between chunks from same source
             addSequentialEdges(addedNodes)
 
+            // Keep FTS5 index in sync
+            rebuildSearchIndex()
+
             Result.success(addedNodes)
         } catch (e: Exception) {
             Result.failure(e)
@@ -503,6 +533,9 @@ class NeuronGraph(
 
             val addedNodes = addNodesWithEmbeddings(newNodes)
             addSequentialEdges(addedNodes)
+
+            // Keep FTS5 index in sync
+            rebuildSearchIndex()
 
             Result.success(addedNodes)
         } catch (e: Exception) {
@@ -711,6 +744,53 @@ class NeuronGraph(
     }
 
     /**
+     * Advanced query using the full retrieval pipeline (RRF + MMR + compression).
+     * Returns RetrievalResult with confidence assessment and compressed context.
+     * Falls back to legacy query() if search index is unavailable.
+     */
+    suspend fun queryWithPipeline(
+        queryText: String,
+        topK: Int = 5
+    ): RetrievalResult = withContext(Dispatchers.IO) {
+        if (!embeddingEngine.isInitialized() || nodes.isEmpty()) {
+            return@withContext RetrievalResult(emptyList(), RetrievalConfidence.LOW, "")
+        }
+
+        val queryEmbedding = embeddingEngine.embed(queryText)
+        if (queryEmbedding == null) {
+            return@withContext RetrievalResult(emptyList(), RetrievalConfidence.LOW, "")
+        }
+
+        // If search index is available, use the full pipeline
+        if (searchIndex != null) {
+            android.util.Log.d("NeuronGraph", "Using retrieval pipeline for query: $queryText")
+            return@withContext RetrievalPipeline.query(
+                allNodes = nodes,
+                queryText = queryText,
+                queryEmbedding = queryEmbedding,
+                searchIndex = searchIndex,
+                topK = topK,
+                settings = settings,
+                expandEdgesFn = { node, depth -> expandByEdges(node, depth) }
+            )
+        }
+
+        // Fallback: use legacy query and wrap in RetrievalResult
+        android.util.Log.d("NeuronGraph", "Search index unavailable, falling back to legacy query")
+        val legacyResults = query(queryText, topK)
+        val contextBuilder = StringBuilder()
+        for (result in legacyResults) {
+            contextBuilder.append(result.node.content.take(500))
+            contextBuilder.append("\n\n")
+        }
+        RetrievalResult(
+            results = legacyResults,
+            confidence = if (legacyResults.isNotEmpty()) RetrievalConfidence.MEDIUM else RetrievalConfidence.LOW,
+            compressedContext = contextBuilder.toString().trim()
+        )
+    }
+
+    /**
      * Extract important keywords from query text
      * Focuses on: IDs (patterns like XX-YYYY-NNN), capitalized words, quoted text
      */
@@ -807,6 +887,7 @@ class NeuronGraph(
 
     suspend fun clear() = mutex.withLock {
         nodes.clear()
+        searchIndex?.clear()
     }
 
     suspend fun removeNode(nodeId: String) = mutex.withLock {
@@ -924,6 +1005,9 @@ class NeuronGraph(
                     nodes[node.id] = node
                 }
             }
+
+            // Build FTS5 index for the loaded graph
+            rebuildSearchIndex()
 
             Result.success(Unit)
         } catch (e: Exception) {

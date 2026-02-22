@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,21 +19,26 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,15 +55,19 @@ import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatListViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeDrawerScreen(
     onChatSelected: (String) -> Unit,
     onVaultManagerClick: () -> Unit,
     onMcpServersClick: () -> Unit,
+    chatViewModel: com.dark.tool_neuron.viewmodel.ChatViewModel,
     viewModel: ChatListViewModel = hiltViewModel()
 ) {
     val chats by viewModel.chats.collectAsStateWithLifecycle()
@@ -66,6 +76,7 @@ fun HomeDrawerScreen(
     val isDialogOpen by viewModel.isDialogOpen.collectAsStateWithLifecycle()
 
     val isChatRefreshed by AppStateManager.isChatRefreshed.collectAsStateWithLifecycle()
+    val currentChatId by chatViewModel.currentChatId.collectAsStateWithLifecycle()
 
     LaunchedEffect(isChatRefreshed) {
         viewModel.loadChats()
@@ -79,12 +90,34 @@ fun HomeDrawerScreen(
             ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            DrawerTopBar(
-                onVaultManagerClick,
-                onMcpServersClick,
-                onCreateNewChat = {
-                    viewModel.createNewChat { chatId ->
-                        onChatSelected(chatId)
+            TopAppBar(
+                title = {
+                    Text(
+                        "Chats",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                },
+                actions = {
+                    Row{
+                        ActionButton(
+                            onClickListener = onMcpServersClick,
+                            icon = Icons.Filled.Cloud,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
+                        ActionButton(
+                            onClickListener = onVaultManagerClick,
+                            icon = R.drawable.smart_temp_message,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
+                        ActionButton(
+                            onClickListener = {
+                                viewModel.createNewChat { chatId ->
+                                    onChatSelected(chatId)
+                                }
+                            },
+                            icon = Icons.Filled.Add,
+                            modifier = Modifier.padding(end = rDp(6.dp))
+                        )
                     }
                 }
             )
@@ -107,8 +140,15 @@ fun HomeDrawerScreen(
                 else -> {
                     ChatList(
                         chats = chats,
+                        isRefreshing = isLoading,
+                        onRefresh = { viewModel.loadChats() },
                         onChatClick = onChatSelected,
-                        onDeleteChat = { viewModel.deleteChat(it) }
+                        onDeleteChat = { chatId ->
+                            viewModel.deleteChat(chatId)
+                            if (chatId == currentChatId) {
+                                chatViewModel.startNewConversation()
+                            }
+                        }
                     )
                 }
             }
@@ -123,70 +163,54 @@ fun HomeDrawerScreen(
     }
 }
 
-/**
- * Top app bar used in the home drawer screen.
- * Provides quick access actions for managing vaults, configuring MCP servers,
- * and creating a new chat session.
- *
- * @param onVaultManagerClick Invoked when the vault manager action is selected.
- * @param onMcpServersClick Invoked when the MCP servers action is selected.
- * @param onCreateNewChat Invoked when the user requests to create a new chat.
- */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DrawerTopBar(
-    onVaultManagerClick: () -> Unit,
-    onMcpServersClick: () -> Unit,
-    onCreateNewChat: () -> Unit
-) {
-    TopAppBar(
-        title = {
-            Text(
-                "Chats",
-                style = MaterialTheme.typography.titleLarge
-            )
-        },
-        actions = {
-            Row{
-                ActionButton(
-                    onClickListener = onMcpServersClick,
-                    icon = Icons.Filled.Cloud,
-                    modifier = Modifier.padding(end = rDp(6.dp))
-                )
-                ActionButton(
-                    onClickListener = onVaultManagerClick,
-                    icon = R.drawable.smart_temp_message,
-                    modifier = Modifier.padding(end = rDp(6.dp))
-                )
-                ActionButton(
-                    onClickListener = onCreateNewChat,
-                    icon = Icons.Filled.Add,
-                    modifier = Modifier.padding(end = rDp(6.dp))
-                )
-            }
-        }
-    )
-}
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun ChatList(
     chats: List<ChatInfo>,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit,
     onChatClick: (String) -> Unit,
     onDeleteChat: (String) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = rDp(8.dp))
+    val scope = rememberCoroutineScope()
+    var isManualRefreshing by remember { mutableStateOf(false) }
+
+    PullToRefreshBox(
+        isRefreshing = isManualRefreshing,
+        onRefresh = {
+            scope.launch {
+                isManualRefreshing = true
+                onRefresh()
+                delay(2000)
+                isManualRefreshing = false
+            }
+        },
+        indicator = {
+            AnimatedVisibility(isManualRefreshing, modifier = Modifier.align(Alignment.Center)) {
+                LoadingIndicator()
+            }
+        },
+        modifier = Modifier.fillMaxSize()
     ) {
-        items(
-            items = chats,
-            key = { it.chatId }
-        ) { chat ->
-            ChatListItem(
-                chat = chat,
-                onClick = { onChatClick(chat.chatId) },
-                onDelete = { onDeleteChat(chat.chatId) }
-            )
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(
+                    if (isManualRefreshing) Modifier.blur(rDp(16.dp)) else Modifier
+                ),
+            contentPadding = PaddingValues(vertical = rDp(8.dp))
+        ) {
+            items(
+                items = chats,
+                key = { it.chatId }
+            ) { chat ->
+                ChatListItem(
+                    chat = chat,
+                    onClick = { onChatClick(chat.chatId) },
+                    onDelete = { onDeleteChat(chat.chatId) }
+                )
+            }
         }
     }
 }

@@ -10,6 +10,8 @@ import com.dark.tool_neuron.models.engine_schema.GgufLoadingParams
 import com.mp.ai_gguf.GGUFNativeLib
 import com.mp.ai_gguf.models.DecodingMetrics
 import com.mp.ai_gguf.models.StreamCallback
+import com.mp.ai_gguf.toolcalling.GrammarMode
+import com.mp.ai_gguf.toolcalling.ToolCallingConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.awaitClose
@@ -24,6 +26,7 @@ class GGUFEngine {
     private var isLoaded = false
     private var currentModelId: String? = null
     private var currentToolsJson: String? = null  // Cache for grammar optimization
+    private var currentToolCallingConfig: ToolCallingConfig? = null
 
     suspend fun load(model: Model, config: ModelConfig?): Boolean = withContext(Dispatchers.IO) {
         if (isLoaded) unload()
@@ -114,7 +117,7 @@ class GGUFEngine {
     }
 
     /**
-     * Generate tokens as a Flow using callbackFlow
+     * Generate tokens as a Flow using callbackFlow (single-turn)
      *
      * This properly handles the callback-to-flow conversion without
      * violating Flow invariants. The native callback runs on whatever
@@ -131,7 +134,6 @@ class GGUFEngine {
 
         val callback = object : StreamCallback {
             override fun onToken(token: String) {
-                // trySend is thread-safe and non-blocking
                 trySend(GenerationEvent.Token(token))
             }
 
@@ -141,7 +143,7 @@ class GGUFEngine {
 
             override fun onDone() {
                 trySend(GenerationEvent.Done)
-                close() // Close the channel when done
+                close()
             }
 
             override fun onError(message: String) {
@@ -154,8 +156,6 @@ class GGUFEngine {
             }
         }
 
-        // Run the native generation on IO thread
-        // This call blocks until generation completes
         try {
             nativeLib.nativeGenerateStream(prompt, maxTokens, callback)
         } catch (e: Exception) {
@@ -163,14 +163,63 @@ class GGUFEngine {
             close()
         }
 
-        // Keep the flow alive until the channel is closed
-        awaitClose {
-            // Cleanup if the collector cancels
-            // This will be called if the flow is cancelled
-        }
+        awaitClose { }
     }
-        .buffer(Channel.UNLIMITED) // Buffer to prevent backpressure blocking native code
-        .flowOn(Dispatchers.IO)    // Ensure collection happens on IO dispatcher
+        .buffer(Channel.UNLIMITED)
+        .flowOn(Dispatchers.IO)
+
+    /**
+     * Multi-turn generation flow using full conversation history.
+     * Processes a JSON array of {role, content} messages and generates the next response.
+     * Supports tool call detection — when a tool call is detected, the flow emits
+     * GenerationEvent.ToolCall and the caller should execute the tool, append the result
+     * to the conversation, and call this method again for the next turn.
+     *
+     * @param messagesJson JSON array of {role, content} objects representing the conversation
+     * @param maxTokens Maximum tokens to generate for this turn
+     */
+    fun generateMultiTurnFlow(messagesJson: String, maxTokens: Int): Flow<GenerationEvent> = callbackFlow {
+        if (!isLoaded) {
+            trySend(GenerationEvent.Error("Model not loaded"))
+            close()
+            return@callbackFlow
+        }
+
+        val callback = object : StreamCallback {
+            override fun onToken(token: String) {
+                trySend(GenerationEvent.Token(token))
+            }
+
+            override fun onToolCall(name: String, argsJson: String) {
+                trySend(GenerationEvent.ToolCall(name, argsJson))
+            }
+
+            override fun onDone() {
+                trySend(GenerationEvent.Done)
+                close()
+            }
+
+            override fun onError(message: String) {
+                trySend(GenerationEvent.Error(message))
+                close()
+            }
+
+            override fun onMetrics(metrics: DecodingMetrics) {
+                trySend(GenerationEvent.Metrics(metrics))
+            }
+        }
+
+        try {
+            nativeLib.nativeGenerateStreamMultiTurn(messagesJson, maxTokens, callback)
+        } catch (e: Exception) {
+            trySend(GenerationEvent.Error(e.message ?: "Multi-turn generation failed"))
+            close()
+        }
+
+        awaitClose { }
+    }
+        .buffer(Channel.UNLIMITED)
+        .flowOn(Dispatchers.IO)
 
     fun stopGeneration() {
         nativeLib.nativeStopGeneration()
@@ -181,7 +230,8 @@ class GGUFEngine {
             nativeLib.nativeRelease()
             isLoaded = false
             currentModelId = null
-            currentToolsJson = null  // Clear tools cache
+            currentToolsJson = null
+            currentToolCallingConfig = null
         }
     }
 
@@ -192,8 +242,54 @@ class GGUFEngine {
         if (isLoaded) nativeLib.nativeGetModelInfo() else null
 
     /**
-     * Set tools JSON for function calling support.
-     * Uses grammar caching - only rebuilds grammar when tools JSON changes.
+     * Check if the loaded model supports tool calling.
+     * Now returns true for any model with a built-in chat template (model-agnostic).
+     */
+    fun isToolCallingSupported(): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeIsToolCallingSupported()
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Enable tool calling with grammar configuration.
+     * Sets up tools JSON, grammar mode, and typed grammar enforcement.
+     *
+     * @param toolsJson JSON array of tool definitions in OpenAI format
+     * @param grammarMode 0=STRICT (forces JSON), 1=LAZY (model chooses text or tool call)
+     * @param useTypedGrammar Whether to enforce exact param names/types/enums
+     * @return true if tool calling was enabled successfully
+     */
+    fun enableToolCalling(
+        toolsJson: String,
+        grammarMode: Int = GrammarMode.LAZY.value,
+        useTypedGrammar: Boolean = true
+    ): Boolean {
+        if (!isLoaded) return false
+
+        return try {
+            // Set tools JSON (grammar caching: skip rebuild if unchanged)
+            if (toolsJson != currentToolsJson) {
+                nativeLib.nativeSetToolsJson(toolsJson)
+                currentToolsJson = toolsJson
+            }
+
+            // Configure grammar mode and typed grammar
+            nativeLib.nativeSetGrammarMode(grammarMode)
+            nativeLib.nativeSetTypedGrammar(useTypedGrammar)
+
+            true
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Set tools JSON for function calling support (backward-compatible).
+     * Uses grammar caching — only rebuilds grammar when tools JSON changes.
      *
      * @param toolsJson JSON array of tool definitions, or empty string to disable
      * @return true if tools were set successfully
@@ -201,7 +297,6 @@ class GGUFEngine {
     fun setToolsJson(toolsJson: String): Boolean {
         if (!isLoaded) return false
 
-        // Grammar caching: skip if tools haven't changed
         if (toolsJson == currentToolsJson) return true
 
         return try {
@@ -214,6 +309,30 @@ class GGUFEngine {
     }
 
     /**
+     * Set grammar enforcement mode.
+     * @param mode 0=STRICT (forces JSON tool call), 1=LAZY (model chooses text or tool call)
+     */
+    fun setGrammarMode(mode: Int) {
+        if (isLoaded) {
+            try {
+                nativeLib.nativeSetGrammarMode(mode)
+            } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * Enable or disable parameter-aware typed grammar.
+     * When enabled, grammar enforces exact parameter names, types, and enum values per tool.
+     */
+    fun setTypedGrammar(enabled: Boolean) {
+        if (isLoaded) {
+            try {
+                nativeLib.nativeSetTypedGrammar(enabled)
+            } catch (_: Exception) { }
+        }
+    }
+
+    /**
      * Clear tools configuration and disable function calling
      */
     fun clearTools() {
@@ -221,9 +340,8 @@ class GGUFEngine {
             try {
                 nativeLib.nativeSetToolsJson("")
                 currentToolsJson = null
-            } catch (_: Exception) {
-                // Ignore errors when clearing
-            }
+                currentToolCallingConfig = null
+            } catch (_: Exception) { }
         }
     }
 

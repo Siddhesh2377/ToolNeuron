@@ -67,7 +67,9 @@ class ModelDownloadService : Service() {
             val modelId: String,
             val progress: Float,
             val downloadedBytes: Long,
-            val totalBytes: Long
+            val totalBytes: Long,
+            val speedBytesPerSec: Long = 0,
+            val etaSeconds: Long = -1
         ) : DownloadState()
 
         data class Extracting(val modelId: String) : DownloadState()
@@ -148,9 +150,11 @@ class ModelDownloadService : Service() {
                 }
                 tempDir.mkdirs()
 
-                tempFile = File(tempDir, "${modelId}_${System.currentTimeMillis()}.tmp")
-
-                downloadFile(fileUrl, tempFile, modelId, modelName, notificationId)
+                // TTS downloads files directly, skip single-file download
+                if (modelType != "TTS") {
+                    tempFile = File(tempDir, "${modelId}_${System.currentTimeMillis()}.tmp")
+                    downloadFile(fileUrl, tempFile, modelId, modelName, notificationId)
+                }
 
                 when (modelType) {
                     "SD" -> {
@@ -171,7 +175,7 @@ class ModelDownloadService : Service() {
                             updateDownloadState(modelId, DownloadState.Extracting(modelId))
                             updateNotification(modelName, 0f, notificationId, isExtracting = true)
 
-                            unzipFile(tempFile, extractTempDir, modelId)
+                            unzipFile(tempFile!!, extractTempDir, modelId)
 
                             extractTempDir.listFiles()?.forEach { file ->
                                 file.copyRecursively(File(modelDir, file.name), overwrite = true)
@@ -182,7 +186,7 @@ class ModelDownloadService : Service() {
                             if (!modelDir.exists()) {
                                 modelDir.mkdirs()
                             }
-                            tempFile.copyTo(File(modelDir, tempFile.name), overwrite = true)
+                            tempFile?.copyTo(File(modelDir, tempFile.name), overwrite = true)
                         }
 
                         updateDownloadState(modelId, DownloadState.Processing(modelId))
@@ -208,7 +212,7 @@ class ModelDownloadService : Service() {
                             targetFile.delete()
                         }
 
-                        tempFile.copyTo(targetFile, overwrite = true)
+                        tempFile?.copyTo(targetFile, overwrite = true)
 
                         updateDownloadState(modelId, DownloadState.Processing(modelId))
                         updateNotification(modelName, 0f, notificationId, isProcessing = true)
@@ -219,6 +223,30 @@ class ModelDownloadService : Service() {
                             modelPath = targetFile.absolutePath,
                             modelType = modelType,
                             runOnCpu = false,
+                            textEmbeddingSize = 0
+                        )
+                    }
+
+                    "TTS" -> {
+                        val modelsDir = File(filesDir, "models")
+                        modelsDir.mkdirs()
+
+                        val ttsModelDir = File(modelsDir, "supertonic-2")
+                        if (ttsModelDir.exists()) ttsModelDir.deleteRecursively()
+                        ttsModelDir.mkdirs()
+
+                        updateDownloadState(modelId, DownloadState.Processing(modelId))
+                        updateNotification(modelName, 0f, notificationId, isProcessing = true)
+
+                        // Download all TTS model files
+                        downloadTTSModelFiles(ttsModelDir, modelId, modelName, notificationId)
+
+                        insertModelToDatabase(
+                            modelId = modelId,
+                            modelName = modelName,
+                            modelPath = ttsModelDir.absolutePath,
+                            modelType = modelType,
+                            runOnCpu = true,
                             textEmbeddingSize = 0
                         )
                     }
@@ -296,18 +324,22 @@ class ModelDownloadService : Service() {
                     throw Exception("Download failed with code: ${response.code}")
                 }
 
-                val body = response.body ?: throw Exception("Response body is null")
+                val body = response.body
                 val totalBytes = body.contentLength()
                 var downloadedBytes = 0L
                 var lastUpdateTime = 0L
 
+                // Speed tracking: rolling window of last 5 samples
+                val speedSamples = mutableListOf<Long>()
+                var lastSpeedBytes = 0L
+                var lastSpeedTime = System.currentTimeMillis()
+
                 FileOutputStream(destFile).buffered().use { output ->
                     body.byteStream().buffered().use { input ->
-                        val buffer = ByteArray(32 * 1024)
+                        val buffer = ByteArray(64 * 1024) // 64KB for better throughput
                         var bytes: Int
 
                         while (input.read(buffer).also { bytes = it } != -1) {
-                            // Check for cancellation
                             if (!downloadJobs.containsKey(modelId) || downloadJobs[modelId]?.isCancelled == true) {
                                 call.cancel()
                                 throw kotlinx.coroutines.CancellationException("Download cancelled")
@@ -318,13 +350,32 @@ class ModelDownloadService : Service() {
 
                             val currentTime = System.currentTimeMillis()
                             if (currentTime - lastUpdateTime >= 500 || downloadedBytes == totalBytes) {
+                                // Calculate speed
+                                val elapsed = currentTime - lastSpeedTime
+                                if (elapsed > 0) {
+                                    val bytesInInterval = downloadedBytes - lastSpeedBytes
+                                    val speedSample = bytesInInterval * 1000 / elapsed
+                                    speedSamples.add(speedSample)
+                                    if (speedSamples.size > 5) speedSamples.removeAt(0)
+                                    lastSpeedBytes = downloadedBytes
+                                    lastSpeedTime = currentTime
+                                }
+
+                                val avgSpeed = if (speedSamples.isNotEmpty()) {
+                                    speedSamples.average().toLong()
+                                } else 0L
+
+                                val eta = if (avgSpeed > 0 && totalBytes > 0) {
+                                    (totalBytes - downloadedBytes) / avgSpeed
+                                } else -1L
+
                                 lastUpdateTime = currentTime
                                 val progress = if (totalBytes > 0) {
                                     downloadedBytes.toFloat() / totalBytes
                                 } else 0f
 
                                 updateDownloadState(modelId, DownloadState.Downloading(
-                                    modelId, progress, downloadedBytes, totalBytes
+                                    modelId, progress, downloadedBytes, totalBytes, avgSpeed, eta
                                 ))
 
                                 updateNotification(modelName, progress, notificationId)
@@ -365,6 +416,65 @@ class ModelDownloadService : Service() {
         }
     }
 
+    private suspend fun downloadTTSModelFiles(
+        ttsModelDir: File, modelId: String, modelName: String, notificationId: Int
+    ) = withContext(Dispatchers.IO) {
+        val baseUrl = "https://huggingface.co/Supertone/supertonic-2/resolve/main"
+
+        val onnxDir = File(ttsModelDir, "onnx")
+        onnxDir.mkdirs()
+        val voiceDir = File(ttsModelDir, "voice_styles")
+        voiceDir.mkdirs()
+
+        val onnxFiles = listOf(
+            "onnx/duration_predictor.onnx",
+            "onnx/text_encoder.onnx",
+            "onnx/vector_estimator.onnx",
+            "onnx/vocoder.onnx",
+            "onnx/tts.json",
+            "onnx/unicode_indexer.json"
+        )
+
+        val voiceFiles = listOf(
+            "voice_styles/F1.json", "voice_styles/F2.json", "voice_styles/F3.json",
+            "voice_styles/F4.json", "voice_styles/F5.json",
+            "voice_styles/M1.json", "voice_styles/M2.json", "voice_styles/M3.json",
+            "voice_styles/M4.json", "voice_styles/M5.json"
+        )
+
+        val allFiles = onnxFiles + voiceFiles
+        var filesDownloaded = 0
+
+        for (filePath in allFiles) {
+            if (!downloadJobs.containsKey(modelId) || downloadJobs[modelId]?.isCancelled == true) {
+                throw kotlinx.coroutines.CancellationException("TTS download cancelled")
+            }
+
+            val url = "$baseUrl/$filePath"
+            val destFile = File(ttsModelDir, filePath)
+            destFile.parentFile?.mkdirs()
+
+            val request = Request.Builder().url(url).build()
+            client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) {
+                    throw Exception("Failed to download $filePath: ${response.code}")
+                }
+                response.body.byteStream().use { input ->
+                    FileOutputStream(destFile).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+
+            filesDownloaded++
+            val progress = filesDownloaded.toFloat() / allFiles.size
+            updateDownloadState(modelId, DownloadState.Downloading(
+                modelId, progress, filesDownloaded.toLong(), allFiles.size.toLong()
+            ))
+            updateNotification(modelName, progress, notificationId)
+        }
+    }
+
     private suspend fun insertModelToDatabase(
         modelId: String,
         modelName: String,
@@ -381,19 +491,23 @@ class ModelDownloadService : Service() {
         val providerType = when (modelType) {
             "SD" -> ProviderType.DIFFUSION
             "GGUF" -> ProviderType.GGUF
+            "TTS" -> ProviderType.TTS
             else -> ProviderType.GGUF
         }
 
         val pathType = when (modelType) {
-            "SD" -> PathType.DIRECTORY
+            "SD", "TTS" -> PathType.DIRECTORY
             "GGUF" -> PathType.FILE
             else -> PathType.FILE
         }
 
-        val fileSize = if (modelType == "GGUF") {
-            File(modelPath).length()
-        } else {
-            0L
+        val fileSize = when (modelType) {
+            "GGUF" -> File(modelPath).length()
+            "TTS" -> {
+                val dir = File(modelPath)
+                if (dir.isDirectory) dir.walkTopDown().sumOf { it.length() } else 0L
+            }
+            else -> 0L
         }
 
         val model = Model(
@@ -434,6 +548,15 @@ class ModelDownloadService : Service() {
                     modelId = checksum,
                     modelLoadingParams = ggufSchema.toLoadingJson(),
                     modelInferenceParams = ggufSchema.toInferenceJson()
+                )
+            }
+
+            ProviderType.TTS -> {
+                // TTS models use simple config with voice/speed/language
+                ModelConfig(
+                    modelId = checksum,
+                    modelLoadingParams = """{"type":"tts","useNNAPI":false}""",
+                    modelInferenceParams = """{"voice":"F1","speed":1.05,"steps":2,"language":"en"}"""
                 )
             }
         }

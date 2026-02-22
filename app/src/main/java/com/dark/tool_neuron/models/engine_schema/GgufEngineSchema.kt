@@ -14,7 +14,7 @@ enum class DeviceTier {
 @Serializable
 data class GgufLoadingParams(
     val threads: Int = 0,  // 0 = auto-detect
-    val ctxSize: Int = 2048,
+    val ctxSize: Int = 4096,
     val batchSize: Int = 512,
     val useMmap: Boolean = true,
     val useMlock: Boolean = false
@@ -23,21 +23,21 @@ data class GgufLoadingParams(
         fun forDeviceTier(tier: DeviceTier): GgufLoadingParams = when (tier) {
             DeviceTier.LOW_END -> GgufLoadingParams(
                 threads = 0,
-                ctxSize = 1024,
+                ctxSize = 2048,
                 batchSize = 256,
                 useMmap = true,
                 useMlock = false
             )
             DeviceTier.MID_RANGE -> GgufLoadingParams(
                 threads = 0,
-                ctxSize = 2048,
+                ctxSize = 4096,
                 batchSize = 512,
                 useMmap = true,
                 useMlock = false
             )
             DeviceTier.HIGH_END -> GgufLoadingParams(
                 threads = 0,
-                ctxSize = 4096,
+                ctxSize = 8192,
                 batchSize = 512,
                 useMmap = true,
                 useMlock = false
@@ -47,10 +47,10 @@ data class GgufLoadingParams(
         fun recommendedContextSize(availableMemoryMB: Int, modelSizeMB: Int): Int {
             val freeAfterModel = availableMemoryMB - modelSizeMB
             return when {
-                freeAfterModel < 1024 -> 512
-                freeAfterModel < 2048 -> 1024
-                freeAfterModel < 4096 -> 2048
-                else -> 4096
+                freeAfterModel < 1024 -> 1024
+                freeAfterModel < 2048 -> 2048
+                freeAfterModel < 4096 -> 4096
+                else -> 8192
             }
         }
     }
@@ -66,7 +66,7 @@ data class GgufInferenceParams(
     val mirostatTau: Float = 5.0f,
     val mirostatEta: Float = 0.1f,
     val seed: Int = -1,
-    val maxTokens: Int = 512,
+    val maxTokens: Int = 4096,
     val systemPrompt: String = "",
     val chatTemplate: String = "",
     val toolsJson: String = ""  // JSON array of tool definitions

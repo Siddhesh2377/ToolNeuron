@@ -103,16 +103,17 @@ class ModelDataParser {
                 return@withContext ModelLoadResult.Error("Model directory not found: ${model.modelPath}")
             }
 
-            // Check for required files
+            // Check for required files — clip filename depends on useCpuClip flag
+            val clipFilename = if (diffusionConfig.useCpuClip) "clip.mnn" else "clip.bin"
             val requiredFiles = if (diffusionConfig.runOnCpu) {
                 listOf("clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json")
             } else {
-                listOf("clip_v2.mnn", "unet.bin", "vae_decoder.bin", "tokenizer.json")
+                listOf(clipFilename, "unet.bin", "vae_decoder.bin", "tokenizer.json")
             }
 
             val missingFiles = requiredFiles.filter { !File(modelDir, it).exists() }
             if (missingFiles.isNotEmpty()) {
-                return@withContext ModelLoadResult.Error("Missing files: ${missingFiles.joinToString()}")
+                return@withContext ModelLoadResult.Error("Missing model files: ${missingFiles.joinToString()}. Expected in: ${model.modelPath}")
             }
 
             // Load using worker (which uses service)

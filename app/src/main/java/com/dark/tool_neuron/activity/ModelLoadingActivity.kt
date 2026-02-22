@@ -251,6 +251,13 @@ fun ModelLoadingScreen(
                                 modelInferenceParams = null
                             )
                         }
+                        ProviderType.TTS -> {
+                            ModelConfig(
+                                modelId = model.id,
+                                modelLoadingParams = """{"type":"tts","useNNAPI":false}""",
+                                modelInferenceParams = """{"voice":"F1","speed":1.05,"steps":2,"language":"en"}"""
+                            )
+                        }
                     }
 
                     repository.insertConfig(config)
@@ -331,7 +338,6 @@ fun ModelLoadingScreen(
                         onUninstall = { uninstallModel() })
 
                     is LoadingState.Error -> ErrorStateView(state.message) { openFilePicker() }
-                    else -> {}
                 }
             }
 

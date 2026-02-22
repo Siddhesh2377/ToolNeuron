@@ -1,11 +1,10 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
+import android.content.ClipData
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -19,22 +18,36 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlin.random.Random
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.models.ui.ActionIcon
+import com.dark.tool_neuron.models.ui.ActionItem
+import com.dark.tool_neuron.ui.components.MemoryResultsDisplay
+import com.dark.tool_neuron.ui.components.MultiActionButton
+import com.dark.tool_neuron.ui.components.ToolChainDisplay
 import com.dark.tool_neuron.models.messages.ContentType
 import com.dark.tool_neuron.models.messages.ImageGenerationMetrics
 import com.dark.tool_neuron.models.messages.MemoryMetrics
@@ -42,14 +55,21 @@ import com.dark.tool_neuron.models.messages.MessageContent
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.messages.RagResultItem
 import com.dark.tool_neuron.models.messages.Role
+import com.dark.tool_neuron.ui.components.AgentExecutionView
 import com.dark.tool_neuron.ui.components.MarkdownText
+import com.dark.tool_neuron.ui.components.lazyMarkdownItems
+import com.dark.tool_neuron.ui.components.PluginResultCard
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.viewmodel.AgentPhase
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.withContext
 import java.util.Base64
 
@@ -59,6 +79,11 @@ data class ParsedMessage(
 )
 
 suspend fun parseThinkingTags(content: String): ParsedMessage = withContext(Dispatchers.IO) {
+    // Fast path: skip regex if no think tags present
+    if (!content.contains("<think>")) {
+        return@withContext ParsedMessage(null, content.trim())
+    }
+
     val thinkingRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
     val thinkingMatch = thinkingRegex.find(content)
 
@@ -85,6 +110,17 @@ fun BodyContent(
     val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
     val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
     val currentRagResults by chatViewModel.currentRagResults.collectAsState()
+    val currentMemoryResults by chatViewModel.currentMemoryResults.collectAsState()
+    val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
+    val toolChainSteps by chatViewModel.toolChainSteps.collectAsState()
+    val currentToolChainRound by chatViewModel.currentToolChainRound.collectAsState()
+    val agentPhase by chatViewModel.agentPhase.collectAsState()
+    val agentPlan by chatViewModel.agentPlan.collectAsState()
+    val agentSummary by chatViewModel.agentSummary.collectAsState()
+    val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsState()
+    val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
+    val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsState()
+    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsState()
 
     val listState = rememberLazyListState()
 
@@ -111,24 +147,75 @@ fun BodyContent(
                     imageProgress = imageProgress,
                     imageStep = imageStep,
                     isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
-                    ragResults = currentRagResults
+                    ragResults = currentRagResults,
+                    memoryResults = currentMemoryResults,
+                    appState = appState,
+                    messages = messages,
+                    toolChainSteps = toolChainSteps,
+                    currentToolChainRound = currentToolChainRound,
+                    agentPhase = agentPhase,
+                    agentPlan = agentPlan,
+                    agentSummary = agentSummary
                 )
             } else {
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = rDp(8.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
                 ) {
-                    items(
-                        count = messages.size,
-                        key = { index ->
-                            val msg = messages[index]
-                            "${msg.msgId}-${index}"
-                        },
-                        contentType = { index -> messages[index].role }
-                    ) { index ->
-                        MessageBubble(message = messages[index])
+                    val lastAssistantIndex = messages.indexOfLast { it.role == Role.Assistant }
+
+                    messages.forEachIndexed { index, message ->
+                        when (message.role) {
+                            Role.User -> {
+                                item(key = "${message.msgId}-user") {
+                                    UserMessageBubble(message)
+                                }
+                            }
+                            else -> {
+                                val isLastAssistant = index == lastAssistantIndex
+                                // Header: RAG, tool chain, thinking, image/plugin
+                                item(key = "${message.msgId}-header") {
+                                    AssistantMessageHeader(message)
+                                }
+                                // Markdown content — each element is a lazy item
+                                if (message.content.contentType == ContentType.Text) {
+                                    val parsedText = message.content.content
+                                        .let { raw ->
+                                            // Strip <think>...</think> for the markdown items
+                                            if (raw.contains("<think>")) {
+                                                raw.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
+                                            } else raw
+                                        }
+                                    if (parsedText.isNotEmpty()) {
+                                        lazyMarkdownItems(
+                                            text = parsedText,
+                                            keyPrefix = message.msgId,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 4.dp)
+                                        )
+                                    }
+                                }
+                                // Footer: metrics + action row
+                                item(key = "${message.msgId}-footer") {
+                                    AssistantMessageFooter(
+                                        message = message,
+                                        ttsPlayingMsgId = ttsPlayingMsgId,
+                                        ttsIsPlaying = ttsIsPlaying,
+                                        ttsSynthesizing = ttsSynthesizing,
+                                        ttsModelLoaded = ttsModelLoaded,
+                                        onSpeak = { chatViewModel.speakMessage(it) },
+                                        onStopTTS = { chatViewModel.stopTTS() },
+                                        onRegenerate = if (isLastAssistant) {
+                                            { chatViewModel.regenerateLastMessage() }
+                                        } else null,
+                                        isRegenerateEnabled = !isGenerating
+                                    )
+                                }
+                            }
+                        }
                     }
                     item {
                         Spacer(modifier = Modifier.height(rDp(16.dp)))
@@ -174,7 +261,15 @@ fun BodyContent(
                     .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
                 contentAlignment = Alignment.TopCenter
             ) {
-                DynamicActionWindow(chatViewModel, llmModelViewModel)
+                val ragCount by com.dark.tool_neuron.plugins.PluginManager.enabledPluginNames.collectAsState()
+                val ttsLoaded by com.dark.tool_neuron.tts.TTSManager.isModelLoaded.collectAsState()
+
+                DynamicActionWindow(
+                    chatViewModel = chatViewModel,
+                    modelViewModel = llmModelViewModel,
+                    enabledToolCount = ragCount.size,
+                    ttsModelLoaded = ttsLoaded
+                )
             }
         }
     }
@@ -188,12 +283,53 @@ private fun StreamingView(
     imageProgress: Float,
     imageStep: String,
     isImageGeneration: Boolean,
-    ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList()
+    ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
+    memoryResults: List<com.dark.tool_neuron.worker.ScoredVaultContent> = emptyList(),
+    appState: com.dark.tool_neuron.models.state.AppState,
+    messages: List<Messages> = emptyList(),
+    toolChainSteps: List<com.dark.tool_neuron.models.messages.ToolChainStepData> = emptyList(),
+    currentToolChainRound: Int = 0,
+    agentPhase: AgentPhase = AgentPhase.Idle,
+    agentPlan: String? = null,
+    agentSummary: String? = null
 ) {
     val scrollState = rememberScrollState()
 
-    LaunchedEffect(assistantMessage, streamingImage) {
-        scrollState.animateScrollTo(scrollState.maxValue)
+    // Track whether user has manually scrolled up (disables auto-scroll)
+    var userScrolledUp by remember { mutableStateOf(false) }
+    val isAtBottom = remember {
+        derivedStateOf {
+            val maxScroll = scrollState.maxValue
+            maxScroll == 0 || scrollState.value >= maxScroll - 100
+        }
+    }
+
+    // Detect user scroll gestures - if user scrolls away from bottom, pause auto-scroll
+    LaunchedEffect(scrollState.isScrollInProgress) {
+        if (scrollState.isScrollInProgress && !isAtBottom.value) {
+            userScrolledUp = true
+        }
+    }
+
+    // Reset userScrolledUp when user scrolls back to bottom
+    LaunchedEffect(isAtBottom.value) {
+        if (isAtBottom.value) {
+            userScrolledUp = false
+        }
+    }
+
+    @OptIn(FlowPreview::class)
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            // Combine all scroll-triggering values
+            Triple(assistantMessage.length, messages.size, toolChainSteps.size)
+        }
+        .debounce(150)
+        .collect {
+            if (!userScrolledUp) {
+                scrollState.animateScrollTo(scrollState.maxValue)
+            }
+        }
     }
 
     Column(
@@ -218,19 +354,50 @@ private fun StreamingView(
             RagResultsDisplay(results = ragResults)
         }
 
-        if (isImageGeneration) {
-            ImageGenerationStreamingBubble(
-                streamingImage = streamingImage,
-                progress = imageProgress,
-                step = imageStep
+        // Show Memory results if available
+        if (memoryResults.isNotEmpty()) {
+            MemoryResultsDisplay(results = memoryResults)
+        }
+
+        // Agent execution view (Plan → Execute → Summarize)
+        if (agentPhase != AgentPhase.Idle) {
+            AgentExecutionView(
+                plan = agentPlan,
+                steps = toolChainSteps,
+                summary = agentSummary,
+                phase = agentPhase,
+                currentStep = currentToolChainRound
             )
-        } else {
-            AssistantStreamingBubble(text = assistantMessage)
+        }
+
+        // Show tool results from plugin execution (only when NOT in agent mode,
+        // since AgentExecutionView already displays step results)
+        if (agentPhase == AgentPhase.Idle) {
+            messages.filter { it.content.contentType == ContentType.PluginResult }.forEach { msg ->
+                PluginResultCard(message = msg)
+            }
+        }
+
+        when {
+            isImageGeneration -> {
+                ImageGenerationStreamingBubble(
+                    streamingImage = streamingImage,
+                    progress = imageProgress,
+                    step = imageStep
+                )
+            }
+            // Show streaming text when in simple flow or during plan/summary generation
+            agentPhase == AgentPhase.Idle || agentPhase == AgentPhase.Complete -> {
+                if (assistantMessage.isNotEmpty()) {
+                    AssistantStreamingBubble(text = assistantMessage)
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(rDp(16.dp)))
     }
 }
+
 
 @Composable
 private fun ImageGenerationStreamingBubble(
@@ -272,23 +439,142 @@ private fun ImageGenerationStreamingBubble(
         }
 
         streamingImage?.let { bitmap ->
-            Surface(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(1f),
-                shape = RoundedCornerShape(rDp(12.dp)),
-                color = MaterialTheme.colorScheme.surfaceVariant
+                    .aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1))
+                    .clip(RoundedCornerShape(rDp(12.dp)))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                Image(
-                    bitmap = bitmap.asImageBitmap(),
-                    contentDescription = "Generating image preview",
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
+                MorphingImagePreview(
+                    bitmap = bitmap,
+                    progress = progress,
+                    modifier = Modifier.fillMaxSize()
                 )
             }
         }
     }
 }
+
+
+/**
+ * ChatGPT-style morphing color preview.
+ *
+ * Each chunk bitmap is pre-processed with a radial alpha mask so its edges
+ * fade from opaque (center) to fully transparent (border). When overlapping
+ * blurred chunks are drawn together, they blend seamlessly with no hard edges.
+ */
+@Composable
+private fun MorphingImagePreview(
+    bitmap: Bitmap,
+    progress: Float,
+    modifier: Modifier = Modifier
+) {
+    val cols = 2
+    val rows = 3
+
+    // Create feathered chunks: opaque center → transparent edges
+    val chunks = remember(bitmap) {
+        val cw = bitmap.width / cols
+        val ch = bitmap.height / rows
+        List(cols * rows) { i ->
+            val src = Bitmap.createBitmap(bitmap, (i % cols) * cw, (i / cols) * ch, cw, ch)
+            createFeatheredChunk(src, cw, ch)
+        }
+    }
+
+    // Eased progress curve: stays abstract longer, resolves in last 30%
+    val easedProgress = if (progress < 0.7f) {
+        progress / 0.7f * 0.4f
+    } else {
+        0.4f + (progress - 0.7f) / 0.3f * 0.6f
+    }
+    val drift = (1f - easedProgress).coerceIn(0f, 1f)
+    val blurAmount = (55f * drift).coerceAtLeast(0f)
+
+    val infiniteTransition = rememberInfiniteTransition(label = "morph")
+
+    BoxWithConstraints(modifier = modifier) {
+        val cellW = maxWidth / cols
+        val cellH = maxHeight / rows
+
+        chunks.forEachIndexed { index, chunk ->
+            key(index) {
+                val rng = remember { Random(index * 37 + 7) }
+                val ampX = remember { 25f + rng.nextFloat() * 35f }
+                val ampY = remember { 20f + rng.nextFloat() * 30f }
+                val durX = remember { 3500 + rng.nextInt(2000) }
+                val durY = remember { 3000 + rng.nextInt(2000) }
+                val delayX = remember { rng.nextInt(700) }
+                val delayY = remember { rng.nextInt(700) }
+                val scatterX = remember { (rng.nextFloat() - 0.5f) * 50f }
+                val scatterY = remember { (rng.nextFloat() - 0.5f) * 40f }
+
+                val driftX by infiniteTransition.animateFloat(
+                    initialValue = -ampX, targetValue = ampX,
+                    animationSpec = infiniteRepeatable(
+                        tween(durX, delayMillis = delayX, easing = LinearOutSlowInEasing),
+                        RepeatMode.Reverse
+                    ), label = "dx$index"
+                )
+                val driftY by infiniteTransition.animateFloat(
+                    initialValue = -ampY, targetValue = ampY,
+                    animationSpec = infiniteRepeatable(
+                        tween(durY, delayMillis = delayY, easing = LinearOutSlowInEasing),
+                        RepeatMode.Reverse
+                    ), label = "dy$index"
+                )
+
+                val col = index % cols
+                val row = index / cols
+                val ox = cellW * col + ((driftX + scatterX) * drift).dp
+                val oy = cellH * row + ((driftY + scatterY) * drift).dp
+                val blobScale = 1f + 0.6f * drift
+
+                Image(
+                    bitmap = chunk.asImageBitmap(),
+                    contentDescription = null,
+                    contentScale = ContentScale.FillBounds,
+                    modifier = Modifier
+                        .size(cellW, cellH)
+                        .offset(x = ox, y = oy)
+                        .graphicsLayer {
+                            scaleX = blobScale
+                            scaleY = blobScale
+                        }
+                        .blur(blurAmount.dp, BlurredEdgeTreatment.Unbounded)
+                )
+            }
+        }
+    }
+}
+
+/** Create a bitmap with radial alpha fade: opaque center → transparent edges. */
+private fun createFeatheredChunk(src: Bitmap, w: Int, h: Int): Bitmap {
+    val result = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(result)
+
+    // Draw original chunk
+    canvas.drawBitmap(src, 0f, 0f, null)
+
+    // Punch out edges with radial gradient alpha mask (DST_IN keeps center, fades edges)
+    val maskPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    maskPaint.xfermode = android.graphics.PorterDuffXfermode(
+        android.graphics.PorterDuff.Mode.DST_IN
+    )
+    val radius = maxOf(w, h) * 0.75f
+    maskPaint.shader = android.graphics.RadialGradient(
+        w / 2f, h / 2f, radius,
+        intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0x00FFFFFF),
+        floatArrayOf(0f, 0.45f, 1f),
+        android.graphics.Shader.TileMode.CLAMP
+    )
+    canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), maskPaint)
+
+    src.recycle()
+    return result
+}
+
 
 @Composable
 private fun AssistantStreamingBubble(text: String) {
@@ -438,14 +724,6 @@ private fun EmptyMessagesState() {
 }
 
 @Composable
-private fun MessageBubble(message: Messages) {
-    when (message.role) {
-        Role.User -> UserMessageBubble(message)
-        else -> AssistantMessageBubble(message)
-    }
-}
-
-@Composable
 private fun UserMessageBubble(message: Messages) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -454,6 +732,7 @@ private fun UserMessageBubble(message: Messages) {
         Surface(
             shape = RoundedCornerShape(rDp(12.dp)),
             color = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier
                 .padding(horizontal = rDp(8.dp), vertical = rDp(5.dp))
                 .widthIn(max = rDp(280.dp))
@@ -471,87 +750,229 @@ private fun UserMessageBubble(message: Messages) {
     }
 }
 
+/** Header part of assistant message: RAG results, tool chain, thinking block, non-text content. */
 @Composable
-private fun AssistantMessageBubble(message: Messages) {
-    val showMetrics = remember(message.decodingMetrics) {
-        message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
-    }
-
-    val showImageMetrics = remember(message.imageMetrics) {
-        message.imageMetrics != null
-    }
-
-    val showMemoryMetrics = remember(message.memoryMetrics) {
-        message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
-    }
-
+private fun AssistantMessageHeader(message: Messages) {
     val hasRagResults = remember(message.ragResults) {
         message.ragResults?.isNotEmpty() == true
     }
-
-    val parsedMessage by produceState(
-        initialValue = ParsedMessage(null, message.content.content),
-        key1 = message.content.content
-    ) {
-        value = parseThinkingTags(message.content.content)
+    val hasToolChainSteps = remember(message.toolChainSteps) {
+        message.toolChainSteps?.isNotEmpty() == true
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = rDp(8.dp)),
+        modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
-        // Show RAG results if available (before the response)
         if (hasRagResults) {
             message.ragResults?.let { results ->
                 SavedRagResultsDisplay(results = results)
             }
         }
 
-        when (message.content.contentType) {
-            ContentType.Image -> {
-                ImageMessageBubble(message)
-            }
-            else -> {
-                if (parsedMessage.thinkingContent != null) {
-                    ThinkingBlock(parsedMessage.thinkingContent!!)
-                }
-
-                if (parsedMessage.actualContent.isNotEmpty()) {
-                    SelectionContainer{
-                        MarkdownText(
-                            text = parsedMessage.actualContent,
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(4.dp))
-                        )
-                    }
-                }
+        if (message.agentPlan != null) {
+            AgentExecutionView(
+                plan = message.agentPlan,
+                steps = message.toolChainSteps ?: emptyList(),
+                summary = message.agentSummary,
+                phase = AgentPhase.Complete
+            )
+        } else if (hasToolChainSteps) {
+            message.toolChainSteps?.let { steps ->
+                ToolChainDisplay(steps = steps, isLive = false)
             }
         }
 
+        // Non-text content types
+        when (message.content.contentType) {
+            ContentType.Image -> ImageMessageBubble(message)
+            ContentType.PluginResult -> PluginResultCard(message = message)
+            else -> {
+                // Thinking block (markdown body is handled by lazyMarkdownItems)
+                val thinkingContent by produceState<String?>(
+                    initialValue = null,
+                    key1 = message.content.content
+                ) {
+                    if (message.content.content.contains("<think>")) {
+                        value = parseThinkingTags(message.content.content).thinkingContent
+                    }
+                }
+                thinkingContent?.let { ThinkingBlock(it) }
+            }
+        }
+    }
+}
+
+/** Footer part of assistant message: metrics + action row. */
+@Composable
+private fun AssistantMessageFooter(
+    message: Messages,
+    ttsPlayingMsgId: String?,
+    ttsIsPlaying: Boolean,
+    ttsSynthesizing: Boolean,
+    ttsModelLoaded: Boolean,
+    onSpeak: (Messages) -> Unit,
+    onStopTTS: () -> Unit,
+    onRegenerate: (() -> Unit)?,
+    isRegenerateEnabled: Boolean
+) {
+    val showMetrics = remember(message.decodingMetrics) {
+        message.decodingMetrics?.tokensPerSecond?.let { it > 0 } ?: false
+    }
+    val showImageMetrics = remember(message.imageMetrics) {
+        message.imageMetrics != null
+    }
+    val showMemoryMetrics = remember(message.memoryMetrics) {
+        message.memoryMetrics?.let { it.modelSizeMB > 0 || it.peakMemoryMB > 0 } ?: false
+    }
+    val isTextContent = message.content.contentType == ContentType.Text
+    val isThisMessagePlaying = ttsPlayingMsgId == message.msgId && ttsIsPlaying
+    val isThisMessageSynthesizing = ttsPlayingMsgId == message.msgId && ttsSynthesizing
+
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+    ) {
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
                 MetricsDisplay(metrics, message.memoryMetrics)
             }
         }
-
         if (showImageMetrics) {
             message.imageMetrics?.let { metrics ->
                 ImageMetricsDisplay(metrics)
             }
         }
-
         if (showMemoryMetrics && !showMetrics) {
             message.memoryMetrics?.let { metrics ->
                 MemoryMetricsDisplay(metrics)
             }
+        }
+        if (isTextContent && message.content.content.isNotEmpty()) {
+            // Strip thinking tags for the text content passed to action row
+            val textContent = remember(message.content.content) {
+                if (message.content.content.contains("<think>")) {
+                    message.content.content.replace(
+                        Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), ""
+                    ).trim()
+                } else message.content.content
+            }
+            if (textContent.isNotEmpty()) {
+                MessageActionRow(
+                    message = message,
+                    textContent = textContent,
+                    isPlaying = isThisMessagePlaying,
+                    isSynthesizing = isThisMessageSynthesizing,
+                    ttsModelLoaded = ttsModelLoaded,
+                    onSpeak = onSpeak,
+                    onStopTTS = onStopTTS,
+                    onRegenerate = onRegenerate,
+                    isRegenerateEnabled = isRegenerateEnabled
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MessageActionRow(
+    message: Messages,
+    textContent: String,
+    isPlaying: Boolean,
+    isSynthesizing: Boolean,
+    ttsModelLoaded: Boolean,
+    onSpeak: (Messages) -> Unit,
+    onStopTTS: () -> Unit,
+    onRegenerate: (() -> Unit)? = null,
+    isRegenerateEnabled: Boolean = true
+) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var showCopied by remember { mutableStateOf(false) }
+
+    LaunchedEffect(showCopied) {
+        if (showCopied) {
+            kotlinx.coroutines.delay(1500)
+            showCopied = false
+        }
+    }
+
+    val actions = buildList {
+        // TTS action: 3 states - playing (stop icon), synthesizing (loading spinner), idle (speak icon)
+        when {
+            isPlaying -> add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.Stop),
+                onClick = { onStopTTS() },
+                contentDescription = "Stop"
+            ))
+            isSynthesizing -> add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.volume),
+                onClick = { onStopTTS() },
+                contentDescription = "Synthesizing",
+                isLoading = true
+            ))
+            else -> add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.volume),
+                onClick = { onSpeak(message) },
+                contentDescription = "Speak"
+            ))
+        }
+
+        // Copy action
+        if (showCopied) {
+            add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.CheckCircle),
+                onClick = {},
+                contentDescription = "Copied"
+            ))
+        } else {
+            add(ActionItem(
+                icon = ActionIcon.Resource(R.drawable.copy),
+                onClick = {
+                    scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("message", textContent))) }
+                    showCopied = true
+                },
+                contentDescription = "Copy"
+            ))
+        }
+
+        // Regenerate action (always visible, disabled during generation)
+        if (onRegenerate != null) {
+            add(ActionItem(
+                icon = ActionIcon.Vector(Icons.Default.Refresh),
+                onClick = { if (isRegenerateEnabled) onRegenerate() },
+                contentDescription = "Regenerate",
+                enabled = isRegenerateEnabled
+            ))
+        }
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        MultiActionButton(actions = actions)
+
+        if (showCopied) {
+            Text(
+                text = "Copied",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
         }
     }
 }
 
 @Composable
 private fun ImageMessageBubble(message: Messages) {
-    var isImageRevealed by remember { mutableStateOf(false) }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
+    val imageBlurEnabled by appSettingsDataStore.imageBlurEnabled.collectAsState(initial = true)
+    var isImageRevealed by remember(imageBlurEnabled) { mutableStateOf(!imageBlurEnabled) }
 
     Column(
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp)),

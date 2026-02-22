@@ -182,6 +182,71 @@ class LLMService : Service() {
             ggufEngine.clearTools()
         }
 
+        // ==================== Multi-turn Tool Calling ====================
+
+        override fun enableToolCallingGguf(
+            toolsJson: String,
+            grammarMode: Int,
+            useTypedGrammar: Boolean
+        ): Boolean {
+            return ggufEngine.enableToolCalling(toolsJson, grammarMode, useTypedGrammar)
+        }
+
+        override fun generateGgufMultiTurn(
+            messagesJson: String,
+            maxTokens: Int,
+            callback: IGgufGenerationCallback
+        ) {
+            scope.launch(Dispatchers.IO) {
+                try {
+                    ggufEngine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
+                        when (event) {
+                            is GenerationEvent.Token -> {
+                                callback.onToken(event.text)
+                            }
+                            is GenerationEvent.Done -> {
+                                callback.onDone()
+                            }
+                            is GenerationEvent.Error -> {
+                                callback.onError(event.message)
+                            }
+                            is GenerationEvent.Metrics -> {
+                                callback.onMetrics(
+                                    event.metrics.totalTokens,
+                                    event.metrics.promptTokens,
+                                    event.metrics.generatedTokens,
+                                    event.metrics.tokensPerSecond,
+                                    event.metrics.timeToFirstToken,
+                                    event.metrics.totalTimeMs
+                                )
+                            }
+                            is GenerationEvent.ToolCall -> {
+                                callback.onToolCall(event.name, event.args)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    try {
+                        callback.onError(e.message ?: "Unknown error")
+                    } catch (_: Exception) {
+                        // Client may have disconnected
+                    }
+                }
+            }
+        }
+
+        override fun setGrammarModeGguf(mode: Int) {
+            ggufEngine.setGrammarMode(mode)
+        }
+
+        override fun setTypedGrammarGguf(enabled: Boolean) {
+            ggufEngine.setTypedGrammar(enabled)
+        }
+
+        override fun isToolCallingSupportedGguf(): Boolean {
+            return ggufEngine.isToolCallingSupported()
+        }
+
         // ==================== Diffusion Methods ====================
 
         override fun loadDiffusionModel(

@@ -1,15 +1,10 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
-import java.io.FileInputStream
-import java.util.Properties
-import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.android)
 }
-
-val localPropertiesFile = rootProject.file("local.properties")
 
 android {
     namespace = "com.memoryvault"
@@ -24,11 +19,6 @@ android {
         }
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-        buildConfigField("String", "ALIAS", getProperty("ALIAS"))
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     buildTypes {
@@ -64,15 +54,4 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.material)
-}
-
-fun getProperty(value: String): String {
-    return if (localPropertiesFile.exists()) {
-        val localProps = Properties().apply {
-            load(FileInputStream(localPropertiesFile))
-        }
-        localProps.getProperty(value) ?: "\"sample_val\""
-    } else {
-        System.getenv(value) ?: "\"sample_val\""
-    }
 }

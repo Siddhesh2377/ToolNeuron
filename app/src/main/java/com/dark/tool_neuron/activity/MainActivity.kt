@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.activity
 
 import android.os.Bundle
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,15 +21,21 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.di.AppContainer
-import com.dark.tool_neuron.engine.EmbeddingEngine
-import com.dark.tool_neuron.ui.screen.EmbeddingSetupScreen
+import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.ui.screen.AiMemoryScreen
 import com.dark.tool_neuron.ui.screen.McpServersScreen
 import com.dark.tool_neuron.ui.screen.McpStoreScreen
 import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
+import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
+import com.dark.tool_neuron.ui.screen.PersonaScreen
+import com.dark.tool_neuron.ui.screen.SetupScreen
+import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.WelcomeScreen
 import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -41,12 +46,12 @@ import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
-    private lateinit var termsDataStore: TermsDataStore
 
     @Inject
     lateinit var ragRepository: com.dark.tool_neuron.repo.RagRepository
@@ -54,8 +59,6 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        termsDataStore = TermsDataStore(this)
 
         // Bind LLM service after activity is created (Android 14+ requirement)
         LlmModelWorker.bindService(applicationContext)
@@ -73,45 +76,49 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            val context = this
-
             NeuroVerseTheme {
-                val hasAcceptedTerms by termsDataStore.hasAcceptedTerms.collectAsState(initial = true)
-                val scope = rememberCoroutineScope()
+                val context = this@MainActivity
 
-                // Start background download if model not present
+                // Compute start destination from onboarding state + installed models
+                var startDestination by remember { mutableStateOf<String?>(null) }
+                var hasModelsInstalled by remember { mutableStateOf(false) }
+
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        if (!EmbeddingEngine.isModelDownloaded(context)) {
-                            LlmModelWorker.startEmbeddingModelDownload(context)
+                        val termsDataStore = TermsDataStore(context)
+                        val setupDataStore = SetupDataStore(context)
+                        val modelRepository = AppContainer.getModelRepository()
+
+                        val termsAccepted = termsDataStore.hasAcceptedTerms.first()
+                        val setupDone = setupDataStore.isSetupDone.first()
+                        val models = modelRepository.getAllModels().first()
+
+                        val hasModel = models.any {
+                            it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                        }
+                        hasModelsInstalled = hasModel
+
+                        startDestination = when {
+                            !termsAccepted && hasModel -> Screen.Terms.route
+                            !termsAccepted -> Screen.Welcome.route
+                            !setupDone && !hasModel -> Screen.OnboardingSetup.route
+                            else -> Screen.Chat.route
                         }
                     }
                 }
 
-                if (!hasAcceptedTerms) {
-                    TermsAndConditionsScreen(
-                        onAccept = {
-                            scope.launch {
-                                termsDataStore.acceptTerms()
-                            }
-                        }
-                    )
-                } else {
-                    val chatViewModel: ChatViewModel = hiltViewModel()
-                    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
+                val dest = startDestination ?: return@NeuroVerseTheme
 
-                    AppNavigation(
-                        chatViewModel = chatViewModel,
-                        llmModelViewModel = llmModelViewModel
-                    )
-                }
+                AppNavigation(
+                    startDestination = dest,
+                    hasModelsInstalled = hasModelsInstalled
+                )
             }
         }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        // Clear password cache when app terminates
         ragRepository.clearPasswordCache()
         LlmModelWorker.unbindService()
         AppContainer.shutdown()
@@ -119,24 +126,41 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
+    // Onboarding
+    object Welcome : Screen("welcome")
+    object Terms : Screen("terms")
+    object OnboardingSetup : Screen("setup")
+
+    // Main app
     object Chat : Screen("chat")
     object Store : Screen("store")
     object Editor : Screen("editor")
-    object VaultManager: Screen("vault_manager")
-    object McpServers: Screen("mcp_servers")
-    object McpStore: Screen("mcp_store")
+    object Settings : Screen("settings")
+    object VaultManager : Screen("vault_manager")
+    object McpServers : Screen("mcp_servers")
+    object McpStore : Screen("mcp_store")
+    object Personas : Screen("personas")
+    object PersonaEditor : Screen("persona_editor/{personaId}") {
+        fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
+    }
+    object AiMemory : Screen("ai_memory")
 }
 
 @Composable
 fun AppNavigation(
-    chatViewModel: ChatViewModel,
-    llmModelViewModel: LLMModelViewModel
+    startDestination: String,
+    hasModelsInstalled: Boolean
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
     val navController = rememberNavController()
+
+    val chatViewModel: ChatViewModel = hiltViewModel()
+    val llmModelViewModel: LLMModelViewModel = hiltViewModel()
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Chat.route,
+        startDestination = startDestination,
         enterTransition = {
             slideIntoContainer(
                 towards = AnimatedContentTransitionScope.SlideDirection.Left,
@@ -163,16 +187,48 @@ fun AppNavigation(
         }
     ) {
 
-        composable(Screen.Editor.route) {
-            ModelConfigEditorScreen(onBackClick = {
-                navController.popBackStack()
-            })
+        // ============ ONBOARDING SCREENS ============
+        composable(Screen.Welcome.route) {
+            WelcomeScreen(
+                onContinue = {
+                    navController.navigate(Screen.Terms.route)
+                }
+            )
         }
 
+        composable(Screen.Terms.route) {
+            val termsDataStore = remember { TermsDataStore(context) }
+            TermsAndConditionsScreen(
+                onAccept = {
+                    scope.launch {
+                        termsDataStore.acceptTerms()
+                    }
+                    if (hasModelsInstalled) {
+                        navController.navigate(Screen.Chat.route) {
+                            popUpTo(0) { inclusive = true }
+                        }
+                    } else {
+                        navController.navigate(Screen.OnboardingSetup.route)
+                    }
+                }
+            )
+        }
+
+        composable(Screen.OnboardingSetup.route) {
+            SetupScreen(
+                onSetupComplete = {
+                    navController.navigate(Screen.Chat.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        // ============ MAIN APP ROUTES ============
         composable(Screen.Chat.route) { _ ->
             HomeScreen(
-                onModelEditor = {
-                    navController.navigate(Screen.Editor.route)
+                onSettingsClick = {
+                    navController.navigate(Screen.Settings.route)
                 },
                 onStoreButtonClicked = {
                     navController.navigate(Screen.Store.route)
@@ -183,13 +239,16 @@ fun AppNavigation(
                 onMcpServersClick = {
                     navController.navigate(Screen.McpServers.route)
                 },
+                onCharacterClick = {
+                    navController.navigate(Screen.Personas.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
         }
 
-        composable(Screen.Store.route) {
-            ModelStoreScreen(onNavigateBack = {
+        composable(Screen.Editor.route) {
+            ModelConfigEditorScreen(onBackClick = {
                 navController.popBackStack()
             })
         }
@@ -198,10 +257,63 @@ fun AppNavigation(
             ModelStoreScreen(onNavigateBack = {
                 navController.popBackStack()
             })
+        }
+
+        composable(Screen.Settings.route) {
+            SettingsScreen(
+                onNavigateBack = { navController.popBackStack() },
+                onModelEditor = { navController.navigate(Screen.Editor.route) },
+                onPersonasClick = { navController.navigate(Screen.Personas.route) },
+                onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) }
+            )
         }
 
         composable(Screen.VaultManager.route) {
-            VaultDashboard()
+            VaultDashboard(onNavigateBack = { navController.popBackStack() })
+        }
+
+        composable(Screen.Personas.route) {
+            val activePersonaId by chatViewModel.activePersona.collectAsState()
+            PersonaScreen(
+                activePersonaId = activePersonaId?.id,
+                onPersonaSelected = { personaId -> chatViewModel.setActivePersona(personaId) },
+                onEditPersona = { personaId ->
+                    navController.navigate(Screen.PersonaEditor.createRoute(personaId))
+                },
+                onCreatePersona = {
+                    navController.navigate(Screen.PersonaEditor.createRoute(null))
+                },
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = Screen.PersonaEditor.route,
+            arguments = listOf(
+                androidx.navigation.navArgument("personaId") {
+                    type = androidx.navigation.NavType.StringType
+                    defaultValue = "new"
+                }
+            )
+        ) { backStackEntry ->
+            val personaId = backStackEntry.arguments?.getString("personaId")
+                ?.takeIf { it != "new" }
+            PersonaEditorScreen(
+                personaId = personaId,
+                onNavigateBack = { navController.popBackStack() },
+                onDeleted = {
+                    if (personaId != null && chatViewModel.activePersona.value?.id == personaId) {
+                        chatViewModel.setActivePersona(null)
+                    }
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        composable(Screen.AiMemory.route) {
+            AiMemoryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
 
         composable(Screen.McpServers.route) {

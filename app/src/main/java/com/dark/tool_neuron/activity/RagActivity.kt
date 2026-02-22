@@ -36,9 +36,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Close
@@ -75,6 +75,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -96,7 +97,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.table_schema.InstalledRag
@@ -139,7 +140,14 @@ fun RagScreen(
     val scope = rememberCoroutineScope()
 
     var selectedTab by remember { mutableIntStateOf(0) }
-    var showCreateSheet by remember { mutableStateOf(false) }
+
+    // Auto-initialize embedding engine when Create tab is selected
+    LaunchedEffect(selectedTab) {
+        if (selectedTab == 2 && !ragViewModel.isEmbeddingReady) {
+            ragViewModel.initializeEmbeddingFromFiles()
+        }
+    }
+
     var showDetailSheet by remember { mutableStateOf(false) }
     var selectedRagDetail by remember { mutableStateOf<InstalledRag?>(null) }
     var showPasswordDialog by remember { mutableStateOf(false) }
@@ -232,7 +240,7 @@ fun RagScreen(
                 .padding(padding)
         ) {
             // Tabs
-            TabRow(
+            SecondaryTabRow(
                 selectedTabIndex = selectedTab,
                 containerColor = MaterialTheme.colorScheme.background
             ) {
@@ -267,35 +275,33 @@ fun RagScreen(
 
             // Error display
             error?.let { errorMsg ->
-                if (errorMsg != null){
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(rDp(8.dp)),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        shape = RoundedCornerShape(rDp(8.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(rDp(8.dp)),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    shape = RoundedCornerShape(rDp(8.dp))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(rDp(12.dp)),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(
-                            modifier = Modifier.padding(rDp(12.dp)),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = errorMsg,
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.weight(1f)
+                        Text(
+                            text = errorMsg,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        ActionButton(
+                            onClickListener = { ragViewModel.clearError() },
+                            icon = Icons.Default.Close,
+                            contentDescription = "Dismiss",
+                            shape = RoundedCornerShape(rDp(8.dp)),
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer
                             )
-                            ActionButton(
-                                onClickListener = { ragViewModel.clearError() },
-                                icon = Icons.Default.Close,
-                                contentDescription = "Dismiss",
-                                shape = RoundedCornerShape(rDp(8.dp)),
-                                colors = IconButtonDefaults.filledIconButtonColors(
-                                    containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
-                                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                                )
-                            )
-                        }
+                        )
                     }
                 }
             }
@@ -369,17 +375,6 @@ fun RagScreen(
                 }
             }
         }
-    }
-
-    // Create RAG Bottom Sheet
-    if (showCreateSheet) {
-        CreateRagBottomSheet(
-            ragViewModel = ragViewModel,
-            onDismiss = { showCreateSheet = false },
-            onCreated = {
-                showCreateSheet = false
-            }
-        )
     }
 
     // RAG Detail Bottom Sheet
@@ -795,27 +790,6 @@ private fun TagChip(tag: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CreateRagBottomSheet(
-    ragViewModel: RagViewModel,
-    onDismiss: () -> Unit,
-    onCreated: () -> Unit
-) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
-    ) {
-        SecureRagCreationScreen(
-            ragViewModel = ragViewModel,
-            padding = PaddingValues(),
-            onRagCreated = onCreated
-        )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 private fun RagDetailBottomSheet(
     rag: InstalledRag,
     onDismiss: () -> Unit,
@@ -1036,7 +1010,7 @@ private fun DetailRow(label: String, value: String) {
 
 private fun getRagSourceIcon(sourceType: RagSourceType): ImageVector = when (sourceType) {
     RagSourceType.TEXT -> Icons.Default.Book
-    RagSourceType.CHAT -> Icons.Default.Chat
+    RagSourceType.CHAT -> Icons.AutoMirrored.Filled.Chat
     RagSourceType.FILE -> Icons.Default.Description
     RagSourceType.MEDICAL_TEXT -> Icons.Default.Description  // Legacy support
     RagSourceType.NEURON_PACKET -> Icons.Default.Memory

@@ -8,6 +8,8 @@ import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.NeuronNode
+import com.dark.tool_neuron.neuron_example.RetrievalConfidence
+import com.dark.tool_neuron.neuron_example.RetrievalResult
 import com.dark.tool_neuron.util.DocumentParser
 import com.neuronpacket.NeuronPacketManager
 import com.neuronpacket.PacketMetadata
@@ -57,7 +59,7 @@ class RagRepository(
             ragFile.delete()
         }
         // Remove from loaded graphs and password cache
-        loadedGraphs.remove(id)
+        loadedGraphs.remove(id)?.close()
         passwordCache.remove(id)
     }
 
@@ -71,6 +73,7 @@ class RagRepository(
 
     suspend fun unloadAllRags() {
         ragDao.unloadAllRags()
+        loadedGraphs.values.forEach { it.close() }
         loadedGraphs.clear()
         // Don't clear password cache - keep passwords until app terminates
     }
@@ -395,7 +398,7 @@ class RagRepository(
     }
 
     suspend fun unloadGraph(ragId: String) {
-        loadedGraphs.remove(ragId)
+        loadedGraphs.remove(ragId)?.close()
         ragDao.markAsUnloaded(ragId)
         // Don't clear password - keep it cached for re-loading
     }
@@ -429,6 +432,54 @@ class RagRepository(
 
         android.util.Log.d("RagRepository", "Total RAGs with results: ${results.size}")
         results
+    }
+
+    /**
+     * Aggregated retrieval result across all loaded graphs.
+     */
+    data class AggregatedRetrievalResult(
+        val ragResults: List<Pair<InstalledRag, RetrievalResult>>,
+        val overallConfidence: RetrievalConfidence,
+        val combinedContext: String
+    )
+
+    /**
+     * Query all loaded graphs using the advanced retrieval pipeline.
+     * Returns aggregated results with confidence and compressed context.
+     */
+    suspend fun queryAllLoadedGraphsWithPipeline(
+        query: String,
+        topK: Int = 5
+    ): AggregatedRetrievalResult = withContext(Dispatchers.IO) {
+        val ragResults = mutableListOf<Pair<InstalledRag, RetrievalResult>>()
+
+        android.util.Log.d("RagRepository", "Pipeline query on ${loadedGraphs.size} loaded graphs for: $query")
+
+        for ((ragId, graph) in loadedGraphs) {
+            val rag = ragDao.getById(ragId) ?: continue
+            if (!rag.isEnabled) continue
+
+            val result = graph.queryWithPipeline(query, topK)
+            if (result.results.isNotEmpty()) {
+                ragResults.add(rag to result)
+            }
+        }
+
+        // Overall confidence = minimum confidence across all queried graphs
+        val overallConfidence = if (ragResults.isEmpty()) {
+            RetrievalConfidence.LOW
+        } else {
+            ragResults.minOf { it.second.confidence }
+        }
+
+        // Concatenated compressed contexts
+        val combinedContext = ragResults.joinToString("\n\n") { (_, result) ->
+            result.compressedContext
+        }
+
+        android.util.Log.d("RagRepository", "Pipeline query: ${ragResults.size} RAGs with results, confidence=$overallConfidence")
+
+        AggregatedRetrievalResult(ragResults, overallConfidence, combinedContext)
     }
 
     suspend fun createSecureRagFromText(

@@ -45,8 +45,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
+import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -122,7 +122,7 @@ fun RagOverlayBottomSheet(
                 Spacer(modifier = Modifier.height(rDp(8.dp)))
 
                 // Tabs
-                TabRow(
+                SecondaryTabRow(
                     selectedTabIndex = selectedTab,
                     containerColor = MaterialTheme.colorScheme.surface,
                     contentColor = MaterialTheme.colorScheme.primary
@@ -199,17 +199,21 @@ private fun RagOverlayHeader(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Text(
-                text = "RAG Management",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "$loadedCount active / $installedCount installed",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        Column(modifier = Modifier.weight(1f)) {
+            SectionHeader(title = "RAG Management") {
+                Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                    InfoBadge(
+                        text = "$loadedCount active",
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                    InfoBadge(
+                        text = "$installedCount installed",
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
@@ -353,26 +357,24 @@ private fun RagListItem(
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = "Loaded",
-                                modifier = Modifier.size(rDp(16.dp)),
-                                tint = MaterialTheme.colorScheme.primary
+                            StatusBadge(
+                                text = "Loaded",
+                                isActive = true,
+                                activeColor = MaterialTheme.colorScheme.primary
                             )
                         }
                         RagStatus.LOADING -> {
-                            Text(
-                                text = "Loading...",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.tertiary
+                            StatusBadge(
+                                text = "Loading",
+                                isActive = true,
+                                activeColor = MaterialTheme.colorScheme.tertiary
                             )
                         }
                         RagStatus.ERROR -> {
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Error",
-                                modifier = Modifier.size(rDp(16.dp)),
-                                tint = MaterialTheme.colorScheme.error
+                            StatusBadge(
+                                text = "Error",
+                                isActive = true,
+                                activeColor = MaterialTheme.colorScheme.error
                             )
                         }
                         else -> {}
@@ -485,20 +487,13 @@ private fun RagListItem(
 
 @Composable
 private fun RagTag(tag: String) {
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(rDp(12.dp)))
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f))
-            .padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
-    ) {
-        Text(
-            text = tag,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Medium
-        )
-    }
+    InfoBadge(
+        text = tag,
+        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+        contentColor = MaterialTheme.colorScheme.primary
+    )
 }
+
 
 private fun getRagSourceIcon(sourceType: RagSourceType) = when (sourceType) {
     RagSourceType.TEXT -> Icons.Default.Book

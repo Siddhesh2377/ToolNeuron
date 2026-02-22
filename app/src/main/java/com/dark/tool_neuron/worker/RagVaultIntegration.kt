@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.worker
 
 import android.content.Context
+import com.dark.tool_neuron.BuildConfig
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
@@ -30,7 +31,10 @@ class RagVaultIntegration(
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
         if (memoryVault == null) {
-            memoryVault = MemoryVault(context)
+            memoryVault = MemoryVault(
+                context = context,
+                keyAlias = BuildConfig.ALIAS
+            )
             memoryVault?.initialize()
         }
     }

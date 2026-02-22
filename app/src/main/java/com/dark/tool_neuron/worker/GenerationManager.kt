@@ -11,7 +11,8 @@ class GenerationManager {
 
     enum class ModelType {
         TEXT_GENERATION,
-        IMAGE_GENERATION
+        IMAGE_GENERATION,
+        AUDIO_GENERATION
     }
 
     private var currentModelType: ModelType = ModelType.TEXT_GENERATION
@@ -38,8 +39,19 @@ class GenerationManager {
 
     // ==================== Text Generation ====================
 
-    fun generateTextStreaming(prompt: String, maxTokens: Int = 512): Flow<GenerationEvent> {
+    fun generateTextStreaming(prompt: String, maxTokens: Int = 2048): Flow<GenerationEvent> {
         return LlmModelWorker.ggufGenerateStreaming(prompt, maxTokens)
+    }
+
+    /**
+     * Multi-turn streaming generation using full conversation history.
+     * Used for multi-turn tool calling flows.
+     *
+     * @param messagesJson JSON array of {role, content} message objects
+     * @param maxTokens Maximum tokens per turn
+     */
+    fun generateMultiTurnStreaming(messagesJson: String, maxTokens: Int = 2048): Flow<GenerationEvent> {
+        return LlmModelWorker.ggufGenerateMultiTurnStreaming(messagesJson, maxTokens)
     }
 
     fun stopTextGeneration() {
@@ -59,7 +71,9 @@ class GenerationManager {
         scheduler: String = "dpm",
         inputImage: String? = null,
         mask: String? = null,
-        denoiseStrength: Float = 0.6f
+        denoiseStrength: Float = 0.6f,
+        showDiffusionProcess: Boolean = true,
+        showDiffusionStride: Int = 1
     ): Flow<DiffusionGenerationEvent> {
         return LlmModelWorker.generateDiffusionImage(
             prompt = prompt,
@@ -73,8 +87,8 @@ class GenerationManager {
             inputImage = inputImage,
             mask = mask,
             denoiseStrength = denoiseStrength,
-            showDiffusionProcess = true,
-            showDiffusionStride = 5
+            showDiffusionProcess = showDiffusionProcess,
+            showDiffusionStride = showDiffusionStride
         )
     }
 

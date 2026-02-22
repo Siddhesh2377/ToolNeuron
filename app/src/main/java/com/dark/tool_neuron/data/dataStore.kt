@@ -20,7 +20,7 @@ class TermsDataStore(private val context: Context) {
         private val TERMS_VERSION_KEY = longPreferencesKey("terms_version")
         
         // Update this version number whenever T&C change
-        private const val CURRENT_TERMS_VERSION = 1L
+        private const val CURRENT_TERMS_VERSION = 2L
     }
 
     /**

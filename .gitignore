@@ -27,3 +27,7 @@ local.properties
 /repo/*.apk
 *.apk
 
+
+
+/app/release/app-release/
+/app/release/

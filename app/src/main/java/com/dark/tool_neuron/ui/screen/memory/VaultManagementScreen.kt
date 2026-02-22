@@ -1,64 +1,51 @@
 package com.dark.tool_neuron.ui.screen.memory
 
+import android.annotation.SuppressLint
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.ChatBubbleOutline
+import androidx.compose.material.icons.outlined.CleaningServices
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material.icons.outlined.SmartToy
+import androidx.compose.material.icons.outlined.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -66,7 +53,8 @@ import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.components.ActionToggleButton
+import com.dark.tool_neuron.ui.components.ActionToggleGroup
+import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
@@ -74,415 +62,144 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+private enum class ManageTab(val label: String) {
+    STATS("Stats"),
+    CHATS("Chats"),
+    TOOLS("Tools")
+}
+
 @Composable
 fun VaultManagementScreen(
     viewModel: VaultManagementViewModel = viewModel()
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Overview", "Chats", "Search", "Maintenance")
+    val tabs = ManageTab.entries
 
     LaunchedEffect(Unit) {
         viewModel.loadVaultStats()
         viewModel.loadChatList()
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(title = {
-                Text(
-                    "Memory Vault Manager", fontSize = rSp(20.sp), fontWeight = FontWeight.Bold
-                )
-            }, actions = {
-                ActionToggleButton(
-                    checked = viewModel.autoRefresh,
-                    onCheckedChange = { viewModel.toggleAutoRefresh() },
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "Auto Refresh"
-                )
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Tab selector
+        ActionToggleGroup(
+            items = tabs.toList(),
+            selectedItem = tabs[selectedTab],
+            onItemSelected = { selectedTab = tabs.indexOf(it) },
+            itemLabel = { it.label },
+            modifier = Modifier.padding(horizontal = rDp(16.dp))
+        )
 
-                Spacer(Modifier.width(rDp(8.dp)))
+        Spacer(Modifier.height(rDp(8.dp)))
 
-                ActionButton(
-                    onClickListener = { viewModel.loadVaultStats() },
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "Refresh"
-                )
-            })
-        }) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
+        // Loading
+        AnimatedVisibility(
+            visible = viewModel.isLoading,
+            enter = fadeIn(),
+            exit = fadeOut()
         ) {
-            // Tab Row
-            TabRow(
-                selectedTabIndex = selectedTab, modifier = Modifier.fillMaxWidth()
-            ) {
-                tabs.forEachIndexed { index, title ->
-                    Tab(selected = selectedTab == index, onClick = { selectedTab = index }, text = {
-                        Text(
-                            title,
-                            fontSize = rSp(14.sp),
-                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal
-                        )
-                    })
-                }
-            }
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = rDp(16.dp))
+            )
+        }
 
-            // Status Bar
-            AnimatedVisibility(
-                visible = viewModel.statusMessage.isNotEmpty(),
-                enter = slideInVertically() + fadeIn(),
-                exit = slideOutVertically() + fadeOut()
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Row(
-                        modifier = Modifier.padding(rDp(12.dp)),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp)),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Spacer(Modifier.width(rDp(8.dp)))
-                        Text(
-                            viewModel.statusMessage,
-                            fontSize = rSp(12.sp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-            }
-
-            // Loading Indicator
-            if (viewModel.isLoading) {
-                LinearProgressIndicator(
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
-            // Content
-            when (selectedTab) {
-                0 -> OverviewTab(viewModel)
-                1 -> ChatsTab(viewModel)
-                2 -> SearchTab(viewModel)
-                3 -> MaintenanceTab(viewModel)
-            }
+        // Content
+        when (selectedTab) {
+            0 -> VaultStatsOverview(
+                stats = viewModel.vaultStats,
+                onRefresh = { viewModel.loadVaultStats() }
+            )
+            1 -> ChatsContent(viewModel)
+            2 -> ToolsContent(viewModel)
         }
 
         // Error Dialog
         if (viewModel.showError) {
-            AlertDialog(onDismissRequest = { viewModel.dismissError() }, icon = {
-                Icon(Icons.Default.Warning, contentDescription = null)
-            }, title = {
-                Text("Error", fontSize = rSp(18.sp), fontWeight = FontWeight.Bold)
-            }, text = {
-                Text(viewModel.errorMessage, fontSize = rSp(14.sp))
-            }, confirmButton = {
-                TextButton(onClick = { viewModel.dismissError() }) {
-                    Text("OK")
-                }
-            })
-        }
-    }
-}
-
-@Composable
-fun OverviewTab(viewModel: VaultManagementViewModel) {
-    VaultStatsOverview(
-        stats = viewModel.vaultStats,
-        onRefresh = { viewModel.loadVaultStats() }
-    )
-}
-
-@Composable
-fun ChatsTab(viewModel: VaultManagementViewModel) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Chat List Header
-        Surface(
-            modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(rDp(12.dp)),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    "Chats (${viewModel.chatList.size})",
-                    fontSize = rSp(16.sp),
-                    fontWeight = FontWeight.Bold
-                )
-
-                ActionButton(
-                    onClickListener = { viewModel.loadChatList() },
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "Refresh Chats"
-                )
-            }
-        }
-
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-        ) {
-            items(viewModel.chatList) { chat ->
-                ChatCard(
-                    chatInfo = chat,
-                    isSelected = viewModel.selectedChatId == chat.chatId,
-                    onClick = { viewModel.loadChatMessages(chat.chatId) },
-                    onDelete = { viewModel.deleteChat(chat.chatId) })
-            }
-
-            if (viewModel.chatList.isEmpty()) {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.Email, message = "No chats found"
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SearchTab(viewModel: VaultManagementViewModel) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Search Bar
-        Surface(
-            modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(rDp(12.dp)),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-            ) {
-                OutlinedTextField(
-                    value = viewModel.searchQuery,
-                    onValueChange = { viewModel.performSearch(it) },
-                    modifier = Modifier.weight(1f),
-                    placeholder = { Text("Search messages...", fontSize = rSp(14.sp)) },
-                    leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        if (viewModel.searchQuery.isNotEmpty()) {
-                            IconButton(onClick = { viewModel.performSearch("") }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Clear")
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = RoundedCornerShape(rDp(12.dp))
-                )
-            }
-        }
-
-        // Search Results
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-        ) {
-            if (viewModel.searchQuery.isNotEmpty()) {
-                item {
+            AlertDialog(
+                onDismissRequest = { viewModel.dismissError() },
+                icon = { Icon(Icons.Outlined.Warning, null) },
+                title = {
                     Text(
-                        "Results (${viewModel.searchResults.size})",
-                        fontSize = rSp(14.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        "Error",
+                        fontFamily = ManropeFontFamily,
+                        fontWeight = FontWeight.SemiBold
                     )
-                }
-
-                items(viewModel.searchResults) { result ->
-                    SearchResultCard(result)
-                }
-
-                if (viewModel.searchResults.isEmpty() && !viewModel.isLoading) {
-                    item {
-                        EmptyStateCard(
-                            icon = Icons.Default.Search,
-                            message = "No results found for \"${viewModel.searchQuery}\""
-                        )
+                },
+                text = {
+                    Text(
+                        viewModel.errorMessage,
+                        fontFamily = ManropeFontFamily
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.dismissError() }) {
+                        Text("OK", fontFamily = ManropeFontFamily)
                     }
-                }
-            } else {
-                item {
-                    EmptyStateCard(
-                        icon = Icons.Default.Search,
-                        message = "Enter a search query to find messages"
-                    )
-                }
-            }
+                },
+                shape = RoundedCornerShape(rDp(16.dp))
+            )
         }
     }
 }
 
 @Composable
-fun MaintenanceTab(viewModel: VaultManagementViewModel) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-    ) {
-        item {
+private fun ChatsContent(viewModel: VaultManagementViewModel) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Header
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
-                "Maintenance Operations",
-                fontSize = rSp(18.sp),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
+                "${viewModel.chatList.size} conversations",
+                fontFamily = ManropeFontFamily,
+                fontSize = rSp(13.sp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            ActionButton(
+                onClickListener = { viewModel.loadChatList() },
+                icon = Icons.Outlined.Refresh,
+                contentDescription = "Refresh"
             )
         }
 
-        item {
-            MaintenanceCard(
-                title = "Defragmentation",
-                description = "Reclaim wasted space and optimize storage",
-                icon = Icons.Default.Build,
-                buttonText = "Defragment",
-                isProcessing = viewModel.isDefragging,
-                progress = viewModel.defragProgress,
-                onClick = { viewModel.performDefragmentation() })
-        }
-
-        item {
-            MaintenanceCard(
-                title = "Create Backup",
-                description = "Create a compressed backup of the vault",
-                icon = Icons.Default.Face,
-                buttonText = "Backup",
-                onClick = {
-                    // TODO: Implement file picker
-                    val path =
-                        "/storage/emulated/0/Download/vault_backup_${System.currentTimeMillis()}.mvlt.gz"
-                    viewModel.createBackup(path)
-                })
-        }
-
-        item {
-            MaintenanceCard(
-                title = "Restore Backup",
-                description = "Restore vault from a backup file",
-                icon = Icons.Default.Build,
-                buttonText = "Restore",
-                onClick = {
-                    // TODO: Implement file picker
-                })
-        }
-
-        item {
-            MaintenanceCard(
-                title = "Clear Vault",
-                description = "Delete all data from the vault (irreversible)",
-                icon = Icons.Default.Delete,
-                buttonText = "Clear All",
-                buttonColor = MaterialTheme.colorScheme.error,
-                onClick = {
-                    // TODO: Add confirmation dialog
-                })
-        }
-
-        item {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(rDp(12.dp)),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer
-                )
+        if (viewModel.chatList.isEmpty() && !viewModel.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier.padding(rDp(16.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        Icon(
-                            Icons.Default.Warning,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                        Text(
-                            "Warning",
-                            fontSize = rSp(16.sp),
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onErrorContainer
-                        )
-                    }
-                    Text(
-                        "Maintenance operations may take time and temporarily block other operations. " + "Always create a backup before performing destructive operations.",
-                        fontSize = rSp(12.sp),
-                        color = MaterialTheme.colorScheme.onErrorContainer
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        Icons.Outlined.ChatBubbleOutline, null,
+                        modifier = Modifier.size(rDp(40.dp)),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                     )
-                }
-            }
-        }
-    }
-}
-
-// Supporting Composables
-
-@Composable
-fun StatsCard(
-    title: String, items: List<StatItem>
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-        ) {
-            Text(
-                title,
-                fontSize = rSp(16.sp),
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.primary
-            )
-
-            items.forEach { item ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                    ) {
-                        Icon(
-                            item.icon,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp)),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            item.label,
-                            fontSize = rSp(14.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
                     Text(
-                        item.value,
+                        "No conversations",
+                        fontFamily = ManropeFontFamily,
                         fontSize = rSp(14.sp),
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = rDp(8.dp))
+                    )
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = rDp(16.dp)),
+                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            ) {
+                items(viewModel.chatList, key = { it.chatId }) { chat ->
+                    ChatCard(
+                        chat = chat,
+                        isSelected = viewModel.selectedChatId == chat.chatId,
+                        onClick = { viewModel.loadChatMessages(chat.chatId) },
+                        onDelete = { viewModel.deleteChat(chat.chatId) }
                     )
                 }
             }
@@ -491,143 +208,167 @@ fun StatsCard(
 }
 
 @Composable
-fun ChatCard(
-    chatInfo: ChatInfo, isSelected: Boolean, onClick: () -> Unit, onDelete: () -> Unit
+private fun ChatCard(
+    chat: ChatInfo,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onDelete: () -> Unit
 ) {
-    Card(
+    Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(12.dp)),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
-        )
+        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+               else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(12.dp))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp)),
+                .padding(rDp(12.dp)),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "Chat ID: ${chatInfo.chatId.take(8)}...",
+                    "Chat ${chat.chatId.take(8)}",
+                    fontFamily = ManropeFontFamily,
                     fontSize = rSp(14.sp),
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Medium
                 )
                 Text(
-                    "${chatInfo.messageCount} messages",
+                    "${chat.messageCount} messages · ${formatDate(chat.createdAt)}",
+                    fontFamily = ManropeFontFamily,
                     fontSize = rSp(12.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "Created: ${formatDate(chatInfo.createdAt)}",
-                    fontSize = rSp(11.sp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             ActionButton(
                 onClickListener = onDelete,
-                icon = Icons.Default.Delete,
-                contentDescription = "Delete Chat",
-                colors = IconButtonDefaults.filledIconButtonColors(
-                    containerColor = MaterialTheme.colorScheme.errorContainer,
-                    contentColor = MaterialTheme.colorScheme.onErrorContainer
-                )
+                icon = Icons.Outlined.Delete,
+                contentDescription = "Delete"
             )
         }
     }
 }
 
 @Composable
-fun SearchResultCard(result: MessageSearchResult) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
+private fun ToolsContent(viewModel: VaultManagementViewModel) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
-        Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    if (result.message.role == Role.User) Icons.Default.Person else Icons.Default.Face,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(16.dp))
-                )
-                Text(
-                    result.message.role.name,
-                    fontSize = rSp(12.sp),
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    formatDate(result.timestamp),
-                    fontSize = rSp(11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
+        item {
             Text(
-                result.message.content.content.take(150) + if (result.message.content.content.length > 150) "..." else "",
-                fontSize = rSp(13.sp),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            Text(
-                "Chat: ${result.chatId.take(8)}...",
+                "MAINTENANCE",
+                fontFamily = ManropeFontFamily,
                 fontSize = rSp(11.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                letterSpacing = 1.sp
+            )
+        }
+
+        item {
+            ToolCard(
+                title = "Defragment",
+                description = "Reclaim unused space and optimize storage",
+                icon = Icons.Outlined.CleaningServices,
+                isProcessing = viewModel.isDefragging,
+                progress = viewModel.defragProgress,
+                onClick = { viewModel.performDefragmentation() }
+            )
+        }
+
+        item {
+            ToolCard(
+                title = "Create Backup",
+                description = "Save encrypted backup to Downloads",
+                icon = Icons.Outlined.Backup,
+                onClick = {
+                    val path = "/storage/emulated/0/Download/vault_backup_${System.currentTimeMillis()}.mvlt.gz"
+                    viewModel.createBackup(path)
+                }
+            )
+        }
+
+        item {
+            ToolCard(
+                title = "Restore Backup",
+                description = "Restore from a backup file",
+                icon = Icons.Outlined.Restore,
+                onClick = { }
+            )
+        }
+
+        item {
+            Spacer(Modifier.height(rDp(8.dp)))
+            Text(
+                "DANGER ZONE",
+                fontFamily = ManropeFontFamily,
+                fontSize = rSp(11.sp),
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.error,
+                letterSpacing = 1.sp
+            )
+        }
+
+        item {
+            ToolCard(
+                title = "Clear All Data",
+                description = "Permanently delete everything",
+                icon = Icons.Outlined.Delete,
+                isDangerous = true,
+                onClick = { }
             )
         }
     }
 }
 
 @Composable
-fun MaintenanceCard(
+private fun ToolCard(
     title: String,
     description: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    buttonText: String,
-    buttonColor: androidx.compose.ui.graphics.Color = MaterialTheme.colorScheme.primary,
+    icon: ImageVector,
+    isDangerous: Boolean = false,
     isProcessing: Boolean = false,
     progress: Float = 0f,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
+    val color = if (isDangerous) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
+
+    Surface(
+        onClick = if (!isProcessing) onClick else ({}),
+        modifier = Modifier.fillMaxWidth(),
+        color = if (isDangerous) MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f)
+               else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(12.dp))
     ) {
         Column(
-            modifier = Modifier.padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            modifier = Modifier.padding(rDp(14.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
         ) {
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    icon,
-                    contentDescription = null,
-                    modifier = Modifier.size(rDp(32.dp)),
-                    tint = MaterialTheme.colorScheme.primary
+                    icon, null,
+                    modifier = Modifier.size(rDp(22.dp)),
+                    tint = color
                 )
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        title, fontSize = rSp(15.sp), fontWeight = FontWeight.Bold
+                        title,
+                        fontFamily = ManropeFontFamily,
+                        fontSize = rSp(14.sp),
+                        fontWeight = FontWeight.Medium
                     )
                     Text(
                         description,
+                        fontFamily = ManropeFontFamily,
                         fontSize = rSp(12.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -635,68 +376,16 @@ fun MaintenanceCard(
             }
 
             if (isProcessing) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
-                    LinearProgressIndicator(
-                        progress = { progress },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    Text(
-                        "${(progress * 100).toInt()}% Complete",
-                        fontSize = rSp(11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                FilledTonalButton(
-                    onClick = onClick,
+                LinearProgressIndicator(
+                    progress = { progress },
                     modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = buttonColor.copy(alpha = 0.12f), contentColor = buttonColor
-                    )
-                ) {
-                    Text(buttonText, fontSize = rSp(14.sp))
-                }
+                )
             }
         }
     }
 }
 
-@Composable
-fun EmptyStateCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector, message: String
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(rDp(12.dp))
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(rDp(32.dp)),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                modifier = Modifier.size(rDp(48.dp)),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-            )
-            Text(
-                message,
-                fontSize = rSp(14.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center
-            )
-        }
-    }
-}
-
-// Data Classes
-data class StatItem(
-    val label: String, val value: String, val icon: androidx.compose.ui.graphics.vector.ImageVector
-)
-
-// Utility Functions
+@SuppressLint("DefaultLocale")
 fun formatBytes(bytes: Long): String {
     return when {
         bytes < 1024 -> "$bytes B"
@@ -707,6 +396,6 @@ fun formatBytes(bytes: Long): String {
 }
 
 fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
     return sdf.format(Date(timestamp))
 }

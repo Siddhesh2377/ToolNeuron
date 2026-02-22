@@ -4,6 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.plugins.PluginManager
 
 sealed class AppState {
     // Idle states
@@ -18,7 +19,15 @@ sealed class AppState {
     data class GeneratingText(val modelName: String) : AppState()
     data class GeneratingImage(val modelName: String) : AppState()
     data class GeneratingAudio(val modelName: String) : AppState()
-    
+    data class ExecutingPlugin(val pluginName: String, val toolName: String) : AppState()
+    data class PluginExecutionComplete(
+        val pluginName: String,
+        val toolName: String,
+        val success: Boolean,
+        val executionTimeMs: Long,
+        val errorMessage: String? = null
+    ) : AppState()
+
     // Error states
     data class Error(val message: String, val modelName: String? = null) : AppState()
 }
@@ -29,9 +38,15 @@ fun AppState.getDisplayText(): String = when (this) {
     is AppState.NoModelLoaded -> "No Model Loaded"
     is AppState.ModelLoaded -> "Ready: $modelName"
     is AppState.LoadingModel -> "Loading: $modelName"
-    is AppState.GeneratingText -> "Generating Text"
+    is AppState.GeneratingText -> {
+        // Show "Looking for Tool" if any plugins are enabled
+        val hasToolsEnabled = PluginManager.enabledPluginNames.value.isNotEmpty()
+        if (hasToolsEnabled) "Looking for Tool" else "Generating Text"
+    }
     is AppState.GeneratingImage -> "Creating Image"
     is AppState.GeneratingAudio -> "Generating Audio"
+    is AppState.ExecutingPlugin -> "Executing Tool"
+    is AppState.PluginExecutionComplete -> if (success) "Tool Completed" else "Tool Failed"
     is AppState.Error -> "Error: $message"
 }
 
@@ -42,7 +57,9 @@ fun AppState.getIcon(): Int = when (this) {
     is AppState.LoadingModel -> R.drawable.settings
     is AppState.GeneratingText,
     is AppState.GeneratingImage,
-    is AppState.GeneratingAudio -> R.drawable.tool
+    is AppState.GeneratingAudio,
+    is AppState.ExecutingPlugin,
+    is AppState.PluginExecutionComplete -> R.drawable.tool
     is AppState.Error -> R.drawable.error
 }
 
@@ -61,6 +78,14 @@ fun AppState.getColor(): Color = when (this) {
     is AppState.GeneratingImage -> MaterialTheme.colorScheme.tertiary
 
     is AppState.GeneratingAudio -> MaterialTheme.colorScheme.secondary
+
+    is AppState.ExecutingPlugin -> MaterialTheme.colorScheme.tertiary
+
+    is AppState.PluginExecutionComplete -> if (success) {
+        MaterialTheme.colorScheme.tertiary
+    } else {
+        MaterialTheme.colorScheme.error
+    }
 
     is AppState.Error -> MaterialTheme.colorScheme.error
 }
@@ -81,6 +106,14 @@ fun AppState.getBackgroundColor(): Color = when (this) {
 
     is AppState.GeneratingAudio -> MaterialTheme.colorScheme.secondaryContainer
 
+    is AppState.ExecutingPlugin -> MaterialTheme.colorScheme.tertiaryContainer
+
+    is AppState.PluginExecutionComplete -> if (success) {
+        MaterialTheme.colorScheme.tertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.errorContainer
+    }
+
     is AppState.Error -> MaterialTheme.colorScheme.errorContainer
 }
 
@@ -99,6 +132,14 @@ fun AppState.getContentColor(): Color = when (this) {
     is AppState.GeneratingImage -> MaterialTheme.colorScheme.onTertiaryContainer
 
     is AppState.GeneratingAudio -> MaterialTheme.colorScheme.onSecondaryContainer
+
+    is AppState.ExecutingPlugin -> MaterialTheme.colorScheme.onTertiaryContainer
+
+    is AppState.PluginExecutionComplete -> if (success) {
+        MaterialTheme.colorScheme.onTertiaryContainer
+    } else {
+        MaterialTheme.colorScheme.onErrorContainer
+    }
 
     is AppState.Error -> MaterialTheme.colorScheme.onErrorContainer
 }

@@ -16,6 +16,13 @@ interface ILLMService {
     boolean setToolsJsonGguf(String toolsJson);
     void clearToolsGguf();
 
+    // Multi-turn tool calling
+    boolean enableToolCallingGguf(String toolsJson, int grammarMode, boolean useTypedGrammar);
+    void generateGgufMultiTurn(String messagesJson, int maxTokens, IGgufGenerationCallback callback);
+    void setGrammarModeGguf(int mode);
+    void setTypedGrammarGguf(boolean enabled);
+    boolean isToolCallingSupportedGguf();
+
     //Diffusion
     void loadDiffusionModel(
         String name,

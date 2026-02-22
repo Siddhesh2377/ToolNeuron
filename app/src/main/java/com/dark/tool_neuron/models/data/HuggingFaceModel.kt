@@ -24,5 +24,6 @@ data class HFModelRepository(
     val name: String,
     val repoPath: String,
     val modelType: ModelType,
-    val isEnabled: Boolean = true
+    val isEnabled: Boolean = true,
+    val category: ModelCategory = ModelCategory.GENERAL
 )

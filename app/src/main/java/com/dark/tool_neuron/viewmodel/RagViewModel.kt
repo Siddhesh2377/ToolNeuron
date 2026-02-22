@@ -15,12 +15,15 @@ import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
 import com.dark.tool_neuron.neuron_example.QueryResult
+import com.dark.tool_neuron.neuron_example.RetrievalConfidence
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagRepository
+import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,7 +44,7 @@ class RagViewModel @Inject constructor(
     private val ragRepository: RagRepository,
     private val embeddingEngine: EmbeddingEngine,
     private val chatRepository: ChatRepository,
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     // UI State
@@ -68,6 +71,12 @@ class RagViewModel @Inject constructor(
 
     private val _isEmbeddingModelDownloading = MutableStateFlow(false)
     val isEmbeddingModelDownloading: StateFlow<Boolean> = _isEmbeddingModelDownloading
+
+    private val _isEmbeddingModelDownloaded = MutableStateFlow(false)
+    val isEmbeddingModelDownloaded: StateFlow<Boolean> = _isEmbeddingModelDownloaded
+
+    private val _embeddingDownloadProgress = MutableStateFlow(0f)
+    val embeddingDownloadProgress: StateFlow<Float> = _embeddingDownloadProgress
 
     // Chat list for creating RAG from chats
     private val _availableChats = MutableStateFlow<List<ChatInfo>>(emptyList())
@@ -101,6 +110,10 @@ class RagViewModel @Inject constructor(
     private val _lastRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val lastRagResults: StateFlow<List<RagQueryDisplayResult>> = _lastRagResults
 
+    // Retrieval confidence from last query
+    private val _retrievalConfidence = MutableStateFlow<RetrievalConfidence?>(null)
+    val retrievalConfidence: StateFlow<RetrievalConfidence?> = _retrievalConfidence
+
     init {
         // Sync database state with in-memory state on startup
         // Since loadedGraphs is empty on app restart, mark all RAGs as unloaded
@@ -109,6 +122,7 @@ class RagViewModel @Inject constructor(
         }
 
         refreshCounts()
+        _isEmbeddingModelDownloaded.value = EmbeddingEngine.isModelDownloaded(context)
         _isEmbeddingInitialized.value = embeddingEngine.isInitialized()
         if (embeddingEngine.isInitialized()) {
             _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
@@ -122,16 +136,111 @@ class RagViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val workManager = WorkManager.getInstance(context)
-                val workInfos = workManager.getWorkInfosByTag(com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG).get()
+                val workInfos = workManager.getWorkInfosByTag(
+                    com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG
+                ).get()
 
-                if (workInfos.any { it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED }) {
+                val activeWork = workInfos.any {
+                    it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+                }
+
+                if (activeWork) {
                     _isEmbeddingModelDownloading.value = true
                     _embeddingStatus.value = "Downloading embedding model..."
+                    // Start polling for completion
+                    pollDownloadCompletion()
                 } else {
                     _isEmbeddingModelDownloading.value = false
                 }
             } catch (e: Exception) {
                 Log.e("RagViewModel", "Failed to check download status", e)
+            }
+        }
+    }
+
+    fun startEmbeddingDownload() {
+        viewModelScope.launch(Dispatchers.IO) {
+            if (_isEmbeddingModelDownloading.value) return@launch
+            if (EmbeddingEngine.isModelDownloaded(context)) {
+                _isEmbeddingModelDownloaded.value = true
+                initializeEmbeddingFromFiles()
+                return@launch
+            }
+
+            _isEmbeddingModelDownloading.value = true
+            _embeddingDownloadProgress.value = 0f
+            _embeddingStatus.value = "Starting download..."
+
+            LlmModelWorker.startEmbeddingModelDownload(context)
+            pollDownloadCompletion()
+        }
+    }
+
+    private fun pollDownloadCompletion() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val modelFile = EmbeddingEngine.getModelPath(context)
+
+            while (_isEmbeddingModelDownloading.value) {
+                delay(1500)
+
+                // Check if file appeared (download complete)
+                if (modelFile.exists() && modelFile.length() > 0) {
+                    _isEmbeddingModelDownloaded.value = true
+                    _isEmbeddingModelDownloading.value = false
+                    _embeddingDownloadProgress.value = 1f
+                    _embeddingStatus.value = "Download complete"
+                    // Auto-initialize after download
+                    initializeEmbeddingFromFiles()
+                    return@launch
+                }
+
+                // Check WorkManager state
+                try {
+                    val workManager = WorkManager.getInstance(context)
+                    val workInfos = workManager.getWorkInfosByTag(
+                        com.dark.tool_neuron.worker.EmbeddingModelDownloadWorker.TAG
+                    ).get()
+
+                    val running = workInfos.any {
+                        it.state == WorkInfo.State.RUNNING || it.state == WorkInfo.State.ENQUEUED
+                    }
+                    val failed = workInfos.any { it.state == WorkInfo.State.FAILED }
+
+                    if (failed) {
+                        _isEmbeddingModelDownloading.value = false
+                        _embeddingDownloadProgress.value = 0f
+                        _embeddingStatus.value = "Download failed"
+                        _error.value = "Embedding model download failed. Tap to retry."
+                        return@launch
+                    }
+
+                    if (!running) {
+                        // Work finished — check if file exists
+                        if (modelFile.exists() && modelFile.length() > 0) {
+                            _isEmbeddingModelDownloaded.value = true
+                            _isEmbeddingModelDownloading.value = false
+                            _embeddingDownloadProgress.value = 1f
+                            _embeddingStatus.value = "Download complete"
+                            initializeEmbeddingFromFiles()
+                        } else {
+                            _isEmbeddingModelDownloading.value = false
+                            _embeddingDownloadProgress.value = 0f
+                            _embeddingStatus.value = "Download failed"
+                        }
+                        return@launch
+                    }
+
+                    // Estimate progress from partial file size (~23MB model)
+                    val partialFile = modelFile
+                    if (partialFile.exists()) {
+                        val estimatedSize = 23_000_000L
+                        val progress = (partialFile.length().toFloat() / estimatedSize).coerceIn(0f, 0.99f)
+                        _embeddingDownloadProgress.value = progress
+                        _embeddingStatus.value = "Downloading... ${(progress * 100).toInt()}%"
+                    }
+                } catch (e: Exception) {
+                    Log.e("RagViewModel", "Error polling download status", e)
+                }
             }
         }
     }
@@ -219,6 +328,7 @@ class RagViewModel @Inject constructor(
 
                 if (result.isSuccess) {
                     _loadedCount.value = ragRepository.getLoadedRagCount()
+                    _isRagEnabledForChat.value = true
                     Log.d("RagViewModel", "RAG loaded successfully, total loaded: ${_loadedCount.value}")
                 } else {
                     Log.e("RagViewModel", "Error loading RAG: ${result.exceptionOrNull()?.message}")
@@ -238,7 +348,9 @@ class RagViewModel @Inject constructor(
     fun unloadRag(ragId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             ragRepository.unloadGraph(ragId)
-            _loadedCount.value = ragRepository.getLoadedRagCount()
+            val remaining = ragRepository.getLoadedRagCount()
+            _loadedCount.value = remaining
+            if (remaining == 0) _isRagEnabledForChat.value = false
         }
     }
 
@@ -246,6 +358,7 @@ class RagViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             ragRepository.unloadAllRags()
             _loadedCount.value = 0
+            _isRagEnabledForChat.value = false
         }
     }
 
@@ -522,63 +635,57 @@ class RagViewModel @Inject constructor(
     // ==================== Query with Display Results ====================
 
     suspend fun queryAndStoreResults(query: String, topK: Int = 5): String {
-        // Query all loaded RAGs - no need to check isRagEnabledForChat here
-        // The caller (HomeScreen) already checks if loadedRags is not empty
-        val results = queryRags(query, topK)
-        if (results.isEmpty()) {
+        // Use the advanced retrieval pipeline
+        val aggregated = ragRepository.queryAllLoadedGraphsWithPipeline(query, topK)
+
+        if (aggregated.ragResults.isEmpty()) {
             Log.w("RagViewModel", "No RAG results found for query: $query")
             _lastRagResults.value = emptyList()
+            _retrievalConfidence.value = null
             return ""
         }
 
+        // Store confidence for UI
+        _retrievalConfidence.value = aggregated.overallConfidence
+
         // Store results for UI display
         val displayResults = mutableListOf<RagQueryDisplayResult>()
-        val contextBuilder = StringBuilder()
-        contextBuilder.append("### Relevant Context from Knowledge Base:\n\n")
-
-        for ((rag, queryResults) in results) {
-            if (queryResults.isNotEmpty()) {
-                Log.d("RagViewModel", "RAG '${rag.name}' returned ${queryResults.size} results")
-                contextBuilder.append("**From ${rag.name}:**\n")
-                for ((index, result) in queryResults.withIndex()) {
-                    val score = result.score
-                    val scorePercent = (score * 100).toInt()
-                    val contentPreview = result.node.content.take(500)
-
-                    // Log detailed match info
-                    Log.d("RagViewModel", "  Result ${index + 1}: score=${"%.3f".format(score)} ($scorePercent%), " +
-                            "content=${result.node.content.take(100)}...")
-
-                    contextBuilder.append("- [$scorePercent% match] $contentPreview\n")
-
-                    // Include connected nodes for more context
-                    if (result.connectedNodes.isNotEmpty()) {
-                        Log.d("RagViewModel", "    + ${result.connectedNodes.size} connected nodes")
-                        for (connectedNode in result.connectedNodes.take(2)) {
-                            contextBuilder.append("  Related: ${connectedNode.content.take(200)}\n")
-                        }
-                    }
-
-                    displayResults.add(
-                        RagQueryDisplayResult(
-                            ragName = rag.name,
-                            content = result.node.content,
-                            score = score,
-                            nodeId = result.node.id
-                        )
+        for ((rag, retrievalResult) in aggregated.ragResults) {
+            for (result in retrievalResult.results) {
+                displayResults.add(
+                    RagQueryDisplayResult(
+                        ragName = rag.name,
+                        content = result.node.content,
+                        score = result.score,
+                        nodeId = result.node.id
                     )
-                }
-                contextBuilder.append("\n")
+                )
             }
         }
-
         _lastRagResults.value = displayResults.sortedByDescending { it.score }
-        Log.d("RagViewModel", "RAG context length: ${contextBuilder.length} chars, ${displayResults.size} results")
+
+        // Build context with confidence-aware prefix
+        val contextBuilder = StringBuilder()
+        when (aggregated.overallConfidence) {
+            RetrievalConfidence.HIGH -> {
+                contextBuilder.append("### Relevant Knowledge:\n")
+            }
+            RetrievalConfidence.MEDIUM -> {
+                contextBuilder.append("### Relevant Knowledge:\n")
+            }
+            RetrievalConfidence.LOW -> {
+                contextBuilder.append("### Relevant Knowledge (uncertain — retrieved context may not fully answer the question):\n")
+            }
+        }
+        contextBuilder.append(aggregated.combinedContext)
+
+        Log.d("RagViewModel", "RAG context: ${contextBuilder.length} chars, ${displayResults.size} results, confidence=${aggregated.overallConfidence}")
         return contextBuilder.toString()
     }
 
     fun clearRagResults() {
         _lastRagResults.value = emptyList()
+        _retrievalConfidence.value = null
     }
 
     // ==================== Secure RAG Creation ====================

@@ -1,26 +1,35 @@
 package com.memoryvault.core
 
+import android.util.Log
+
 class ContentProcessor(
     private val encryptionManager: EncryptionManager
 ) {
-    
+
+    companion object {
+        private const val TAG = "ContentProcessor"
+    }
+
     fun processForWrite(data: ByteArray, shouldEncrypt: Boolean): ProcessedContent {
         var processed = data
         var compressed = false
-        
+
         if (CompressionUtils.shouldCompress(data)) {
+            val beforeSize = processed.size
             processed = CompressionUtils.compress(processed)
             compressed = true
+            Log.d(TAG, "Compressed block: ${beforeSize}B → ${processed.size}B (${((1 - processed.size.toFloat() / beforeSize) * 100).toInt()}% reduction)")
         }
-        
+
         val encrypted = if (shouldEncrypt) {
+            Log.d(TAG, "Encrypting block data: ${processed.size} bytes")
             val encryptedData = encryptionManager.encrypt(processed)
             processed = encryptedData.toBytes()
             true
         } else {
             false
         }
-        
+
         return ProcessedContent(
             data = processed,
             originalSize = data.size,
@@ -36,16 +45,19 @@ class ContentProcessor(
         encrypted: Boolean
     ): ByteArray {
         var processed = data
-        
+
         if (encrypted) {
+            //Log.d(TAG, "Decrypting block data: ${processed.size} bytes")
             val encryptedData = EncryptedData.fromBytes(processed)
             processed = encryptionManager.decrypt(encryptedData)
         }
-        
+
         if (compressed) {
+            val beforeSize = processed.size
             processed = CompressionUtils.decompress(processed, originalSize)
+            //Log.d(TAG, "Decompressed block: ${beforeSize}B → ${processed.size}B")
         }
-        
+
         return processed
     }
 }

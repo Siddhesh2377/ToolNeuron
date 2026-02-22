@@ -8,8 +8,14 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 
-class VaultExample(private val context: Context) {
-    private val vault = MemoryVault(context)
+class VaultExample(
+    private val context: Context,
+    private val keyAlias: String = "example_key_alias"
+) {
+    private val vault = MemoryVault(
+        context = context,
+        keyAlias = keyAlias
+    )
     private val scope = CoroutineScope(Dispatchers.IO)
 
     fun initialize() {

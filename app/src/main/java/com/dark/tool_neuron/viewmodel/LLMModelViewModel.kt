@@ -5,6 +5,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -22,7 +23,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import androidx.core.net.toUri
 
 @HiltViewModel
 class LLMModelViewModel @Inject constructor(
@@ -30,20 +33,19 @@ class LLMModelViewModel @Inject constructor(
     private val repository: ModelRepository
 ) : AndroidViewModel(application) {
 
+    private val appSettings = AppSettingsDataStore(application)
+
     val installedModels: Flow<List<Model>> = repository.getAllModels()
+        .map { models -> models.filter { it.providerType != ProviderType.TTS } }
 
     private val _currentModelID = MutableStateFlow("")
     val currentModelID: StateFlow<String> = _currentModelID.asStateFlow()
 
     private val _currentModelType = MutableStateFlow<ProviderType?>(null)
-    val currentModelType: StateFlow<ProviderType?> = _currentModelType.asStateFlow()
-
-
 
     // Model loading states
     val isGgufModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isDiffusionModelLoaded = LlmModelWorker.isDiffusionModelLoaded
-    val diffusionBackendState = LlmModelWorker.diffusionBackendState
 
     suspend fun getModelConfig(modelId: String): ModelConfig? {
         return repository.getConfigByModelId(modelId)
@@ -69,9 +71,7 @@ class LLMModelViewModel @Inject constructor(
                 when (model.providerType) {
                     ProviderType.GGUF -> loadGgufModel(model, config)
                     ProviderType.DIFFUSION -> loadDiffusionModel(model, config)
-                    else -> {
-                        AppStateManager.setError("Unsupported model type: ${model.providerType}")
-                    }
+                    ProviderType.TTS -> { /* TTS models are managed by TTSManager, not LLMService */ }
                 }
             } catch (e: Exception) {
                 AppStateManager.setError(e.message ?: "Unknown error")
@@ -82,7 +82,7 @@ class LLMModelViewModel @Inject constructor(
     private suspend fun loadGgufModel(model: Model, config: ModelConfig) {
         val success = if (model.pathType == PathType.CONTENT_URI) {
             // Use FD-based loading for content:// URIs (SAF)
-            val uri = Uri.parse(model.modelPath)
+            val uri = model.modelPath.toUri()
             LlmModelWorker.loadGgufModelFromUri(
                 context = getApplication(),
                 uri = uri,
@@ -99,6 +99,12 @@ class LLMModelViewModel @Inject constructor(
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.GGUF
             AppStateManager.setModelLoaded(model.modelName)
+            appSettings.saveLastModelId(model.id)
+
+            // Update tool calling model state and sync tools
+            val nativeSupports = LlmModelWorker.isToolCallingSupportedGguf()
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(nativeSupports)
+            com.dark.tool_neuron.plugins.PluginManager.syncToolsWithLLM()
         } else {
             AppStateManager.setError("Failed to load GGUF model")
         }
@@ -121,18 +127,14 @@ class LLMModelViewModel @Inject constructor(
         )
 
         if (success) {
-            LlmModelWorker._currentDiffusionModelId.value = model.id // ADD THIS
+            LlmModelWorker._currentDiffusionModelId.value = model.id
             _currentModelID.value = model.id
             _currentModelType.value = ProviderType.DIFFUSION
             AppStateManager.setModelLoaded(model.modelName)
+            appSettings.saveLastModelId(model.id)
         } else {
             AppStateManager.setError("Failed to load Diffusion model")
         }
-    }
-
-    // ADD THIS NEW METHOD
-    private fun parseDiffusionInferenceParams(config: ModelConfig): DiffusionInferenceParams {
-        return DiffusionInferenceParams.fromJson(config.modelInferenceParams)
     }
 
     private fun parseDiffusionConfig(config: ModelConfig): DiffusionConfig {
@@ -175,6 +177,7 @@ class LLMModelViewModel @Inject constructor(
 
             _currentModelID.value = ""
             _currentModelType.value = null
+            com.dark.tool_neuron.plugins.PluginManager.setToolCallingModelLoaded(false)
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -187,11 +190,11 @@ class LLMModelViewModel @Inject constructor(
                 when (_currentModelType.value) {
                     ProviderType.GGUF -> {
                         LlmModelWorker.unloadGgufModel()
-                        LlmModelWorker._currentGgufModelId.value = null // ADD THIS
+                        LlmModelWorker._currentGgufModelId.value = null
                     }
                     ProviderType.DIFFUSION -> {
                         LlmModelWorker.stopDiffusionBackend()
-                        LlmModelWorker._currentDiffusionModelId.value = null // ADD THIS
+                        LlmModelWorker._currentDiffusionModelId.value = null
                     }
                     else -> {}
                 }
@@ -205,21 +208,48 @@ class LLMModelViewModel @Inject constructor(
         }
     }
 
-    fun restartDiffusionBackend() {
-        if (_currentModelType.value != ProviderType.DIFFUSION) {
-            return
-        }
-
-        viewModelScope.launch {
+    /**
+     * Delete a model from the database and optionally from disk.
+     * If the model is currently loaded, it will be unloaded first.
+     */
+    fun deleteModel(model: Model, deleteFile: Boolean = true) {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val success = LlmModelWorker.restartDiffusionBackend()
-                if (success) {
-                    AppStateManager.setModelLoaded("Diffusion backend restarted")
-                } else {
-                    AppStateManager.setError("Failed to restart diffusion backend")
+                // Unload if this is the currently loaded model
+                if (_currentModelID.value == model.id) {
+                    unloadCurrentModel()
+                    delay(300)
                 }
+
+                // Delete associated config
+                val config = repository.getConfigByModelId(model.id)
+                if (config != null) {
+                    repository.deleteConfig(config)
+                }
+
+                // Delete model file from disk if requested
+                if (deleteFile && model.pathType != PathType.CONTENT_URI) {
+                    try {
+                        val modelFile = java.io.File(model.modelPath)
+                        if (modelFile.exists()) {
+                            if (modelFile.isDirectory) {
+                                modelFile.deleteRecursively()
+                            } else {
+                                modelFile.delete()
+                            }
+                            Log.d("LLMModelVM", "Deleted model file: ${model.modelPath}")
+                        }
+                    } catch (e: Exception) {
+                        Log.e("LLMModelVM", "Failed to delete model file: ${e.message}")
+                    }
+                }
+
+                // Delete from database
+                repository.deleteModel(model)
+                Log.d("LLMModelVM", "Model deleted: ${model.modelName}")
             } catch (e: Exception) {
-                AppStateManager.setError(e.message ?: "Restart failed")
+                Log.e("LLMModelVM", "Failed to delete model: ${e.message}")
+                AppStateManager.setError("Failed to delete model: ${e.message}")
             }
         }
     }

@@ -22,8 +22,8 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
         targetSdk = 36
-        versionCode = 18
-        versionName = "1.1.2-Fix"
+        versionCode = 26
+        versionName = "2.0.1"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -82,6 +82,12 @@ android {
 }
 
 dependencies {
+
+    implementation(libs.onnxruntime.android)
+
+    // Image Loading
+    implementation(libs.coil.compose)
+
     // Dependency Injection
     implementation(libs.hilt.android)
     ksp(libs.hilt.android.compiler)
@@ -93,6 +99,7 @@ dependencies {
     implementation(libs.xz)
     implementation(libs.okhttp)
     implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.jsoup)
 
     // Document Parsing
     implementation(libs.poi)
@@ -116,10 +123,12 @@ dependencies {
     // Local Projects & AI Libraries
     implementation(":ai_gguf-release@aar")
     implementation(":ai_sd-release@aar")
+    implementation(":ai_supertonic_tts-release@aar")
     //implementation(":runanywhere-core-onnx-release@aar")
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))
     implementation(project(":neuron-packet"))
+    //implementation(project(":character-engine"))
 
     // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)

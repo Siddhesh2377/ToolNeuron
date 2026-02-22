@@ -81,9 +81,11 @@ class ModelConfigEditorViewModel @Inject constructor(
                         }
                     }
 
-                    else -> {}
+                    ProviderType.TTS -> {
+                        // TTS config managed via TTSDataStore
+                    }
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Handle error
             } finally {
                 _isLoading.value = false
@@ -106,7 +108,7 @@ class ModelConfigEditorViewModel @Inject constructor(
                 width = json.optInt("width", 512),
                 height = json.optInt("height", 512)
             )
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             DiffusionConfig()
         }
     }
@@ -138,7 +140,14 @@ class ModelConfigEditorViewModel @Inject constructor(
                         )
                     }
 
-                    else -> return@launch
+                    ProviderType.TTS -> {
+                        ModelConfig(
+                            id = existingConfig?.id ?: "",
+                            modelId = model.id,
+                            modelLoadingParams = existingConfig?.modelLoadingParams ?: """{"type":"tts","useNNAPI":false}""",
+                            modelInferenceParams = existingConfig?.modelInferenceParams ?: """{"voice":"F1","speed":1.05,"steps":2,"language":"en"}"""
+                        )
+                    }
                 }
 
                 if (existingConfig != null) {
@@ -150,7 +159,7 @@ class ModelConfigEditorViewModel @Inject constructor(
                 _saveSuccess.value = true
                 delay(2000)
                 _saveSuccess.value = false
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // Handle error
             } finally {
                 _isLoading.value = false
@@ -246,12 +255,6 @@ class ModelConfigEditorViewModel @Inject constructor(
         }
     }
 
-    fun updateDiffusionHttpPort(value: Int) {
-        _diffusionConfig.update {
-            it.copy(httpPort = value)
-        }
-    }
-
     fun updateDiffusionRunOnCpu(value: Boolean) {
         _diffusionConfig.update {
             it.copy(runOnCpu = value)
@@ -273,18 +276,6 @@ class ModelConfigEditorViewModel @Inject constructor(
     fun updateDiffusionSafetyMode(value: Boolean) {
         _diffusionConfig.update {
             it.copy(safetyMode = value)
-        }
-    }
-
-    fun updateDiffusionWidth(value: Int) {
-        _diffusionConfig.update {
-            it.copy(width = value)
-        }
-    }
-
-    fun updateDiffusionHeight(value: Int) {
-        _diffusionConfig.update {
-            it.copy(height = value)
         }
     }
 

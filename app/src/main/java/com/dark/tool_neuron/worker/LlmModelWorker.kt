@@ -309,24 +309,167 @@ object LlmModelWorker {
         return service?.modelInfoGguf
     }
 
-    suspend fun setGgufToolsJson(toolsJson: String): Boolean {
-        val svc = ensureServiceBound()
+    // ==================== Tool Calling Methods ====================
+
+    /**
+     * Set tools for tool calling (backward-compatible)
+     * @param toolsJson JSON string containing tool definitions in OpenAI format
+     * @return true if tools were set successfully
+     */
+    fun setToolsGguf(toolsJson: String): Boolean {
         return try {
-            svc.setToolsJsonGguf(toolsJson)
+            service?.setToolsJsonGguf(toolsJson) ?: false
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to set GGUF tools JSON", e)
+            Log.e(TAG, "Failed to set tools: ${e.message}")
             false
         }
     }
 
-    fun clearGgufTools() {
-        try {
-            service?.clearToolsGguf()
-            Log.i(TAG, "Cleared GGUF tools")
+    /**
+     * Enable tool calling with grammar configuration.
+     * Sets up tools, grammar mode, and typed grammar enforcement.
+     *
+     * @param toolsJson JSON array of tool definitions in OpenAI format
+     * @param grammarMode 0=STRICT (forces JSON), 1=LAZY (model chooses text or tool call)
+     * @param useTypedGrammar Whether to enforce exact param names/types/enums
+     * @return true if tool calling was enabled successfully
+     */
+    fun enableToolCallingGguf(
+        toolsJson: String,
+        grammarMode: Int = 1, // LAZY by default
+        useTypedGrammar: Boolean = true
+    ): Boolean {
+        return try {
+            service?.enableToolCallingGguf(toolsJson, grammarMode, useTypedGrammar) ?: false
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to clear GGUF tools", e)
+            Log.e(TAG, "Failed to enable tool calling: ${e.message}")
+            false
         }
     }
+
+    /**
+     * Clear all registered tools
+     */
+    fun clearToolsGguf() {
+        try {
+            service?.clearToolsGguf()
+            Log.i(TAG, "Tools cleared")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear tools: ${e.message}")
+        }
+    }
+
+    /**
+     * Check if the loaded model supports tool calling.
+     * Returns true for any model with a built-in chat template (model-agnostic).
+     */
+    fun isToolCallingSupportedGguf(): Boolean {
+        return try {
+            service?.isToolCallingSupportedGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check tool calling support: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Set grammar enforcement mode
+     * @param mode 0=STRICT, 1=LAZY
+     */
+    fun setGrammarModeGguf(mode: Int) {
+        try {
+            service?.setGrammarModeGguf(mode)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set grammar mode: ${e.message}")
+        }
+    }
+
+    /**
+     * Enable or disable parameter-aware typed grammar
+     */
+    fun setTypedGrammarGguf(enabled: Boolean) {
+        try {
+            service?.setTypedGrammarGguf(enabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set typed grammar: ${e.message}")
+        }
+    }
+
+    // ==================== Multi-turn Generation ====================
+
+    /**
+     * Multi-turn streaming generation using full conversation history.
+     * Used for multi-turn tool calling flows where the model generates,
+     * calls a tool, receives the result, and generates again.
+     *
+     * @param messagesJson JSON array of {role, content} objects
+     * @param maxTokens Maximum tokens per turn
+     */
+    fun ggufGenerateMultiTurnStreaming(
+        messagesJson: String,
+        maxTokens: Int
+    ): Flow<GenerationEvent> = callbackFlow {
+        serviceBound.await()
+
+        val svc = service
+        if (svc == null) {
+            trySend(GenerationEvent.Error("Service not bound"))
+            close()
+            return@callbackFlow
+        }
+
+        val callback = object : IGgufGenerationCallback.Stub() {
+            override fun onToken(token: String) {
+                trySend(GenerationEvent.Token(token))
+            }
+
+            override fun onToolCall(name: String, args: String) {
+                trySend(GenerationEvent.ToolCall(name, args))
+            }
+
+            override fun onMetrics(
+                totalTokens: Int,
+                promptTokens: Int,
+                generatedTokens: Int,
+                tokensPerSecond: Float,
+                timeToFirstToken: Long,
+                totalTimeMs: Long
+            ) {
+                trySend(
+                    GenerationEvent.Metrics(
+                        DecodingMetrics(
+                            totalTokens,
+                            promptTokens,
+                            generatedTokens,
+                            tokensPerSecond,
+                            timeToFirstToken,
+                            totalTimeMs
+                        )
+                    )
+                )
+            }
+
+            override fun onDone() {
+                trySend(GenerationEvent.Done)
+                close()
+            }
+
+            override fun onError(message: String) {
+                trySend(GenerationEvent.Error(message))
+                close()
+            }
+        }
+
+        try {
+            svc.generateGgufMultiTurn(messagesJson, maxTokens, callback)
+        } catch (e: Exception) {
+            trySend(GenerationEvent.Error(e.message ?: "Failed to start multi-turn generation"))
+            close()
+        }
+
+        awaitClose { }
+    }.buffer(Channel.UNLIMITED)
+        .flowOn(Dispatchers.IO)
 
     // ==================== Diffusion Methods ====================
 

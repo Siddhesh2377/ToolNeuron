@@ -2,6 +2,8 @@ package com.dark.tool_neuron.models.messages
 
 import android.graphics.Bitmap
 import androidx.compose.runtime.Immutable
+import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
+import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.mp.ai_gguf.models.DecodingMetrics
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -13,10 +15,26 @@ data class Messages(
     val msgId: String = UUID.randomUUID().toString(),
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
+    val timestamp: Long? = null, // Nullable for backward compatibility with old messages
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
-    val ragResults: List<RagResultItem>? = null
+    val ragResults: List<RagResultItem>? = null,
+    val pluginMetrics: PluginExecutionMetrics? = null,
+    val toolChainSteps: List<ToolChainStepData>? = null,
+    val agentPlan: String? = null,
+    val agentSummary: String? = null
+)
+
+@Serializable
+data class ToolChainStepData(
+    val round: Int,
+    val toolName: String,
+    val pluginName: String,
+    val args: String,
+    val result: String,
+    val executionTimeMs: Long,
+    val success: Boolean
 )
 
 /**
@@ -37,7 +55,8 @@ data class MessageContent(
     val content: String = "",
     val imageData: String? = null, // Base64 encoded image
     val imagePrompt: String? = null, // Original prompt used for image
-    val imageSeed: Long? = null // Seed used for image generation
+    val imageSeed: Long? = null, // Seed used for image generation
+    val pluginResultData: PluginResultData? = null
 )
 
 @Serializable
@@ -64,7 +83,8 @@ enum class ContentType {
     None,
     Text,
     Image,
-    TextWithImage // For messages that contain both text and image
+    TextWithImage, // For messages that contain both text and image
+    PluginResult
 }
 
 @Serializable

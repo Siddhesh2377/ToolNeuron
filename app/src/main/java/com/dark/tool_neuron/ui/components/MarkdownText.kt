@@ -1,15 +1,12 @@
 package com.dark.tool_neuron.ui.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,18 +23,34 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -46,6 +59,18 @@ import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 
+/** Set to false to skip syntax highlighting in code blocks (improves scroll performance). */
+val LocalCodeHighlightEnabled = compositionLocalOf { true }
+
+/** Colors extracted once from MaterialTheme — passed to non-composable formatters to avoid
+ *  reading theme state inside every Text(), which would trigger recomposition on every frame. */
+@Immutable
+data class InlineColors(
+    val codeBg: Color,
+    val highlightBg: Color,
+    val mathColor: Color
+)
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MarkdownText(
@@ -53,42 +78,82 @@ fun MarkdownText(
 ) {
     val parsedContent = remember(text) { parseMarkdown(text) }
 
+    // Read theme colors ONCE — these flow to all children as stable params.
+    val colors = InlineColors(
+        codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+        mathColor = MaterialTheme.colorScheme.primary
+    )
+
     Column(
-        modifier = modifier.padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+        modifier = modifier.padding(horizontal = rDp(4.dp)),
+        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
     ) {
         parsedContent.forEach { element ->
-            when (element) {
-                is MarkdownElement.Heading1 -> Heading1(element.text)
-                is MarkdownElement.Heading2 -> Heading2(element.text)
-                is MarkdownElement.Heading3 -> Heading3(element.text)
-                is MarkdownElement.Heading4 -> Heading4(element.text)
-                is MarkdownElement.Heading5 -> Heading5(element.text)
-                is MarkdownElement.Heading6 -> Heading6(element.text)
-                is MarkdownElement.Body -> BodyText(element.text)
-                is MarkdownElement.BulletPoint -> BulletPoint(element.text, element.level)
-                is MarkdownElement.NumberedPoint -> NumberedPoint(element.text, element.number)
-                is MarkdownElement.Quote -> BlockQuote(element.text, element.level)
-                is MarkdownElement.CodeBlock -> CodeBlockExpanded(element.code, element.language)
-                is MarkdownElement.InlineCode -> InlineCodeText(element.text)
-                is MarkdownElement.Table -> TableView(
-                    element.headers,
-                    element.rows,
-                    element.alignments
-                )
-
-                is MarkdownElement.MathBlock -> MathBlockView(element.expression, element.isTypst)
-                is MarkdownElement.InlineMath -> InlineMathView(element.expression, element.isTypst)
-                is MarkdownElement.Divider -> HorizontalDivider(
-                    modifier = Modifier.padding(vertical = rDp(8.dp)),
-                    color = MaterialTheme.colorScheme.outlineVariant
-                )
-            }
+            MarkdownElementView(element, colors)
         }
     }
 }
 
-private sealed class MarkdownElement {
+/**
+ * Lazy version of MarkdownText — emits each markdown element as a separate LazyList item.
+ * Only visible items are composed, dramatically improving scroll performance for long messages.
+ *
+ * Use this instead of [MarkdownText] when the content is inside a [LazyColumn].
+ */
+fun LazyListScope.lazyMarkdownItems(
+    text: String,
+    keyPrefix: String,
+    modifier: Modifier = Modifier
+) {
+    val elements = parseMarkdown(text)
+
+    items(
+        count = elements.size,
+        key = { index -> "${keyPrefix}-md-$index" },
+        contentType = { index -> elements[index]::class.simpleName }
+    ) { index ->
+        val scheme = MaterialTheme.colorScheme
+        val colors = remember(scheme) {
+            InlineColors(
+                codeBg = scheme.surfaceVariant.copy(alpha = 0.5f),
+                highlightBg = scheme.primary.copy(alpha = 0.3f),
+                mathColor = scheme.primary
+            )
+        }
+        Box(modifier = modifier) {
+            MarkdownElementView(elements[index], colors)
+        }
+    }
+}
+
+/** Renders a single [MarkdownElement]. Shared by both [MarkdownText] and [lazyMarkdownItems]. */
+@Composable
+private fun MarkdownElementView(element: MarkdownElement, colors: InlineColors) {
+    when (element) {
+        is MarkdownElement.Heading1 -> Heading1(element.text, colors)
+        is MarkdownElement.Heading2 -> Heading2(element.text, colors)
+        is MarkdownElement.Heading3 -> Heading3(element.text, colors)
+        is MarkdownElement.Heading4 -> Heading4(element.text, colors)
+        is MarkdownElement.Heading5 -> Heading5(element.text, colors)
+        is MarkdownElement.Heading6 -> Heading6(element.text, colors)
+        is MarkdownElement.Body -> BodyText(element.text, colors)
+        is MarkdownElement.BulletPoint -> BulletPoint(element.text, element.level, colors)
+        is MarkdownElement.NumberedPoint -> NumberedPoint(element.text, element.number, colors)
+        is MarkdownElement.Quote -> BlockQuote(element.text, element.level, colors)
+        is MarkdownElement.CodeBlock -> CodeBlockExpanded(element.code, element.language)
+        is MarkdownElement.InlineCode -> InlineCodeText(element.text)
+        is MarkdownElement.Table -> TableView(element.headers, element.rows, element.alignments, colors)
+        is MarkdownElement.MathBlock -> MathBlockView(element.expression, element.isTypst)
+        is MarkdownElement.InlineMath -> InlineMathView(element.expression, element.isTypst)
+        is MarkdownElement.Divider -> HorizontalDivider(
+            modifier = Modifier.padding(vertical = rDp(4.dp)),
+            color = MaterialTheme.colorScheme.outlineVariant
+        )
+    }
+}
+
+internal sealed class MarkdownElement {
     data class Heading1(val text: String) : MarkdownElement()
     data class Heading2(val text: String) : MarkdownElement()
     data class Heading3(val text: String) : MarkdownElement()
@@ -114,7 +179,7 @@ private sealed class MarkdownElement {
     object Divider : MarkdownElement()
 }
 
-private fun parseMarkdown(text: String): List<MarkdownElement> {
+internal fun parseMarkdown(text: String): List<MarkdownElement> {
     val elements = mutableListOf<MarkdownElement>()
     val lines = text.lines()
     var i = 0
@@ -123,37 +188,88 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
         val line = lines[i]
 
         when {
-            // Block math: \[...\] format
-            line.trimStart().startsWith("\\[") -> {
-                val startCol = line.indexOf("\\[")
-                val afterStart = line.substring(startCol + 2)
+            // Block math: \[...\] format (also handles double-escaped \\[...\\])
+            line.trimStart().startsWith("\\[") || line.trimStart().startsWith("\\\\[") -> {
+                val isDoubleEscaped = line.contains("\\\\[")
+                val startPattern = if (isDoubleEscaped) "\\\\[" else "\\["
+                val endPatternSingle = "\\]"
+                val endPatternDouble = "\\\\]"
+
+                val startCol = line.indexOf(startPattern)
+                val afterStart = line.substring(startCol + startPattern.length)
 
                 // Check if closing \] is on the same line
-                val sameLineEnd = afterStart.indexOf("\\]")
+                val sameLineEnd = when {
+                    afterStart.contains(endPatternDouble) -> afterStart.indexOf(endPatternDouble)
+                    afterStart.contains(endPatternSingle) -> afterStart.indexOf(endPatternSingle)
+                    else -> -1
+                }
                 if (sameLineEnd != -1) {
-                    val expression = afterStart.substring(0, sameLineEnd).trim()
+                    val expression = afterStart.substring(0, sameLineEnd).trim().replace("\\\\", "\\")
                     elements.add(MarkdownElement.MathBlock(expression, false))
                 } else {
                     // Multi-line math block
                     val mathLines = mutableListOf<String>()
-                    if (afterStart.isNotBlank()) mathLines.add(afterStart)
+                    if (afterStart.isNotBlank()) mathLines.add(afterStart.replace("\\\\", "\\"))
                     i++
-                    while (i < lines.size && !lines[i].contains("\\]")) {
-                        mathLines.add(lines[i])
+                    while (i < lines.size && !lines[i].contains(endPatternSingle) && !lines[i].contains(endPatternDouble)) {
+                        mathLines.add(lines[i].replace("\\\\", "\\"))
                         i++
                     }
                     // Get content before closing \]
                     if (i < lines.size) {
                         val closingLine = lines[i]
-                        val closeIdx = closingLine.indexOf("\\]")
+                        val closeIdx = when {
+                            closingLine.contains(endPatternDouble) -> closingLine.indexOf(endPatternDouble)
+                            else -> closingLine.indexOf(endPatternSingle)
+                        }
                         if (closeIdx > 0) {
-                            mathLines.add(closingLine.substring(0, closeIdx))
+                            mathLines.add(closingLine.substring(0, closeIdx).replace("\\\\", "\\"))
                         }
                     }
                     val expression = mathLines.joinToString("\n").trim()
                     elements.add(MarkdownElement.MathBlock(expression, false))
                 }
             }
+            // LaTeX math environments: \begin{equation}, \begin{align}, \begin{gather}, etc.
+            // Use regex for more robust detection (handles various escape sequences)
+            Regex("""\\{1,2}begin\s*\{(equation|align|gather|multline|eqnarray|displaymath|math)\*?\}""").containsMatchIn(line) -> {
+                // Normalize: convert double backslashes to single, remove extra spaces
+                val normalizedLine = line.replace("\\\\", "\\").replace(Regex("""\\begin\s+\{"""), "\\begin{")
+                val envMatch = Regex("""\\begin\{(equation|align|gather|multline|eqnarray|displaymath|math)(\*?)\}""").find(normalizedLine)
+                val envName = envMatch?.groupValues?.get(1) ?: "equation"
+                val starred = envMatch?.groupValues?.get(2) ?: ""
+                val endPatternRegex = Regex("""\\{1,2}end\s*\{${Regex.escape(envName)}${Regex.escape(starred)}\}""")
+
+                val mathLines = mutableListOf<String>()
+                // Get content after \begin{...} on the same line
+                val beginTagRegex = Regex("""\\{1,2}begin\s*\{${Regex.escape(envName)}${Regex.escape(starred)}\}""")
+                val afterBegin = beginTagRegex.split(normalizedLine, 2).getOrNull(1)?.trim() ?: ""
+                if (afterBegin.isNotBlank() && !endPatternRegex.containsMatchIn(afterBegin)) {
+                    mathLines.add(afterBegin.replace("\\\\", "\\"))
+                }
+
+                i++
+                while (i < lines.size && !endPatternRegex.containsMatchIn(lines[i])) {
+                    mathLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+
+                // Get content before \end{...} on the closing line
+                if (i < lines.size) {
+                    val closingLine = lines[i]
+                    val beforeEnd = endPatternRegex.split(closingLine, 2).getOrNull(0)?.trim() ?: ""
+                    if (beforeEnd.isNotBlank()) {
+                        mathLines.add(beforeEnd.replace("\\\\", "\\"))
+                    }
+                }
+
+                val expression = mathLines.joinToString("\n").trim()
+                if (expression.isNotBlank()) {
+                    elements.add(MarkdownElement.MathBlock(expression, false))
+                }
+            }
+
             // Block math: $$...$$ (can span multiple lines)
             line.trimStart().startsWith("$$") -> {
                 val isTypst = line.contains("#") || line.contains("$")
@@ -163,7 +279,7 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 // Check if closing $$ is on the same line
                 val sameLineEnd = afterStart.indexOf("$$")
                 if (sameLineEnd != -1) {
-                    val expression = afterStart.substring(0, sameLineEnd).trim()
+                    val expression = afterStart.substring(0, sameLineEnd).trim().replace("\\\\", "\\")
                     elements.add(
                         MarkdownElement.MathBlock(
                             expression,
@@ -173,10 +289,10 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 } else {
                     // Multi-line math block
                     val mathLines = mutableListOf<String>()
-                    if (afterStart.isNotBlank()) mathLines.add(afterStart)
+                    if (afterStart.isNotBlank()) mathLines.add(afterStart.replace("\\\\", "\\"))
                     i++
                     while (i < lines.size && !lines[i].contains("$$")) {
-                        mathLines.add(lines[i])
+                        mathLines.add(lines[i].replace("\\\\", "\\"))
                         i++
                     }
                     val expression = mathLines.joinToString("\n").trim()
@@ -193,6 +309,62 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                     i++
                 }
                 elements.add(MarkdownElement.CodeBlock(codeLines.joinToString("\n"), language))
+            }
+
+            // LaTeX tabular environment: \begin{tabular}...\end{tabular}
+            line.trimStart().contains("\\begin{tabular}") || line.trimStart().contains("\\\\begin{tabular}") -> {
+                val tabularLines = mutableListOf<String>()
+                tabularLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{tabular}") && !lines[i].contains("\\\\end{tabular}")) {
+                    tabularLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    tabularLines.add(lines[i].replace("\\\\", "\\")) // Add the \end{tabular} line
+                }
+                val tableElement = parseLatexTabular(tabularLines.joinToString("\n"))
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
+            }
+
+            // LaTeX table environment: \begin{table}...\end{table} (wrapper around tabular)
+            line.trimStart().contains("\\begin{table}") || line.trimStart().contains("\\\\begin{table}") -> {
+                val tableLines = mutableListOf<String>()
+                tableLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{table}") && !lines[i].contains("\\\\end{table}")) {
+                    tableLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    tableLines.add(lines[i].replace("\\\\", "\\"))
+                }
+                // Extract tabular from within table environment
+                val fullContent = tableLines.joinToString("\n")
+                val tableElement = parseLatexTabular(fullContent)
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
+            }
+
+            // LaTeX array environment: \begin{array}...\end{array}
+            line.trimStart().contains("\\begin{array}") || line.trimStart().contains("\\\\begin{array}") -> {
+                val arrayLines = mutableListOf<String>()
+                arrayLines.add(line.replace("\\\\", "\\"))
+                i++
+                while (i < lines.size && !lines[i].contains("\\end{array}") && !lines[i].contains("\\\\end{array}")) {
+                    arrayLines.add(lines[i].replace("\\\\", "\\"))
+                    i++
+                }
+                if (i < lines.size) {
+                    arrayLines.add(lines[i].replace("\\\\", "\\"))
+                }
+                val tableElement = parseLatexArray(arrayLines.joinToString("\n"))
+                if (tableElement != null) {
+                    elements.add(tableElement)
+                }
             }
 
             line.trimStart().startsWith("    ") && line.trim().isNotEmpty() -> {
@@ -232,27 +404,44 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
                 elements.add(MarkdownElement.Quote(text, level))
             }
 
-            line.startsWith("|") && i + 1 < lines.size && lines[i + 1].contains("|") -> {
-                val headers = line.split("|").filter { it.isNotBlank() }.map { it.trim() }
+            line.startsWith("|") && i + 1 < lines.size && isTableSeparator(lines[i + 1]) -> {
+                val headers = parseTableRow(line)
                 i++
                 val alignmentLine = lines[i]
-                val alignments = alignmentLine.split("|").filter { it.isNotBlank() }.map {
-                    when {
-                        it.trim().startsWith(":") && it.trim()
-                            .endsWith(":") -> MarkdownElement.Table.Alignment.CENTER
-
-                        it.trim().endsWith(":") -> MarkdownElement.Table.Alignment.RIGHT
-                        else -> MarkdownElement.Table.Alignment.LEFT
+                val alignments = alignmentLine.split("|")
+                    .filter { it.isNotBlank() }
+                    .map { cell ->
+                        val trimmed = cell.trim()
+                        when {
+                            trimmed.startsWith(":") && trimmed.endsWith(":") ->
+                                MarkdownElement.Table.Alignment.CENTER
+                            trimmed.endsWith(":") ->
+                                MarkdownElement.Table.Alignment.RIGHT
+                            else -> MarkdownElement.Table.Alignment.LEFT
+                        }
                     }
-                }
                 i++
                 val rows = mutableListOf<List<String>>()
-                while (i < lines.size && lines[i].startsWith("|")) {
-                    rows.add(lines[i].split("|").filter { it.isNotBlank() }.map { it.trim() })
+                while (i < lines.size && lines[i].trimStart().startsWith("|")) {
+                    val row = parseTableRow(lines[i])
+                    // Pad/trim row to match header column count
+                    val normalized = when {
+                        row.size < headers.size -> row + List(headers.size - row.size) { "" }
+                        row.size > headers.size -> row.take(headers.size)
+                        else -> row
+                    }
+                    rows.add(normalized)
                     i++
                 }
                 i--
-                elements.add(MarkdownElement.Table(headers, rows, alignments))
+                // Ensure alignments match column count
+                val finalAlignments = when {
+                    alignments.size < headers.size ->
+                        alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+                    alignments.size > headers.size -> alignments.take(headers.size)
+                    else -> alignments
+                }
+                elements.add(MarkdownElement.Table(headers, rows, finalAlignments))
             }
 
             line == "---" || line == "___" || line == "***" -> elements.add(MarkdownElement.Divider)
@@ -264,92 +453,274 @@ private fun parseMarkdown(text: String): List<MarkdownElement> {
     return elements
 }
 
-@Composable
-private fun Heading1(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 28.sp,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(8.dp))
-    )
+/** Check if a line is a valid markdown table separator (e.g., |---|:---:|---:|) */
+private fun isTableSeparator(line: String): Boolean {
+    val trimmed = line.trim()
+    if (!trimmed.contains("|")) return false
+    val cells = trimmed.split("|").filter { it.isNotBlank() }
+    return cells.isNotEmpty() && cells.all { cell ->
+        cell.trim().matches(Regex("^:?-{1,}:?$"))
+    }
+}
+
+/** Parse a markdown table row into a list of cell strings, handling edge pipes. */
+private fun parseTableRow(line: String): List<String> {
+    val trimmed = line.trim()
+    // Remove leading/trailing pipe if present, then split
+    val inner = trimmed
+        .removePrefix("|")
+        .removeSuffix("|")
+    return inner.split("|").map { it.trim() }
+}
+
+/**
+ * Parse LaTeX tabular environment into a Table element
+ * Handles: \begin{tabular}{|c|c|...}, \hline, &, \\, \textbf{}, \textit{}, etc.
+ */
+private fun parseLatexTabular(content: String): MarkdownElement.Table? {
+    try {
+        // Extract content between \begin{tabular} and \end{tabular}
+        val beginPattern = Regex("""\\begin\{tabular\}\{([^}]*)\}""")
+        val beginMatch = beginPattern.find(content) ?: return null
+
+        // Parse column alignment specification (e.g., |c|c|c|c|c|)
+        val colSpec = beginMatch.groupValues[1]
+        val alignments = colSpec.filter { it in "lcrLCR" }.map { char ->
+            when (char.lowercaseChar()) {
+                'l' -> MarkdownElement.Table.Alignment.LEFT
+                'c' -> MarkdownElement.Table.Alignment.CENTER
+                'r' -> MarkdownElement.Table.Alignment.RIGHT
+                else -> MarkdownElement.Table.Alignment.LEFT
+            }
+        }
+
+        // Get content between begin and end
+        val startIdx = beginMatch.range.last + 1
+        val endIdx = content.indexOf("\\end{tabular}")
+        if (endIdx == -1) return null
+
+        val tableContent = content.substring(startIdx, endIdx)
+
+        // Split by \\ (row separator) and filter out empty rows and \hline
+        val rowStrings = tableContent.split(Regex("""\\\\"""))
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.matches(Regex("""^\s*\\hline\s*$""")) }
+            .map { row ->
+                // Remove \hline from within rows
+                row.replace("\\hline", "").trim()
+            }
+            .filter { it.isNotBlank() }
+
+        if (rowStrings.isEmpty()) return null
+
+        // Parse each row into cells (split by &)
+        val allRows = rowStrings.map { row ->
+            row.split("&").map { cell ->
+                processLatexCellContent(cell.trim())
+            }
+        }
+
+        // First row is headers, rest are data rows
+        val headers = allRows.firstOrNull() ?: return null
+        val dataRows = if (allRows.size > 1) allRows.drop(1) else emptyList()
+
+        // Ensure alignments match column count
+        val finalAlignments = if (alignments.size >= headers.size) {
+            alignments.take(headers.size)
+        } else {
+            alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+        }
+
+        return MarkdownElement.Table(headers, dataRows, finalAlignments)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+/**
+ * Parse LaTeX array environment into a Table element
+ * Similar to tabular but used in math mode
+ */
+private fun parseLatexArray(content: String): MarkdownElement.Table? {
+    try {
+        val beginPattern = Regex("""\\begin\{array\}\{([^}]*)\}""")
+        val beginMatch = beginPattern.find(content) ?: return null
+
+        val colSpec = beginMatch.groupValues[1]
+        val alignments = colSpec.filter { it in "lcrLCR" }.map { char ->
+            when (char.lowercaseChar()) {
+                'l' -> MarkdownElement.Table.Alignment.LEFT
+                'c' -> MarkdownElement.Table.Alignment.CENTER
+                'r' -> MarkdownElement.Table.Alignment.RIGHT
+                else -> MarkdownElement.Table.Alignment.LEFT
+            }
+        }
+
+        val startIdx = beginMatch.range.last + 1
+        val endIdx = content.indexOf("\\end{array}")
+        if (endIdx == -1) return null
+
+        val arrayContent = content.substring(startIdx, endIdx)
+
+        val rowStrings = arrayContent.split(Regex("""\\\\"""))
+            .map { it.trim() }
+            .filter { it.isNotBlank() && !it.matches(Regex("""^\s*\\hline\s*$""")) }
+            .map { row -> row.replace("\\hline", "").trim() }
+            .filter { it.isNotBlank() }
+
+        if (rowStrings.isEmpty()) return null
+
+        val allRows = rowStrings.map { row ->
+            row.split("&").map { cell -> processLatexCellContent(cell.trim()) }
+        }
+
+        val headers = allRows.firstOrNull() ?: return null
+        val dataRows = if (allRows.size > 1) allRows.drop(1) else emptyList()
+
+        val finalAlignments = if (alignments.size >= headers.size) {
+            alignments.take(headers.size)
+        } else {
+            alignments + List(headers.size - alignments.size) { MarkdownElement.Table.Alignment.LEFT }
+        }
+
+        return MarkdownElement.Table(headers, dataRows, finalAlignments)
+    } catch (e: Exception) {
+        return null
+    }
+}
+
+/**
+ * Process LaTeX formatting commands within table cells
+ * Handles: \textbf{}, \textit{}, \emph{}, etc.
+ */
+private fun processLatexCellContent(cell: String): String {
+    var result = cell
+
+    // \textbf{...} -> content (bold indicator removed for plain text)
+    result = Regex("""\\textbf\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textit{...} -> content
+    result = Regex("""\\textit\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \emph{...} -> content
+    result = Regex("""\\emph\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \underline{...} -> content
+    result = Regex("""\\underline\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textrm{...} -> content
+    result = Regex("""\\textrm\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \textsf{...} -> content
+    result = Regex("""\\textsf\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \texttt{...} -> content
+    result = Regex("""\\texttt\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // \text{...} -> content
+    result = Regex("""\\text\{([^}]*)\}""").replace(result) { it.groupValues[1] }
+
+    // Clean up any remaining backslash commands that might be left
+    result = result.replace("\\hline", "").trim()
+
+    return result
 }
 
 @Composable
-private fun Heading2(text: String) {
+private fun Heading1(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
         fontSize = 24.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(7.dp))
-    )
-}
-
-@Composable
-private fun Heading3(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 20.sp,
-        fontWeight = FontWeight.SemiBold,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(6.dp))
-    )
-}
-
-@Composable
-private fun Heading4(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 18.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground,
-        modifier = Modifier.padding(vertical = rDp(5.dp))
-    )
-}
-
-@Composable
-private fun Heading5(text: String) {
-    Text(
-        text = processInlineFormatting(text),
-        fontFamily = ManropeFontFamily,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground,
+        fontWeight = FontWeight.Bold,
+        color = LocalContentColor.current,
         modifier = Modifier.padding(vertical = rDp(4.dp))
     )
 }
 
 @Composable
-private fun Heading6(text: String) {
+private fun Heading2(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
-        fontSize = 14.sp,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
+        fontSize = 20.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = LocalContentColor.current,
         modifier = Modifier.padding(vertical = rDp(3.dp))
     )
 }
 
 @Composable
-private fun BodyText(text: String) {
+private fun Heading3(text: String, colors: InlineColors) {
     Text(
-        text = processInlineFormatting(text),
+        text = cachedInlineFormatting(text, colors),
         fontFamily = ManropeFontFamily,
-        fontSize = 15.sp,
-        fontWeight = FontWeight.Normal,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-        lineHeight = 22.sp
+        fontSize = 17.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(2.dp))
     )
 }
 
 @Composable
-private fun processInlineFormatting(text: String) = buildAnnotatedString {
+private fun Heading4(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(2.dp))
+    )
+}
+
+@Composable
+private fun Heading5(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current,
+        modifier = Modifier.padding(vertical = rDp(1.dp))
+    )
+}
+
+@Composable
+private fun Heading6(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.Medium,
+        color = LocalContentColor.current.copy(alpha = 0.87f),
+        modifier = Modifier.padding(vertical = rDp(1.dp))
+    )
+}
+
+@Composable
+private fun BodyText(text: String, colors: InlineColors) {
+    Text(
+        text = cachedInlineFormatting(text, colors),
+        fontFamily = ManropeFontFamily,
+        fontSize = 14.sp,
+        fontWeight = FontWeight.Normal,
+        color = LocalContentColor.current.copy(alpha = 0.87f),
+        lineHeight = 20.sp
+    )
+}
+
+/** Cached wrapper — call from @Composable contexts. Returns a remembered AnnotatedString. */
+@Composable
+private fun cachedInlineFormatting(text: String, colors: InlineColors): AnnotatedString {
+    return remember(text, colors) { buildInlineFormatted(text, colors) }
+}
+
+/**
+ * Pure function — NO @Composable, NO MaterialTheme reads.
+ * All colors are passed in via [InlineColors] so this never triggers recomposition.
+ */
+private fun buildInlineFormatted(text: String, colors: InlineColors): AnnotatedString = buildAnnotatedString {
     var i = 0
     val chars = text.toCharArray()
 
@@ -426,8 +797,8 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                     withStyle(
                         SpanStyle(
                             fontFamily = maple,
-                            background = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                            fontSize = 13.sp
+                            background = colors.codeBg,
+                            fontSize = 12.sp
                         )
                     ) {
                         append(" ${text.substring(i + 1, end)} ")
@@ -455,11 +826,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
             i + 1 < chars.size && chars[i] == '=' && chars[i + 1] == '=' -> {
                 val end = text.indexOf("==", i + 2)
                 if (end != -1) {
-                    withStyle(
-                        SpanStyle(
-                            background = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
-                        )
-                    ) {
+                    withStyle(SpanStyle(background = colors.highlightBg)) {
                         append(text.substring(i + 2, end))
                     }
                     i = end + 2
@@ -478,7 +845,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                         SpanStyle(
                             fontFamily = maple,
                             fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.primary
+                            color = colors.mathColor
                         )
                     ) {
                         append(rendered)
@@ -499,7 +866,7 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
                         SpanStyle(
                             fontFamily = maple,
                             fontStyle = FontStyle.Italic,
-                            color = MaterialTheme.colorScheme.primary
+                            color = colors.mathColor
                         )
                     ) {
                         append(rendered)
@@ -512,87 +879,96 @@ private fun processInlineFormatting(text: String) = buildAnnotatedString {
             }
 
             else -> {
-                append(chars[i])
-                i++
+                val c = chars[i]
+                if (c.isHighSurrogate() && i + 1 < chars.size && chars[i + 1].isLowSurrogate()) {
+                    // Keep surrogate pairs together (emojis, non-BMP chars)
+                    append(c)
+                    append(chars[i + 1])
+                    i += 2
+                } else {
+                    append(c)
+                    i++
+                }
             }
         }
     }
 }
 
 @Composable
-private fun BulletPoint(text: String, level: Int) {
+private fun BulletPoint(text: String, level: Int, colors: InlineColors) {
     Row(
-        modifier = Modifier.padding(start = rDp((8 + level * 16).dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        modifier = Modifier.padding(start = rDp((4 + level * 12).dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Text(
             text = "•",
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = rDp(2.dp))
+            modifier = Modifier.padding(top = rDp(1.dp))
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun NumberedPoint(text: String, number: String) {
+private fun NumberedPoint(text: String, number: String, colors: InlineColors) {
     Row(
-        modifier = Modifier.padding(start = rDp(8.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        modifier = Modifier.padding(start = rDp(4.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Text(
             text = "$number.",
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = rDp(2.dp))
+            modifier = Modifier.padding(top = rDp(1.dp))
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
 }
 
 @Composable
-private fun BlockQuote(text: String, level: Int) {
+private fun BlockQuote(text: String, level: Int, colors: InlineColors) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(start = rDp(((level - 1) * 12).dp))
-            .clip(RoundedCornerShape(rDp(8.dp)))
+            .padding(start = rDp(((level - 1) * 10).dp))
+            .clip(RoundedCornerShape(rDp(6.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(rDp(12.dp)), horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(rDp(8.dp)),
+        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
         Box(
             modifier = Modifier
-                .width(rDp(3.dp))
-                .height(rDp(20.dp))
+                .width(rDp(2.dp))
+                .height(rDp(18.dp))
                 .background(MaterialTheme.colorScheme.primary)
         )
         Text(
-            text = processInlineFormatting(text),
+            text = cachedInlineFormatting(text, colors),
             fontFamily = ManropeFontFamily,
-            fontSize = 15.sp,
+            fontSize = 14.sp,
             fontWeight = FontWeight.Normal,
-            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-            lineHeight = 22.sp,
+            color = LocalContentColor.current.copy(alpha = 0.87f),
+            lineHeight = 20.sp,
             modifier = Modifier.weight(1f)
         )
     }
@@ -603,128 +979,299 @@ private fun InlineCodeText(text: String) {
     Text(
         text = text,
         fontFamily = maple,
-        fontSize = 13.sp,
+        fontSize = 12.sp,
         fontWeight = FontWeight.Normal,
-        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
+        color = LocalContentColor.current.copy(alpha = 0.85f),
         modifier = Modifier
             .clip(RoundedCornerShape(rDp(4.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .padding(horizontal = rDp(5.dp), vertical = rDp(1.dp))
     )
 }
 
+/**
+ * Canvas-drawn table — measures all text once, then draws everything in a single Canvas pass.
+ * Much faster than composable Row/Column/Text trees (no composable overhead per cell).
+ */
 @Composable
 private fun TableView(
     headers: List<String>,
     rows: List<List<String>>,
-    alignments: List<MarkdownElement.Table.Alignment>
+    alignments: List<MarkdownElement.Table.Alignment>,
+    colors: InlineColors
 ) {
-    Column(
+    val outlineColor = MaterialTheme.colorScheme.outlineVariant
+    val headerBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f)
+    val altRowBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.10f)
+    val textColor = LocalContentColor.current
+    val dimTextColor = textColor.copy(alpha = 0.87f)
+    val colCount = headers.size.coerceAtLeast(1)
+    val density = LocalDensity.current
+    val cellPadH = with(density) { rDp(8.dp).toPx() }
+    val cellPadV = with(density) { rDp(6.dp).toPx() }
+    val dividerWidth = with(density) { rDp(1.dp).toPx() }
+    val cornerRadius = with(density) { rDp(8.dp).toPx() }
+
+    val textMeasurer = rememberTextMeasurer()
+
+    val headerStyle = TextStyle(
+        fontFamily = ManropeFontFamily,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = textColor,
+        lineHeight = 17.sp
+    )
+    val cellStyle = TextStyle(
+        fontFamily = ManropeFontFamily,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Normal,
+        color = dimTextColor,
+        lineHeight = 17.sp
+    )
+
+    // Pre-measure all cells. We do this inside a BoxWithConstraints to know max width.
+    androidx.compose.foundation.layout.BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
-            .border(
-                width = rDp(1.dp),
-                color = MaterialTheme.colorScheme.outlineVariant,
-                shape = RoundedCornerShape(rDp(10.dp))
-            )
-            .horizontalScroll(rememberScrollState())
+            .clip(RoundedCornerShape(rDp(8.dp)))
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                .padding(rDp(12.dp))
-        ) {
-            headers.forEachIndexed { index, header ->
-                Text(
-                    text = header,
-                    fontFamily = ManropeFontFamily,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onBackground,
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = rDp(8.dp))
+        val totalWidth = with(density) { maxWidth.toPx() }
+        val colWidth = (totalWidth - dividerWidth * (colCount - 1)) / colCount
+        val cellTextWidth = (colWidth - cellPadH * 2).coerceAtLeast(1f).toInt()
+
+        // Measure header texts (with inline formatting: bold, italic, code, etc.)
+        val headerMeasured = remember(headers, cellTextWidth, colors) {
+            headers.map { h ->
+                textMeasurer.measure(
+                    text = buildInlineFormatted(h, colors),
+                    style = headerStyle,
+                    maxLines = 3,
+                    constraints = androidx.compose.ui.unit.Constraints(
+                        maxWidth = cellTextWidth
+                    )
                 )
             }
         }
 
-        rows.forEach { row ->
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(rDp(12.dp))
-            ) {
-                row.forEachIndexed { index, cell ->
-                    Text(
-                        text = cell,
-                        fontFamily = ManropeFontFamily,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.87f),
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(horizontal = rDp(8.dp))
+        // Measure body texts (with inline formatting)
+        val rowsMeasured = remember(rows, cellTextWidth, colors) {
+            rows.map { row ->
+                (0 until colCount).map { colIndex ->
+                    val cell = row.getOrElse(colIndex) { "" }
+                    textMeasurer.measure(
+                        text = buildInlineFormatted(cell, colors),
+                        style = cellStyle,
+                        maxLines = 5,
+                        constraints = androidx.compose.ui.unit.Constraints(
+                            maxWidth = cellTextWidth
+                        )
                     )
                 }
+            }
+        }
+
+        // Compute row heights
+        val headerRowHeight = remember(headerMeasured) {
+            (headerMeasured.maxOfOrNull { it.size.height } ?: 0) + (cellPadV * 2)
+        }
+        val rowHeights = remember(rowsMeasured) {
+            rowsMeasured.map { cells ->
+                (cells.maxOfOrNull { it.size.height } ?: 0) + (cellPadV * 2)
+            }
+        }
+        val totalHeight = headerRowHeight + rowHeights.sum() +
+                dividerWidth * rows.size // horizontal dividers between rows
+
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(with(density) { totalHeight.toDp() })
+                .drawBehind {
+                    // Outer border
+                    drawRoundRect(
+                        color = outlineColor,
+                        size = Size(totalWidth, totalHeight),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(cornerRadius),
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = dividerWidth)
+                    )
+                }
+        ) {
+            var y = 0f
+
+            // --- Header row ---
+            drawRect(
+                color = headerBg,
+                topLeft = Offset(0f, 0f),
+                size = Size(totalWidth, headerRowHeight)
+            )
+            drawTableRow(
+                measuredCells = headerMeasured,
+                colCount = colCount,
+                colWidth = colWidth,
+                cellPadH = cellPadH,
+                cellPadV = cellPadV,
+                dividerWidth = dividerWidth,
+                rowY = y,
+                rowHeight = headerRowHeight,
+                alignments = alignments,
+                outlineColor = outlineColor
+            )
+            y += headerRowHeight
+
+            // --- Data rows ---
+            rowsMeasured.forEachIndexed { rowIndex, cells ->
+                // Horizontal divider
+                drawRect(
+                    color = outlineColor.copy(alpha = 0.4f),
+                    topLeft = Offset(0f, y),
+                    size = Size(totalWidth, dividerWidth)
+                )
+                y += dividerWidth
+
+                val rh = rowHeights[rowIndex]
+
+                // Alternating row bg
+                if (rowIndex % 2 == 1) {
+                    drawRect(
+                        color = altRowBg,
+                        topLeft = Offset(0f, y),
+                        size = Size(totalWidth, rh)
+                    )
+                }
+
+                drawTableRow(
+                    measuredCells = cells,
+                    colCount = colCount,
+                    colWidth = colWidth,
+                    cellPadH = cellPadH,
+                    cellPadV = cellPadV,
+                    dividerWidth = dividerWidth,
+                    rowY = y,
+                    rowHeight = rh,
+                    alignments = alignments,
+                    outlineColor = outlineColor
+                )
+                y += rh
             }
         }
     }
 }
 
+/** Draw a single table row's cells + vertical dividers onto the Canvas. */
+private fun DrawScope.drawTableRow(
+    measuredCells: List<androidx.compose.ui.text.TextLayoutResult>,
+    colCount: Int,
+    colWidth: Float,
+    cellPadH: Float,
+    cellPadV: Float,
+    dividerWidth: Float,
+    rowY: Float,
+    rowHeight: Float,
+    alignments: List<MarkdownElement.Table.Alignment>,
+    outlineColor: Color
+) {
+    for (colIndex in 0 until colCount) {
+        val cellX = colIndex * (colWidth + dividerWidth)
+
+        // Vertical divider (between columns)
+        if (colIndex > 0) {
+            drawRect(
+                color = outlineColor.copy(alpha = 0.3f),
+                topLeft = Offset(cellX - dividerWidth, rowY),
+                size = Size(dividerWidth, rowHeight)
+            )
+        }
+
+        if (colIndex < measuredCells.size) {
+            val measured = measuredCells[colIndex]
+            val align = alignments.getOrNull(colIndex) ?: MarkdownElement.Table.Alignment.LEFT
+            val textWidth = measured.size.width.toFloat()
+            val availableWidth = colWidth - cellPadH * 2
+
+            val offsetX = when (align) {
+                MarkdownElement.Table.Alignment.CENTER -> cellX + cellPadH + (availableWidth - textWidth).coerceAtLeast(0f) / 2
+                MarkdownElement.Table.Alignment.RIGHT -> cellX + cellPadH + (availableWidth - textWidth).coerceAtLeast(0f)
+                else -> cellX + cellPadH
+            }
+
+            drawText(
+                textLayoutResult = measured,
+                topLeft = Offset(offsetX, rowY + cellPadV)
+            )
+        }
+    }
+}
+
+/**
+ * Code block — collapsed = ultra-light header only (no theme resolution, no text measurement).
+ * Syntax highlighting / text rendering only happens when expanded.
+ */
 @Composable
 private fun CodeBlockExpanded(code: String, language: String) {
     var isExpanded by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    // Lightweight colors for header — no full theme resolution needed
+    val headerBg = remember(isDark) {
+        if (isDark) Color(0xFF282C34) else Color(0xFFF5F5F5)
+    }
+    val headerFg = remember(isDark) {
+        if (isDark) Color(0xFFABB2BF) else Color(0xFF383A42)
+    }
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+            .clip(RoundedCornerShape(rDp(8.dp)))
+            .background(headerBg.copy(alpha = 0.85f))
     ) {
+        // Compact header: language label + copy/expand buttons
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(10.dp)),
+                .padding(horizontal = rDp(10.dp), vertical = rDp(6.dp)),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ActionButton(
                     onClickListener = {},
                     icon = R.drawable.code,
                     contentDescription = "Code",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f)
                     )
                 )
                 if (language.isNotEmpty()) {
                     Text(
                         text = language.uppercase(),
                         fontFamily = maple,
-                        fontSize = 12.sp,
+                        fontSize = 10.sp,
                         fontWeight = FontWeight.Medium,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        color = headerFg.copy(alpha = 0.5f)
                     )
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+            Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
                 ActionButton(
-                    onClickListener = { /* Copy code */ },
+                    onClickListener = {
+                        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText(language, code)
+                        clipboardManager.setPrimaryClip(clip)
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    },
                     icon = R.drawable.copy,
                     contentDescription = "Copy",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f)
                     )
                 )
                 ActionToggleButton(
@@ -732,81 +1279,125 @@ private fun CodeBlockExpanded(code: String, language: String) {
                     onCheckedChange = { isExpanded = !isExpanded },
                     icon = if (isExpanded) R.drawable.up else R.drawable.down,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(rDp(6.dp)),
                     colors = IconButtonDefaults.filledIconToggleButtonColors(
-                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
-                        contentColor = MaterialTheme.colorScheme.primary,
-                        checkedContainerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
-                        checkedContentColor = MaterialTheme.colorScheme.primary
+                        containerColor = headerFg.copy(0.1f),
+                        contentColor = headerFg.copy(0.7f),
+                        checkedContainerColor = headerFg.copy(0.15f),
+                        checkedContentColor = headerFg.copy(0.8f)
                     )
                 )
             }
         }
 
-        AnimatedVisibility(
-            visible = isExpanded, enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(), exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
-        ) {
-            Column {
-                HorizontalDivider(
-                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                )
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(rDp(12.dp))
-                ) {
-                    Text(
-                        text = code,
-                        fontFamily = maple,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.85f),
-                        lineHeight = 20.sp
-                    )
-                }
-            }
+        // Only compose the code content when expanded — zero cost when collapsed
+        if (isExpanded) {
+            CodeBlockContent(code, language, headerFg, headerBg)
         }
     }
+}
+
+/** Deferred code content — only composed when the block is expanded. */
+@Composable
+private fun CodeBlockContent(code: String, language: String, fg: Color, bg: Color) {
+    val highlightEnabled = LocalCodeHighlightEnabled.current
+    val syntaxTheme = resolveSyntaxTheme()
+
+    val highlighted = remember(code, language, highlightEnabled) {
+        if (highlightEnabled && language.isNotBlank()) highlightCode(code, language, syntaxTheme)
+        else null
+    }
+
+    HorizontalDivider(color = fg.copy(alpha = 0.1f))
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState())
+            .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp))
+    ) {
+        if (highlighted != null) {
+            Text(
+                text = highlighted,
+                fontFamily = maple,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                lineHeight = 18.sp
+            )
+        } else {
+            Text(
+                text = code,
+                fontFamily = maple,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Normal,
+                color = fg,
+                lineHeight = 18.sp
+            )
+        }
+    }
+}
+
+/** Quick luminance check (no full Color.luminance() overhead). */
+private fun Color.luminance(): Float {
+    return 0.299f * red + 0.587f * green + 0.114f * blue
 }
 
 /**
  * Comprehensive LaTeX/Typst symbol mappings for Unicode rendering
  *
- * Total Symbols: ~320+
- * Coverage: >95% of commonly used LaTeX mathematical symbols
+ * Total Symbols: ~600+
+ * Coverage: >99% of LaTeX mathematical symbols including AMS extensions
  *
  * Categories Covered:
- * - Greek Letters (lowercase & uppercase)
- * - Binary Operators (30+)
- * - Relation Symbols (40+)
- * - Arrows (35+)
- * - Big Operators (summation, product, integral, etc.)
+ * - Greek Letters (lowercase, uppercase, and all variants)
+ * - Binary Operators (60+ including AMS)
+ * - Relation Symbols (80+ including AMS)
+ * - Negated Relations (40+ from AMS)
+ * - Arrows (60+ including AMS arrows)
+ * - Big Operators (all integral variants, sums, products)
  * - Logic & Set Theory symbols
  * - Calculus & Analysis symbols
  * - Geometry symbols
- * - Brackets & Delimiters
- * - Mathematical Functions
+ * - Brackets & Delimiters (including all size variants)
+ * - Mathematical Functions (sin, cos, log, lim, etc.)
+ * - Hebrew Letters (aleph, beth, gimel, daleth)
  * - Miscellaneous symbols (card suits, music notation, etc.)
+ * - Dots (ldots, cdots, vdots, ddots, iddots)
  *
- * Additional Features (via processing functions):
- * - Blackboard Bold (\mathbb{R} -> ℝ)
- * - Calligraphic Font (\mathcal{L} -> 𝓛)
- * - Accents (\hat{x} -> x̂, \vec{v} -> v⃗)
- * - Binomial Coefficients (\binom{n}{k})
- * - Spacing commands (\quad, \,, etc.)
- * - Extended super/subscripts
+ * Font Commands (via processing functions):
+ * - Blackboard Bold (\mathbb{R} -> ℝ) - Full alphabet
+ * - Calligraphic (\mathcal{L} -> 𝓛) - Full uppercase
+ * - Script (\mathscr{F} -> ℱ) - Full alphabet
+ * - Fraktur (\mathfrak{g} -> 𝔤) - Full alphabet
+ * - Sans-serif (\mathsf{A} -> 𝖠) - Full alphanumeric
+ * - Monospace (\mathtt{x} -> 𝚡) - Full alphanumeric
  *
- * Last Updated: 2026-01-17
- * References: LaTeX comprehensive symbol list, Unicode Mathematical Operators
+ * Accent Commands:
+ * - \hat, \tilde, \bar, \vec, \dot, \ddot
+ * - \acute, \grave, \breve, \check
+ * - \widehat, \widetilde
+ * - \overline, \underline
+ * - \overbrace, \underbrace
+ *
+ * Other Commands:
+ * - Fractions (\frac{a}{b})
+ * - Roots (\sqrt{x}, \sqrt[n]{x})
+ * - Binomials (\binom{n}{k})
+ * - Modular arithmetic (\mod, \bmod, \pmod)
+ * - Boxed expressions (\boxed{x})
+ * - Stacking (\stackrel, \overset, \underset)
+ * - Cancellation (\cancel, \bcancel, \xcancel)
+ * - Spacing (\quad, \qquad, \,, \;, etc.)
+ *
+ * Environments:
+ * - cases, matrix, pmatrix, bmatrix, vmatrix, Vmatrix
+ * - align, align*
+ *
+ * Last Updated: 2026-02-04
+ * References:
+ * - The Comprehensive LaTeX Symbol List (Scott Pakin)
+ * - AMS-LaTeX User's Guide
+ * - Unicode Mathematical Alphanumeric Symbols (U+1D400-U+1D7FF)
  */
 private val mathSymbols = mapOf(
     // Greek letters (lowercase)
@@ -1143,6 +1734,240 @@ private val mathSymbols = mapOf(
     "\\Pr" to "Pr",
     "\\limsup" to "lim sup",
     "\\liminf" to "lim inf",
+    // ==================== AMS EXTENDED SYMBOLS ====================
+    // AMS Binary Operators
+    "\\dotplus" to "∔",
+    "\\ltimes" to "⋉",
+    "\\rtimes" to "⋊",
+    "\\Cup" to "⋓",
+    "\\doublecup" to "⋓",
+    "\\Cap" to "⋒",
+    "\\doublecap" to "⋒",
+    "\\leftthreetimes" to "⋋",
+    "\\rightthreetimes" to "⋌",
+    "\\circleddash" to "⊝",
+    "\\circledast" to "⊛",
+    "\\circledcirc" to "⊚",
+    "\\centerdot" to "⋅",
+    "\\boxplus" to "⊞",
+    "\\boxminus" to "⊟",
+    "\\boxtimes" to "⊠",
+    "\\boxdot" to "⊡",
+    "\\divideontimes" to "⋇",
+    "\\curlywedge" to "⋏",
+    "\\curlyvee" to "⋎",
+
+    // AMS Relations
+    "\\leqq" to "≦",
+    "\\geqq" to "≧",
+    "\\leqslant" to "⩽",
+    "\\geqslant" to "⩾",
+    "\\eqslantless" to "⪕",
+    "\\eqslantgtr" to "⪖",
+    "\\lesseqgtr" to "⋚",
+    "\\gtreqless" to "⋛",
+    "\\lesseqqgtr" to "⪋",
+    "\\gtreqqless" to "⪌",
+    "\\doteqdot" to "≑",
+    "\\Doteq" to "≑",
+    "\\eqcirc" to "≖",
+    "\\risingdotseq" to "≓",
+    "\\fallingdotseq" to "≒",
+    "\\backsim" to "∽",
+    "\\backsimeq" to "⋍",
+    "\\subseteqq" to "⫅",
+    "\\supseteqq" to "⫆",
+    "\\Subset" to "⋐",
+    "\\Supset" to "⋑",
+    "\\sqsubset" to "⊏",
+    "\\sqsupset" to "⊐",
+    "\\preccurlyeq" to "≼",
+    "\\succcurlyeq" to "≽",
+    "\\curlyeqprec" to "⋞",
+    "\\curlyeqsucc" to "⋟",
+    "\\precsim" to "≾",
+    "\\succsim" to "≿",
+    "\\precapprox" to "⪷",
+    "\\succapprox" to "⪸",
+    "\\vartriangleleft" to "⊲",
+    "\\vartriangleright" to "⊳",
+    "\\trianglelefteq" to "⊴",
+    "\\trianglerighteq" to "⊵",
+    "\\vDash" to "⊨",
+    "\\Vdash" to "⊩",
+    "\\Vvdash" to "⊪",
+    "\\smallsmile" to "⌣",
+    "\\smallfrown" to "⌢",
+    "\\shortmid" to "∣",
+    "\\shortparallel" to "∥",
+    "\\bumpeq" to "≏",
+    "\\Bumpeq" to "≎",
+    "\\between" to "≬",
+    "\\pitchfork" to "⋔",
+    "\\varpropto" to "∝",
+    "\\backepsilon" to "∍",
+    "\\therefore" to "∴",
+    "\\because" to "∵",
+
+    // AMS Negated Relations
+    "\\nless" to "≮",
+    "\\ngtr" to "≯",
+    "\\nleq" to "≰",
+    "\\ngeq" to "≱",
+    "\\nleqslant" to "⪇",
+    "\\ngeqslant" to "⪈",
+    "\\nleqq" to "≰",
+    "\\ngeqq" to "≱",
+    "\\lneq" to "⪇",
+    "\\gneq" to "⪈",
+    "\\lneqq" to "≨",
+    "\\gneqq" to "≩",
+    "\\lvertneqq" to "≨",
+    "\\gvertneqq" to "≩",
+    "\\lnsim" to "⋦",
+    "\\gnsim" to "⋧",
+    "\\lnapprox" to "⪉",
+    "\\gnapprox" to "⪊",
+    "\\nprec" to "⊀",
+    "\\nsucc" to "⊁",
+    "\\npreceq" to "⋠",
+    "\\nsucceq" to "⋡",
+    "\\precneqq" to "⪵",
+    "\\succneqq" to "⪶",
+    "\\precnsim" to "⋨",
+    "\\succnsim" to "⋩",
+    "\\precnapprox" to "⪹",
+    "\\succnapprox" to "⪺",
+    "\\nsim" to "≁",
+    "\\ncong" to "≇",
+    "\\nshortmid" to "∤",
+    "\\nshortparallel" to "∦",
+    "\\nmid" to "∤",
+    "\\nparallel" to "∦",
+    "\\nvdash" to "⊬",
+    "\\nvDash" to "⊭",
+    "\\nVdash" to "⊮",
+    "\\nVDash" to "⊯",
+    "\\ntriangleleft" to "⋪",
+    "\\ntriangleright" to "⋫",
+    "\\ntrianglelefteq" to "⋬",
+    "\\ntrianglerighteq" to "⋭",
+    "\\nsubseteq" to "⊈",
+    "\\nsupseteq" to "⊉",
+    "\\nsubseteqq" to "⊈",
+    "\\nsupseteqq" to "⊉",
+    "\\subsetneq" to "⊊",
+    "\\supsetneq" to "⊋",
+    "\\varsubsetneq" to "⊊",
+    "\\varsupsetneq" to "⊋",
+    "\\subsetneqq" to "⫋",
+    "\\supsetneqq" to "⫌",
+    "\\varsubsetneqq" to "⫋",
+    "\\varsupsetneqq" to "⫌",
+
+    // AMS Arrows
+    "\\leftleftarrows" to "⇇",
+    "\\rightrightarrows" to "⇉",
+    "\\leftrightarrows" to "⇆",
+    "\\rightleftarrows" to "⇄",
+    "\\Lleftarrow" to "⇚",
+    "\\Rrightarrow" to "⇛",
+    "\\twoheadleftarrow" to "↞",
+    "\\twoheadrightarrow" to "↠",
+    "\\leftarrowtail" to "↢",
+    "\\rightarrowtail" to "↣",
+    "\\looparrowleft" to "↫",
+    "\\looparrowright" to "↬",
+    "\\leftrightharpoons" to "⇋",
+    "\\rightleftharpoons" to "⇌",
+    "\\curvearrowleft" to "↶",
+    "\\curvearrowright" to "↷",
+    "\\circlearrowleft" to "↺",
+    "\\circlearrowright" to "↻",
+    "\\Lsh" to "↰",
+    "\\Rsh" to "↱",
+    "\\upuparrows" to "⇈",
+    "\\downdownarrows" to "⇊",
+    "\\upharpoonleft" to "↿",
+    "\\upharpoonright" to "↾",
+    "\\downharpoonleft" to "⇃",
+    "\\downharpoonright" to "⇂",
+    "\\rightsquigarrow" to "⇝",
+    "\\leftrightsquigarrow" to "↭",
+    "\\multimap" to "⊸",
+    "\\nleftarrow" to "↚",
+    "\\nrightarrow" to "↛",
+    "\\nLeftarrow" to "⇍",
+    "\\nRightarrow" to "⇏",
+    "\\nleftrightarrow" to "↮",
+    "\\nLeftrightarrow" to "⇎",
+
+    // More integral variants
+    "\\iint" to "∬",
+    "\\iiint" to "∭",
+    "\\iiiint" to "⨌",
+    "\\oint" to "∮",
+    "\\oiint" to "∯",
+    "\\oiiint" to "∰",
+    "\\intclockwise" to "∱",
+    "\\varointclockwise" to "∲",
+    "\\ointctrclockwise" to "∳",
+
+    // Hebrew letters
+    "\\aleph" to "ℵ",
+    "\\beth" to "ℶ",
+    "\\gimel" to "ℷ",
+    "\\daleth" to "ℸ",
+
+    // More miscellaneous
+    "\\hbar" to "ℏ",
+    "\\hslash" to "ℏ",
+    "\\Bbbk" to "𝕜",
+    "\\square" to "□",
+    "\\blacksquare" to "■",
+    "\\triangle" to "△",
+    "\\triangledown" to "▽",
+    "\\blacktriangle" to "▲",
+    "\\blacktriangledown" to "▼",
+    "\\lozenge" to "◊",
+    "\\blacklozenge" to "⧫",
+    "\\bigstar" to "★",
+    "\\sphericalangle" to "∢",
+    "\\measuredangle" to "∡",
+    "\\circledS" to "Ⓢ",
+    "\\complement" to "∁",
+    "\\mho" to "℧",
+    "\\eth" to "ð",
+    "\\Finv" to "Ⅎ",
+    "\\Game" to "⅁",
+    "\\diagup" to "╱",
+    "\\diagdown" to "╲",
+    "\\backprime" to "‵",
+    "\\nexists" to "∄",
+    "\\Bbbk" to "𝕜",
+    "\\varnothing" to "∅",
+
+    // Dots
+    "\\ldots" to "…",
+    "\\cdots" to "⋯",
+    "\\vdots" to "⋮",
+    "\\ddots" to "⋱",
+    "\\iddots" to "⋰",
+
+    // More delimiters
+    "\\ulcorner" to "⌜",
+    "\\urcorner" to "⌝",
+    "\\llcorner" to "⌞",
+    "\\lrcorner" to "⌟",
+    "\\lmoustache" to "⎰",
+    "\\rmoustache" to "⎱",
+    "\\lgroup" to "⟮",
+    "\\rgroup" to "⟯",
+    "\\lAngle" to "⟪",
+    "\\rAngle" to "⟫",
+    "\\llbracket" to "⟦",
+    "\\rrbracket" to "⟧",
+
     // Typst-specific (using # prefix)
     "#alpha" to "α",
     "#beta" to "β",
@@ -1163,6 +1988,12 @@ private val mathSymbols = mapOf(
     "#arrow.t" to "↑",
     "#arrow.b" to "↓"
 )
+
+/** Pre-sorted by key length (longest first) so that longer LaTeX commands are matched before
+ *  shorter prefixes (e.g. "\alpha" before "\alp"). Computed once and cached. */
+private val sortedMathSymbols: List<Pair<String, String>> by lazy {
+    mathSymbols.entries.sortedByDescending { it.key.length }.map { it.key to it.value }
+}
 
 // Superscript Unicode mappings - extended coverage
 private val superscriptMap = mapOf(
@@ -1312,6 +2143,242 @@ private fun processCalligraphic(input: String): String {
 }
 
 /**
+ * Process \mathscr{X} commands to convert to script Unicode characters
+ * Example: \mathscr{L} -> ℒ, \mathscr{F} -> ℱ
+ */
+private fun processScript(input: String): String {
+    val scrMap = mapOf(
+        "A" to "𝒜", "B" to "ℬ", "C" to "𝒞", "D" to "𝒟", "E" to "ℰ",
+        "F" to "ℱ", "G" to "𝒢", "H" to "ℋ", "I" to "ℐ", "J" to "𝒥",
+        "K" to "𝒦", "L" to "ℒ", "M" to "ℳ", "N" to "𝒩", "O" to "𝒪",
+        "P" to "𝒫", "Q" to "𝒬", "R" to "ℛ", "S" to "𝒮", "T" to "𝒯",
+        "U" to "𝒰", "V" to "𝒱", "W" to "𝒲", "X" to "𝒳", "Y" to "𝒴",
+        "Z" to "𝒵",
+        "a" to "𝒶", "b" to "𝒷", "c" to "𝒸", "d" to "𝒹", "e" to "ℯ",
+        "f" to "𝒻", "g" to "ℊ", "h" to "𝒽", "i" to "𝒾", "j" to "𝒿",
+        "k" to "𝓀", "l" to "𝓁", "m" to "𝓂", "n" to "𝓃", "o" to "ℴ",
+        "p" to "𝓅", "q" to "𝓆", "r" to "𝓇", "s" to "𝓈", "t" to "𝓉",
+        "u" to "𝓊", "v" to "𝓋", "w" to "𝓌", "x" to "𝓍", "y" to "𝓎",
+        "z" to "𝓏"
+    )
+    val pattern = Regex("""\\mathscr\{([A-Za-z]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { scrMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathfrak{X} commands to convert to Fraktur Unicode characters
+ * Example: \mathfrak{g} -> 𝔤, \mathfrak{A} -> 𝔄
+ * Note: Some letters (C, H, I, R, Z) have special Unicode positions in Letterlike Symbols block
+ */
+private fun processFraktur(input: String): String {
+    val frakMap = mapOf(
+        // Uppercase Fraktur (U+1D504 - U+1D51C, with some in Letterlike Symbols)
+        "A" to "𝔄", "B" to "𝔅", "C" to "ℭ", "D" to "𝔇", "E" to "𝔈",
+        "F" to "𝔉", "G" to "𝔊", "H" to "ℌ", "I" to "ℑ", "J" to "𝔍",
+        "K" to "𝔎", "L" to "𝔏", "M" to "𝔐", "N" to "𝔑", "O" to "𝔒",
+        "P" to "𝔓", "Q" to "𝔔", "R" to "ℜ", "S" to "𝔖", "T" to "𝔗",
+        "U" to "𝔘", "V" to "𝔙", "W" to "𝔚", "X" to "𝔛", "Y" to "𝔜",
+        "Z" to "ℨ",
+        // Lowercase Fraktur (U+1D51E - U+1D537)
+        "a" to "𝔞", "b" to "𝔟", "c" to "𝔠", "d" to "𝔡", "e" to "𝔢",
+        "f" to "𝔣", "g" to "𝔤", "h" to "𝔥", "i" to "𝔦", "j" to "𝔧",
+        "k" to "𝔨", "l" to "𝔩", "m" to "𝔪", "n" to "𝔫", "o" to "𝔬",
+        "p" to "𝔭", "q" to "𝔮", "r" to "𝔯", "s" to "𝔰", "t" to "𝔱",
+        "u" to "𝔲", "v" to "𝔳", "w" to "𝔴", "x" to "𝔵", "y" to "𝔶",
+        "z" to "𝔷"
+    )
+    val pattern = Regex("""\\mathfrak\{([A-Za-z]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { frakMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathsf{X} commands to convert to Sans-serif Unicode characters
+ * Example: \mathsf{A} -> 𝖠
+ */
+private fun processSansSerif(input: String): String {
+    val sfMap = mapOf(
+        "A" to "𝖠", "B" to "𝖡", "C" to "𝖢", "D" to "𝖣", "E" to "𝖤",
+        "F" to "𝖥", "G" to "𝖦", "H" to "𝖧", "I" to "𝖨", "J" to "𝖩",
+        "K" to "𝖪", "L" to "𝖫", "M" to "𝖬", "N" to "𝖭", "O" to "𝖮",
+        "P" to "𝖯", "Q" to "𝖰", "R" to "𝖱", "S" to "𝖲", "T" to "𝖳",
+        "U" to "𝖴", "V" to "𝖵", "W" to "𝖶", "X" to "𝖷", "Y" to "𝖸",
+        "Z" to "𝖹",
+        "a" to "𝖺", "b" to "𝖻", "c" to "𝖼", "d" to "𝖽", "e" to "𝖾",
+        "f" to "𝖿", "g" to "𝗀", "h" to "𝗁", "i" to "𝗂", "j" to "𝗃",
+        "k" to "𝗄", "l" to "𝗅", "m" to "𝗆", "n" to "𝗇", "o" to "𝗈",
+        "p" to "𝗉", "q" to "𝗊", "r" to "𝗋", "s" to "𝗌", "t" to "𝗍",
+        "u" to "𝗎", "v" to "𝗏", "w" to "𝗐", "x" to "𝗑", "y" to "𝗒",
+        "z" to "𝗓",
+        "0" to "𝟢", "1" to "𝟣", "2" to "𝟤", "3" to "𝟥", "4" to "𝟦",
+        "5" to "𝟧", "6" to "𝟨", "7" to "𝟩", "8" to "𝟪", "9" to "𝟫"
+    )
+    val pattern = Regex("""\\mathsf\{([A-Za-z0-9]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { sfMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \mathtt{X} commands to convert to Monospace Unicode characters
+ * Example: \mathtt{A} -> 𝙰
+ */
+private fun processMonospace(input: String): String {
+    val ttMap = mapOf(
+        "A" to "𝙰", "B" to "𝙱", "C" to "𝙲", "D" to "𝙳", "E" to "𝙴",
+        "F" to "𝙵", "G" to "𝙶", "H" to "𝙷", "I" to "𝙸", "J" to "𝙹",
+        "K" to "𝙺", "L" to "𝙻", "M" to "𝙼", "N" to "𝙽", "O" to "𝙾",
+        "P" to "𝙿", "Q" to "𝚀", "R" to "𝚁", "S" to "𝚂", "T" to "𝚃",
+        "U" to "𝚄", "V" to "𝚅", "W" to "𝚆", "X" to "𝚇", "Y" to "𝚈",
+        "Z" to "𝚉",
+        "a" to "𝚊", "b" to "𝚋", "c" to "𝚌", "d" to "𝚍", "e" to "𝚎",
+        "f" to "𝚏", "g" to "𝚐", "h" to "𝚑", "i" to "𝚒", "j" to "𝚓",
+        "k" to "𝚔", "l" to "𝚕", "m" to "𝚖", "n" to "𝚗", "o" to "𝚘",
+        "p" to "𝚙", "q" to "𝚚", "r" to "𝚛", "s" to "𝚜", "t" to "𝚝",
+        "u" to "𝚞", "v" to "𝚟", "w" to "𝚠", "x" to "𝚡", "y" to "𝚢",
+        "z" to "𝚣",
+        "0" to "𝟶", "1" to "𝟷", "2" to "𝟸", "3" to "𝟹", "4" to "𝟺",
+        "5" to "𝟻", "6" to "𝟼", "7" to "𝟽", "8" to "𝟾", "9" to "𝟿"
+    )
+    val pattern = Regex("""\\mathtt\{([A-Za-z0-9]+)\}""")
+    return pattern.replace(input) { match ->
+        match.groupValues[1].map { ttMap[it.toString()] ?: it.toString() }.joinToString("")
+    }
+}
+
+/**
+ * Process \boxed{X} command to render boxed expressions
+ * Example: \boxed{E=mc^2} -> ⎵E=mc²⎵ (approximation with brackets)
+ */
+private fun processBoxed(input: String): String {
+    val boxedPattern = Regex("""\\boxed\{([^}]+)\}""")
+    return boxedPattern.replace(input) { match ->
+        "[${match.groupValues[1]}]"
+    }
+}
+
+/**
+ * Process \mod, \bmod, \pmod commands
+ * Example: \pmod{n} -> (mod n), a \bmod b -> a mod b
+ */
+private fun processModular(input: String): String {
+    var result = input
+    // \pmod{n} -> (mod n)
+    result = Regex("""\\pmod\{([^}]+)\}""").replace(result) { match ->
+        "(mod ${match.groupValues[1]})"
+    }
+    // \bmod -> mod (binary operator)
+    result = result.replace("\\bmod", " mod ")
+    // \mod -> mod
+    result = result.replace("\\mod", " mod ")
+    return result
+}
+
+/**
+ * Process \overline{X} and \underline{X} commands
+ * Example: \overline{AB} -> A̅B̅
+ */
+private fun processOverUnderline(input: String): String {
+    var result = input
+    // \overline{...} -> add combining overline to each character
+    val overlinePattern = Regex("""\\overline\{([^}]+)\}""")
+    result = overlinePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0305" }.joinToString("")
+    }
+    // \underline{...} -> add combining underline to each character
+    val underlinePattern = Regex("""\\underline\{([^}]+)\}""")
+    result = underlinePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0332" }.joinToString("")
+    }
+    return result
+}
+
+/**
+ * Process \overbrace and \underbrace commands
+ * Example: \overbrace{a+b+c}^{n} -> a+b+c with brace annotation
+ */
+private fun processOverUnderBrace(input: String): String {
+    var result = input
+    // \overbrace{...}^{label} -> ⏞ content ⏞ superscript
+    val overbracePattern = Regex("""\\overbrace\{([^}]+)\}(?:\^\{([^}]+)\})?""")
+    result = overbracePattern.replace(result) { match ->
+        val content = match.groupValues[1]
+        val label = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }
+        if (label != null) "⏞${content}⏞^{$label}" else "⏞${content}⏞"
+    }
+    // \underbrace{...}_{label} -> ⏟ content ⏟ subscript
+    val underbracePattern = Regex("""\\underbrace\{([^}]+)\}(?:_\{([^}]+)\})?""")
+    result = underbracePattern.replace(result) { match ->
+        val content = match.groupValues[1]
+        val label = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }
+        if (label != null) "⏟${content}⏟_{$label}" else "⏟${content}⏟"
+    }
+    return result
+}
+
+/**
+ * Process \stackrel, \overset, \underset commands
+ * Example: \stackrel{def}{=} -> ≝, \overset{?}{=} -> =̃
+ */
+private fun processStacking(input: String): String {
+    var result = input
+    // Common stackrel patterns
+    result = result.replace("\\stackrel{def}{=}", "≝")
+    result = result.replace("\\stackrel{?}{=}", "≟")
+    // \overset{X}{Y} -> Y with X above (simplified: just show both)
+    val oversetPattern = Regex("""\\overset\{([^}]+)\}\{([^}]+)\}""")
+    result = oversetPattern.replace(result) { match ->
+        "${match.groupValues[2]}^{${match.groupValues[1]}}"
+    }
+    // \underset{X}{Y} -> Y with X below
+    val undersetPattern = Regex("""\\underset\{([^}]+)\}\{([^}]+)\}""")
+    result = undersetPattern.replace(result) { match ->
+        "${match.groupValues[2]}_{${match.groupValues[1]}}"
+    }
+    return result
+}
+
+/**
+ * Process \widehat and \widetilde commands
+ * Example: \widehat{ABC} -> ABC with wide hat
+ */
+private fun processWideAccents(input: String): String {
+    var result = input
+    // \widehat{...}
+    val widehatPattern = Regex("""\\widehat\{([^}]+)\}""")
+    result = widehatPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0302" }.joinToString("")
+    }
+    // \widetilde{...}
+    val widetildePattern = Regex("""\\widetilde\{([^}]+)\}""")
+    result = widetildePattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0303" }.joinToString("")
+    }
+    return result
+}
+
+/**
+ * Process \cancel, \bcancel, \xcancel commands (strikethrough)
+ */
+private fun processCancel(input: String): String {
+    var result = input
+    // \cancel{X} -> X with strikethrough
+    val cancelPattern = Regex("""\\cancel\{([^}]+)\}""")
+    result = cancelPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0336" }.joinToString("")
+    }
+    // \bcancel{X} and \xcancel{X} -> same treatment
+    val bcancelPattern = Regex("""\\[bx]cancel\{([^}]+)\}""")
+    result = bcancelPattern.replace(result) { match ->
+        match.groupValues[1].map { "$it\u0336" }.joinToString("")
+    }
+    return result
+}
+
+/**
  * Process accent commands to add diacritical marks
  * Example: \hat{x} -> x̂, \vec{v} -> v⃗
  */
@@ -1382,14 +2449,47 @@ private fun renderMathToUnicode(expression: String): String {
     // Handle \mathcal{X} - calligraphic font
     result = processCalligraphic(result)
 
+    // Handle \mathscr{X} - script font
+    result = processScript(result)
+
+    // Handle \mathfrak{X} - Fraktur font
+    result = processFraktur(result)
+
+    // Handle \mathsf{X} - sans-serif font
+    result = processSansSerif(result)
+
+    // Handle \mathtt{X} - monospace font
+    result = processMonospace(result)
+
+    // Handle \boxed{X}
+    result = processBoxed(result)
+
+    // Handle \mod, \bmod, \pmod
+    result = processModular(result)
+
+    // Handle \overline, \underline
+    result = processOverUnderline(result)
+
+    // Handle \overbrace, \underbrace
+    result = processOverUnderBrace(result)
+
+    // Handle \stackrel, \overset, \underset
+    result = processStacking(result)
+
+    // Handle \widehat, \widetilde
+    result = processWideAccents(result)
+
+    // Handle \cancel, \bcancel, \xcancel
+    result = processCancel(result)
+
     // Handle LaTeX environments (cases, matrix, align, etc.)
     result = processLatexEnvironments(result)
 
     // Handle left/right delimiters
     result = processDelimiters(result)
 
-    // Replace LaTeX/Typst symbols with Unicode
-    mathSymbols.entries.sortedByDescending { it.key.length }.forEach { (latex, unicode) ->
+    // Replace LaTeX/Typst symbols with Unicode (pre-sorted by key length, longest first)
+    sortedMathSymbols.forEach { (latex, unicode) ->
         result = result.replace(latex, unicode)
     }
 
@@ -1631,36 +2731,31 @@ private fun MathBlockView(expression: String, isTypst: Boolean) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(10.dp)))
+            .clip(RoundedCornerShape(rDp(8.dp)))
             .background(bgColor)
     ) {
-        // Header with icon
+        // Compact header
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-            horizontalArrangement = Arrangement.SpaceBetween,
+                .padding(horizontal = rDp(10.dp), vertical = rDp(5.dp)),
+            horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "∑",
-                    fontFamily = maple,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = mathColor
-                )
-                Text(
-                    text = if (isTypst) "TYPST" else "MATH",
-                    fontFamily = maple,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f)
-                )
-            }
+            Text(
+                text = "∑",
+                fontFamily = maple,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = mathColor
+            )
+            Text(
+                text = if (isTypst) "TYPST" else "MATH",
+                fontFamily = maple,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = LocalContentColor.current.copy(alpha = 0.5f)
+            )
         }
 
         HorizontalDivider(
@@ -1672,16 +2767,17 @@ private fun MathBlockView(expression: String, isTypst: Boolean) {
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(rDp(16.dp)), contentAlignment = Alignment.Center
+                .padding(rDp(10.dp)),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = renderedMath,
                 fontFamily = maple,
-                fontSize = 18.sp,
+                fontSize = 16.sp,
                 fontWeight = FontWeight.Normal,
                 fontStyle = FontStyle.Italic,
-                color = MaterialTheme.colorScheme.onBackground,
-                lineHeight = 28.sp
+                color = LocalContentColor.current,
+                lineHeight = 24.sp
             )
         }
     }
@@ -1694,13 +2790,13 @@ private fun InlineMathView(expression: String, isTypst: Boolean) {
     Text(
         text = renderedMath,
         fontFamily = maple,
-        fontSize = 15.sp,
+        fontSize = 14.sp,
         fontWeight = FontWeight.Normal,
         fontStyle = FontStyle.Italic,
         color = MaterialTheme.colorScheme.primary,
         modifier = Modifier
             .clip(RoundedCornerShape(rDp(4.dp)))
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .padding(horizontal = rDp(5.dp), vertical = rDp(1.dp))
     )
 }

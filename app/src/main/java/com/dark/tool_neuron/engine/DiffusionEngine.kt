@@ -67,7 +67,7 @@ class DiffusionEngine {
         runOnCpu: Boolean = false,
         useCpuClip: Boolean = false,
         isPony: Boolean = false,
-        httpPort: Int = 8081,
+        httpPort: Int = 8081, // Kept for API compat, no longer used (JNI direct)
         width: Int = 512,
         height: Int = 512,
         safetyMode: Boolean
@@ -80,7 +80,6 @@ class DiffusionEngine {
                 runOnCpu(runOnCpu)
                 useCpuClip(useCpuClip)
                 isPony(isPony)
-                httpPort(httpPort)
                 setSafetyMode(safetyMode)
             }
 

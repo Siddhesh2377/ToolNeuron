@@ -13,9 +13,7 @@ class TempActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             NeuroVerseTheme {
-                //DataPackScreen()
-                //NeuronExampleScreen()
-                //VaultDashboard()
+
             }
         }
     }

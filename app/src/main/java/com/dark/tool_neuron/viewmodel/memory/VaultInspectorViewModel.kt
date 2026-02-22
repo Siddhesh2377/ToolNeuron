@@ -1,6 +1,15 @@
 package com.dark.tool_neuron.viewmodel.memory
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,39 +25,49 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.FilterList
+import androidx.compose.material.icons.automirrored.outlined.Sort
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,14 +76,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.screen.memory.EmptyStateCard
 import com.dark.tool_neuron.ui.screen.memory.VaultLogger
@@ -87,7 +110,6 @@ class VaultInspectorViewModel : ViewModel() {
     var selectedBlock by mutableStateOf<BlockMetadata?>(null)
         private set
 
-    // Use private backing fields with public getters to avoid JVM signature clash
     private var _filterType by mutableStateOf<BlockType?>(null)
     val filterType: BlockType? get() = _filterType
 
@@ -114,7 +136,6 @@ class VaultInspectorViewModel : ViewModel() {
         viewModelScope.launch {
             try {
                 isLoading = true
-                // Access vault's getAllMetadata through VaultHelper
                 blockMetadata = VaultHelper.getVault().getAllMetadata()
                 statusMessage = "Loaded ${blockMetadata.size} blocks"
                 VaultLogger.info("Inspector", "Loaded ${blockMetadata.size} block metadata entries")
@@ -152,12 +173,10 @@ class VaultInspectorViewModel : ViewModel() {
     fun getFilteredAndSortedBlocks(): List<BlockMetadata> {
         var filtered = blockMetadata
 
-        // Apply type filter
         if (_filterType != null) {
             filtered = filtered.filter { it.blockType == _filterType }
         }
 
-        // Apply search
         if (_searchQuery.isNotBlank()) {
             filtered = filtered.filter {
                 it.blockId.toString()
@@ -173,7 +192,6 @@ class VaultInspectorViewModel : ViewModel() {
             }
         }
 
-        // Apply sorting
         filtered = when (_sortBy) {
             SortOption.TIMESTAMP_ASC -> filtered.sortedBy { it.timestamp }
             SortOption.TIMESTAMP_DESC -> filtered.sortedByDescending { it.timestamp }
@@ -206,6 +224,7 @@ fun VaultInspectorScreen(
 ) {
     var showSortMenu by remember { mutableStateOf(false) }
     var showFilterMenu by remember { mutableStateOf(false) }
+    val listState = rememberLazyListState()
 
     val filteredBlocks = remember(
         viewModel.blockMetadata, viewModel.filterType, viewModel.sortBy, viewModel.searchQuery
@@ -213,205 +232,345 @@ fun VaultInspectorScreen(
         viewModel.getFilteredAndSortedBlocks()
     }
 
+    val showScrollToTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 3
+        }
+    }
+
     Scaffold(
         topBar = {
-            TopAppBar(title = {
-                Column {
-                    Text(
-                        "Vault Inspector", fontSize = rSp(18.sp), fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${filteredBlocks.size} blocks",
-                        fontSize = rSp(11.sp),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }, actions = {
-                // Sort Menu
-                Box {
-                    ActionButton(
-                        onClickListener = { showSortMenu = true },
-                        icon = Icons.Default.List,
-                        contentDescription = "Sort"
-                    )
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            "Vault Inspector",
+                            fontSize = rSp(20.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            "${filteredBlocks.size} blocks",
+                            fontSize = rSp(12.sp),
+                            fontWeight = FontWeight.Normal,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                actions = {
+                    // Sort Button
+                    Box {
+                        ActionButton(
+                            onClickListener = { showSortMenu = true },
+                            icon = Icons.AutoMirrored.Outlined.Sort,
+                            contentDescription = "Sort",
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = if (showSortMenu) MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (showSortMenu) MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
 
-                    DropdownMenu(
-                        expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                        SortOption.entries.forEach { option ->
-                            DropdownMenuItem(text = {
-                                Text(
-                                    option.displayName, fontSize = rSp(13.sp)
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false },
+                            shape = RoundedCornerShape(rDp(12.dp))
+                        ) {
+                            SortOption.entries.forEach { option ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            option.displayName,
+                                            fontSize = rSp(14.sp),
+                                            fontWeight = if (viewModel.sortBy == option) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setSortOption(option)
+                                        showSortMenu = false
+                                    },
+                                    leadingIcon = {
+                                        if (viewModel.sortBy == option) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
                                 )
-                            }, onClick = {
-                                viewModel.setSortOption(option)
-                                showSortMenu = false
-                            }, leadingIcon = {
-                                if (viewModel.sortBy == option) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            })
+                            }
                         }
                     }
-                }
 
-                Spacer(Modifier.width(rDp(8.dp)))
+                    Spacer(Modifier.width(rDp(4.dp)))
 
-                // Filter Menu
-                Box {
-                    ActionButton(
-                        onClickListener = { showFilterMenu = true },
-                        icon = Icons.Default.Search,
-                        contentDescription = "Filter"
-                    )
+                    // Filter Button
+                    Box {
+                        ActionButton(
+                            onClickListener = { showFilterMenu = true },
+                            icon = Icons.Outlined.FilterList,
+                            contentDescription = "Filter",
+                            shape = CircleShape,
+                            colors = IconButtonDefaults.filledIconButtonColors(
+                                containerColor = if (viewModel.filterType != null || showFilterMenu)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (viewModel.filterType != null || showFilterMenu)
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                else MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
 
-                    DropdownMenu(
-                        expanded = showFilterMenu, onDismissRequest = { showFilterMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text("All Types", fontSize = rSp(13.sp)) },
-                            onClick = {
-                                viewModel.setFilterType(null)
-                                showFilterMenu = false
-                            },
-                            leadingIcon = {
-                                if (viewModel.filterType == null) {
-                                    Icon(Icons.Default.Check, contentDescription = null)
-                                }
-                            })
-
-                        Divider()
-
-                        BlockType.entries.forEach { type ->
+                        DropdownMenu(
+                            expanded = showFilterMenu,
+                            onDismissRequest = { showFilterMenu = false },
+                            shape = RoundedCornerShape(rDp(12.dp))
+                        ) {
                             DropdownMenuItem(
-                                text = { Text(type.name, fontSize = rSp(13.sp)) },
+                                text = {
+                                    Text(
+                                        "All Types",
+                                        fontSize = rSp(14.sp),
+                                        fontWeight = if (viewModel.filterType == null) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                },
                                 onClick = {
-                                    viewModel.setFilterType(type)
+                                    viewModel.setFilterType(null)
                                     showFilterMenu = false
                                 },
                                 leadingIcon = {
-                                    if (viewModel.filterType == type) {
-                                        Icon(Icons.Default.Check, contentDescription = null)
+                                    if (viewModel.filterType == null) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
                                     }
-                                })
+                                }
+                            )
+
+                            HorizontalDivider(modifier = Modifier.padding(vertical = rDp(4.dp)))
+
+                            BlockType.entries.forEach { type ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            type.name,
+                                            fontSize = rSp(14.sp),
+                                            fontWeight = if (viewModel.filterType == type) FontWeight.SemiBold else FontWeight.Normal
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.setFilterType(type)
+                                        showFilterMenu = false
+                                    },
+                                    leadingIcon = {
+                                        if (viewModel.filterType == type) {
+                                            Icon(
+                                                Icons.Default.Check,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                        }
+                                    }
+                                )
+                            }
                         }
                     }
-                }
 
-                Spacer(Modifier.width(rDp(8.dp)))
+                    Spacer(Modifier.width(rDp(4.dp)))
 
-                ActionButton(
-                    onClickListener = { viewModel.loadBlockMetadata() },
-                    icon = Icons.Default.Refresh,
-                    contentDescription = "Refresh"
+                    // Refresh Button
+                    ActionButton(
+                        onClickListener = { viewModel.loadBlockMetadata() },
+                        icon = Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        shape = CircleShape,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+
+                    Spacer(Modifier.width(rDp(8.dp)))
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
                 )
-            })
-        }) { paddingValues ->
-        Column(
+            )
+        }
+    ) { paddingValues ->
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Search Bar
-            Surface(
-                modifier = Modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceVariant
+            Column(
+                modifier = Modifier.fillMaxSize()
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(rDp(12.dp)),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
-                ) {
-                    OutlinedTextField(
-                        value = viewModel.searchQuery,
-                        onValueChange = { viewModel.setSearchQuery(it) },
-                        modifier = Modifier.weight(1f),
-                        placeholder = {
-                            Text(
-                                "Search blocks...", fontSize = rSp(13.sp)
-                            )
-                        },
-                        leadingIcon = {
-                            Icon(Icons.Default.Search, contentDescription = null)
-                        },
-                        trailingIcon = {
-                            if (viewModel.searchQuery.isNotEmpty()) {
-                                IconButton(onClick = { viewModel.setSearchQuery("") }) {
-                                    Icon(Icons.Default.Clear, contentDescription = "Clear")
-                                }
-                            }
-                        },
-                        singleLine = true,
-                        shape = RoundedCornerShape(rDp(8.dp))
-                    )
-                }
-            }
-
-            // Active Filters Display
-            AnimatedVisibility(
-                visible = viewModel.filterType != null || viewModel.searchQuery.isNotEmpty()
-            ) {
+                // Search Bar
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = if (viewModel.searchQuery.isNotEmpty()) rDp(2.dp) else rDp(0.dp)
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            Icons.Default.Info,
-                            contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp)),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-
-                        Text(
-                            buildString {
-                                append("Filters: ")
-                                if (viewModel.filterType != null) {
-                                    append(viewModel.filterType!!.name)
-                                }
+                    Column {
+                        OutlinedTextField(
+                            value = viewModel.searchQuery,
+                            onValueChange = { viewModel.setSearchQuery(it) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = rDp(16.dp), vertical = rDp(12.dp)),
+                            placeholder = {
+                                Text(
+                                    "Search blocks by ID, category, tags...",
+                                    fontSize = rSp(14.sp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            },
+                            trailingIcon = {
                                 if (viewModel.searchQuery.isNotEmpty()) {
-                                    if (viewModel.filterType != null) append(", ")
-                                    append("\"${viewModel.searchQuery}\"")
+                                    IconButton(onClick = { viewModel.setSearchQuery("") }) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Clear",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             },
-                            fontSize = rSp(12.sp),
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            singleLine = true,
+                            shape = RoundedCornerShape(rDp(28.dp)),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = Color.Transparent
+                            )
                         )
+
+                        // Active Filters Display
+                        AnimatedVisibility(
+                            visible = viewModel.filterType != null || viewModel.searchQuery.isNotEmpty(),
+                            enter = fadeIn() + slideInVertically(),
+                            exit = fadeOut() + slideOutVertically()
+                        ) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = rDp(16.dp), vertical = rDp(10.dp)),
+                                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.Info,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(rDp(18.dp)),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+
+                                    Text(
+                                        buildString {
+                                            append("Active filters: ")
+                                            if (viewModel.filterType != null) {
+                                                append(viewModel.filterType!!.name)
+                                            }
+                                            if (viewModel.searchQuery.isNotEmpty()) {
+                                                if (viewModel.filterType != null) append(" • ")
+                                                append("\"${viewModel.searchQuery}\"")
+                                            }
+                                        },
+                                        fontSize = rSp(13.sp),
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
+                        }
+
+                        // Loading Indicator
+                        if (viewModel.isLoading) {
+                            LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
+
+                // Block List
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(rDp(16.dp)),
+                    verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                ) {
+                    if (filteredBlocks.isEmpty()) {
+                        item {
+                            EmptyStateCard(
+                                icon = Icons.Default.Face,
+                                message = if (viewModel.searchQuery.isNotEmpty() || viewModel.filterType != null)
+                                    "No blocks match your filters"
+                                else "No blocks in vault"
+                            )
+                        }
+                    } else {
+                        items(
+                            items = filteredBlocks,
+                            key = { it.blockId.toString() }
+                        ) { block ->
+                            BlockMetadataCard(
+                                metadata = block,
+                                isSelected = viewModel.selectedBlock?.blockId == block.blockId,
+                                onClick = { viewModel.selectBlock(block) }
+                            )
+                        }
+                    }
+
+                    // Bottom spacer
+                    item {
+                        Spacer(modifier = Modifier.height(rDp(16.dp)))
                     }
                 }
             }
 
-            // Loading Indicator
-            if (viewModel.isLoading) {
-                LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-            }
-
-            // Block List
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(rDp(12.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            // Scroll to top button
+            AnimatedVisibility(
+                visible = showScrollToTop,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(rDp(16.dp)),
+                enter = fadeIn(),
+                exit = fadeOut()
             ) {
-                if (filteredBlocks.isEmpty()) {
-                    item {
-                        EmptyStateCard(
-                            icon = Icons.Default.Face,
-                            message = if (viewModel.searchQuery.isNotEmpty() || viewModel.filterType != null) "No blocks match your filters"
-                            else "No blocks in vault"
-                        )
-                    }
-                } else {
-                    items(filteredBlocks) { block ->
-                        BlockMetadataCard(
-                            metadata = block,
-                            isSelected = viewModel.selectedBlock?.blockId == block.blockId,
-                            onClick = { viewModel.selectBlock(block) })
-                    }
+                androidx.compose.material3.FloatingActionButton(
+                    onClick = {
+                        kotlinx.coroutines.MainScope().launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Face,
+                        contentDescription = "Scroll to top"
+                    )
                 }
             }
         }
@@ -419,41 +578,80 @@ fun VaultInspectorScreen(
         // Block Detail Sheet
         viewModel.selectedBlock?.let { block ->
             BlockDetailSheet(
-                metadata = block, onDismiss = { viewModel.selectBlock(null) })
+                metadata = block,
+                onDismiss = { viewModel.selectBlock(null) }
+            )
         }
 
         // Error Dialog
         if (viewModel.showError) {
             AlertDialog(
                 onDismissRequest = { viewModel.dismissError() },
-                icon = { Icon(Icons.Default.Warning, contentDescription = null) },
-                title = { Text("Error", fontSize = rSp(18.sp), fontWeight = FontWeight.Bold) },
-                text = { Text(viewModel.errorMessage, fontSize = rSp(14.sp)) },
+                icon = {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                title = {
+                    Text(
+                        "Error",
+                        fontSize = rSp(20.sp),
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Text(
+                        viewModel.errorMessage,
+                        fontSize = rSp(14.sp)
+                    )
+                },
                 confirmButton = {
                     TextButton(onClick = { viewModel.dismissError() }) {
-                        Text("OK")
+                        Text("OK", fontWeight = FontWeight.SemiBold)
                     }
-                })
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = RoundedCornerShape(rDp(24.dp))
+            )
         }
     }
 }
 
 @Composable
 fun BlockMetadataCard(
-    metadata: BlockMetadata, isSelected: Boolean, onClick: () -> Unit
+    metadata: BlockMetadata,
+    isSelected: Boolean,
+    onClick: () -> Unit
 ) {
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 0.98f else 1f,
+        label = "scale"
+    )
+
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(12.dp)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
+        shape = RoundedCornerShape(rDp(16.dp)),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-            else MaterialTheme.colorScheme.surface
+            containerColor = if (isSelected)
+                MaterialTheme.colorScheme.primaryContainer
+            else
+                MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = if (isSelected) rDp(4.dp) else rDp(0.dp)
         )
     ) {
         Column(
-            modifier = Modifier.padding(rDp(12.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            modifier = Modifier.padding(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
             // Header Row
             Row(
@@ -462,51 +660,58 @@ fun BlockMetadataCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                    verticalAlignment = Alignment.CenterVertically
+                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(rDp(32.dp))
-                            .clip(RoundedCornerShape(rDp(8.dp)))
+                            .size(rDp(44.dp))
+                            .clip(RoundedCornerShape(rDp(12.dp)))
                             .background(getBlockTypeColor(metadata.blockType)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             getBlockTypeIcon(metadata.blockType),
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(18.dp)),
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            modifier = Modifier.size(rDp(22.dp)),
+                            tint = Color.White
                         )
                     }
 
-                    Column {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+                    ) {
                         Text(
                             metadata.blockType.name,
-                            fontSize = rSp(13.sp),
-                            fontWeight = FontWeight.Bold
+                            fontSize = rSp(15.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                         Text(
-                            metadata.blockId.toString().take(13) + "...",
-                            fontSize = rSp(10.sp),
+                            metadata.blockId.toString().take(16) + "...",
+                            fontSize = rSp(11.sp),
                             fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
                 Column(
-                    horizontalAlignment = Alignment.End
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
                 ) {
                     Text(
                         formatBytes(metadata.compressedSize),
-                        fontSize = rSp(12.sp),
+                        fontSize = rSp(13.sp),
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
                         formatDate(metadata.timestamp),
-                        fontSize = rSp(10.sp),
+                        fontSize = rSp(11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -514,75 +719,141 @@ fun BlockMetadataCard(
 
             // Tags and Category
             if (metadata.category != null || metadata.tags.isNotEmpty()) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                Column (
+                    verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     metadata.category?.let {
-                        SuggestionChip(onClick = { }, label = {
-                            Text(
-                                it, fontSize = rSp(10.sp)
-                            )
-                        }, icon = {
-                            Icon(
-                                Icons.Default.Face,
-                                contentDescription = null,
-                                modifier = Modifier.size(rDp(12.dp))
-                            )
-                        })
+                        SuggestionChip(
+                            onClick = { },
+                            label = {
+                                Text(
+                                    it,
+                                    fontSize = rSp(11.sp),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            },
+                            icon = {
+                                Icon(
+                                    Icons.Default.Face,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(rDp(14.dp))
+                                )
+                            },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                iconContentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            ),
+                            shape = RoundedCornerShape(rDp(8.dp))
+                        )
                     }
 
-                    metadata.tags.take(3).forEach { tag ->
-                        SuggestionChip(onClick = { }, label = {
-                            Text(
-                                tag, fontSize = rSp(10.sp)
-                            )
-                        })
+                    metadata.tags.take(2).forEach { tag ->
+                        SuggestionChip(
+                            onClick = { },
+                            label = {
+                                Text(
+                                    tag,
+                                    fontSize = rSp(11.sp),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                labelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                            ),
+                            shape = RoundedCornerShape(rDp(8.dp))
+                        )
                     }
 
-                    if (metadata.tags.size > 3) {
-                        Text(
-                            "+${metadata.tags.size - 3}",
-                            fontSize = rSp(10.sp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = rDp(4.dp))
+                    if (metadata.tags.size > 2) {
+                        SuggestionChip(
+                            onClick = { },
+                            label = {
+                                Text(
+                                    "+${metadata.tags.size - 2}",
+                                    fontSize = rSp(11.sp),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            },
+                            colors = SuggestionChipDefaults.suggestionChipColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                labelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            shape = RoundedCornerShape(rDp(8.dp))
                         )
                     }
                 }
             }
 
             // Compression Info
-            Divider()
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-            Row(
-                modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween
+            Column(
+                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
             ) {
-                Text(
-                    "Compressed: ${formatBytes(metadata.compressedSize)}",
-                    fontSize = rSp(11.sp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Compressed",
+                        fontSize = rSp(12.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        formatBytes(metadata.compressedSize),
+                        fontSize = rSp(12.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Uncompressed",
+                        fontSize = rSp(12.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        formatBytes(metadata.uncompressedSize),
+                        fontSize = rSp(12.sp),
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                val compressionRatio = if (metadata.uncompressedSize > 0) {
+                    (metadata.compressedSize.toFloat() / metadata.uncompressedSize.toFloat() * 100).toInt()
+                } else 100
+
+                Spacer(modifier = Modifier.height(rDp(4.dp)))
+
+                LinearProgressIndicator(
+                    progress = { compressionRatio / 100f },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(rDp(8.dp))
+                        .clip(RoundedCornerShape(rDp(4.dp))),
+                    color = when {
+                        compressionRatio < 30 -> Color(0xFF4CAF50)
+                        compressionRatio < 60 -> Color(0xFFFFC107)
+                        else -> Color(0xFFFF5722)
+                    },
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
                 )
+
                 Text(
-                    "Uncompressed: ${formatBytes(metadata.uncompressedSize)}",
+                    "Compression ratio: $compressionRatio%",
                     fontSize = rSp(11.sp),
+                    fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-
-            val compressionRatio = if (metadata.uncompressedSize > 0) {
-                (metadata.compressedSize.toFloat() / metadata.uncompressedSize.toFloat() * 100).toInt()
-            } else 100
-
-            LinearProgressIndicator(
-                progress = { compressionRatio / 100f },
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Text(
-                "Compression: $compressionRatio%",
-                fontSize = rSp(10.sp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -590,72 +861,114 @@ fun BlockMetadataCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BlockDetailSheet(
-    metadata: BlockMetadata, onDismiss: () -> Unit
+    metadata: BlockMetadata,
+    onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val context = LocalContext.current
+    val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        shape = RoundedCornerShape(topStart = rDp(16.dp), topEnd = rDp(16.dp))
+        shape = RoundedCornerShape(topStart = rDp(24.dp), topEnd = rDp(24.dp)),
+        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                .padding(horizontal = rDp(20.dp)),
+            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
         ) {
             item {
-                Text(
-                    "Block Details", fontSize = rSp(20.sp), fontWeight = FontWeight.Bold
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        "Block Details",
+                        fontSize = rSp(24.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    IconButton(onClick = onDismiss) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = "Close",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            item {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+
+            item {
+                DetailRow(
+                    label = "Block ID",
+                    value = metadata.blockId.toString(),
+                    onCopy = {
+                        val clip = ClipData.newPlainText("Block ID", metadata.blockId.toString())
+                        clipboardManager.setPrimaryClip(clip)
+                        Toast.makeText(context, "Block ID copied", Toast.LENGTH_SHORT).show()
+                    }
                 )
             }
 
-            item { Divider() }
-
             item {
-                DetailRow("Block ID", metadata.blockId.toString())
+                DetailRow(label = "Type", value = metadata.blockType.name)
             }
 
             item {
-                DetailRow("Type", metadata.blockType.name)
+                DetailRow(label = "File Offset", value = "${metadata.fileOffset} bytes")
             }
 
             item {
-                DetailRow("File Offset", "${metadata.fileOffset} bytes")
+                DetailRow(label = "Compressed Size", value = formatBytes(metadata.compressedSize))
             }
 
             item {
-                DetailRow("Compressed Size", formatBytes(metadata.compressedSize))
+                DetailRow(label = "Uncompressed Size", value = formatBytes(metadata.uncompressedSize))
             }
 
             item {
-                DetailRow("Uncompressed Size", formatBytes(metadata.uncompressedSize))
-            }
-
-            item {
-                DetailRow("Timestamp", formatDate(metadata.timestamp))
+                DetailRow(label = "Timestamp", value = formatDate(metadata.timestamp))
             }
 
             if (metadata.category != null) {
                 item {
-                    DetailRow("Category", metadata.category!!)
+                    DetailRow(label = "Category", value = metadata.category!!)
                 }
             }
 
             if (metadata.tags.isNotEmpty()) {
                 item {
-                    DetailRow("Tags", metadata.tags.joinToString(", "))
+                    DetailRow(label = "Tags", value = metadata.tags.joinToString(", "))
                 }
             }
 
             item {
-                DetailRow("Content Hash", metadata.contentHash.take(32) + "...")
+                DetailRow(
+                    label = "Content Hash",
+                    value = metadata.contentHash,
+                    onCopy = {
+                        val clip = ClipData.newPlainText("Content Hash", metadata.contentHash)
+                        clipboardManager.setPrimaryClip(clip)
+                        Toast.makeText(context, "Content hash copied", Toast.LENGTH_SHORT).show()
+                    }
+                )
             }
 
             if (metadata.searchableText != null) {
                 item {
-                    DetailRow("Searchable Text", metadata.searchableText!!.take(100) + "...")
+                    DetailRow(
+                        label = "Searchable Text",
+                        value = metadata.searchableText!!,
+                        maxLines = 4
+                    )
                 }
             }
 
@@ -667,26 +980,54 @@ fun BlockDetailSheet(
 }
 
 @Composable
-fun DetailRow(label: String, value: String) {
+fun DetailRow(
+    label: String,
+    value: String,
+    maxLines: Int = 1,
+    onCopy: (() -> Unit)? = null
+) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
-        Text(
-            label,
-            fontSize = rSp(12.sp),
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                label,
+                fontSize = rSp(13.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
+            )
+
+            if (onCopy != null) {
+                ActionButton(
+                    onClickListener = onCopy,
+                    icon = R.drawable.copy,
+                    contentDescription = "Copy",
+                    shape = RoundedCornerShape(rDp(8.dp)),
+                    colors = IconButtonDefaults.filledIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+            }
+        }
+
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(rDp(12.dp)),
             color = MaterialTheme.colorScheme.surfaceVariant
         ) {
             Text(
                 value,
                 fontSize = rSp(13.sp),
-                fontFamily = FontFamily.Monospace,
-                modifier = Modifier.padding(rDp(12.dp))
+                fontFamily = if (maxLines == 1) FontFamily.Monospace else FontFamily.Default,
+                modifier = Modifier.padding(rDp(14.dp)),
+                maxLines = maxLines,
+                overflow = TextOverflow.Ellipsis,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
