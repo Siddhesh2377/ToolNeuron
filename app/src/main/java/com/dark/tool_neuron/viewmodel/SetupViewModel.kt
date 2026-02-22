@@ -2,6 +2,7 @@ package com.dark.tool_neuron.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.SetupDataStore
@@ -11,6 +12,8 @@ import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.worker.SystemBackupManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -247,5 +250,23 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         context.startForegroundService(intent)
+    }
+
+    // ==================== Restore from Backup ====================
+
+    private val _restoreProgress = MutableStateFlow<SystemBackupManager.BackupProgress?>(null)
+    val restoreProgress: StateFlow<SystemBackupManager.BackupProgress?> = _restoreProgress
+
+    fun restoreFromBackup(uri: Uri, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val manager = SystemBackupManager(getApplication())
+            val success = manager.restoreBackup(uri, password) { progress ->
+                _restoreProgress.value = progress
+            }
+            if (success) {
+                setupDataStore.completeSetup()
+                _setupComplete.value = true
+            }
+        }
     }
 }

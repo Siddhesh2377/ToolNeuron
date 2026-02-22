@@ -1,5 +1,7 @@
 package com.dark.tool_neuron.ui.screen
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -12,6 +14,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,11 +26,16 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.RadioButtonChecked
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -45,6 +53,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,6 +63,7 @@ import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SetupOption
 import com.dark.tool_neuron.viewmodel.SetupViewModel
+import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlinx.coroutines.delay
 
 @Composable
@@ -244,7 +255,141 @@ fun SetupScreen(
                     }
                 }
             }
+
+            // Restore from Backup section
+            if (!isDownloading) {
+                Spacer(Modifier.height(rDp(24.dp)))
+                RestoreFromBackupCard(viewModel = viewModel)
+            }
         }
+    }
+}
+
+// ==================== Restore from Backup ====================
+
+@Composable
+private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var restorePassword by remember { mutableStateOf("") }
+    val restoreProgress by viewModel.restoreProgress.collectAsState()
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && restorePassword.isNotEmpty()) {
+            viewModel.restoreFromBackup(uri, restorePassword)
+            restorePassword = ""
+            showRestoreDialog = false
+        }
+    }
+
+    // Show progress or the restore button
+    val progress = restoreProgress
+    if (progress != null && progress !is SystemBackupManager.BackupProgress.Error) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(14.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(rDp(20.dp)))
+                Text(
+                    text = when (progress) {
+                        is SystemBackupManager.BackupProgress.Starting -> "Restoring..."
+                        is SystemBackupManager.BackupProgress.Collecting -> progress.step
+                        is SystemBackupManager.BackupProgress.Processing -> "Restoring ${(progress.progress * 100).toInt()}%"
+                        is SystemBackupManager.BackupProgress.Complete -> "Restore complete!"
+                        else -> "Restoring..."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+    } else {
+        Surface(
+            onClick = { showRestoreDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(14.dp)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            ) {
+                Icon(
+                    Icons.Outlined.Restore, null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(rDp(20.dp))
+                )
+                Text(
+                    "Restore from Backup",
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+
+        // Error from previous attempt
+        if (progress is SystemBackupManager.BackupProgress.Error) {
+            Spacer(Modifier.height(rDp(8.dp)))
+            Text(
+                text = progress.message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+
+    // Restore dialog
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreDialog = false
+                restorePassword = ""
+            },
+            icon = { Icon(Icons.Outlined.Restore, null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Restore from Backup", fontWeight = FontWeight.SemiBold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                    Text(
+                        "Enter your backup password, then select the backup file.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = restorePassword,
+                        onValueChange = { restorePassword = it },
+                        label = { Text("Backup Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { restoreLauncher.launch(arrayOf("application/octet-stream", "*/*")) },
+                    enabled = restorePassword.length >= 4
+                ) { Text("Select Backup File") }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRestoreDialog = false
+                    restorePassword = ""
+                }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(rDp(16.dp))
+        )
     }
 }
 

@@ -88,6 +88,37 @@ object AppContainer {
         }
     }
 
+    /**
+     * Close the Room database for backup/restore operations.
+     */
+    fun closeDatabase() {
+        AppDatabase.closeDatabase()
+    }
+
+    /**
+     * Re-initialize the entire container after a restore operation.
+     * Closes everything and re-creates database + vault connections.
+     */
+    fun reinitialize(context: Context) {
+        val ctx = context.applicationContext
+        appContext = ctx
+        database = AppDatabase.getDatabase(ctx)
+
+        modelRepository = ModelRepository(
+            modelDao = database.modelDao(), configDao = database.modelConfigDao()
+        )
+
+        chatRepository = ChatRepository()
+
+        appScope.launch {
+            try {
+                VaultHelper.initialize(ctx)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     fun getDatabase(): AppDatabase = database
 
     fun getModelRepository(): ModelRepository = modelRepository

@@ -272,5 +272,16 @@ abstract class AppDatabase : RoomDatabase() {
                 instance
             }
         }
+
+        /**
+         * Close the database and clear the singleton instance.
+         * Used before restoring a backup so the DB file can be replaced.
+         */
+        fun closeDatabase() {
+            synchronized(this) {
+                INSTANCE?.close()
+                INSTANCE = null
+            }
+        }
     }
 }

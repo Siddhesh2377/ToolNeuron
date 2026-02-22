@@ -2,6 +2,7 @@ package com.dark.tool_neuron.viewmodel
 
 import android.app.Application
 import android.content.Intent
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppSettingsDataStore
@@ -13,8 +14,10 @@ import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.tts.TTSDataStore
 import com.dark.tool_neuron.tts.TTSManager
 import com.dark.tool_neuron.tts.TTSSettings
+import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -206,5 +209,41 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
                 TTSManager.loadModel(modelDir)
             }
         }
+    }
+
+    // ==================== Backup / Restore / Delete ====================
+
+    private val _backupProgress = MutableStateFlow<SystemBackupManager.BackupProgress?>(null)
+    val backupProgress: StateFlow<SystemBackupManager.BackupProgress?> = _backupProgress
+
+    fun createBackup(uri: Uri, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val manager = SystemBackupManager(getApplication())
+            manager.createBackup(uri, password) { progress ->
+                _backupProgress.value = progress
+            }
+        }
+    }
+
+    fun restoreBackup(uri: Uri, password: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val manager = SystemBackupManager(getApplication())
+            manager.restoreBackup(uri, password) { progress ->
+                _backupProgress.value = progress
+            }
+        }
+    }
+
+    fun deleteAllData() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val manager = SystemBackupManager(getApplication())
+            manager.deleteAllData { progress ->
+                _backupProgress.value = progress
+            }
+        }
+    }
+
+    fun clearBackupProgress() {
+        _backupProgress.value = null
     }
 }

@@ -1,7 +1,17 @@
 package com.dark.tool_neuron.ui.screen
 
+import android.app.Activity
+import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -15,30 +25,44 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Backup
+import androidx.compose.material.icons.outlined.DeleteForever
+import androidx.compose.material.icons.outlined.Restore
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -56,6 +80,10 @@ import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
+import com.dark.tool_neuron.worker.SystemBackupManager
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -692,7 +720,411 @@ fun SettingsScreen(
                 }
             }
 
+            // ==================== Data Management ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Data Management") }
+
+            item {
+                DataManagementSection(viewModel = viewModel)
+            }
+
             item { Spacer(Modifier.height(rDp(Standards.SpacingXl))) }
         }
+    }
+}
+
+// ==================== Data Management Section ====================
+
+@Composable
+private fun DataManagementSection(viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val backupProgress by viewModel.backupProgress.collectAsStateWithLifecycle()
+
+    var showBackupDialog by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var backupPassword by remember { mutableStateOf("") }
+    var backupPasswordConfirm by remember { mutableStateOf("") }
+    var restorePassword by remember { mutableStateOf("") }
+    var deleteConfirmText by remember { mutableStateOf("") }
+
+    // SAF launchers
+    val backupLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/octet-stream")
+    ) { uri ->
+        if (uri != null && backupPassword.isNotEmpty()) {
+            viewModel.createBackup(uri, backupPassword)
+            backupPassword = ""
+            backupPasswordConfirm = ""
+        }
+    }
+
+    val restoreLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null && restorePassword.isNotEmpty()) {
+            viewModel.restoreBackup(uri, restorePassword)
+            restorePassword = ""
+        }
+    }
+
+    // Auto-dismiss progress after completion/error
+    LaunchedEffect(backupProgress) {
+        if (backupProgress is SystemBackupManager.BackupProgress.Complete) {
+            kotlinx.coroutines.delay(2000)
+            viewModel.clearBackupProgress()
+        }
+    }
+
+    // Restart activity after successful restore
+    LaunchedEffect(backupProgress) {
+        if (backupProgress is SystemBackupManager.BackupProgress.Complete && showRestoreDialog) {
+            kotlinx.coroutines.delay(500)
+            showRestoreDialog = false
+            val activity = context as? Activity
+            activity?.let {
+                val intent = it.intent
+                it.finish()
+                it.startActivity(intent)
+            }
+        }
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+        // Progress indicator
+        AnimatedVisibility(
+            visible = backupProgress != null && backupProgress !is SystemBackupManager.BackupProgress.Complete
+                    && backupProgress !is SystemBackupManager.BackupProgress.Error,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+            ) {
+                Row(
+                    modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(rDp(20.dp)))
+                    Text(
+                        text = when (val p = backupProgress) {
+                            is SystemBackupManager.BackupProgress.Starting -> "Starting..."
+                            is SystemBackupManager.BackupProgress.Collecting -> p.step
+                            is SystemBackupManager.BackupProgress.Processing -> "Processing ${(p.progress * 100).toInt()}%"
+                            else -> ""
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+
+        // Status messages
+        val progressStatus = backupProgress
+        if (progressStatus is SystemBackupManager.BackupProgress.Complete) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
+                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+            ) {
+                Text(
+                    "Operation completed successfully",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(rDp(Standards.CardPadding))
+                )
+            }
+        }
+        if (progressStatus is SystemBackupManager.BackupProgress.Error) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+            ) {
+                Text(
+                    progressStatus.message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.padding(rDp(Standards.CardPadding))
+                )
+            }
+        }
+
+        // --- Green Backup Card ---
+        Surface(
+            onClick = { showBackupDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
+            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f))
+        ) {
+            Row(
+                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            ) {
+                Icon(
+                    Icons.Outlined.Backup, null,
+                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    tint = MaterialTheme.colorScheme.tertiary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Backup",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    Text(
+                        "Create encrypted backup of all app data",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // --- Restore Card ---
+        Surface(
+            onClick = { showRestoreDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+        ) {
+            Row(
+                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            ) {
+                Icon(
+                    Icons.Outlined.Restore, null,
+                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Restore from Backup",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Text(
+                        "Restore from encrypted backup file",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
+        // --- Red Delete All Card ---
+        Surface(
+            onClick = { showDeleteDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
+            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+        ) {
+            Row(
+                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            ) {
+                Icon(
+                    Icons.Outlined.DeleteForever, null,
+                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    tint = MaterialTheme.colorScheme.error
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Delete All Data",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    Text(
+                        "Permanently delete all app data",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
+                }
+            }
+        }
+    }
+
+    // ==================== Dialogs ====================
+
+    // Backup Dialog
+    if (showBackupDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showBackupDialog = false
+                backupPassword = ""
+                backupPasswordConfirm = ""
+            },
+            icon = { Icon(Icons.Outlined.Backup, null, tint = MaterialTheme.colorScheme.tertiary) },
+            title = {
+                Text("Create Backup", fontWeight = FontWeight.SemiBold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                    Text(
+                        "Set a password to encrypt your backup. You'll need this password to restore.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = backupPassword,
+                        onValueChange = { backupPassword = it },
+                        label = { Text("Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = backupPasswordConfirm,
+                        onValueChange = { backupPasswordConfirm = it },
+                        label = { Text("Confirm Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showBackupDialog = false
+                        val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                        backupLauncher.launch("toolneuron_backup_$timestamp.tnbackup")
+                    },
+                    enabled = backupPassword.length >= 4 && backupPassword == backupPasswordConfirm
+                ) {
+                    Text("Create Backup", color = MaterialTheme.colorScheme.tertiary)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showBackupDialog = false
+                    backupPassword = ""
+                    backupPasswordConfirm = ""
+                }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(rDp(16.dp))
+        )
+    }
+
+    // Restore Dialog
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showRestoreDialog = false
+                restorePassword = ""
+            },
+            icon = { Icon(Icons.Outlined.Restore, null, tint = MaterialTheme.colorScheme.primary) },
+            title = {
+                Text("Restore from Backup", fontWeight = FontWeight.SemiBold)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                    Text(
+                        "This will replace all current data with the backup. The app will restart after restore.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    OutlinedTextField(
+                        value = restorePassword,
+                        onValueChange = { restorePassword = it },
+                        label = { Text("Backup Password") },
+                        visualTransformation = PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        restoreLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                    },
+                    enabled = restorePassword.length >= 4
+                ) {
+                    Text("Select Backup File")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showRestoreDialog = false
+                    restorePassword = ""
+                }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(rDp(16.dp))
+        )
+    }
+
+    // Delete All Dialog
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showDeleteDialog = false
+                deleteConfirmText = ""
+            },
+            icon = { Icon(Icons.Outlined.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
+            title = {
+                Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                    Text(
+                        "This will permanently delete all chats, memories, personas, RAG data, and settings. This cannot be undone.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "Type DELETE to confirm",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    OutlinedTextField(
+                        value = deleteConfirmText,
+                        onValueChange = { deleteConfirmText = it },
+                        label = { Text("Type DELETE") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        isError = deleteConfirmText.isNotEmpty() && deleteConfirmText != "DELETE"
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteDialog = false
+                        deleteConfirmText = ""
+                        viewModel.deleteAllData()
+                    },
+                    enabled = deleteConfirmText == "DELETE"
+                ) {
+                    Text("Delete Everything", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDeleteDialog = false
+                    deleteConfirmText = ""
+                }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(rDp(16.dp))
+        )
     }
 }

@@ -134,4 +134,7 @@ class AppSettingsDataStore(private val context: Context) {
         context.appSettingsDataStore.edit { it[AI_MEMORY_ENABLED] = enabled }
     }
 
+    suspend fun clear() {
+        context.appSettingsDataStore.edit { it.clear() }
+    }
 }
