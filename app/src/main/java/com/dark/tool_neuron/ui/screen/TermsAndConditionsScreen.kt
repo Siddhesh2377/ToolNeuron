@@ -29,13 +29,13 @@ fun TermsAndConditionsScreen(
         isScrolledToBottom = scrollState.value >= scrollState.maxValue - 100 || scrollState.maxValue == 0
     }
 
-    Surface(
-        modifier = Modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+    Scaffold(
+        modifier = Modifier.fillMaxSize()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(it)
                 .padding(horizontal = rDp(20.dp))
         ) {
             // Header
