@@ -2,13 +2,19 @@ package com.dark.tool_neuron.worker
 
 import android.util.Log
 import com.dark.tool_neuron.database.dao.AiMemoryDao
+import com.dark.tool_neuron.database.dao.KnowledgeEntityDao
+import com.dark.tool_neuron.database.dao.KnowledgeRelationDao
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
 import org.json.JSONArray
 import org.json.JSONObject
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.exp
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Extracts personal facts from conversations and manages the AI memory lifecycle.
@@ -21,16 +27,35 @@ import kotlin.math.min
  */
 class MemoryExtractor(
     private val aiMemoryDao: AiMemoryDao,
-    private val generationManager: GenerationManager
+    private val generationManager: GenerationManager,
+    private val embeddingEngine: EmbeddingEngine? = null,
+    private val knowledgeEntityDao: KnowledgeEntityDao? = null,
+    private val knowledgeRelationDao: KnowledgeRelationDao? = null
 ) {
     companion object {
         private const val TAG = "MemoryExtractor"
-        private const val EXTRACTION_MAX_TOKENS = 128
+        private const val EXTRACTION_MAX_TOKENS = 256
         private const val SIMILARITY_THRESHOLD = 0.7f
+        private const val COSINE_SIMILARITY_THRESHOLD = 0.75f
         private const val DEFAULT_RETRIEVAL_LIMIT = 15
         private const val RECENCY_DECAY_RATE = 0.01f
         private const val MIN_MESSAGE_LENGTH = 20
     }
+
+    // ========================================================================
+    // Embedding helpers
+    // ========================================================================
+
+    /**
+     * Check if the embedding engine is ready for use.
+     */
+    private fun isEmbeddingAvailable(): Boolean {
+        return embeddingEngine != null && embeddingEngine.isInitialized()
+    }
+
+    // ========================================================================
+    // Extraction
+    // ========================================================================
 
     /**
      * Extract facts from a conversation turn and store them.
@@ -40,7 +65,8 @@ class MemoryExtractor(
         userMessage: String,
         assistantResponse: String,
         chatId: String?,
-        personaName: String? = null
+        personaName: String? = null,
+        personaId: String? = null
     ) {
         // Skip very short exchanges (greetings, acknowledgments)
         if (userMessage.length < MIN_MESSAGE_LENGTH && assistantResponse.length < MIN_MESSAGE_LENGTH) {
@@ -57,7 +83,7 @@ class MemoryExtractor(
             val facts = extractFacts(userMessage, assistantResponse, personaName)
             if (facts.isNotEmpty()) {
                 Log.d(TAG, "Extracted ${facts.size} candidate facts")
-                deduplicateAndStore(facts, chatId)
+                deduplicateAndStore(facts, chatId, personaId)
             } else {
                 Log.d(TAG, "No facts extracted from conversation")
             }
@@ -108,15 +134,26 @@ class MemoryExtractor(
         assistantResponse: String,
         personaName: String? = null
     ): String {
-        // Truncate to keep prompt small
-        val userTrunc = userMessage.take(500)
-        val assistTrunc = assistantResponse.take(500)
+        val userTrunc = userMessage.take(600)
+        val assistTrunc = assistantResponse.take(400)
 
         val personaWarning = if (!personaName.isNullOrBlank()) {
-            "\nIMPORTANT: The assistant is roleplaying as \"$personaName\". Only extract facts the USER stated about THEMSELVES. Do NOT extract anything the assistant said about itself or its character.\n"
+            "\nIMPORTANT: The assistant is roleplaying as \"$personaName\". Only extract facts the USER stated about THEMSELVES. NEVER extract anything $personaName said about itself — those are fictional character traits, not user facts.\n"
         } else ""
 
-        return """Extract facts about the user from this conversation. Only personal information the user shared about themselves (name, preferences, job, location, interests, habits). One fact per line. If none, say NONE.
+        return """Extract personal facts about the user from this conversation. Include:
+- Name, age, birthday, location
+- Job, company, profession, education
+- Preferences (likes, dislikes, favorites)
+- Interests, hobbies, activities
+- Family, relationships, pets
+- Goals, plans, habits
+- Emotional states or recurring feelings
+
+Rules:
+- One fact per line, written in third person ("User likes...", "User works at...")
+- Only facts the USER explicitly shared — never infer or assume
+- If no personal facts found, output only: NONE
 $personaWarning
 User: $userTrunc
 Assistant: $assistTrunc
@@ -147,17 +184,25 @@ Facts:"""
 
     /**
      * AUDN dedup cycle: compare each candidate fact against existing memories.
-     * - If Jaccard similarity > threshold with existing → UPDATE (overwrite text, bump timestamp)
-     * - If no match → ADD new memory
+     * - If similarity > threshold with existing -> UPDATE (overwrite text, bump timestamp)
+     * - If no match -> ADD new memory
+     *
+     * Uses cosine similarity when embeddings are available (threshold: 0.75),
+     * falls back to Jaccard token overlap (threshold: 0.7).
      */
-    private suspend fun deduplicateAndStore(facts: List<String>, chatId: String?) {
-        val existingMemories = aiMemoryDao.getAllOnce()
+    private suspend fun deduplicateAndStore(facts: List<String>, chatId: String?, personaId: String? = null) {
+        val existingMemories = if (personaId != null) {
+            aiMemoryDao.getAllForPersonaOnce(personaId)
+        } else {
+            aiMemoryDao.getAllOnce()
+        }
         val now = System.currentTimeMillis()
+        val effectiveThreshold = if (isEmbeddingAvailable()) COSINE_SIMILARITY_THRESHOLD else SIMILARITY_THRESHOLD
 
         for (fact in facts) {
             val bestMatch = findBestMatch(fact, existingMemories)
 
-            if (bestMatch != null && bestMatch.second >= SIMILARITY_THRESHOLD) {
+            if (bestMatch != null && bestMatch.second >= effectiveThreshold) {
                 // UPDATE: overwrite fact text, bump timestamp
                 val updated = bestMatch.first.copy(
                     fact = fact,
@@ -165,7 +210,13 @@ Facts:"""
                     category = categorize(fact)
                 )
                 aiMemoryDao.update(updated)
-                Log.d(TAG, "Updated memory: '${bestMatch.first.fact}' → '$fact' (sim=${bestMatch.second})")
+                Log.d(TAG, "Updated memory: '${bestMatch.first.fact}' -> '$fact' (sim=${bestMatch.second})")
+
+                // Re-embed the updated fact
+                generateAndStoreEmbedding(updated.id, fact)
+
+                // Real-time KG extraction for updated fact
+                extractToKnowledgeGraph(updated.id, fact, personaId)
             } else {
                 // ADD: new memory
                 val memory = AiMemory(
@@ -175,33 +226,107 @@ Facts:"""
                     createdAt = now,
                     updatedAt = now,
                     lastAccessedAt = now,
-                    accessCount = 0
+                    accessCount = 0,
+                    personaId = personaId
                 )
                 aiMemoryDao.insert(memory)
-                Log.d(TAG, "Added new memory: '$fact' [${memory.category}]")
+                Log.d(TAG, "Added new memory: '$fact' [${memory.category}] persona=$personaId")
+
+                // Generate and store embedding for the new fact
+                generateAndStoreEmbedding(memory.id, fact)
+
+                // Real-time KG extraction for new fact
+                extractToKnowledgeGraph(memory.id, fact, personaId)
             }
         }
     }
 
     /**
+     * Generate an embedding for the given text and store it in the database.
+     * Fails silently if embedding engine is not available.
+     */
+    private suspend fun generateAndStoreEmbedding(memoryId: String, text: String) {
+        if (!isEmbeddingAvailable()) return
+
+        try {
+            val embedding = embeddingEngine!!.embed(text)
+            if (embedding != null && embedding.isNotEmpty()) {
+                val bytes = embedding.toByteArray()
+                aiMemoryDao.updateEmbedding(memoryId, bytes)
+                Log.d(TAG, "Stored embedding for memory $memoryId (${embedding.size} dims)")
+            } else {
+                Log.w(TAG, "Embedding returned null/empty for: ${text.take(50)}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to generate embedding for memory $memoryId: ${e.message}")
+        }
+    }
+
+    /**
+     * Real-time knowledge graph extraction from a new/updated fact.
+     * Uses regex patterns to extract entity-relation triples.
+     * Fails silently if KG DAOs are not available.
+     */
+    private suspend fun extractToKnowledgeGraph(memoryId: String, fact: String, personaId: String? = null) {
+        val entityDao = knowledgeEntityDao ?: return
+        val relationDao = knowledgeRelationDao ?: return
+
+        try {
+            val triples = KnowledgeGraphBuilder.extractTriplesFromFact(fact)
+            for (triple in triples) {
+                KnowledgeGraphBuilder.storeTriple(entityDao, relationDao, triple, memoryId, personaId)
+            }
+            if (triples.isNotEmpty()) {
+                Log.d(TAG, "Extracted ${triples.size} KG triples from fact: ${fact.take(50)}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "KG extraction failed for fact $memoryId: ${e.message}")
+        }
+    }
+
+    /**
      * Find the most similar existing memory to a candidate fact.
+     * Uses cosine similarity when embeddings are available, falls back to Jaccard.
      * Returns (memory, similarity) or null if no memories exist.
      */
-    private fun findBestMatch(
+    private suspend fun findBestMatch(
         candidate: String,
         existingMemories: List<AiMemory>
     ): Pair<AiMemory, Float>? {
         if (existingMemories.isEmpty()) return null
 
+        // Try embedding-based matching first
+        val candidateEmbedding = if (isEmbeddingAvailable()) {
+            try {
+                embeddingEngine!!.embed(candidate)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to embed candidate for dedup, falling back to Jaccard: ${e.message}")
+                null
+            }
+        } else null
+
+        val useEmbeddings = candidateEmbedding != null && candidateEmbedding.isNotEmpty()
+
         var bestMemory: AiMemory? = null
         var bestSim = 0f
 
         for (memory in existingMemories) {
-            val sim = textSimilarity(candidate, memory.fact)
+            val sim = if (useEmbeddings && memory.embedding != null) {
+                // Embedding-based cosine similarity (more accurate for semantic dedup)
+                val memoryEmb = memory.embedding.toFloatArray()
+                cosineSimilarity(candidateEmbedding!!, memoryEmb).coerceIn(0f, 1f)
+            } else {
+                // Jaccard fallback
+                textSimilarity(candidate, memory.fact)
+            }
             if (sim > bestSim) {
                 bestSim = sim
                 bestMemory = memory
             }
+        }
+
+        if (useEmbeddings) {
+            Log.d(TAG, "Dedup match (embedding): best_sim=$bestSim for '${candidate.take(50)}'")
         }
 
         return bestMemory?.let { it to bestSim }
@@ -260,30 +385,43 @@ Facts:"""
 
     /**
      * Score and retrieve top-K memories relevant to a query.
-     * Scoring: keyword_relevance * 0.5 + recency * 0.3 + access_factor * 0.2
+     *
+     * When embedding engine is available:
+     *   Scoring: cosine_similarity * 0.6 + recency * 0.25 + access_factor * 0.15
+     *
+     * Fallback (no embedding engine):
+     *   Scoring: keyword_relevance * 0.5 + recency * 0.3 + access_factor * 0.2
      *
      * Also updates lastAccessedAt and accessCount for retrieved memories (reinforcement).
      */
     suspend fun retrieveRelevant(
         query: String,
-        limit: Int = DEFAULT_RETRIEVAL_LIMIT
+        limit: Int = DEFAULT_RETRIEVAL_LIMIT,
+        personaId: String? = null
     ): List<AiMemory> {
-        val allMemories = aiMemoryDao.getAllOnce()
+        val allMemories = if (personaId != null) {
+            aiMemoryDao.getAllForPersonaOnce(personaId)
+        } else {
+            aiMemoryDao.getAllOnce()
+        }
         if (allMemories.isEmpty()) return emptyList()
 
-        val queryTokens = tokenize(query)
         val now = System.currentTimeMillis()
         val dayMs = 86_400_000L
 
+        // Try embedding-based retrieval first
+        val queryEmbedding = if (isEmbeddingAvailable()) {
+            try {
+                embeddingEngine!!.embed(query)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to embed query, falling back to Jaccard: ${e.message}")
+                null
+            }
+        } else null
+
+        val useEmbeddings = queryEmbedding != null && queryEmbedding.isNotEmpty()
+
         val scored = allMemories.map { memory ->
-            val memoryTokens = tokenize(memory.fact)
-
-            // Keyword relevance: overlap between memory tokens and query tokens
-            val overlap = memoryTokens.intersect(queryTokens).size
-            val keywordRelevance = if (memoryTokens.isNotEmpty()) {
-                overlap.toFloat() / memoryTokens.size
-            } else 0f
-
             // Recency factor: exponential decay based on days since last update
             val daysSinceUpdate = ((now - memory.updatedAt).toFloat() / dayMs).coerceAtLeast(0f)
             val recencyFactor = exp(-RECENCY_DECAY_RATE * daysSinceUpdate)
@@ -291,7 +429,22 @@ Facts:"""
             // Access factor: frequently accessed memories are more important
             val accessFactor = min(1f, memory.accessCount / 10f)
 
-            val score = keywordRelevance * 0.5f + recencyFactor * 0.3f + accessFactor * 0.2f
+            val score = if (useEmbeddings && memory.embedding != null) {
+                // Embedding-based scoring
+                val memoryEmbedding = memory.embedding.toFloatArray()
+                val cosine = cosineSimilarity(queryEmbedding!!, memoryEmbedding)
+                val clampedCosine = cosine.coerceIn(0f, 1f)
+                clampedCosine * 0.6f + recencyFactor * 0.25f + accessFactor * 0.15f
+            } else {
+                // Jaccard fallback
+                val queryTokens = tokenize(query)
+                val memoryTokens = tokenize(memory.fact)
+                val overlap = memoryTokens.intersect(queryTokens).size
+                val keywordRelevance = if (memoryTokens.isNotEmpty()) {
+                    overlap.toFloat() / memoryTokens.size
+                } else 0f
+                keywordRelevance * 0.5f + recencyFactor * 0.3f + accessFactor * 0.2f
+            }
 
             memory to score
         }
@@ -309,15 +462,33 @@ Facts:"""
             aiMemoryDao.update(updated)
         }
 
+        if (useEmbeddings) {
+            val embeddingCount = allMemories.count { it.embedding != null }
+            Log.d(TAG, "Embedding retrieval: $embeddingCount/${allMemories.size} memories have embeddings")
+        } else {
+            Log.d(TAG, "Jaccard fallback retrieval (embedding engine not available)")
+        }
+
         return topMemories.map { it.first }
     }
 
     /**
      * Format memories for injection into system prompt.
+     * Uses KG query expansion when available for broader retrieval.
      * Returns empty string if no memories available.
      */
-    suspend fun buildMemoryBlock(query: String): String {
-        val memories = retrieveRelevant(query)
+    suspend fun buildMemoryBlock(query: String, personaId: String? = null): String {
+        // Expand query using KG entities if available
+        val expandedQuery = if (knowledgeEntityDao != null && knowledgeRelationDao != null) {
+            try {
+                KnowledgeGraphBuilder.expandQueryWithKG(query, knowledgeEntityDao, knowledgeRelationDao, personaId)
+            } catch (e: Exception) {
+                Log.w(TAG, "KG query expansion failed: ${e.message}")
+                query
+            }
+        } else query
+
+        val memories = retrieveRelevant(expandedQuery, personaId = personaId)
         if (memories.isEmpty()) return ""
 
         val factLines = memories.joinToString("\n") { "- ${it.fact}" }
@@ -361,4 +532,73 @@ Facts:"""
         Log.d(TAG, "Cleared ${stale.size} stale memories")
         return stale.size
     }
+
+    /**
+     * Backfill embeddings for all memories that don't have one yet.
+     * Useful for migrating existing memories after embedding engine becomes available.
+     * Returns count of newly embedded memories.
+     */
+    suspend fun backfillEmbeddings(): Int {
+        if (!isEmbeddingAvailable()) {
+            Log.d(TAG, "Cannot backfill: embedding engine not available")
+            return 0
+        }
+
+        val allMemories = aiMemoryDao.getAllOnce()
+        var count = 0
+        for (memory in allMemories) {
+            if (memory.embedding == null) {
+                generateAndStoreEmbedding(memory.id, memory.fact)
+                count++
+            }
+        }
+        Log.d(TAG, "Backfilled embeddings for $count memories")
+        return count
+    }
+}
+
+// ========================================================================
+// Extension functions for FloatArray <-> ByteArray conversion
+// ========================================================================
+
+/**
+ * Convert a FloatArray to ByteArray using little-endian ByteBuffer.
+ * Each float is 4 bytes, so output size = input.size * 4.
+ */
+fun FloatArray.toByteArray(): ByteArray {
+    val buffer = ByteBuffer.allocate(size * 4).order(ByteOrder.LITTLE_ENDIAN)
+    buffer.asFloatBuffer().put(this)
+    return buffer.array()
+}
+
+/**
+ * Convert a ByteArray back to FloatArray using little-endian ByteBuffer.
+ * Input size must be a multiple of 4.
+ */
+fun ByteArray.toFloatArray(): FloatArray {
+    val buffer = ByteBuffer.wrap(this).order(ByteOrder.LITTLE_ENDIAN)
+    val floats = FloatArray(size / 4)
+    buffer.asFloatBuffer().get(floats)
+    return floats
+}
+
+/**
+ * Compute cosine similarity between two float vectors.
+ * Returns a value in [-1, 1] where 1 means identical direction.
+ * Returns 0 if either vector has zero magnitude.
+ */
+fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+    if (a.size != b.size) return 0f
+
+    var dot = 0f
+    var normA = 0f
+    var normB = 0f
+    for (i in a.indices) {
+        dot += a[i] * b[i]
+        normA += a[i] * a[i]
+        normB += b[i] * b[i]
+    }
+
+    val denom = sqrt(normA) * sqrt(normB)
+    return if (denom > 0f) dot / denom else 0f
 }

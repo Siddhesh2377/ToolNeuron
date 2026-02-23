@@ -40,6 +40,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,6 +49,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -103,6 +105,18 @@ fun PersonaEditorScreen(
     var showDeleteDialog by remember { mutableStateOf(false) }
     var descriptionTokenCount by remember { mutableIntStateOf(0) }
 
+    // Persona Engine: Sampling Profile
+    var samplingProfileJson by remember { mutableStateOf("") }
+    var controlVectorsJson by remember { mutableStateOf("") }
+
+    // Personality axis sliders (parsed from controlVectorsJson)
+    var warmthSlider by remember { mutableFloatStateOf(0f) }
+    var energySlider by remember { mutableFloatStateOf(0f) }
+    var humorSlider by remember { mutableFloatStateOf(0f) }
+    var formalitySlider by remember { mutableFloatStateOf(0f) }
+    var verbositySlider by remember { mutableFloatStateOf(0f) }
+    var emotionSlider by remember { mutableFloatStateOf(0f) }
+
     // Load existing persona
     LaunchedEffect(personaId) {
         if (personaId != null) {
@@ -118,6 +132,20 @@ fun PersonaEditorScreen(
                     scenario = persona.scenario
                     exampleMessages = persona.exampleMessages
                     creatorNotes = persona.creatorNotes
+                    samplingProfileJson = persona.samplingProfile
+                    controlVectorsJson = persona.controlVectors
+                    // Parse axis sliders from control vectors JSON
+                    try {
+                        if (persona.controlVectors.isNotBlank() && !persona.controlVectors.trimStart().startsWith("[")) {
+                            val cvJson = org.json.JSONObject(persona.controlVectors)
+                            warmthSlider = cvJson.optDouble("warmth", 0.0).toFloat()
+                            energySlider = cvJson.optDouble("energy", 0.0).toFloat()
+                            humorSlider = cvJson.optDouble("humor", 0.0).toFloat()
+                            formalitySlider = cvJson.optDouble("formality", 0.0).toFloat()
+                            verbositySlider = cvJson.optDouble("verbosity", 0.0).toFloat()
+                            emotionSlider = cvJson.optDouble("emotion", 0.0).toFloat()
+                        }
+                    } catch (_: Exception) {}
                     alternateGreetings.clear()
                     alternateGreetings.addAll(persona.alternateGreetings)
                     tags.clear()
@@ -181,6 +209,8 @@ fun PersonaEditorScreen(
                 scenario = scenario,
                 exampleMessages = exampleMessages,
                 creatorNotes = creatorNotes,
+                samplingProfile = samplingProfileJson,
+                controlVectors = buildAxisJson(warmthSlider, energySlider, humorSlider, formalitySlider, verbositySlider, emotionSlider),
                 alternateGreetings = alternateGreetings.toList(),
                 tags = tags.toList()
             )
@@ -528,6 +558,43 @@ fun PersonaEditorScreen(
                 shape = RoundedCornerShape(10.dp)
             )
 
+            // ===== Sampling Profile (Persona Engine) =====
+            SectionLabel("Sampling Profile")
+            Text(
+                text = "Override model sampling params for this character. Leave empty to use model defaults.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 4.dp)
+            )
+            OutlinedTextField(
+                value = samplingProfileJson,
+                onValueChange = { samplingProfileJson = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(120.dp),
+                placeholder = {
+                    Text(
+                        """{"temperature": 0.85, "minP": 0.03, "dryMultiplier": 0.8, "bannedTokens": ["certainly"]}"""
+                    )
+                },
+                shape = RoundedCornerShape(10.dp)
+            )
+
+            // ===== Personality Vectors (Control Vectors) =====
+            SectionLabel("Personality")
+            Text(
+                text = "Steer the model's personality along each axis. Requires compatible control vector files.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp)
+            )
+            PersonalitySlider("Warmth", "cold", "warm", warmthSlider) { warmthSlider = it }
+            PersonalitySlider("Energy", "calm", "energetic", energySlider) { energySlider = it }
+            PersonalitySlider("Humor", "serious", "playful", humorSlider) { humorSlider = it }
+            PersonalitySlider("Formality", "casual", "formal", formalitySlider) { formalitySlider = it }
+            PersonalitySlider("Verbosity", "verbose", "concise", verbositySlider) { verbositySlider = it }
+            PersonalitySlider("Emotion", "stoic", "expressive", emotionSlider) { emotionSlider = it }
+
             Spacer(modifier = Modifier.height(32.dp))
         }
     }
@@ -574,4 +641,69 @@ private fun SectionLabel(text: String) {
         fontWeight = FontWeight.SemiBold,
         color = MaterialTheme.colorScheme.onSurface
     )
+}
+
+/** Personality axis slider with labeled poles. */
+@Composable
+private fun PersonalitySlider(
+    label: String,
+    negativePole: String,
+    positivePole: String,
+    value: Float,
+    onValueChange: (Float) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = if (value == 0f) "neutral" else String.format("%.1f", value),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = negativePole,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(56.dp)
+            )
+            Slider(
+                value = value,
+                onValueChange = { onValueChange(Math.round(it * 10f) / 10f) },
+                valueRange = -1f..1f,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = positivePole,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.width(56.dp)
+            )
+        }
+    }
+}
+
+/** Build axis-based control vectors JSON from slider values. Returns "" if all neutral. */
+private fun buildAxisJson(
+    warmth: Float, energy: Float, humor: Float,
+    formality: Float, verbosity: Float, emotion: Float
+): String {
+    val axes = mapOf(
+        "warmth" to warmth, "energy" to energy, "humor" to humor,
+        "formality" to formality, "verbosity" to verbosity, "emotion" to emotion
+    ).filter { it.value != 0f }
+
+    if (axes.isEmpty()) return ""
+    return org.json.JSONObject(axes).toString()
 }

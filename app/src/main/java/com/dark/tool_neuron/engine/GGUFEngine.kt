@@ -50,7 +50,10 @@ class GGUFEngine {
             mirostat = inference.mirostat,
             mirostatTau = inference.mirostatTau,
             mirostatEta = inference.mirostatEta,
-            seed = inference.seed
+            seed = inference.seed,
+            flashAttn = loading.flashAttn,
+            cacheTypeK = loading.cacheTypeK,
+            cacheTypeV = loading.cacheTypeV
         )
 
         if (success) {
@@ -98,7 +101,10 @@ class GGUFEngine {
             mirostat = inference.mirostat,
             mirostatTau = inference.mirostatTau,
             mirostatEta = inference.mirostatEta,
-            seed = inference.seed
+            seed = inference.seed,
+            flashAttn = loading.flashAttn,
+            cacheTypeK = loading.cacheTypeK,
+            cacheTypeV = loading.cacheTypeV
         )
 
         if (success) {
@@ -330,6 +336,63 @@ class GGUFEngine {
                 nativeLib.nativeSetTypedGrammar(enabled)
             } catch (_: Exception) { }
         }
+    }
+
+    // ========================================================================
+    // PERSONA ENGINE: Dynamic Sampling + Logit Bias + Control Vectors
+    // ========================================================================
+
+    fun updateSamplerParams(paramsJson: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeUpdateSamplerParams(paramsJson)
+        } catch (_: Exception) { false }
+    }
+
+    fun setLogitBias(biasJson: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeSetLogitBias(biasJson)
+        } catch (_: Exception) { false }
+    }
+
+    fun loadControlVectors(vectorsJson: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeLoadControlVectors(vectorsJson)
+        } catch (_: Exception) { false }
+    }
+
+    fun clearControlVector(): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeClearControlVector()
+        } catch (_: Exception) { false }
+    }
+
+    // ========================================================================
+    // KV CACHE STATE PERSISTENCE
+    // ========================================================================
+
+    fun getStateSize(): Long {
+        if (!isLoaded) return 0
+        return try {
+            nativeLib.nativeGetStateSize()
+        } catch (_: Exception) { 0 }
+    }
+
+    fun stateSaveToFile(path: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeStateSaveToFile(path)
+        } catch (_: Exception) { false }
+    }
+
+    fun stateLoadFromFile(path: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeStateLoadFromFile(path)
+        } catch (_: Exception) { false }
     }
 
     /**

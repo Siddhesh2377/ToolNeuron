@@ -16,7 +16,10 @@ enum class MemoryCategory {
 
 @Entity(
     tableName = "ai_memories",
-    indices = [Index(value = ["category"])]
+    indices = [
+        Index(value = ["category"]),
+        Index(value = ["persona_id"])
+    ]
 )
 data class AiMemory(
     @PrimaryKey
@@ -44,7 +47,16 @@ data class AiMemory(
     val accessCount: Int = 0,
 
     @ColumnInfo(name = "embedding", typeAffinity = ColumnInfo.BLOB)
-    val embedding: ByteArray? = null
+    val embedding: ByteArray? = null,
+
+    @ColumnInfo(name = "is_summarized")
+    val isSummarized: Boolean = false,
+
+    @ColumnInfo(name = "summary_group_id")
+    val summaryGroupId: String? = null,
+
+    @ColumnInfo(name = "persona_id")
+    val personaId: String? = null
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

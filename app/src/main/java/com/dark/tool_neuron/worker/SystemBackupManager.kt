@@ -6,10 +6,14 @@ import android.util.Log
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.models.table_schema.AiMemory
+import com.dark.tool_neuron.models.table_schema.KnowledgeRelation
+import com.dark.tool_neuron.models.table_schema.MemoryCategory
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.vault.VaultHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -53,8 +57,8 @@ class SystemBackupManager(private val context: Context) {
         data class Error(val message: String) : BackupProgress()
     }
 
-    // Ordinals: 0=DB_FILE, 1=VAULT_FILE, 2=DATASTORE_FILE, 3=RAG_FILE, 4=AVATAR_FILE, 5=CHAT_EXPORT, 6=MODEL_FILE, 7=MANIFEST
-    // v1 backups only used ordinals 0-5. Appending 6-7 maintains backward compatibility.
+    // Ordinals: 0=DB_FILE, 1=VAULT_FILE, 2=DATASTORE_FILE, 3=RAG_FILE, 4=AVATAR_FILE, 5=CHAT_EXPORT, 6=MODEL_FILE, 7=MANIFEST, 8=MEMORY_EXPORT
+    // v1 backups only used ordinals 0-5. Appending 6-8 maintains backward compatibility.
     enum class EntryType {
         DB_FILE,
         VAULT_FILE,       // Legacy — raw vault files (device-bound encryption, not portable)
@@ -63,7 +67,8 @@ class SystemBackupManager(private val context: Context) {
         AVATAR_FILE,
         CHAT_EXPORT,      // Portable — decrypted chat JSON, re-encrypted on restore
         MODEL_FILE,       // NEW v2 — model GGUF/SD/TTS files (relative path under models/)
-        MANIFEST          // NEW v2 — SHA-256 checksums for validation
+        MANIFEST,         // NEW v2 — SHA-256 checksums for validation
+        MEMORY_EXPORT     // NEW v3 — per-persona memory + KG triples as JSON
     }
 
     data class BackupOptions(
@@ -92,6 +97,44 @@ class SystemBackupManager(private val context: Context) {
         val sizeBytes: Long,
         val canBackup: Boolean, // false if content:// URI or > 2GB
         val reason: String = ""
+    )
+
+    // ======================== MEMORY EXPORT MODELS ========================
+
+    @Serializable
+    data class PersonaMemoryExport(
+        val personaId: String?,
+        val personaName: String?,
+        val memories: List<MemoryFactExport>,
+        val kgTriples: List<KgTripleExport>,
+        val exportedAt: Long
+    )
+
+    @Serializable
+    data class MemoryFactExport(
+        val id: String,
+        val fact: String,
+        val category: String,
+        val sourceChatId: String? = null,
+        val createdAt: Long,
+        val updatedAt: Long,
+        val lastAccessedAt: Long,
+        val accessCount: Int,
+        val isSummarized: Boolean = false,
+        val summaryGroupId: String? = null,
+        val personaId: String? = null
+    )
+
+    @Serializable
+    data class KgTripleExport(
+        val id: String,
+        val subjectId: String,
+        val predicate: String,
+        val objectId: String,
+        val confidence: Float,
+        val sourceFactId: String? = null,
+        val createdAt: Long,
+        val personaId: String? = null
     )
 
     // ======================== SIZE ESTIMATION ========================
@@ -196,7 +239,7 @@ class SystemBackupManager(private val context: Context) {
         try {
             onProgress(BackupProgress.Starting)
 
-            val componentCount = 5 + (if (options.includeModelFiles) 1 else 0)
+            val componentCount = 6 + (if (options.includeModelFiles) 1 else 0)
             var componentIndex = 0
 
             // 1. Collect all data entries
@@ -250,6 +293,17 @@ class SystemBackupManager(private val context: Context) {
             collectDirectoryFiles(File(context.filesDir, "persona_avatars")).forEach { (path, data) ->
                 entries.add(Triple(EntryType.AVATAR_FILE, path, data))
                 checksums["avatar:$path"] = sha256(data)
+            }
+
+            // Per-persona memory + KG export
+            try {
+                onProgress(BackupProgress.Collecting("Memories", ++componentIndex, componentCount))
+                collectMemoryExports().forEach { (personaKey, data) ->
+                    entries.add(Triple(EntryType.MEMORY_EXPORT, personaKey, data))
+                    checksums["memory:$personaKey"] = sha256(data)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Memory export failed: ${e.message}")
             }
 
             // Model files (v2)
@@ -395,11 +449,13 @@ class SystemBackupManager(private val context: Context) {
             // Separate entries by type
             val chatExports = entries.filter { it.first == EntryType.CHAT_EXPORT }
             val modelEntries = entries.filter { it.first == EntryType.MODEL_FILE }
+            val memoryExports = entries.filter { it.first == EntryType.MEMORY_EXPORT }
             val fileEntries = entries.filter {
                 it.first != EntryType.CHAT_EXPORT &&
                 it.first != EntryType.VAULT_FILE &&
                 it.first != EntryType.MODEL_FILE &&
-                it.first != EntryType.MANIFEST
+                it.first != EntryType.MANIFEST &&
+                it.first != EntryType.MEMORY_EXPORT
             }
             // VAULT_FILE entries are skipped — they use device-bound Keystore encryption
 
@@ -452,6 +508,12 @@ class SystemBackupManager(private val context: Context) {
                         onProgress(BackupProgress.Processing(chatProgress, "Restoring chats"))
                     }
                     Log.i(TAG, "Imported ${chatExports.size} chats")
+                }
+
+                // Restore per-persona memory exports (supplement DB restore)
+                if (memoryExports.isNotEmpty()) {
+                    onProgress(BackupProgress.Processing(0.92f, "Restoring memories"))
+                    restoreMemoryExports(memoryExports)
                 }
 
                 // Success — delete safety snapshot
@@ -595,6 +657,7 @@ class SystemBackupManager(private val context: Context) {
                 EntryType.RAG_FILE -> "rag:${entry.second}"
                 EntryType.AVATAR_FILE -> "avatar:${entry.second}"
                 EntryType.MODEL_FILE -> "model:${entry.second}"
+                EntryType.MEMORY_EXPORT -> "memory:${entry.second}"
                 else -> continue
             }
 
@@ -681,6 +744,137 @@ class SystemBackupManager(private val context: Context) {
         val destFile = File(modelsDir, relativePath)
         destFile.parentFile?.mkdirs()
         destFile.writeBytes(data)
+    }
+
+    // ======================== MEMORY EXPORT/RESTORE ========================
+
+    private suspend fun collectMemoryExports(): List<Pair<String, ByteArray>> {
+        val results = mutableListOf<Pair<String, ByteArray>>()
+        val db = AppContainer.getDatabase()
+        val memoryDao = db.aiMemoryDao()
+        val relationDao = db.knowledgeRelationDao()
+        val personaDao = db.personaDao()
+
+        val allMemories = memoryDao.getAllOnce()
+        val allRelations = relationDao.getAll()
+        val personas = personaDao.getAllOnce()
+        val personaNameMap = personas.associate { it.id to it.name }
+
+        // Group memories by persona_id (null = global)
+        val memoriesByPersona = allMemories.groupBy { it.personaId }
+
+        for ((personaId, memories) in memoriesByPersona) {
+            val memoryExports = memories.map { m ->
+                MemoryFactExport(
+                    id = m.id,
+                    fact = m.fact,
+                    category = m.category.name,
+                    sourceChatId = m.sourceChatId,
+                    createdAt = m.createdAt,
+                    updatedAt = m.updatedAt,
+                    lastAccessedAt = m.lastAccessedAt,
+                    accessCount = m.accessCount,
+                    isSummarized = m.isSummarized,
+                    summaryGroupId = m.summaryGroupId,
+                    personaId = m.personaId
+                )
+            }
+
+            // KG relations matching this persona (or global)
+            val matchingRelations = allRelations.filter { it.personaId == personaId }
+            val kgExports = matchingRelations.map { r ->
+                KgTripleExport(
+                    id = r.id,
+                    subjectId = r.subjectId,
+                    predicate = r.predicate,
+                    objectId = r.objectId,
+                    confidence = r.confidence,
+                    sourceFactId = r.sourceFactId,
+                    createdAt = r.createdAt,
+                    personaId = r.personaId
+                )
+            }
+
+            val export = PersonaMemoryExport(
+                personaId = personaId,
+                personaName = personaId?.let { personaNameMap[it] },
+                memories = memoryExports,
+                kgTriples = kgExports,
+                exportedAt = System.currentTimeMillis()
+            )
+
+            val exportJson = json.encodeToString(PersonaMemoryExport.serializer(), export)
+            val key = personaId ?: "global"
+            results.add(key to exportJson.toByteArray(Charsets.UTF_8))
+        }
+
+        Log.i(TAG, "Collected memory exports: ${results.size} persona groups, ${allMemories.size} memories, ${allRelations.size} relations")
+        return results
+    }
+
+    private suspend fun restoreMemoryExports(memoryEntries: List<Triple<EntryType, String, ByteArray>>) {
+        val db = AppContainer.getDatabase()
+        val memoryDao = db.aiMemoryDao()
+        val relationDao = db.knowledgeRelationDao()
+
+        // Get existing IDs to avoid duplicates (DB restore may have already inserted them)
+        val existingMemoryIds = memoryDao.getAllOnce().map { it.id }.toSet()
+        val existingRelationIds = relationDao.getAll().map { it.id }.toSet()
+
+        var memoriesInserted = 0
+        var relationsInserted = 0
+
+        for (entry in memoryEntries) {
+            try {
+                val exportJson = String(entry.third, Charsets.UTF_8)
+                val export = json.decodeFromString(PersonaMemoryExport.serializer(), exportJson)
+
+                // Insert memories not already present
+                for (m in export.memories) {
+                    if (m.id in existingMemoryIds) continue
+                    val category = try { MemoryCategory.valueOf(m.category) } catch (_: Exception) { MemoryCategory.GENERAL }
+                    memoryDao.insert(
+                        AiMemory(
+                            id = m.id,
+                            fact = m.fact,
+                            category = category,
+                            sourceChatId = m.sourceChatId,
+                            createdAt = m.createdAt,
+                            updatedAt = m.updatedAt,
+                            lastAccessedAt = m.lastAccessedAt,
+                            accessCount = m.accessCount,
+                            isSummarized = m.isSummarized,
+                            summaryGroupId = m.summaryGroupId,
+                            personaId = m.personaId
+                            // embedding excluded — will be regenerated via backfillEmbeddings()
+                        )
+                    )
+                    memoriesInserted++
+                }
+
+                // Insert KG relations not already present
+                for (r in export.kgTriples) {
+                    if (r.id in existingRelationIds) continue
+                    relationDao.insert(
+                        KnowledgeRelation(
+                            id = r.id,
+                            subjectId = r.subjectId,
+                            predicate = r.predicate,
+                            objectId = r.objectId,
+                            confidence = r.confidence,
+                            sourceFactId = r.sourceFactId,
+                            createdAt = r.createdAt,
+                            personaId = r.personaId
+                        )
+                    )
+                    relationsInserted++
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to restore memory export ${entry.second}: ${e.message}")
+            }
+        }
+
+        Log.i(TAG, "Memory restore: $memoriesInserted memories, $relationsInserted relations inserted")
     }
 
     // ======================== CRYPTO ========================
@@ -830,6 +1024,7 @@ class SystemBackupManager(private val context: Context) {
             EntryType.CHAT_EXPORT -> { /* Handled separately after vault init */ }
             EntryType.MODEL_FILE -> { /* Handled separately via restoreModelEntry */ }
             EntryType.MANIFEST -> { /* Already validated */ }
+            EntryType.MEMORY_EXPORT -> { /* Handled separately after DB restore */ }
         }
     }
 

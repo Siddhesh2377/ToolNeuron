@@ -51,7 +51,15 @@ data class Persona(
     val avatarUri: String? = null,
 
     @ColumnInfo(name = "creator_notes")
-    val creatorNotes: String = ""
+    val creatorNotes: String = "",
+
+    // Persona Engine: per-character sampling profile (JSON)
+    @ColumnInfo(name = "sampling_profile")
+    val samplingProfile: String = "",
+
+    // Persona Engine: control vectors (JSON array of {path, strength})
+    @ColumnInfo(name = "control_vectors")
+    val controlVectors: String = ""
 ) {
     /**
      * Build the effective system prompt from structured character card fields.
@@ -82,6 +90,7 @@ data class Persona(
                     append("Example dialogue:\n")
                     append(exampleMessages)
                 }
+                append("\n\nIMPORTANT: Keep responses natural and proportional. Reply to casual messages (greetings, short questions) with 1-3 sentences. Only give longer responses when the topic genuinely requires depth.")
             }
         }
         // Legacy fallback: wrap raw systemPrompt with identity framing too
@@ -98,15 +107,25 @@ data class Persona(
      */
     fun buildPostHistoryInstruction(): String {
         val traits = personality.takeIf { it.isNotBlank() }
-            ?: description.take(200).takeIf { it.isNotBlank() }
+            ?: description.take(300).takeIf { it.isNotBlank() }
             ?: return ""
-        // Compress to PList-style for token efficiency
+        // Keep up to 20 traits for richer character reinforcement on small models.
+        // Research shows post-history is the MOST influential position for character
+        // consistency — 6 traits was too aggressive for 0.5B-3B models.
         val compressed = traits.split(Regex("[,;.\\n]+"))
             .map { it.trim() }
             .filter { it.isNotBlank() }
-            .take(6)
+            .take(20)
             .joinToString(", ")
-        return "[Write {{char}}'s next response. Stay in character as {{char}} ($compressed). Never write actions or dialogue for {{user}}. Never refer to {{user}} as {{char}}.]"
+        return buildString {
+            append("[Write {{char}}'s next response. Stay in character as {{char}}.")
+            append(" {{char}} traits: $compressed.")
+            if (scenario.isNotBlank()) {
+                append(" Current scenario: ${scenario.take(150)}.")
+            }
+            append(" Match your response length to the conversation — short casual messages deserve short replies (1-2 sentences), not essays.")
+            append(" Never write actions or dialogue for {{user}}. Never refer to {{user}} as {{char}}.]")
+        }
     }
 
     /**

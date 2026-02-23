@@ -12,13 +12,20 @@ import com.dark.tool_neuron.repo.RagRepository
 import com.dark.tool_neuron.tts.TTSManager
 import com.dark.tool_neuron.vault.VaultHelper
 import com.dark.tool_neuron.worker.DataIntegrityManager
+import com.dark.tool_neuron.worker.KnowledgeGraphBuilder
 import com.dark.tool_neuron.worker.LlmModelWorker
+import com.dark.tool_neuron.worker.MemorySummaryWorker
 import dagger.hilt.android.HiltAndroidApp
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 @HiltAndroidApp
 class NVApplication : Application() {
@@ -95,7 +102,39 @@ class NVApplication : Application() {
             }
         }
 
+        // Schedule background memory workers
+        scheduleMemoryWorkers()
+
         // Note: Service binding moved to MainActivity to comply with Android 14+ foreground service restrictions
+    }
+
+    private fun scheduleMemoryWorkers() {
+        val idleChargingConstraints = Constraints.Builder()
+            .setRequiresCharging(true)
+            .setRequiresDeviceIdle(true)
+            .build()
+
+        val workManager = WorkManager.getInstance(applicationContext)
+
+        // L2: Memory summary consolidation — every 6 hours when idle + charging
+        workManager.enqueueUniquePeriodicWork(
+            MemorySummaryWorker.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<MemorySummaryWorker>(6, TimeUnit.HOURS)
+                .setConstraints(idleChargingConstraints)
+                .build()
+        )
+
+        // L3: Knowledge graph builder — every 12 hours when idle + charging
+        workManager.enqueueUniquePeriodicWork(
+            KnowledgeGraphBuilder.WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            PeriodicWorkRequestBuilder<KnowledgeGraphBuilder>(12, TimeUnit.HOURS)
+                .setConstraints(idleChargingConstraints)
+                .build()
+        )
+
+        Log.d(TAG, "Memory workers scheduled (summary: 6h, knowledge graph: 12h)")
     }
 
     override fun onTerminate() {

@@ -142,6 +142,24 @@ class GenerationManager {
         return builder.toString()
     }
 
+    // ==================== Persona Engine ====================
+
+    fun updateSamplerParams(paramsJson: String): Boolean = LlmModelWorker.updateSamplerParamsGguf(paramsJson)
+
+    fun setLogitBias(biasJson: String): Boolean = LlmModelWorker.setLogitBiasGguf(biasJson)
+
+    fun loadControlVectors(vectorsJson: String): Boolean = LlmModelWorker.loadControlVectorsGguf(vectorsJson)
+
+    fun clearControlVector(): Boolean = LlmModelWorker.clearControlVectorGguf()
+
+    // ==================== KV Cache State Persistence ====================
+
+    fun getKvCacheStateSize(): Long = LlmModelWorker.getStateSizeGguf()
+
+    fun saveKvCacheState(path: String): Boolean = LlmModelWorker.stateSaveToFileGguf(path)
+
+    fun loadKvCacheState(path: String): Boolean = LlmModelWorker.stateLoadFromFileGguf(path)
+
     // ==================== Utility ====================
 
     fun bitmapToBase64(bitmap: Bitmap): String {

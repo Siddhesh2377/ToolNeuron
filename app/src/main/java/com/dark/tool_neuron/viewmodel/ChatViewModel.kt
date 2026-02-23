@@ -10,8 +10,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.engine.EmbeddingConfig
+import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
+import com.dark.tool_neuron.models.engine_schema.GgufInferenceParams
+import com.dark.tool_neuron.models.engine_schema.PersonaSamplingProfile
 import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.tool_neuron.worker.MemoryExtractor
 import com.dark.tool_neuron.models.messages.ContentType
@@ -27,6 +31,9 @@ import com.dark.tool_neuron.plugins.PluginExecutionResult
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
+import com.dark.tool_neuron.engine.EmotionalStateTracker
+import com.dark.tool_neuron.worker.ControlVectorManager
+import com.dark.tool_neuron.worker.KnowledgeGraphBuilder
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.GenerationManager
@@ -49,8 +56,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 enum class AgentPhase { Idle, Planning, Executing, Summarizing, Complete }
 
@@ -64,6 +73,12 @@ class ChatViewModel @Inject constructor(
     private val appContext = context
     private val appSettings = AppSettingsDataStore(context)
     private val ttsDataStore = com.dark.tool_neuron.tts.TTSDataStore(context)
+    private val controlVectorManager = ControlVectorManager(context)
+    private val emotionalStateTracker = EmotionalStateTracker()
+
+    init {
+        controlVectorManager.emotionalStateTracker = emotionalStateTracker
+    }
 
     val streamingEnabled: StateFlow<Boolean> = appSettings.streamingEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -203,10 +218,36 @@ class ChatViewModel @Inject constructor(
     val aiMemoryEnabled: StateFlow<Boolean> = appSettings.aiMemoryEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
+    private val embeddingEngine: EmbeddingEngine by lazy {
+        EmbeddingEngine().also { engine ->
+            val modelPath = EmbeddingEngine.getModelPath(appContext)
+            if (modelPath.exists()) {
+                viewModelScope.launch(Dispatchers.IO) {
+                    engine.initialize(EmbeddingConfig(modelPath = modelPath.absolutePath))
+                        .onSuccess {
+                            Log.d("ChatViewModel", "Embedding engine initialized for memory retrieval")
+                            // Auto-backfill embeddings for memories that don't have one yet
+                            try {
+                                val count = memoryExtractor.backfillEmbeddings()
+                                if (count > 0) Log.d("ChatViewModel", "Auto-backfilled $count memory embeddings")
+                            } catch (e: Exception) {
+                                Log.w("ChatViewModel", "Embedding backfill failed: ${e.message}")
+                            }
+                        }
+                        .onFailure { Log.w("ChatViewModel", "Embedding engine init failed: ${it.message}") }
+                }
+            }
+        }
+    }
+
     private val memoryExtractor: MemoryExtractor by lazy {
+        val db = AppContainer.getDatabase()
         MemoryExtractor(
             aiMemoryDao = AppContainer.getAiMemoryDao(),
-            generationManager = generationManager
+            generationManager = generationManager,
+            embeddingEngine = embeddingEngine,
+            knowledgeEntityDao = db.knowledgeEntityDao(),
+            knowledgeRelationDao = db.knowledgeRelationDao()
         )
     }
 
@@ -238,12 +279,15 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        // Load active persona
+        // Load active persona and apply its sampling profile + control vectors
         viewModelScope.launch {
             appSettings.activePersonaId.collect { personaId ->
-                _activePersona.value = if (personaId != null) {
+                val persona = if (personaId != null) {
                     AppContainer.getPersonaDao().getById(personaId)
                 } else null
+                _activePersona.value = persona
+                applyPersonaSamplingProfile(persona)
+                applyPersonaControlVectors(persona)
             }
         }
     }
@@ -280,9 +324,272 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    // ==================== KV Cache State Persistence ====================
+
+    // ==================== Persona Engine: Sampling + Control Vectors ====================
+
+    private val lenientJson = Json { ignoreUnknownKeys = true }
+
+    /**
+     * Apply a persona's sampling profile to the model's sampler chain.
+     * Merges persona overrides with model defaults — null fields keep model config.
+     * Called when persona changes or model loads.
+     */
+    private fun applyPersonaSamplingProfile(persona: Persona?) {
+        if (!generationManager.isTextModelLoaded()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val profileJson = persona?.samplingProfile?.takeIf { it.isNotBlank() }
+
+                if (profileJson == null) {
+                    // No persona or no profile — reset to model config defaults
+                    resetSamplerToModelDefaults()
+                    // Clear any logit biases from previous persona
+                    generationManager.setLogitBias("[]")
+                    Log.d(TAG, "Persona cleared — reset sampler to model defaults")
+                    return@launch
+                }
+
+                val profile = lenientJson.decodeFromString<PersonaSamplingProfile>(profileJson)
+
+                // Start from model config defaults, then overlay persona overrides
+                val modelParams = getModelInferenceParams()
+                val paramsObj = JSONObject().apply {
+                    // Always send all params so model defaults are restored for
+                    // fields the persona doesn't override (full replace, not merge)
+                    put("temperature", profile.temperature ?: modelParams.temperature)
+                    put("topK", profile.topK ?: modelParams.topK)
+                    put("topP", profile.topP ?: modelParams.topP)
+                    put("minP", profile.minP ?: modelParams.minP)
+                    put("mirostat", profile.mirostat ?: modelParams.mirostat)
+                    put("mirostatTau", profile.mirostatTau ?: modelParams.mirostatTau)
+                    put("seed", profile.seed ?: modelParams.seed)
+                    // Persona-only params (no model config equivalent — use struct defaults)
+                    put("repeatPenalty", profile.repeatPenalty ?: 1.0)
+                    put("frequencyPenalty", profile.frequencyPenalty ?: 0.0)
+                    put("presencePenalty", profile.presencePenalty ?: 0.0)
+                    put("penaltyLastN", profile.penaltyLastN ?: 64)
+                    put("dryMultiplier", profile.dryMultiplier ?: 0.0)
+                    put("dryBase", profile.dryBase ?: 1.75)
+                    put("dryAllowedLength", profile.dryAllowedLength ?: 2)
+                    put("dryPenaltyLastN", profile.dryPenaltyLastN ?: -1)
+                    put("xtcProbability", profile.xtcProbability ?: 0.0)
+                    put("xtcThreshold", profile.xtcThreshold ?: 0.1)
+                }
+
+                generationManager.updateSamplerParams(paramsObj.toString())
+                Log.d(TAG, "Applied persona sampling profile (full override)")
+
+                // Apply banned tokens as logit bias (-100 = hard suppress)
+                val tokens = profile.bannedTokens
+                if (tokens != null && tokens.isNotEmpty()) {
+                    val biasArray = JSONArray()
+                    tokens.forEach { token ->
+                        biasArray.put(JSONObject().apply {
+                            put("token", token)
+                            put("bias", -100.0)
+                        })
+                    }
+                    generationManager.setLogitBias(biasArray.toString())
+                    Log.d(TAG, "Applied persona banned tokens: ${tokens.size} tokens")
+                } else {
+                    generationManager.setLogitBias("[]")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to apply persona sampling profile: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Reset the native sampler chain to the current model's config defaults.
+     * Called when persona is cleared or has no sampling profile.
+     */
+    private suspend fun resetSamplerToModelDefaults() {
+        val params = getModelInferenceParams()
+        val paramsObj = JSONObject().apply {
+            put("temperature", params.temperature)
+            put("topK", params.topK)
+            put("topP", params.topP)
+            put("minP", params.minP)
+            put("mirostat", params.mirostat)
+            put("mirostatTau", params.mirostatTau)
+            put("seed", params.seed)
+            // Reset persona-only params to disabled defaults
+            put("repeatPenalty", 1.0)
+            put("frequencyPenalty", 0.0)
+            put("presencePenalty", 0.0)
+            put("penaltyLastN", 64)
+            put("dryMultiplier", 0.0)
+            put("dryBase", 1.75)
+            put("dryAllowedLength", 2)
+            put("dryPenaltyLastN", -1)
+            put("xtcProbability", 0.0)
+            put("xtcThreshold", 0.1)
+        }
+        generationManager.updateSamplerParams(paramsObj.toString())
+    }
+
+    /**
+     * Read the model's inference params from Room DB.
+     * Returns defaults if unavailable.
+     */
+    private suspend fun getModelInferenceParams(): GgufInferenceParams {
+        val modelId = LlmModelWorker.currentGgufModelId.value ?: return GgufInferenceParams()
+        val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
+        if (config?.modelInferenceParams != null) {
+            return GgufEngineSchema.fromJson(null, config.modelInferenceParams).inferenceParams
+        }
+        return GgufInferenceParams()
+    }
+
+    /**
+     * Apply a persona's control vectors (steering vectors) to the model.
+     * Supports both axis-based format {"warmth": 0.7, "energy": 0.3, ...}
+     * and legacy path-based format [{"path": "...", "strength": 0.8}].
+     * Called when persona changes or model loads.
+     */
+    private fun applyPersonaControlVectors(persona: Persona?) {
+        if (!generationManager.isTextModelLoaded()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val raw = persona?.controlVectors?.takeIf { it.isNotBlank() }
+                if (raw == null) {
+                    controlVectorManager.clearAll()
+                    return@launch
+                }
+
+                if (raw.trimStart().startsWith("[")) {
+                    // Legacy path-based format — pass through via IPC
+                    generationManager.loadControlVectors(raw)
+                    Log.d(TAG, "Applied legacy path-based control vectors")
+                } else {
+                    // Axis-based format — apply full personality via ControlVectorManager
+                    val axisStrengths = mutableMapOf<String, Float>()
+                    val json = JSONObject(raw)
+                    json.keys().forEach { key ->
+                        axisStrengths[key] = json.getDouble(key).toFloat()
+                    }
+                    controlVectorManager.applyPersonality(axisStrengths)
+                    Log.d(TAG, "Applied personality interventions: $axisStrengths")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to apply persona control vectors: ${e.message}")
+            }
+        }
+    }
+
+    // ==================== Dynamic Emotional Steering ====================
+
+    /**
+     * Run Tier 1 keyword mood analysis on user message, then
+     * re-apply control vectors with mood-adjusted strengths.
+     */
+    private suspend fun updateMoodAndVectors(userMessage: String) {
+        val persona = _activePersona.value ?: return
+        val raw = persona.controlVectors.takeIf { it.isNotBlank() } ?: return
+        // Only works with axis-based format (not legacy path-based)
+        if (raw.trimStart().startsWith("[")) return
+
+        try {
+            val tier1 = emotionalStateTracker.analyzeKeywords(userMessage)
+            emotionalStateTracker.update(tier1 = tier1)
+
+            // Parse persona baseline axes
+            val baseJson = JSONObject(raw)
+            val baseAxes = mutableMapOf<String, Float>()
+            baseJson.keys().forEach { key -> baseAxes[key] = baseJson.getDouble(key).toFloat() }
+
+            // Apply mood offset to baseline and re-apply full personality
+            val adjusted = emotionalStateTracker.adjustVectorsForMood(baseAxes)
+            controlVectorManager.applyPersonality(adjusted)
+            Log.d(TAG, "Mood-adjusted vectors applied: $adjusted")
+        } catch (e: Exception) {
+            Log.d(TAG, "Mood steering skipped: ${e.message}")
+        }
+    }
+
+    // ==================== KV Cache State Persistence ====================
+
+    /**
+     * Get the directory for storing KV cache state files.
+     * Files are keyed by chatId + modelId to ensure model compatibility.
+     */
+    private fun getKvCacheDir(): File {
+        val dir = File(appContext.filesDir, "kv_cache")
+        if (!dir.exists()) dir.mkdirs()
+        return dir
+    }
+
+    /**
+     * Get the KV cache file path for a specific chat and model combination.
+     * Returns null if no model is loaded.
+     */
+    private fun getKvCacheFile(chatId: String): File? {
+        val modelId = LlmModelWorker.currentGgufModelId.value ?: return null
+        // Use modelId hash to keep filename short but unique
+        val modelHash = modelId.hashCode().toUInt().toString(16)
+        return File(getKvCacheDir(), "${chatId}_${modelHash}.bin")
+    }
+
+    /**
+     * Save KV cache for the current chat to disk (background, fire-and-forget).
+     * Only saves if a text model is loaded and there's an active chat.
+     */
+    private fun saveKvCacheForCurrentChat() {
+        val chatId = _currentChatId.value ?: return
+        if (!generationManager.isTextModelLoaded()) return
+        val file = getKvCacheFile(chatId) ?: return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val ok = generationManager.saveKvCacheState(file.absolutePath)
+                if (ok) {
+                    Log.d(TAG, "KV cache saved for chat $chatId → ${file.name}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to save KV cache: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Try to restore KV cache for a chat from disk.
+     * Only restores if the same model is loaded (file encodes model compatibility).
+     */
+    private fun tryRestoreKvCache(chatId: String) {
+        if (!generationManager.isTextModelLoaded()) return
+        val file = getKvCacheFile(chatId) ?: return
+        if (!file.exists()) return
+
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val ok = generationManager.loadKvCacheState(file.absolutePath)
+                if (ok) {
+                    Log.d(TAG, "KV cache restored for chat $chatId ← ${file.name}")
+                } else {
+                    // Model mismatch or corrupt file — clean up
+                    file.delete()
+                    Log.d(TAG, "KV cache file incompatible, deleted: ${file.name}")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restore KV cache: ${e.message}")
+            }
+        }
+    }
+
     // ==================== Chat Management ====================
 
     fun startNewConversation() {
+        // Save KV cache for the outgoing chat before switching
+        saveKvCacheForCurrentChat()
+
+        // Reset emotional state and conversation-specific memory for fresh conversation
+        emotionalStateTracker.reset()
+        controlVectorManager.resetConversationMemory()
+
         _currentChatId.value = null
         _messages.clear()
         _streamingUserMessage.value = null
@@ -307,12 +614,22 @@ class ChatViewModel @Inject constructor(
     }
 
     fun loadChat(chatId: String) {
+        // Save KV cache for the outgoing chat before switching
+        saveKvCacheForCurrentChat()
+
+        // Reset emotional state and conversation memory for the new conversation context
+        emotionalStateTracker.reset()
+        controlVectorManager.resetConversationMemory()
+
         viewModelScope.launch {
             _currentChatId.value = chatId
             chatManager.getChatMessages(chatId).onSuccess { loadedMessages ->
                 _messages.clear()
                 _messages.addAll(loadedMessages)
                 AppStateManager.setHasMessages(loadedMessages.isNotEmpty())
+
+                // Try to restore KV cache for this chat (same model only)
+                tryRestoreKvCache(chatId)
             }.onFailure { e ->
                 _error.value = "Failed to load chat: ${e.message}"
                 AppStateManager.setError("Failed to load chat: ${e.message}")
@@ -392,6 +709,9 @@ class ChatViewModel @Inject constructor(
                     }
                 }
 
+                // Tier 1: Fast keyword mood analysis before generation
+                updateMoodAndVectors(prompt)
+
                 when {
                     hasTools -> agentFlow(prompt, ragContext, maxTokens, isNewChat)
                     else -> simpleFlow(prompt, ragContext, maxTokens, isNewChat)
@@ -401,6 +721,10 @@ class ChatViewModel @Inject constructor(
                 _error.value = e.message
                 AppStateManager.setError(e.message ?: "Unknown error")
                 resetStreamingState()
+            } finally {
+                // Persist KV cache after every completed generation turn so
+                // the cache file is always up-to-date for the current chat.
+                saveKvCacheForCurrentChat()
             }
         }
     }
@@ -470,10 +794,18 @@ class ChatViewModel @Inject constructor(
     }
 
     /**
-     * Read the maxTokens setting from the currently loaded model's config.
-     * Falls back to 2048 if config is unavailable.
+     * Read the effective maxTokens: persona override > model config > default.
      */
     private suspend fun getCurrentModelMaxTokens(): Int {
+        // Persona override takes priority
+        _activePersona.value?.samplingProfile?.takeIf { it.isNotBlank() }?.let { json ->
+            try {
+                val profile = lenientJson.decodeFromString<PersonaSamplingProfile>(json)
+                profile.maxTokens?.let { return it }
+            } catch (_: Exception) {}
+        }
+
+        // Fall back to model config
         val modelId = LlmModelWorker.currentGgufModelId.value ?: return 4096
         val config = AppContainer.getModelRepository().getConfigByModelId(modelId)
         if (config?.modelInferenceParams != null) {
@@ -533,12 +865,25 @@ class ChatViewModel @Inject constructor(
         // Persist
         persistAgentChat(prompt, isNewChat, plan, steps, summary)
 
+        // Emotion probing + P7 learning after agent response
+        if (summary.isNotBlank()) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    controlVectorManager.onGenerationTurnComplete(summary, prompt)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Emotion probe/learning failed: ${e.message}")
+                }
+            }
+        }
+
         // Background memory extraction after agent response
         if (aiMemoryEnabled.value && summary.isNotBlank()) {
             val chatId = _currentChatId.value
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    memoryExtractor.extractAndStore(prompt, summary, chatId, _activePersona.value?.name)
+                    val persona = _activePersona.value
+                    val memPersonaId = persona?.takeIf { it.buildEffectiveSystemPrompt().isNotBlank() }?.id
+                    memoryExtractor.extractAndStore(prompt, summary, chatId, persona?.name, memPersonaId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Memory extraction failed: ${e.message}")
                 }
@@ -747,9 +1092,6 @@ class ChatViewModel @Inject constructor(
             }
 
             if (generatedDuplicate || consecutiveFailures >= 2) break
-
-            // Brief pause to show step in UI
-            kotlinx.coroutines.delay(300)
         }
 
         _currentToolName.value = null
@@ -766,7 +1108,23 @@ class ChatViewModel @Inject constructor(
             "${i + 1}. ${step.pluginName} (${step.toolName}): ${step.result}"
         }.joinToString("\n")
 
-        val systemPrompt = "You are a helpful assistant. Summarize the tool execution results concisely for the user."
+        // Inject character persona so agent responses maintain character voice.
+        // Without this, agent summaries use a generic "helpful assistant" tone
+        // which breaks immersion when the user has an active persona.
+        val activePersona = _activePersona.value
+        val systemPrompt = if (activePersona != null) {
+            val rawPersona = activePersona.buildEffectiveSystemPrompt().takeIf { it.isNotBlank() }
+            val personaBlock = if (rawPersona != null) activePersona.applyTemplateVars(rawPersona) else ""
+            buildString {
+                if (personaBlock.isNotEmpty()) {
+                    append(personaBlock)
+                    append("\n\n")
+                }
+                append("Summarize the tool execution results concisely for the user. Stay in character.")
+            }
+        } else {
+            "You are a helpful assistant. Summarize the tool execution results concisely for the user."
+        }
         val userContent = "My request: $prompt\n\nTool Results:\n$resultsText\n\nProvide a helpful summary."
 
         val messages = listOf(
@@ -935,12 +1293,25 @@ class ChatViewModel @Inject constructor(
             }
         }
 
+        // Emotion probing + P7 learning after response
+        if (responseForMemory != null) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    controlVectorManager.onGenerationTurnComplete(responseForMemory, prompt)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Emotion probe/learning failed: ${e.message}")
+                }
+            }
+        }
+
         // Background memory extraction after response
         if (aiMemoryEnabled.value && responseForMemory != null) {
             val chatId = _currentChatId.value
             viewModelScope.launch(Dispatchers.IO) {
                 try {
-                    memoryExtractor.extractAndStore(prompt, responseForMemory, chatId, _activePersona.value?.name)
+                    val persona = _activePersona.value
+                    val memPersonaId = persona?.takeIf { it.buildEffectiveSystemPrompt().isNotBlank() }?.id
+                    memoryExtractor.extractAndStore(prompt, responseForMemory, chatId, persona?.name, memPersonaId)
                 } catch (e: Exception) {
                     Log.e(TAG, "Memory extraction failed: ${e.message}")
                 }
@@ -1160,30 +1531,52 @@ class ChatViewModel @Inject constructor(
             activePersona.applyTemplateVars(rawPersonaPrompt)
         } else rawPersonaPrompt
 
-        // Build memory block
+        // Build knowledge graph context (scoped to active persona)
+        // Bare "Assistant" persona (no personality/description) uses null → global memory
+        val personaId = if (rawPersonaPrompt.isNotEmpty()) activePersona?.id else null
+        val knowledgeContext = if (aiMemoryEnabled.value && userQuery.isNotBlank()) {
+            try {
+                val db = AppContainer.getDatabase()
+                KnowledgeGraphBuilder.buildContextForQuery(
+                    userQuery, db.knowledgeEntityDao(), db.knowledgeRelationDao(),
+                    personaId = personaId
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to build KG context: ${e.message}")
+                ""
+            }
+        } else ""
+
+        // Build memory block (scoped to active persona)
         val memoryBlock = if (aiMemoryEnabled.value && userQuery.isNotBlank()) {
             try {
-                memoryExtractor.buildMemoryBlock(userQuery)
+                memoryExtractor.buildMemoryBlock(userQuery, personaId = personaId)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to build memory block: ${e.message}")
                 ""
             }
         } else ""
 
-        // Assemble: thinkingDirective + persona + memory + model system prompt
+        // Assemble: thinkingDirective + model system prompt + KG context + memory + persona (LAST)
+        // Small models treat the LAST content in system prompt as highest priority,
+        // so persona must come last to maintain character consistency.
         return buildString {
             append(thinkingDirective)
-            if (personaPrompt.isNotEmpty()) {
+            if (basePrompt.isNotEmpty()) {
                 append("\n")
-                append(personaPrompt)
+                append(basePrompt)
+            }
+            if (knowledgeContext.isNotEmpty()) {
+                append("\n\n")
+                append(knowledgeContext)
             }
             if (memoryBlock.isNotEmpty()) {
                 append("\n\n")
                 append(memoryBlock)
             }
-            if (basePrompt.isNotEmpty()) {
+            if (personaPrompt.isNotEmpty()) {
                 append("\n\n")
-                append(basePrompt)
+                append(personaPrompt)
             }
         }
     }
@@ -1191,6 +1584,8 @@ class ChatViewModel @Inject constructor(
     /** Build conversation messages for new chat (with optional memory). */
     private suspend fun buildConversationMessages(userPrompt: String): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
+        // Use persona name as assistant role (Layla's trick — small models treat role name as identity)
+        val assistantRole = _activePersona.value?.name ?: "assistant"
         // Prepend system prompt from model config if configured
         val systemPrompt = getCurrentModelSystemPrompt(userQuery = userPrompt)
         if (systemPrompt.isNotEmpty()) {
@@ -1205,7 +1600,7 @@ class ChatViewModel @Inject constructor(
                     Role.Assistant -> {
                         if (msg.content.contentType == ContentType.Text) {
                             messages.add(
-                                JSONObject().put("role", "assistant").put("content", msg.content.content)
+                                JSONObject().put("role", assistantRole).put("content", msg.content.content)
                             )
                         }
                     }
@@ -1228,6 +1623,7 @@ class ChatViewModel @Inject constructor(
         isRegeneration: Boolean = false
     ): List<JSONObject> {
         val messages = mutableListOf<JSONObject>()
+        val assistantRole = _activePersona.value?.name ?: "assistant"
         // Prepend system prompt from model config if configured
         val systemPrompt = getCurrentModelSystemPrompt(userQuery = userPrompt)
         if (systemPrompt.isNotEmpty()) {
@@ -1249,7 +1645,7 @@ class ChatViewModel @Inject constructor(
                     Role.Assistant -> {
                         if (msg.content.contentType == ContentType.Text) {
                             messages.add(
-                                JSONObject().put("role", "assistant").put("content", msg.content.content)
+                                JSONObject().put("role", assistantRole).put("content", msg.content.content)
                             )
                         }
                     }

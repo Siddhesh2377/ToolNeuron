@@ -25,7 +25,14 @@ object PersonaCardConverter {
             put("tags", JSONArray(persona.tags))
             put("creator_notes", persona.creatorNotes)
             put("system_prompt", persona.systemPrompt)
-            put("extensions", JSONObject())
+            put("extensions", JSONObject().apply {
+                if (persona.samplingProfile.isNotBlank()) {
+                    put("sampling_profile", persona.samplingProfile)
+                }
+                if (persona.controlVectors.isNotBlank()) {
+                    put("control_vectors", persona.controlVectors)
+                }
+            })
         }
 
         return JSONObject().apply {
@@ -64,7 +71,9 @@ object PersonaCardConverter {
             exampleMessages = data.optString("mes_example", ""),
             tags = jsonArrayToStringList(data.optJSONArray("tags")),
             creatorNotes = data.optString("creator_notes", ""),
-            systemPrompt = data.optString("system_prompt", "")
+            systemPrompt = data.optString("system_prompt", ""),
+            samplingProfile = data.optJSONObject("extensions")?.optString("sampling_profile", "") ?: "",
+            controlVectors = data.optJSONObject("extensions")?.optString("control_vectors", "") ?: ""
         )
     }
 

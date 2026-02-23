@@ -23,6 +23,17 @@ interface ILLMService {
     void setTypedGrammarGguf(boolean enabled);
     boolean isToolCallingSupportedGguf();
 
+    // Persona engine: dynamic sampling + logit bias + control vectors
+    boolean updateSamplerParamsGguf(String paramsJson);
+    boolean setLogitBiasGguf(String biasJson);
+    boolean loadControlVectorsGguf(String vectorsJson);
+    boolean clearControlVectorGguf();
+
+    // KV cache state persistence
+    long getStateSizeGguf();
+    boolean stateSaveToFileGguf(String path);
+    boolean stateLoadFromFileGguf(String path);
+
     //Diffusion
     void loadDiffusionModel(
         String name,

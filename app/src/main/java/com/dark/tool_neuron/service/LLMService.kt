@@ -247,6 +247,38 @@ class LLMService : Service() {
             return ggufEngine.isToolCallingSupported()
         }
 
+        // ==================== Persona Engine ====================
+
+        override fun updateSamplerParamsGguf(paramsJson: String): Boolean {
+            return ggufEngine.updateSamplerParams(paramsJson)
+        }
+
+        override fun setLogitBiasGguf(biasJson: String): Boolean {
+            return ggufEngine.setLogitBias(biasJson)
+        }
+
+        override fun loadControlVectorsGguf(vectorsJson: String): Boolean {
+            return ggufEngine.loadControlVectors(vectorsJson)
+        }
+
+        override fun clearControlVectorGguf(): Boolean {
+            return ggufEngine.clearControlVector()
+        }
+
+        // ==================== KV Cache State Persistence ====================
+
+        override fun getStateSizeGguf(): Long {
+            return ggufEngine.getStateSize()
+        }
+
+        override fun stateSaveToFileGguf(path: String): Boolean {
+            return ggufEngine.stateSaveToFile(path)
+        }
+
+        override fun stateLoadFromFileGguf(path: String): Boolean {
+            return ggufEngine.stateLoadFromFile(path)
+        }
+
         // ==================== Diffusion Methods ====================
 
         override fun loadDiffusionModel(

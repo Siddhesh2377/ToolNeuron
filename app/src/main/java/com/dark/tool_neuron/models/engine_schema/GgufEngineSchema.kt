@@ -17,7 +17,10 @@ data class GgufLoadingParams(
     val ctxSize: Int = 4096,
     val batchSize: Int = 512,
     val useMmap: Boolean = true,
-    val useMlock: Boolean = false
+    val useMlock: Boolean = false,
+    val flashAttn: Boolean = true,      // Flash attention (reduces memory bandwidth)
+    val cacheTypeK: Int = 9,            // GGML_TYPE_Q8_0 (quantized KV cache keys)
+    val cacheTypeV: Int = 9             // GGML_TYPE_Q8_0 (quantized KV cache values)
 ) {
     companion object {
         fun forDeviceTier(tier: DeviceTier): GgufLoadingParams = when (tier) {

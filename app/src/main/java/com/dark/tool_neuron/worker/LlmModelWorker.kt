@@ -400,6 +400,91 @@ object LlmModelWorker {
         }
     }
 
+    // ==================== Persona Engine ====================
+
+    fun updateSamplerParamsGguf(paramsJson: String): Boolean {
+        return try {
+            service?.updateSamplerParamsGguf(paramsJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update sampler params: ${e.message}")
+            false
+        }
+    }
+
+    fun setLogitBiasGguf(biasJson: String): Boolean {
+        return try {
+            service?.setLogitBiasGguf(biasJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set logit bias: ${e.message}")
+            false
+        }
+    }
+
+    fun loadControlVectorsGguf(vectorsJson: String): Boolean {
+        return try {
+            service?.loadControlVectorsGguf(vectorsJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load control vectors: ${e.message}")
+            false
+        }
+    }
+
+    fun clearControlVectorGguf(): Boolean {
+        return try {
+            service?.clearControlVectorGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear control vector: ${e.message}")
+            false
+        }
+    }
+
+    // ==================== KV Cache State Persistence ====================
+
+    /**
+     * Get the size of the current KV cache state in bytes.
+     * Returns 0 if no model is loaded or no context exists.
+     */
+    fun getStateSizeGguf(): Long {
+        return try {
+            service?.getStateSizeGguf() ?: 0
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get state size: ${e.message}")
+            0
+        }
+    }
+
+    /**
+     * Save the current KV cache state to a file.
+     * The file includes model compatibility checks and prompt tokens.
+     *
+     * @param path Absolute path to write the state file
+     * @return true if saved successfully
+     */
+    fun stateSaveToFileGguf(path: String): Boolean {
+        return try {
+            service?.stateSaveToFileGguf(path) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to save KV state: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Load a previously saved KV cache state from a file.
+     * Must be the same model architecture that created the file.
+     *
+     * @param path Absolute path to the state file
+     * @return true if loaded successfully
+     */
+    fun stateLoadFromFileGguf(path: String): Boolean {
+        return try {
+            service?.stateLoadFromFileGguf(path) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load KV state: ${e.message}")
+            false
+        }
+    }
+
     // ==================== Multi-turn Generation ====================
 
     /**
