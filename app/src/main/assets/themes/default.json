@@ -1,0 +1,28 @@
+{
+    "id": "default",
+    "name": "Default",
+    "author": "ToolNeuron",
+    "version": 1,
+    "colors": {
+        "background": "#121212",
+        "surface": "#1e1e1e",
+        "surfaceVariant": "#2d2d2d",
+        "onBackground": "#e0e0e0",
+        "onSurface": "#e0e0e0",
+        "onSurfaceVariant": "#a0a0a0",
+        "primary": "#bb86fc",
+        "onPrimary": "#000000",
+        "error": "#ef4444",
+        "success": "#22c55e",
+        "info": "#3b82f6"
+    },
+    "fontFamily": "manrope",
+    "useUppercaseLabels": false,
+    "letterSpacing": 0,
+    "cornerRadius": 12,
+    "accentBorderWidth": 0,
+    "showCornerBrackets": false,
+    "showGridBackground": false,
+    "scrollbarWidth": 4,
+    "squareStatusDots": false
+}

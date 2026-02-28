@@ -9,6 +9,9 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -99,36 +102,57 @@ fun NeuroVerseTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+    val activeConfig by ThemeEngine.activeTheme.collectAsState()
 
-    val colorScheme = if (darkTheme) {
-        dynamicDarkColorScheme(context)
+    val isDefault = activeConfig.id == "default"
+
+    val colorScheme = if (isDefault) {
+        // Preserve original dynamic color behavior for the default theme
+        if (darkTheme) {
+            dynamicDarkColorScheme(context)
+        } else {
+            dynamicLightColorScheme(context)
+        }
     } else {
-        dynamicLightColorScheme(context)
+        ThemeEngine.buildColorScheme(activeConfig, isDark = darkTheme)
     }
 
-    // Define typography with Manrope as the base/default family
-    val typography = Typography().copy(
-        displayLarge = Typography().displayLarge.copy(fontFamily = ManropeFontFamily),
-        displayMedium = Typography().displayMedium.copy(fontFamily = ManropeFontFamily),
-        displaySmall = Typography().displaySmall.copy(fontFamily = ManropeFontFamily),
-        headlineLarge = Typography().headlineLarge.copy(fontFamily = ManropeFontFamily),
-        headlineMedium = Typography().headlineMedium.copy(fontFamily = ManropeFontFamily),
-        headlineSmall = Typography().headlineSmall.copy(fontFamily = ManropeFontFamily),
-        titleLarge = Typography().titleLarge.copy(fontFamily = ManropeFontFamily),
-        titleMedium = Typography().titleMedium.copy(fontFamily = ManropeFontFamily),
-        titleSmall = Typography().titleSmall.copy(fontFamily = ManropeFontFamily),
-        bodyLarge = Typography().bodyLarge.copy(fontFamily = ManropeFontFamily),
-        bodyMedium = Typography().bodyMedium.copy(fontFamily = ManropeFontFamily),
-        bodySmall = Typography().bodySmall.copy(fontFamily = ManropeFontFamily),
-        labelLarge = Typography().labelLarge.copy(fontFamily = ManropeFontFamily),
-        labelMedium = Typography().labelMedium.copy(fontFamily = ManropeFontFamily),
-        labelSmall = Typography().labelSmall.copy(fontFamily = ManropeFontFamily),
+    val shapes = if (isDefault) {
+        MaterialTheme.shapes
+    } else {
+        ThemeEngine.buildShapes(activeConfig)
+    }
+
+    val fontFamily = ThemeEngine.getFontFamily(activeConfig)
+
+    // Build typography with the selected font family
+    val baseTypography = Typography()
+    val letterSpacing = activeConfig.letterSpacing.sp
+    val typography = baseTypography.copy(
+        displayLarge = baseTypography.displayLarge.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        displayMedium = baseTypography.displayMedium.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        displaySmall = baseTypography.displaySmall.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        headlineLarge = baseTypography.headlineLarge.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        headlineMedium = baseTypography.headlineMedium.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        headlineSmall = baseTypography.headlineSmall.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        titleLarge = baseTypography.titleLarge.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        titleMedium = baseTypography.titleMedium.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        titleSmall = baseTypography.titleSmall.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        bodyLarge = baseTypography.bodyLarge.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        bodyMedium = baseTypography.bodyMedium.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        bodySmall = baseTypography.bodySmall.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        labelLarge = baseTypography.labelLarge.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        labelMedium = baseTypography.labelMedium.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
+        labelSmall = baseTypography.labelSmall.copy(fontFamily = fontFamily, letterSpacing = letterSpacing),
     )
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = typography,
-        motionScheme = MotionScheme.expressive(),
-        content = content
-    )
+    CompositionLocalProvider(LocalThemeConfig provides activeConfig) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            shapes = shapes,
+            typography = typography,
+            motionScheme = MotionScheme.expressive(),
+            content = content
+        )
+    }
 }

@@ -1,0 +1,28 @@
+{
+    "id": "industrial-label",
+    "name": "Industrial Label",
+    "author": "ToolNeuron",
+    "version": 1,
+    "colors": {
+        "background": "#0b0b0b",
+        "surface": "#111111",
+        "surfaceVariant": "#1a1a1a",
+        "onBackground": "#d4d4d4",
+        "onSurface": "#d4d4d4",
+        "onSurfaceVariant": "#666666",
+        "primary": "#f59e0b",
+        "onPrimary": "#000000",
+        "error": "#ef4444",
+        "success": "#22c55e",
+        "info": "#3b82f6"
+    },
+    "fontFamily": "jetbrains_mono",
+    "useUppercaseLabels": true,
+    "letterSpacing": 1.2,
+    "cornerRadius": 0,
+    "accentBorderWidth": 1.5,
+    "showCornerBrackets": true,
+    "showGridBackground": true,
+    "scrollbarWidth": 6,
+    "squareStatusDots": true
+}
