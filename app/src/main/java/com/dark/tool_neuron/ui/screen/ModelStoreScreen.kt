@@ -8,6 +8,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
@@ -95,6 +96,7 @@ import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.repo.HuggingFaceExplorerRepo
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.global.Standards
@@ -115,6 +117,7 @@ import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.RepoGroupInfo
 import com.dark.tool_neuron.viewmodel.SortOption
+import kotlinx.coroutines.delay
 import java.io.File
 import java.util.Locale
 
@@ -917,6 +920,11 @@ private fun SettingsTab(
 ) {
     val repositories by viewModel.repositories.collectAsStateWithLifecycle(emptyList())
     val validationResults by viewModel.validationResults.collectAsStateWithLifecycle()
+    val explorerQuery by viewModel.explorerQuery.collectAsStateWithLifecycle()
+    val explorerResults by viewModel.explorerResults.collectAsStateWithLifecycle()
+    val isExplorerLoading by viewModel.isExplorerLoading.collectAsStateWithLifecycle()
+    val explorerError by viewModel.explorerError.collectAsStateWithLifecycle()
+    val existingRepoPaths = repositories.map { it.repoPath.lowercase() }.toSet()
     var showAddDialog by remember { mutableStateOf(false) }
     var editingRepository by remember { mutableStateOf<HFModelRepository?>(null) }
 
@@ -928,6 +936,19 @@ private fun SettingsTab(
         // Device Info Section
         item {
             DeviceInfoCard(deviceInfo)
+        }
+
+        item {
+            ExplorerRepositoriesCard(
+                query = explorerQuery,
+                results = explorerResults,
+                isLoading = isExplorerLoading,
+                error = explorerError,
+                existingRepoPaths = existingRepoPaths,
+                onQueryChange = viewModel::setExplorerQuery,
+                onSearch = viewModel::searchExplorerRepositories,
+                onAdd = viewModel::addExplorerRepository
+            )
         }
 
         // Repositories Section
@@ -1040,6 +1061,187 @@ private fun DeviceInfoRow(label: String, value: String) {
             style = MaterialTheme.typography.bodyMedium,
             fontWeight = FontWeight.Medium
         )
+    }
+}
+
+@Composable
+private fun ExplorerRepositoriesCard(
+    query: String,
+    results: List<HuggingFaceExplorerRepo>,
+    isLoading: Boolean,
+    error: String?,
+    existingRepoPaths: Set<String>,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onAdd: (HuggingFaceExplorerRepo) -> Unit
+) {
+    var expanded by remember { mutableStateOf(true) }
+
+    StandardCard(
+        title = "HuggingFace GGUF Explorer",
+        iconRes = R.drawable.prompt,
+        trailing = {
+            ActionButton(
+                onClickListener = { expanded = !expanded },
+                icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                contentDescription = if (expanded) "Collapse" else "Expand"
+            )
+        }
+    ) {
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically(
+                animationSpec = spring(stiffness = Spring.StiffnessMedium)
+            ) + fadeIn(spring(stiffness = Spring.StiffnessMedium)),
+            exit = shrinkVertically(
+                animationSpec = spring(stiffness = Spring.StiffnessMedium)
+            ) + fadeOut(spring(stiffness = Spring.StiffnessMedium))
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                // Search input
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    modifier = Modifier.fillMaxWidth(),
+                    label = { Text("Search GGUF repositories") },
+                    placeholder = { Text("e.g. qwen, mistral, coder") },
+                    singleLine = true,
+                    trailingIcon = {
+                        ActionButton(
+                            onClickListener = onSearch,
+                            icon = Icons.Default.Search,
+                            contentDescription = "Search"
+                        )
+                    }
+                )
+
+                // Status row: loading / error / result count
+                AnimatedContent(
+                    targetState = Triple(isLoading, error, results.size),
+                    transitionSpec = {
+                        fadeIn(spring(stiffness = Spring.StiffnessMedium)) togetherWith
+                                fadeOut(spring(stiffness = Spring.StiffnessMedium))
+                    },
+                    label = "explorer_status"
+                ) { (loading, err, count) ->
+                    when {
+                        loading -> {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(rDp(10.dp)),
+                                    strokeWidth = rDp(1.5.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                CaptionText(text = "Searching HuggingFace...")
+                            }
+                        }
+                        !err.isNullOrBlank() -> {
+                            CaptionText(
+                                text = err,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                        count > 0 -> {
+                            CaptionText(text = "$count result${if (count != 1) "s" else ""} found")
+                        }
+                        else -> Spacer(modifier = Modifier.height(0.dp))
+                    }
+                }
+
+                // Results list with staggered entry animation
+                results.take(8).forEachIndexed { index, repo ->
+                    val isAdded = existingRepoPaths.contains(repo.id.lowercase())
+
+                    var visible by remember(repo.id) { mutableStateOf(false) }
+                    LaunchedEffect(repo.id) {
+                        delay(index * 60L)
+                        visible = true
+                    }
+
+                    AnimatedVisibility(
+                        visible = visible,
+                        enter = slideInVertically(
+                            initialOffsetY = { it / 2 },
+                            animationSpec = spring(
+                                dampingRatio = 0.75f,
+                                stiffness = 300f
+                            )
+                        ) + fadeIn(spring(stiffness = 300f))
+                    ) {
+                        Column {
+                            ExplorerResultRow(
+                                repo = repo,
+                                isAdded = isAdded,
+                                onAdd = { onAdd(repo) }
+                            )
+                            if (index < results.take(8).lastIndex) {
+                                HorizontalDivider(
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ExplorerResultRow(
+    repo: HuggingFaceExplorerRepo,
+    isAdded: Boolean,
+    onAdd: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+    ) {
+        Row(
+            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = repo.id,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs)),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    CaptionText(text = "${repo.downloads} downloads")
+                    CaptionText(text = "·")
+                    CaptionText(text = "${repo.likes} likes")
+                    if (repo.gated) {
+                        CaptionText(text = "·")
+                        StatusBadge(text = "Gated", isActive = true)
+                    }
+                }
+            }
+
+            if (isAdded) {
+                ActionButton(
+                    onClickListener = {},
+                    icon = Icons.Default.CheckCircle,
+                    contentDescription = "Added"
+                )
+            } else {
+                ActionButton(
+                    onClickListener = onAdd,
+                    icon = Icons.Default.Add,
+                    contentDescription = "Add repository"
+                )
+            }
+        }
     }
 }
 

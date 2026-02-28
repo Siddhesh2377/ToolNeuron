@@ -15,6 +15,15 @@ interface HuggingFaceApi {
         @Path("repo", encoded = true) repo: String,
         @Query("recursive") recursive: Boolean = true
     ): Response<List<HuggingFaceFileResponse>>
+
+    @GET("api/models")
+    suspend fun searchModels(
+        @Query("filter") filter: String = "gguf",
+        @Query("search") search: String? = null,
+        @Query("sort") sort: String = "downloads",
+        @Query("direction") direction: Int = -1,
+        @Query("limit") limit: Int = 20
+    ): Response<List<HuggingFaceSearchRepoResponse>>
 }
 
 data class HuggingFaceRepoResponse(
@@ -25,4 +34,13 @@ data class HuggingFaceRepoResponse(
 data class HuggingFaceFileResponse(
     val path: String,
     val size: Long?
+)
+
+data class HuggingFaceSearchRepoResponse(
+    val id: String,
+    val author: String?,
+    val downloads: Long?,
+    val likes: Long?,
+    val tags: List<String>?,
+    val gated: Boolean?
 )
