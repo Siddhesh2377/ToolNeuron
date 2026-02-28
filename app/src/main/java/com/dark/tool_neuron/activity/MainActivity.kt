@@ -30,6 +30,7 @@ import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
 import com.dark.tool_neuron.ui.screen.PersonaScreen
+import com.dark.tool_neuron.ui.screen.ProUpgradeScreen
 import com.dark.tool_neuron.ui.screen.SetupScreen
 import com.dark.tool_neuron.ui.screen.SettingsScreen
 import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
@@ -146,6 +147,7 @@ sealed class Screen(val route: String) {
         fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
     }
     object AiMemory : Screen("ai_memory")
+    object ProUpgrade : Screen("pro_upgrade")
 }
 
 @Composable
@@ -266,7 +268,8 @@ fun AppNavigation(
                 onNavigateBack = { navController.popBackStack() },
                 onModelEditor = { navController.navigate(Screen.Editor.route) },
                 onPersonasClick = { navController.navigate(Screen.Personas.route) },
-                onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) }
+                onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) },
+                onNavigateToUpgrade = { navController.navigate(Screen.ProUpgrade.route) }
             )
         }
 
@@ -315,6 +318,18 @@ fun AppNavigation(
 
         composable(Screen.AiMemory.route) {
             AiMemoryScreen(
+                onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.ProUpgrade.route) {
+            val billingManager = remember { AppContainer.getBillingManager() }
+            val licenseManager = remember { AppContainer.getLicenseManager() }
+            val featureGateManager = remember { AppContainer.getFeatureGateManager() }
+            ProUpgradeScreen(
+                billingManager = billingManager,
+                licenseManager = licenseManager,
+                featureGateManager = featureGateManager,
                 onNavigateBack = { navController.popBackStack() }
             )
         }

@@ -2,6 +2,7 @@ package com.dark.tool_neuron.ui.screen
 
 import android.app.Activity
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -12,7 +13,10 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -24,18 +28,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material.icons.outlined.Backup
 import androidx.compose.material.icons.outlined.DeleteForever
 import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -52,6 +64,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,9 +76,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.dark.tool_neuron.billing.FreeLimits
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
@@ -78,6 +93,8 @@ import com.dark.tool_neuron.ui.components.SectionDivider
 import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.SwitchRow
+import com.dark.tool_neuron.ui.theme.ThemeConfig
+import com.dark.tool_neuron.ui.theme.parseHexColor
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
@@ -93,8 +110,18 @@ fun SettingsScreen(
     onModelEditor: () -> Unit = {},
     onPersonasClick: () -> Unit = {},
     onAiMemoryClick: () -> Unit = {},
+    onNavigateToUpgrade: () -> Unit = {},
     viewModel: SettingsViewModel = viewModel()
 ) {
+    // Pro status
+    val isPro by viewModel.featureGateManager.isPro.collectAsState()
+    val proPrice = remember { viewModel.billingManager.getProPrice() }
+    var showUpgradeSheet by remember { mutableStateOf(false) }
+
+    // Theme
+    val availableThemes by viewModel.availableThemes.collectAsStateWithLifecycle()
+    val activeTheme by viewModel.activeTheme.collectAsStateWithLifecycle()
+
     // App settings
     val streamingEnabled by viewModel.streamingEnabled.collectAsStateWithLifecycle()
     val chatMemoryEnabled by viewModel.chatMemoryEnabled.collectAsStateWithLifecycle()
@@ -161,6 +188,84 @@ fun SettingsScreen(
             contentPadding = PaddingValues(horizontal = rDp(Standards.SpacingLg)),
             verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
         ) {
+            // ==================== ToolNeuron Pro ====================
+            item {
+                if (isPro) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                        ) {
+                            Icon(
+                                Icons.Default.WorkspacePremium,
+                                contentDescription = null,
+                                modifier = Modifier.size(rDp(20.dp)),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Text(
+                                text = "Pro Active",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.weight(1f))
+                            ProBadge()
+                        }
+                    }
+                } else {
+                    Surface(
+                        onClick = onNavigateToUpgrade,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f),
+                        border = BorderStroke(
+                            rDp(1.dp),
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                        ) {
+                            Icon(
+                                Icons.Default.WorkspacePremium,
+                                contentDescription = null,
+                                modifier = Modifier.size(rDp(24.dp)),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "ToolNeuron Pro",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "Unlock all features" + if (proPrice != null) " - $proPrice" else "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Button(
+                                onClick = onNavigateToUpgrade,
+                                shape = RoundedCornerShape(rDp(8.dp)),
+                                contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(6.dp))
+                            ) {
+                                Text("Upgrade", style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+
             // ==================== General ====================
             item { SectionHeader(title = "General") }
 
@@ -537,7 +642,7 @@ fun SettingsScreen(
                 )
             }
 
-            // Voice picker
+            // Voice picker (with Pro gating)
             item {
                 StandardCard(title = "Voice") {
                     Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
@@ -549,8 +654,16 @@ fun SettingsScreen(
                             ActionToggleGroup(
                                 items = femaleVoices,
                                 selectedItem = ttsSettings.voice,
-                                onItemSelected = { viewModel.updateVoice(it) },
-                                itemLabel = { it },
+                                onItemSelected = { voice ->
+                                    if (viewModel.featureGateManager.canUseTtsVoice(voice)) {
+                                        viewModel.updateVoice(voice)
+                                    } else {
+                                        showUpgradeSheet = true
+                                    }
+                                },
+                                itemLabel = { voice ->
+                                    if (!isPro && voice !in FreeLimits.FREE_TTS_VOICES) "$voice \uD83D\uDD12" else voice
+                                },
                                 enabled = ttsModelLoaded
                             )
                         }
@@ -559,8 +672,16 @@ fun SettingsScreen(
                             ActionToggleGroup(
                                 items = maleVoices,
                                 selectedItem = ttsSettings.voice,
-                                onItemSelected = { viewModel.updateVoice(it) },
-                                itemLabel = { it },
+                                onItemSelected = { voice ->
+                                    if (viewModel.featureGateManager.canUseTtsVoice(voice)) {
+                                        viewModel.updateVoice(voice)
+                                    } else {
+                                        showUpgradeSheet = true
+                                    }
+                                },
+                                itemLabel = { voice ->
+                                    if (!isPro && voice !in FreeLimits.FREE_TTS_VOICES) "$voice \uD83D\uDD12" else voice
+                                },
                                 enabled = ttsModelLoaded
                             )
                         }
@@ -703,6 +824,68 @@ fun SettingsScreen(
                 )
             }
 
+            // ==================== Theme ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Theme") }
+
+            item {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)),
+                    contentPadding = PaddingValues(horizontal = rDp(4.dp))
+                ) {
+                    items(availableThemes, key = { it.id }) { theme ->
+                        val isSelected = theme.id == activeTheme.id
+                        Surface(
+                            onClick = { viewModel.selectTheme(theme.id) },
+                            modifier = Modifier.width(rDp(100.dp)),
+                            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+                            color = if (isSelected)
+                                MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                            else
+                                MaterialTheme.colorScheme.surfaceContainerLow,
+                            border = BorderStroke(
+                                width = if (isSelected) rDp(2.dp) else rDp(1.dp),
+                                color = if (isSelected) MaterialTheme.colorScheme.primary
+                                else MaterialTheme.colorScheme.outlineVariant
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(rDp(12.dp)),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                            ) {
+                                // Color swatch
+                                Box(
+                                    modifier = Modifier
+                                        .size(rDp(28.dp))
+                                        .clip(CircleShape)
+                                        .background(parseHexColor(theme.colors.primary))
+                                ) {
+                                    if (isSelected) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            modifier = Modifier
+                                                .size(rDp(16.dp))
+                                                .align(Alignment.Center),
+                                            tint = parseHexColor(theme.colors.onPrimary)
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = theme.name,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // ==================== About ====================
             item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
             item { SectionDivider() }
@@ -731,6 +914,20 @@ fun SettingsScreen(
 
             item { Spacer(Modifier.height(rDp(Standards.SpacingXl))) }
         }
+    }
+
+    // Pro upgrade bottom sheet
+    if (showUpgradeSheet) {
+        ProUpgradeBottomSheet(
+            featureName = "Premium TTS Voice",
+            billingManager = viewModel.billingManager,
+            licenseManager = viewModel.licenseManager,
+            onDismiss = { showUpgradeSheet = false },
+            onNavigateToUpgrade = {
+                showUpgradeSheet = false
+                onNavigateToUpgrade()
+            }
+        )
     }
 }
 

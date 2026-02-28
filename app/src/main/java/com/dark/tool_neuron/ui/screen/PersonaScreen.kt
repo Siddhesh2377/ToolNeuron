@@ -41,8 +41,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import com.dark.tool_neuron.billing.FeatureGateManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -75,6 +78,10 @@ fun PersonaScreen(
     val personaDao = remember { AppContainer.getPersonaDao() }
     val personas by personaDao.getAll().collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    val featureGateManager = remember { AppContainer.getFeatureGateManager() }
+    val billingManager = remember { AppContainer.getBillingManager() }
+    val licenseManager = remember { AppContainer.getLicenseManager() }
+    var showUpgradeSheet by remember { mutableStateOf(false) }
 
     // Import launcher
     val importLauncher = rememberLauncherForActivityResult(
@@ -125,7 +132,13 @@ fun PersonaScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = onCreatePersona,
+                onClick = {
+                    if (featureGateManager.canCreatePersona(personas.size)) {
+                        onCreatePersona()
+                    } else {
+                        showUpgradeSheet = true
+                    }
+                },
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Create Character")
@@ -166,6 +179,17 @@ fun PersonaScreen(
 
             item { Spacer(modifier = Modifier.height(80.dp)) }
         }
+    }
+
+    // Pro upgrade bottom sheet
+    if (showUpgradeSheet) {
+        ProUpgradeBottomSheet(
+            featureName = "More Persona Cards",
+            billingManager = billingManager,
+            licenseManager = licenseManager,
+            onDismiss = { showUpgradeSheet = false },
+            onNavigateToUpgrade = { showUpgradeSheet = false }
+        )
     }
 }
 

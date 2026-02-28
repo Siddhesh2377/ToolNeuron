@@ -2,6 +2,9 @@ package com.dark.tool_neuron.di
 
 import android.app.Application
 import android.content.Context
+import com.dark.tool_neuron.billing.BillingManager
+import com.dark.tool_neuron.billing.FeatureGateManager
+import com.dark.tool_neuron.billing.LicenseManager
 import com.dark.tool_neuron.database.AppDatabase
 import com.dark.tool_neuron.database.dao.AiMemoryDao
 import com.dark.tool_neuron.database.dao.PersonaDao
@@ -31,6 +34,11 @@ object AppContainer {
     private val chatManager = ChatManager()
     private var generationManager = GenerationManager()
 
+    // Billing / feature gate singletons
+    private lateinit var billingManager: BillingManager
+    private lateinit var licenseManager: LicenseManager
+    private lateinit var featureGateManager: FeatureGateManager
+
     // Keep track of context for re-initialization if needed
     private lateinit var appContext: Context
 
@@ -47,6 +55,11 @@ object AppContainer {
         llmModelViewModelFactory = LLMModelViewModelFactory(application, modelRepository)
         chatListViewModelFactory = ChatListViewModelFactory(chatManager)
         chatViewModelFactory = ChatViewModelFactory(context, chatManager, generationManager)
+
+        // Initialize billing singletons
+        billingManager = BillingManager(appContext)
+        licenseManager = LicenseManager(appContext)
+        featureGateManager = FeatureGateManager(billingManager, licenseManager)
 
         initVault(context)
     }
@@ -144,4 +157,10 @@ object AppContainer {
     fun getAiMemoryDao(): AiMemoryDao = database.aiMemoryDao()
 
     fun getGenerationManager(): GenerationManager = generationManager
+
+    fun getBillingManager(): BillingManager = billingManager
+
+    fun getLicenseManager(): LicenseManager = licenseManager
+
+    fun getFeatureGateManager(): FeatureGateManager = featureGateManager
 }

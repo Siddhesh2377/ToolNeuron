@@ -68,6 +68,12 @@ object PluginManager {
     private val _grammarMode = MutableStateFlow(GrammarMode.STRICT)
     val grammarMode: StateFlow<GrammarMode> = _grammarMode.asStateFlow()
 
+    // Premium plugins that require Pro
+    private val PREMIUM_PLUGINS = setOf("Web Search", "File Manager", "Dev Utils", "Device Info")
+
+    // Feature gate provider — set by NVApplication at startup
+    var featureGateProvider: (() -> Boolean)? = null
+
     // Whether multi-turn is active
     private val _multiTurnEnabled = MutableStateFlow(true)
     val multiTurnEnabled: StateFlow<Boolean> = _multiTurnEnabled.asStateFlow()
@@ -115,11 +121,25 @@ object PluginManager {
     }
 
     /**
+     * Check if a plugin is premium and requires Pro.
+     */
+    fun isPremiumPlugin(pluginName: String): Boolean {
+        return pluginName in PREMIUM_PLUGINS
+    }
+
+    /**
      * Enable a plugin. Non-WebSearch plugins are single-select:
      * enabling one disables all other non-WebSearch plugins.
+     * Returns false if the plugin is premium and the user is not Pro.
      */
-    fun enablePlugin(pluginName: String) {
-        if (!_plugins.containsKey(pluginName)) return
+    fun enablePlugin(pluginName: String): Boolean {
+        if (!_plugins.containsKey(pluginName)) return false
+
+        // Check feature gate for premium plugins
+        if (isPremiumPlugin(pluginName) && featureGateProvider?.invoke() != true) {
+            Log.d(TAG, "Plugin $pluginName requires Pro — blocked")
+            return false
+        }
 
         // Single-select for non-WebSearch plugins
         if (pluginName != WEB_SEARCH_PLUGIN_NAME) {
@@ -134,6 +154,7 @@ object PluginManager {
         _enabledPluginNames.value += pluginName
         _cachedEnabledToolDefs = null
         syncToolsWithLLM()
+        return true
     }
 
     /**

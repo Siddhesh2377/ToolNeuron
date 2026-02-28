@@ -5,6 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.billing.BillingManager
+import com.dark.tool_neuron.billing.FeatureGateManager
+import com.dark.tool_neuron.billing.LicenseManager
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -14,6 +17,8 @@ import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.tts.TTSDataStore
 import com.dark.tool_neuron.tts.TTSManager
 import com.dark.tool_neuron.tts.TTSSettings
+import com.dark.tool_neuron.ui.theme.ThemeConfig
+import com.dark.tool_neuron.ui.theme.ThemeEngine
 import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -32,11 +37,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     private val modelRepository = AppContainer.getModelRepository()
 
+    // Billing / feature gate
+    val featureGateManager: FeatureGateManager = AppContainer.getFeatureGateManager()
+    val billingManager: BillingManager = AppContainer.getBillingManager()
+    val licenseManager: LicenseManager = AppContainer.getLicenseManager()
+
+    // Theme
+    val availableThemes: StateFlow<List<ThemeConfig>> = ThemeEngine.availableThemes
+    val activeTheme: StateFlow<ThemeConfig> = ThemeEngine.activeTheme
+
     init {
         // Sync bypass setting with PluginManager on startup
         viewModelScope.launch {
             appSettingsDataStore.toolCallingBypassEnabled.collect { enabled ->
                 PluginManager.setToolCallingBypassEnabled(enabled)
+            }
+        }
+        // Restore saved theme
+        viewModelScope.launch {
+            appSettingsDataStore.selectedThemeId.collect { id ->
+                if (id != null) ThemeEngine.applyTheme(id)
             }
         }
     }
@@ -139,6 +159,11 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAiMemoryEnabled(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateAiMemoryEnabled(enabled) }
+    }
+
+    fun selectTheme(themeId: String) {
+        ThemeEngine.applyTheme(themeId)
+        viewModelScope.launch { appSettingsDataStore.saveSelectedThemeId(themeId) }
     }
 
     // TTS settings updaters

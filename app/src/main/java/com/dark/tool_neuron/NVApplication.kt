@@ -10,6 +10,7 @@ import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.plugins.WebSearchPlugin
 import com.dark.tool_neuron.repo.RagRepository
 import com.dark.tool_neuron.tts.TTSManager
+import com.dark.tool_neuron.ui.theme.ThemeEngine
 import com.dark.tool_neuron.vault.VaultHelper
 import com.dark.tool_neuron.worker.DataIntegrityManager
 import com.dark.tool_neuron.worker.KnowledgeGraphBuilder
@@ -46,6 +47,21 @@ class NVApplication : Application() {
         PluginManager.registerPlugin(DeviceInfoPlugin(applicationContext))
         PluginManager.registerPlugin(FileManagerPlugin(applicationContext))
         Log.d(TAG, "Plugins registered: ${PluginManager.registeredPlugins.value.size} plugins")
+
+        // Initialize ThemeEngine
+        ThemeEngine.init(applicationContext)
+        Log.d(TAG, "ThemeEngine initialized")
+
+        // Initialize billing
+        val billingManager = AppContainer.getBillingManager()
+        val licenseManager = AppContainer.getLicenseManager()
+        billingManager.initialize()
+        licenseManager.validateLicense()
+        Log.d(TAG, "Billing initialized")
+
+        // Wire feature gate into PluginManager
+        val featureGateManager = AppContainer.getFeatureGateManager()
+        PluginManager.featureGateProvider = { featureGateManager.isPro.value }
 
         // Initialize TTS Manager without auto-loading (loading controlled by settings)
         TTSManager.init(applicationContext, autoLoad = false)
