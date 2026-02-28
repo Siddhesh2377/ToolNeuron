@@ -31,6 +31,7 @@ retrofit = "3.0.0"
 slf4j-android = "1.7.36"
 xz = "1.11"
 onnxruntime-android = "1.24.2"
+playBilling = "7.1.1"
 coil = "3.3.0"
 
 androidx-espresso-core = "3.7.0"
@@ -40,6 +41,7 @@ junit = "4.13.2"
 [libraries]
 coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntime-android" }
+play-billing = { group = "com.android.billingclient", name = "billing-ktx", version.ref = "playBilling" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "androidx-activity-compose" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidx-appcompat" }
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "androidx-compose-bom" }

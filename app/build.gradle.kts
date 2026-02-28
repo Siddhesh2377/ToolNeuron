@@ -76,6 +76,9 @@ dependencies {
 
     implementation(libs.onnxruntime.android)
 
+    // Billing
+    implementation(libs.play.billing)
+
     // Image Loading
     implementation(libs.coil.compose)
 
