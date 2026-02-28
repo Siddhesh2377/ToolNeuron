@@ -59,6 +59,8 @@ import com.dark.tool_neuron.ui.components.AgentExecutionView
 import com.dark.tool_neuron.ui.components.MarkdownText
 import com.dark.tool_neuron.ui.components.lazyMarkdownItems
 import com.dark.tool_neuron.ui.components.PluginResultCard
+import com.dark.tool_neuron.ui.components.ThinkingBlock
+import com.dark.tool_neuron.util.ThinkingParser
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.AgentPhase
@@ -66,32 +68,12 @@ import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.GenerationManager
 import com.mp.ai_gguf.models.DecodingMetrics
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.withContext
 import java.util.Base64
 
-data class ParsedMessage(
-    val thinkingContent: String?,
-    val actualContent: String
-)
-
-suspend fun parseThinkingTags(content: String): ParsedMessage = withContext(Dispatchers.IO) {
-    // Fast path: skip regex if no think tags present
-    if (!content.contains("<think>")) {
-        return@withContext ParsedMessage(null, content.trim())
-    }
-
-    val thinkingRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
-    val thinkingMatch = thinkingRegex.find(content)
-
-    val thinkingContent = thinkingMatch?.groupValues?.getOrNull(1)?.trim()
-    val actualContent = content.replace(thinkingRegex, "").trim()
-
-    ParsedMessage(thinkingContent, actualContent)
-}
+// Thinking tag parsing is now handled by com.dark.tool_neuron.util.ThinkingParser
 
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
@@ -181,13 +163,7 @@ fun BodyContent(
                                 }
                                 // Markdown content — each element is a lazy item
                                 if (message.content.contentType == ContentType.Text) {
-                                    val parsedText = message.content.content
-                                        .let { raw ->
-                                            // Strip <think>...</think> for the markdown items
-                                            if (raw.contains("<think>")) {
-                                                raw.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
-                                            } else raw
-                                        }
+                                    val parsedText = ThinkingParser.parse(message.content.content).visibleText
                                     if (parsedText.isNotEmpty()) {
                                         lazyMarkdownItems(
                                             text = parsedText,
@@ -578,12 +554,7 @@ private fun createFeatheredChunk(src: Bitmap, w: Int, h: Int): Bitmap {
 
 @Composable
 private fun AssistantStreamingBubble(text: String) {
-    val parsedMessage by produceState(
-        initialValue = ParsedMessage(null, text),
-        key1 = text
-    ) {
-        value = parseThinkingTags(text)
-    }
+    val parsed = remember(text) { ThinkingParser.parse(text) }
 
     Column(
         modifier = Modifier
@@ -591,11 +562,14 @@ private fun AssistantStreamingBubble(text: String) {
             .padding(vertical = rDp(8.dp)),
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
-        if (parsedMessage.thinkingContent != null) {
-            ThinkingBlock(parsedMessage.thinkingContent!!)
+        if (parsed.thinkingText != null) {
+            ThinkingBlock(
+                thinkingText = parsed.thinkingText,
+                isStreaming = parsed.isThinkingInProgress
+            )
         }
 
-        if (parsedMessage.actualContent.isNotEmpty()) {
+        if (parsed.visibleText.isNotEmpty()) {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
                 verticalAlignment = Alignment.Top
@@ -607,7 +581,7 @@ private fun AssistantStreamingBubble(text: String) {
                 )
 
                 Text(
-                    text = parsedMessage.actualContent.ifEmpty { "..." },
+                    text = parsed.visibleText.ifEmpty { "..." },
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
@@ -617,81 +591,7 @@ private fun AssistantStreamingBubble(text: String) {
     }
 }
 
-@Composable
-private fun ThinkingBlock(thinkingText: String) {
-    var isExpanded by remember { mutableStateOf(false) }
-
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(12.dp)),
-        shape = RoundedCornerShape(rDp(10.dp)),
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = rDp(2.dp)
-    ) {
-        Column {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
-                    .padding(vertical = rDp(8.dp), horizontal = rDp(12.dp)),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = painterResource(R.drawable.thinking),
-                        contentDescription = null,
-                        modifier = Modifier.size(rDp(16.dp)),
-                        tint = MaterialTheme.colorScheme.tertiary
-                    )
-                    Text(
-                        text = "Thinking",
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.tertiary
-                    )
-                }
-
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(20.dp)),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(),
-                exit = shrinkVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut()
-            ) {
-                Column {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
-                    )
-                    Text(
-                        text = thinkingText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(rDp(12.dp))
-                    )
-                }
-            }
-        }
-    }
-}
+// ThinkingBlock composable has been extracted to com.dark.tool_neuron.ui.components.ThinkingBlock
 
 @Composable
 private fun EmptyMessagesState() {
@@ -789,15 +689,10 @@ private fun AssistantMessageHeader(message: Messages) {
             ContentType.PluginResult -> PluginResultCard(message = message)
             else -> {
                 // Thinking block (markdown body is handled by lazyMarkdownItems)
-                val thinkingContent by produceState<String?>(
-                    initialValue = null,
-                    key1 = message.content.content
-                ) {
-                    if (message.content.content.contains("<think>")) {
-                        value = parseThinkingTags(message.content.content).thinkingContent
-                    }
+                val parsed = remember(message.content.content) {
+                    ThinkingParser.parse(message.content.content)
                 }
-                thinkingContent?.let { ThinkingBlock(it) }
+                parsed.thinkingText?.let { ThinkingBlock(thinkingText = it) }
             }
         }
     }
