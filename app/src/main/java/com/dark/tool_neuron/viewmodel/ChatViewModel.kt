@@ -1351,7 +1351,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            if (count >= minRepeats) {
+            if (count >= minRepeats && patternLen * count >= 60) {
                 // Keep content up to end of first occurrence of the pattern
                 val repeatStartInWindow = window.length - patternLen * count
                 return startOffset + repeatStartInWindow + patternLen
@@ -1384,8 +1384,8 @@ class ChatViewModel @Inject constructor(
                         lastEmitTime = now
                     }
 
-                    // Periodically check for repetition loops (every ~80 new chars)
-                    if (repetitionTrimIndex < 0 && resultBuilder.length - lastRepCheckLen >= 80) {
+                    // Periodically check for repetition loops (every ~200 new chars)
+                    if (repetitionTrimIndex < 0 && resultBuilder.length - lastRepCheckLen >= 200) {
                         lastRepCheckLen = resultBuilder.length
                         val trimIdx = detectRepetitionTrimIndex(resultBuilder.toString())
                         if (trimIdx >= 0) {
@@ -2059,57 +2059,67 @@ class ChatViewModel @Inject constructor(
         }
         val pluginResults = _messages.filter { it.content.contentType == ContentType.PluginResult }
 
-        chatManager.createNewChat().onSuccess { newChatId ->
-            _currentChatId.value = newChatId
-            chatManager.addUserMessage(newChatId, userPrompt).onSuccess {
-                pluginResults.forEachIndexed { index, pluginMsg ->
-                    chatManager.addMessage(newChatId, pluginMsg)
-                }
-                if (filteredResponse.isNotBlank()) {
-                    chatManager.addAssistantMessage(newChatId, filteredResponse, metrics, ragResultItems, toolChainSteps)
-                }
-                chatManager.getChatMessages(newChatId).onSuccess { loadedMessages ->
-                    _messages.clear()
-                    _messages.addAll(loadedMessages)
-                    AppStateManager.setGenerationComplete()
-                    AppStateManager.chatRefreshed()
-                    val spokenMsgId = loadedMessages.lastOrNull { it.role == Role.Assistant }?.msgId
-                    resetStreamingState()
-                    viewModelScope.launch { autoSpeakIfEnabled(filteredResponse, spokenMsgId) }
-                }.onFailure {
-                    AppStateManager.setGenerationComplete()
-                    resetStreamingState()
-                }
-            }.onFailure { e ->
-                _error.value = "Failed to save chat: ${e.message}"
-                AppStateManager.setError("Failed to save chat: ${e.message}")
-            }
-        }.onFailure { e ->
+        val newChatId = chatManager.createNewChat().getOrElse { e ->
             _error.value = "Failed to create chat: ${e.message}"
             AppStateManager.setError("Failed to create chat: ${e.message}")
+            return
         }
+        _currentChatId.value = newChatId
+
+        chatManager.addUserMessage(newChatId, userPrompt).getOrElse { e ->
+            _error.value = "Failed to save chat: ${e.message}"
+            AppStateManager.setError("Failed to save chat: ${e.message}")
+            return
+        }
+
+        pluginResults.forEach { pluginMsg ->
+            chatManager.addMessage(newChatId, pluginMsg)
+        }
+        if (filteredResponse.isNotBlank()) {
+            chatManager.addAssistantMessage(newChatId, filteredResponse, metrics, ragResultItems, toolChainSteps)
+        }
+
+        val loadedMessages = chatManager.getChatMessages(newChatId).getOrElse {
+            AppStateManager.setGenerationComplete()
+            resetStreamingState()
+            return
+        }
+        _messages.clear()
+        _messages.addAll(loadedMessages)
+        AppStateManager.setGenerationComplete()
+        AppStateManager.chatRefreshed()
+        val spokenMsgId = loadedMessages.lastOrNull { it.role == Role.Assistant }?.msgId
+        resetStreamingState()
+        viewModelScope.launch { autoSpeakIfEnabled(filteredResponse, spokenMsgId) }
     }
 
     private suspend fun createChatWithImageMessage(
         userPrompt: String, imageBase64: String, imagePrompt: String, seed: Long
     ) {
-        chatManager.createNewChat().onSuccess { newChatId ->
-            _currentChatId.value = newChatId
-            chatManager.addUserMessage(newChatId, userPrompt).onSuccess { userMessage ->
-                _messages.add(userMessage)
-                userMessageAdded = true
-                chatManager.addImageMessage(newChatId, imageBase64, imagePrompt, seed, currentImageMetrics).onSuccess { imageMessage ->
-                    _messages.add(imageMessage)
-                    AppStateManager.setGenerationComplete()
-                    AppStateManager.chatRefreshed()
-                    resetStreamingState()
-                }
-            }.onFailure { e ->
-                _error.value = "Failed to save chat: ${e.message}"
-            }
-        }.onFailure { e ->
+        val newChatId = chatManager.createNewChat().getOrElse { e ->
             _error.value = "Failed to create chat: ${e.message}"
+            AppStateManager.setError("Failed to create chat: ${e.message}")
+            return
         }
+        _currentChatId.value = newChatId
+
+        val userMessage = chatManager.addUserMessage(newChatId, userPrompt).getOrElse { e ->
+            _error.value = "Failed to save chat: ${e.message}"
+            AppStateManager.setError("Failed to save chat: ${e.message}")
+            return
+        }
+        _messages.add(userMessage)
+        userMessageAdded = true
+
+        val imageMessage = chatManager.addImageMessage(newChatId, imageBase64, imagePrompt, seed, currentImageMetrics).getOrElse { e ->
+            _error.value = "Failed to save image: ${e.message}"
+            AppStateManager.setError("Failed to save image: ${e.message}")
+            return
+        }
+        _messages.add(imageMessage)
+        AppStateManager.setGenerationComplete()
+        AppStateManager.chatRefreshed()
+        resetStreamingState()
     }
 
     // ==================== Error Handlers ====================
@@ -2205,48 +2215,66 @@ class ChatViewModel @Inject constructor(
     private fun handleTextStop() {
         val chatId = _currentChatId.value
 
-        if (chatId != null && currentUserMessage != null && currentGeneratedContent.isNotEmpty()) {
+        // Capture state before launching coroutine to avoid race with resetStreamingState()
+        val savedUserMessage = currentUserMessage
+        val savedContent = currentGeneratedContent
+        val savedMetrics = currentMetrics
+        val savedUserMessageAdded = userMessageAdded
+
+        if (chatId != null && savedUserMessage != null && savedContent.isNotEmpty()) {
             viewModelScope.launch {
-                if (!userMessageAdded) { _messages.add(currentUserMessage!!); userMessageAdded = true }
+                if (!savedUserMessageAdded) { _messages.add(savedUserMessage); userMessageAdded = true }
                 val assistantMessage = Messages(
                     role = Role.Assistant,
-                    content = MessageContent(contentType = ContentType.Text, content = "$currentGeneratedContent [stopped]"),
-                    decodingMetrics = currentMetrics
+                    content = MessageContent(contentType = ContentType.Text, content = "$savedContent [stopped]"),
+                    decodingMetrics = savedMetrics
                 )
                 _messages.add(assistantMessage)
-                chatManager.addAssistantMessage(chatId, "$currentGeneratedContent [stopped]", currentMetrics)
+                chatManager.addAssistantMessage(chatId, "$savedContent [stopped]", savedMetrics)
+                // Restore grammar in case we stopped mid-agent-flow
+                try { PluginManager.restoreGrammar() } catch (_: Exception) {}
+                resetStreamingState()
             }
-        } else if (currentUserMessage != null && !userMessageAdded) {
-            _messages.add(currentUserMessage!!)
-            userMessageAdded = true
+        } else {
+            if (savedUserMessage != null && !savedUserMessageAdded) {
+                _messages.add(savedUserMessage)
+                userMessageAdded = true
+            }
+            // Restore grammar in case we stopped mid-agent-flow
+            try { PluginManager.restoreGrammar() } catch (_: Exception) {}
+            resetStreamingState()
         }
-
-        // Restore grammar in case we stopped mid-agent-flow
-        try { PluginManager.restoreGrammar() } catch (_: Exception) {}
-        resetStreamingState()
     }
 
     private fun handleImageStop() {
         val chatId = _currentChatId.value
 
-        if (chatId != null && currentUserMessage != null && currentGeneratedImage != null) {
+        // Capture state before launching coroutine to avoid race with resetStreamingState()
+        val savedUserMessage = currentUserMessage
+        val savedImage = currentGeneratedImage
+        val savedImageMetrics = currentImageMetrics
+        val savedUserMessageAdded = userMessageAdded
+
+        if (chatId != null && savedUserMessage != null && savedImage != null) {
             viewModelScope.launch {
-                if (!userMessageAdded) { _messages.add(currentUserMessage!!); userMessageAdded = true }
-                val imageBase64 = generationManager.bitmapToBase64(currentGeneratedImage!!)
+                if (!savedUserMessageAdded) { _messages.add(savedUserMessage); userMessageAdded = true }
+                val imageBase64 = generationManager.bitmapToBase64(savedImage)
                 val imageMessage = Messages(
                     role = Role.Assistant,
                     content = MessageContent(contentType = ContentType.Image, content = "Image generation stopped", imageData = imageBase64),
-                    imageMetrics = currentImageMetrics
+                    imageMetrics = savedImageMetrics
                 )
                 _messages.add(imageMessage)
-                chatManager.addImageMessage(chatId, imageBase64, "", -1L, currentImageMetrics)
+                chatManager.addImageMessage(chatId, imageBase64, "", -1L, savedImageMetrics)
+                resetStreamingState()
             }
-        } else if (currentUserMessage != null && !userMessageAdded) {
-            _messages.add(currentUserMessage!!)
-            userMessageAdded = true
+        } else {
+            if (savedUserMessage != null && !savedUserMessageAdded) {
+                _messages.add(savedUserMessage)
+                userMessageAdded = true
+            }
+            resetStreamingState()
         }
-
-        resetStreamingState()
     }
 
     // ==================== TTS Controls ====================
