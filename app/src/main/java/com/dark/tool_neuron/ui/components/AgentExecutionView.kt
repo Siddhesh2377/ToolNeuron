@@ -49,7 +49,7 @@ fun AgentExecutionView(
     currentStep: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
     var selectedStep by remember { mutableStateOf<ToolChainStepData?>(null) }
 
     // Tool step detail dialog
