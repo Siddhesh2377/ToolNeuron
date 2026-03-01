@@ -712,9 +712,15 @@ class ChatViewModel @Inject constructor(
                 // Tier 1: Fast keyword mood analysis before generation
                 updateMoodAndVectors(prompt)
 
+                Log.d(TAG, ">>> sendChat: maxTokens=$maxTokens isNewChat=$isNewChat hasTools=$hasTools")
+
                 when {
                     hasTools -> agentFlow(prompt, ragContext, maxTokens, isNewChat)
-                    else -> simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+                    else -> {
+                        Log.d(TAG, ">>> entering simpleFlow")
+                        simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+                        Log.d(TAG, ">>> simpleFlow completed")
+                    }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in sendChat", e)
@@ -1236,6 +1242,7 @@ class ChatViewModel @Inject constructor(
         isNewChat: Boolean,
         isRegeneration: Boolean = false
     ) {
+        Log.d(TAG, ">>> simpleFlow: isNewChat=$isNewChat maxTokens=$maxTokens")
         AppStateManager.setGeneratingText()
         val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
 
@@ -1244,6 +1251,7 @@ class ChatViewModel @Inject constructor(
         if (isNewChat) {
             // Build conversation messages with memory
             val conversationMessages = buildConversationMessages(fullPrompt)
+            Log.d(TAG, ">>> calling generatePlainText with ${conversationMessages.size} messages")
             val response = generatePlainText(conversationMessages, maxTokens)
             val filteredResponse = filterToolCallSyntax(response)
             _streamingAssistantMessage.value = filteredResponse
@@ -1366,21 +1374,25 @@ class ChatViewModel @Inject constructor(
         maxTokens: Int
     ): String {
         val jsonArray = JSONArray(messages)
+        Log.d(TAG, ">>> generatePlainText: ${jsonArray.toString().take(200)}...")
         val resultBuilder = StringBuilder()
         currentMetrics = null
         var lastEmitTime = 0L
         var lastRepCheckLen = 0
         var repetitionTrimIndex = -1
 
+        Log.d(TAG, ">>> calling generateMultiTurnStreaming maxTokens=$maxTokens")
         generationManager.generateMultiTurnStreaming(
             jsonArray.toString(), maxTokens
         ).collect { event ->
+            Log.d(TAG, ">>> generation event: ${event::class.simpleName}")
             when (event) {
                 is GenerationEvent.Token -> {
                     resultBuilder.append(event.text)
+                    currentGeneratedContent = resultBuilder.toString()
                     val now = System.currentTimeMillis()
                     if (now - lastEmitTime >= 50) {
-                        _streamingAssistantMessage.value = resultBuilder.toString()
+                        _streamingAssistantMessage.value = currentGeneratedContent
                         lastEmitTime = now
                     }
 
@@ -1520,9 +1532,6 @@ class ChatViewModel @Inject constructor(
             schema.inferenceParams.systemPrompt
         } else ""
 
-        // Inject thinking mode directive if enabled
-        val thinkingDirective = if (_thinkingModeEnabled.value) "/think" else "/no_think"
-
         // Build persona prompt from structured character card fields
         val activePersona = _activePersona.value
         val rawPersonaPrompt = activePersona?.buildEffectiveSystemPrompt()?.takeIf { it.isNotBlank() } ?: ""
@@ -1557,14 +1566,21 @@ class ChatViewModel @Inject constructor(
             }
         } else ""
 
-        // Assemble: thinkingDirective + model system prompt + KG context + memory + persona (LAST)
+        // When no persona is active and model has no base prompt, inject a sensible default
+        // to prevent small models from hallucinating fake conversations.
+        val effectiveBasePrompt = if (basePrompt.isNotEmpty()) {
+            basePrompt
+        } else if (personaPrompt.isEmpty()) {
+            "You are a helpful AI assistant. Respond directly and concisely to the user's message. " +
+                "Never simulate a conversation or generate fake user messages. Only reply as the assistant."
+        } else ""
+
+        // Assemble: model system prompt + KG context + memory + persona (LAST)
         // Small models treat the LAST content in system prompt as highest priority,
         // so persona must come last to maintain character consistency.
         return buildString {
-            append(thinkingDirective)
-            if (basePrompt.isNotEmpty()) {
-                append("\n")
-                append(basePrompt)
+            if (effectiveBasePrompt.isNotEmpty()) {
+                append(effectiveBasePrompt)
             }
             if (knowledgeContext.isNotEmpty()) {
                 append("\n\n")
@@ -1841,6 +1857,23 @@ class ChatViewModel @Inject constructor(
         return toolName.lowercase().replace(" ", "_").replace("-", "_")
     }
 
+    /**
+     * Strip content after fake user turn markers that small models sometimes generate.
+     * Catches patterns like "- User:", "\nUser:", "- Human:", etc.
+     */
+    private fun stripFakeUserTurns(content: String): String {
+        // Match "- User:" or "\nUser:" or "- Human:" at start of line (model generating fake user turns)
+        val pattern = Regex("(?m)^\\s*[-*]\\s*(?:User|Human|\\{\\{user\\}\\})\\s*:")
+        val match = pattern.find(content) ?: return content
+        // Keep only the assistant's real response before the fake user turn
+        val trimmed = content.substring(0, match.range.first).trim()
+        if (trimmed.isNotEmpty()) {
+            Log.w(TAG, "Stripped fake user turn from response at index ${match.range.first}")
+            return trimmed
+        }
+        return content
+    }
+
     /** Filter out tool call syntax and code blocks from generated text. */
     private fun filterToolCallSyntax(content: String): String {
         var filtered = content
@@ -1851,6 +1884,8 @@ class ChatViewModel @Inject constructor(
         filtered = filtered.replace(Regex("\\{\\s*\"name\"\\s*:\\s*\"[^\"]+\"\\s*,\\s*\"arguments\"\\s*:\\s*\\{.*?\\}\\s*\\}", RegexOption.DOT_MATCHES_ALL), "")
         filtered = filtered.trim()
         filtered = filtered.replace(Regex("\\n{3,}"), "\n\n")
+        // Strip fake user turns that small models sometimes generate
+        filtered = stripFakeUserTurns(filtered)
         return filtered
     }
 

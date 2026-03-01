@@ -58,6 +58,20 @@ class ControlVectorManager(private val context: Context) {
          *  5.0 = sharp (near-binary dimension selection). */
         private const val EMOTION_GATE_SCALE = 3.0f
 
+        /**
+         * Gate for advanced personality systems that require C++ infrastructure not yet built.
+         * Systems A (control vectors / contrastive prompting), F (fast weights),
+         * G (norm offsets from direction vectors), P4 (hypernetwork), P5 (sparse masks),
+         * P6 (KAN), P7 (forward learning), and emotion probing.
+         *
+         * Systems with working JNI bridges (always enabled):
+         *   B — Logit bias (text→token resolution via nativeTokenize)
+         *   D — Head scaling (static profile from personality strength)
+         *   E — Attention temperature (per-layer profile)
+         *   Residual gates (static profile from personality strength)
+         */
+        private const val ADVANCED_PERSONALITY_AVAILABLE = false
+
         /** The 6 standard personality axes. */
         val PERSONALITY_AXES = listOf(
             AxisInfo("warmth", "Warmth", "cold", "warm"),
@@ -190,38 +204,46 @@ class ControlVectorManager(private val context: Context) {
         lastAppliedStrengths = axisStrengths
         val anyActive = axisStrengths.any { it.value != 0f }
 
-        // System A: Control Vectors (also caches direction vectors for head probing)
-        applyControlVectors(axisStrengths)
+        // ── Systems with working JNI bridges (always enabled) ──
 
-        // System B: Logit Biases
+        // System B: Logit Biases (text→token ID via nativeTokenize)
         applyLogitBiases(axisStrengths)
 
-        // System D: Head Rescaling (uses cached direction vectors from System A)
-        applyHeadScaling(axisStrengths)
-
         // System E: Attention Temperature Profile
+        // Engine now applies temperature uniformly to all heads per layer.
+        // SSM layers ignore the temperature array (no attention computation).
         applyAttentionTemperature(axisStrengths)
 
-        // Gated Residual: Per-layer scalar gates on attention and FFN outputs
-        applyResidualGates(axisStrengths)
+        // System D: Head Rescaling (static profile from personality strength)
+        applyStaticHeadScaling(axisStrengths)
 
-        // System F: Fast Weight Memory (init once, persists across calls)
-        initFastWeightsIfNeeded()
+        // Gated Residual: Per-layer scalar gates from personality strength
+        applyStaticResidualGates(axisStrengths)
 
-        // System G: LayerNorm Affine Shift (uses cached direction vectors from System A)
-        applyNormOffsets(axisStrengths)
+        // ── Systems requiring C++ infrastructure (gated) ──
 
-        // System P4: Hypernetwork FFN LoRA (init once — uses direction vectors for warm-start)
-        initHypernetworkIfNeeded(axisStrengths)
+        if (ADVANCED_PERSONALITY_AVAILABLE) {
+            // System A: Control Vectors (contrastive prompting)
+            applyControlVectors(axisStrengths)
 
-        // System P5: Dynamic sparse masks (init once — all neurons active initially)
-        initSparseMasksIfNeeded()
+            // System F: Fast Weight Memory
+            initFastWeightsIfNeeded()
 
-        // System P6: KAN-lite (init once — coefficients start at zero, tuned by P7 learning)
-        initKanIfNeeded()
+            // System G: LayerNorm Affine Shift (needs direction vectors from A)
+            applyNormOffsets(axisStrengths)
 
-        // Enable activation capture for Tier 0 emotion probing
-        enableEmotionProbing(anyActive)
+            // System P4: Hypernetwork FFN LoRA
+            initHypernetworkIfNeeded(axisStrengths)
+
+            // System P5: Dynamic sparse masks
+            initSparseMasksIfNeeded()
+
+            // System P6: KAN-lite
+            initKanIfNeeded()
+
+            // Emotion probing
+            enableEmotionProbing(anyActive)
+        }
 
         if (!anyActive) {
             Log.i(TAG, "All axes neutral — interventions cleared")
@@ -429,17 +451,83 @@ class ControlVectorManager(private val context: Context) {
     }
 
     /**
-     * Gated Residual: Apply per-layer scalar gates on attention and FFN outputs.
-     *
-     * Strategy based on direction vector importance (same data as head probing):
-     *   - High-importance layers (>60%): FFN gate boosted (up to 1.4x) to amplify personality
-     *   - Low-importance layers (<25%): FFN gate suppressed (down to 0.5) to skip redundant compute
-     *   - Middle layers: gate = 1.0 (no change)
-     *   - Attn gates are more conservative: only boost high-importance layers (up to 1.2x)
-     *
-     * Cost: ~0.064ms/token for 32 layers (one ggml_scale per layer per sub-block).
-     * Memory: 256 bytes for 32 layers (2 × 32 × 4 bytes).
-     * Flash attention: fully compatible (gate is outside the attention kernel).
+     * System D (static): Apply head scaling using a fixed profile based on personality strength.
+     * Late layers get boosted (they shape personality/style), early layers slightly suppressed.
+     * No direction vector probing needed — works with any model.
+     */
+    private fun applyStaticHeadScaling(axisStrengths: Map<String, Float>) {
+        val avgStrength = axisStrengths.values.map { kotlin.math.abs(it) }
+            .average().toFloat()
+
+        if (avgStrength < 0.05f) {
+            try { nativeLib.nativeResetHeadScales() } catch (_: Exception) {}
+            return
+        }
+
+        try {
+            val nLayers = nativeLib.nativeLayerCount()
+            if (nLayers <= 0) return
+
+            // Scale profile: early layers slightly suppressed, late layers boosted
+            val scales = FloatArray(nLayers) { i ->
+                val ratio = i.toFloat() / (nLayers - 1).coerceAtLeast(1)
+                val t = avgStrength.coerceIn(0f, 1f)
+                when {
+                    ratio < 0.33f -> 1.0f - 0.15f * t   // early: down to 0.85
+                    ratio > 0.66f -> 1.0f + 0.25f * t    // late: up to 1.25
+                    else -> 1.0f                          // mid: unchanged
+                }
+            }
+            nativeLib.nativeSetHeadScales(scales)
+            Log.d(TAG, "Head scales: static profile applied (avgStrength=%.2f)".format(avgStrength))
+        } catch (e: Exception) {
+            Log.e(TAG, "Head scaling error: ${e.message}")
+        }
+    }
+
+    /**
+     * Static residual gates: boost late FFN layers for personality expression,
+     * gently suppress early layers. No direction vectors needed.
+     */
+    private fun applyStaticResidualGates(axisStrengths: Map<String, Float>) {
+        val avgStrength = axisStrengths.values.map { kotlin.math.abs(it) }
+            .average().toFloat()
+
+        if (avgStrength < 0.05f) {
+            try { nativeLib.nativeResetResidualGates() } catch (_: Exception) {}
+            return
+        }
+
+        try {
+            val nLayers = nativeLib.nativeLayerCount()
+            if (nLayers <= 0) return
+            val t = avgStrength.coerceIn(0f, 1f)
+
+            val attnGates = FloatArray(nLayers) { i ->
+                val ratio = i.toFloat() / (nLayers - 1).coerceAtLeast(1)
+                when {
+                    ratio > 0.66f -> 1.0f + 0.1f * t    // late attn: gentle boost up to 1.1
+                    else -> 1.0f
+                }
+            }
+            val ffnGates = FloatArray(nLayers) { i ->
+                val ratio = i.toFloat() / (nLayers - 1).coerceAtLeast(1)
+                when {
+                    ratio < 0.25f -> 1.0f - 0.1f * t    // early FFN: down to 0.9
+                    ratio > 0.66f -> 1.0f + 0.2f * t    // late FFN: up to 1.2
+                    else -> 1.0f
+                }
+            }
+            nativeLib.nativeSetResidualGates(attnGates, ffnGates)
+            Log.d(TAG, "Residual gates: static profile applied (avgStrength=%.2f)".format(avgStrength))
+        } catch (e: Exception) {
+            Log.e(TAG, "Residual gates error: ${e.message}")
+        }
+    }
+
+    /**
+     * Gated Residual (probe-based): Apply per-layer scalar gates using direction vectors.
+     * Requires ADVANCED_PERSONALITY_AVAILABLE.
      */
     private fun applyResidualGates(axisStrengths: Map<String, Float>) {
         val anyActive = axisStrengths.any { kotlin.math.abs(it.value) > 0.01f }
@@ -853,6 +941,7 @@ class ControlVectorManager(private val context: Context) {
      * @param userMessage The user's input message (for Tier 1 keyword analysis)
      */
     fun onGenerationTurnComplete(lastResponse: String, userMessage: String) {
+        if (!ADVANCED_PERSONALITY_AVAILABLE) return  // all sub-systems are stubs
         val tracker = emotionalStateTracker ?: return
         val persona = lastAppliedStrengths
         if (persona.isEmpty() || persona.all { it.value == 0f }) return

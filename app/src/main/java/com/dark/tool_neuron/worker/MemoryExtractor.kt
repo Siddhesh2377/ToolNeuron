@@ -68,9 +68,10 @@ class MemoryExtractor(
         personaName: String? = null,
         personaId: String? = null
     ) {
-        // Skip very short exchanges (greetings, acknowledgments)
-        if (userMessage.length < MIN_MESSAGE_LENGTH && assistantResponse.length < MIN_MESSAGE_LENGTH) {
-            Log.d(TAG, "Skipping extraction: messages too short")
+        // Skip when user message is trivial (greetings, acknowledgments).
+        // Even if the model gives a long response to "hey", there are no real facts to extract.
+        if (userMessage.length < MIN_MESSAGE_LENGTH) {
+            Log.d(TAG, "Skipping extraction: user message too short (${userMessage.length} chars)")
             return
         }
 
@@ -163,6 +164,8 @@ Facts:"""
 
     /**
      * Parse the raw LLM output into individual fact strings.
+     * Aggressively filters garbage that small models produce: raw conversation turns,
+     * assistant responses, numbered/markdown lists, questions, etc.
      */
     private fun parseExtractedFacts(raw: String): List<String> {
         val trimmed = raw.trim()
@@ -173,12 +176,29 @@ Facts:"""
         return trimmed.lines()
             .map { it.trim() }
             .map { it.removePrefix("-").removePrefix("*").removePrefix("•").trim() }
+            // Strip numbered prefixes like "1." "2." "1)" etc.
+            .map { it.replace(Regex("^\\d+[.)]+\\s*"), "") }
+            // Strip bold markdown
+            .map { it.replace(Regex("\\*\\*([^*]+)\\*\\*"), "$1") }
+            .map { it.trim() }
             .filter { line ->
-                line.length >= 5 &&
+                line.length in 10..200 &&                           // reasonable fact length
                 !line.equals("NONE", ignoreCase = true) &&
                 !line.startsWith("Facts:") &&
                 !line.startsWith("No ") &&
-                !line.startsWith("None")
+                !line.startsWith("None") &&
+                !line.startsWith("User:", ignoreCase = true) &&     // raw user turn
+                !line.startsWith("Assistant:", ignoreCase = true) && // raw assistant turn
+                !line.startsWith("Human:", ignoreCase = true) &&
+                !line.contains("Have you", ignoreCase = true) &&    // questions = not facts
+                !line.contains("What's your", ignoreCase = true) &&
+                !line.contains("What is your", ignoreCase = true) &&
+                !line.contains("Do you", ignoreCase = true) &&
+                !line.endsWith("?") &&                              // any question
+                !line.contains("I believe", ignoreCase = true) &&   // AI self-references
+                !line.contains("I think", ignoreCase = true) &&
+                !line.contains("It's a great", ignoreCase = true) &&
+                line.contains("User ", ignoreCase = true)           // must be about the user
             }
     }
 
@@ -191,16 +211,16 @@ Facts:"""
      * falls back to Jaccard token overlap (threshold: 0.7).
      */
     private suspend fun deduplicateAndStore(facts: List<String>, chatId: String?, personaId: String? = null) {
-        val existingMemories = if (personaId != null) {
+        val mutableExisting = if (personaId != null) {
             aiMemoryDao.getAllForPersonaOnce(personaId)
         } else {
-            aiMemoryDao.getAllOnce()
-        }
+            aiMemoryDao.getGlobalOnce()
+        }.toMutableList()
         val now = System.currentTimeMillis()
         val effectiveThreshold = if (isEmbeddingAvailable()) COSINE_SIMILARITY_THRESHOLD else SIMILARITY_THRESHOLD
 
         for (fact in facts) {
-            val bestMatch = findBestMatch(fact, existingMemories)
+            val bestMatch = findBestMatch(fact, mutableExisting)
 
             if (bestMatch != null && bestMatch.second >= effectiveThreshold) {
                 // UPDATE: overwrite fact text, bump timestamp
@@ -210,6 +230,7 @@ Facts:"""
                     category = categorize(fact)
                 )
                 aiMemoryDao.update(updated)
+                mutableExisting.replaceAll { if (it.id == updated.id) updated else it }
                 Log.d(TAG, "Updated memory: '${bestMatch.first.fact}' -> '$fact' (sim=${bestMatch.second})")
 
                 // Re-embed the updated fact
@@ -230,6 +251,7 @@ Facts:"""
                     personaId = personaId
                 )
                 aiMemoryDao.insert(memory)
+                mutableExisting.add(memory)
                 Log.d(TAG, "Added new memory: '$fact' [${memory.category}] persona=$personaId")
 
                 // Generate and store embedding for the new fact
@@ -402,7 +424,7 @@ Facts:"""
         val allMemories = if (personaId != null) {
             aiMemoryDao.getAllForPersonaOnce(personaId)
         } else {
-            aiMemoryDao.getAllOnce()
+            aiMemoryDao.getGlobalOnce()
         }
         if (allMemories.isEmpty()) return emptyList()
 

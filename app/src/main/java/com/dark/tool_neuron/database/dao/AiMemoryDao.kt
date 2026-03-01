@@ -60,6 +60,10 @@ interface AiMemoryDao {
     @Query("SELECT * FROM ai_memories WHERE summary_group_id IS NOT NULL AND is_summarized = 0 ORDER BY updated_at DESC")
     suspend fun getSummaries(): List<AiMemory>
 
+    /** Get only global memories (no persona). Used when no persona is active. */
+    @Query("SELECT * FROM ai_memories WHERE persona_id IS NULL ORDER BY updated_at DESC")
+    suspend fun getGlobalOnce(): List<AiMemory>
+
     // ==================== Per-persona queries ====================
 
     /** Get all memories for a persona (includes global memories where persona_id IS NULL). */

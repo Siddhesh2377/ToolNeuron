@@ -68,6 +68,7 @@ fun AiMemoryScreen(
     onNavigateBack: () -> Unit
 ) {
     val aiMemoryDao = remember { AppContainer.getAiMemoryDao() }
+    val db = remember { AppContainer.getDatabase() }
     val memoryExtractor = remember {
         MemoryExtractor(aiMemoryDao, AppContainer.getGenerationManager())
     }
@@ -245,6 +246,9 @@ fun AiMemoryScreen(
                 TextButton(onClick = {
                     scope.launch {
                         aiMemoryDao.deleteAll()
+                        // Also clear Knowledge Graph — it's derived from memories
+                        db.knowledgeRelationDao().deleteAll()
+                        db.knowledgeEntityDao().deleteAll()
                         showClearAllDialog = false
                     }
                 }) {

@@ -47,7 +47,7 @@ object LlmModelWorker {
 
     private var service: ILLMService? = null
     private var boundContext: Context? = null
-    private val serviceBound = CompletableDeferred<Unit>()
+    @Volatile private var serviceBound = CompletableDeferred<Unit>()
     private var isBinding = false
 
     // GGUF state
@@ -79,12 +79,14 @@ object LlmModelWorker {
         override fun onServiceDisconnected(name: ComponentName?) {
             service = null
             isBinding = false
+            serviceBound = CompletableDeferred() // Reset so re-bind can complete it again
             Log.w(TAG, "Service disconnected unexpectedly")
         }
 
         override fun onBindingDied(name: ComponentName?) {
             service = null
             isBinding = false
+            serviceBound = CompletableDeferred() // Reset so re-bind can complete it again
             Log.e(TAG, "Service binding died")
         }
 
@@ -206,12 +208,14 @@ object LlmModelWorker {
         return suspendCancellableCoroutine { continuation ->
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    pfd.close()
                     _isGgufModelLoaded.value = true
                     Log.i(TAG, "GGUF model loaded successfully from URI")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    pfd.close()
                     _isGgufModelLoaded.value = false
                     Log.e(TAG, "Failed to load GGUF model from URI: $message")
                     continuation.resume(false)
@@ -264,12 +268,11 @@ object LlmModelWorker {
                 trySend(
                     GenerationEvent.Metrics(
                         DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
+                            tokensPerSecond = tokensPerSecond,
+                            timeToFirstTokenMs = timeToFirstToken.toFloat(),
+                            totalTimeMs = totalTimeMs.toFloat(),
+                            tokensEvaluated = promptTokens,
+                            tokensPredicted = generatedTokens
                         )
                     )
                 )
@@ -528,12 +531,11 @@ object LlmModelWorker {
                 trySend(
                     GenerationEvent.Metrics(
                         DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
+                            tokensPerSecond = tokensPerSecond,
+                            timeToFirstTokenMs = timeToFirstToken.toFloat(),
+                            totalTimeMs = totalTimeMs.toFloat(),
+                            tokensEvaluated = promptTokens,
+                            tokensPredicted = generatedTokens
                         )
                     )
                 )

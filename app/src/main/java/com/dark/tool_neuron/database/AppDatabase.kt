@@ -516,6 +516,10 @@ abstract class AppDatabase : RoomDatabase() {
                             super.onCreate(db)
                             seedDefaultPersonas(db)
                         }
+                        override fun onOpen(db: SupportSQLiteDatabase) {
+                            super.onOpen(db)
+                            db.execSQL("PRAGMA foreign_keys = ON")
+                        }
                     })
                     .build()
                 INSTANCE = instance
