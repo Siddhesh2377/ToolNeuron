@@ -41,10 +41,8 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
         private const val MAX_FILE_LIST_ENTRIES = 100
     }
 
-    /** App-private sandbox directory for all file operations. */
-    private val sandboxDir: File by lazy {
-        File(context.filesDir, "toolneuron_files").also { it.mkdirs() }
-    }
+    /** App-private sandbox directory for all file operations — created eagerly on plugin init. */
+    private val sandboxDir: File = File(context.filesDir, "toolneuron_files").also { it.mkdirs() }
 
     /**
      * Resolve a user-supplied path to a File inside the sandbox.
@@ -52,11 +50,16 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
      * Absolute paths are allowed only if they fall inside sandboxDir.
      */
     private fun resolveSandboxPath(path: String): File {
-        val candidate = if (path.isBlank()) {
+        // Treat common root aliases as sandbox root
+        val normalized = path.trim()
+        val isRootAlias = normalized.isBlank() || normalized == "." || normalized == "/" ||
+                normalized.equals("sandbox", ignoreCase = true) ||
+                normalized.equals("root", ignoreCase = true)
+        val candidate = if (isRootAlias) {
             sandboxDir
         } else {
-            val f = File(path)
-            if (f.isAbsolute) f else File(sandboxDir, path)
+            val f = File(normalized)
+            if (f.isAbsolute) f else File(sandboxDir, normalized)
         }
         val resolved = candidate.canonicalFile
         val sandbox = sandboxDir.canonicalFile
@@ -189,7 +192,7 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
         val directory = resolveSandboxPath(rawPath)
         val path = directory.absolutePath
         if (!directory.exists()) {
-            return@withContext Result.failure(FileNotFoundException("Directory not found: $path"))
+            directory.mkdirs() // Auto-create missing directories instead of failing
         }
         if (!directory.isDirectory) {
             return@withContext Result.failure(IllegalArgumentException("Path is not a directory: $path"))

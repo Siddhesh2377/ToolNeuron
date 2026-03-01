@@ -16,14 +16,15 @@ data class Messages(
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
     val timestamp: Long? = null, // Nullable for backward compatibility with old messages
-    val decodingMetrics: DecodingMetrics? = null,
+    @Transient val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
     val ragResults: List<RagResultItem>? = null,
     val pluginMetrics: PluginExecutionMetrics? = null,
     val toolChainSteps: List<ToolChainStepData>? = null,
     val agentPlan: String? = null,
-    val agentSummary: String? = null
+    val agentSummary: String? = null,
+    val personaName: String? = null // Persona that generated this message
 )
 
 @Serializable

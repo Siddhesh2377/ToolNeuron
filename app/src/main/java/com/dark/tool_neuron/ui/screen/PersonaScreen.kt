@@ -249,7 +249,7 @@ private fun PersonaCard(
                                     .data(File(avatarUri))
                                     .build(),
                                 contentDescription = "Avatar",
-                                modifier = Modifier.fillMaxSize(),
+                                modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(12.dp)),
                                 contentScale = ContentScale.Crop
                             )
                         }
@@ -314,3 +314,4 @@ private fun PersonaCard(
         }
     }
 }
+

@@ -2,6 +2,9 @@ package com.dark.tool_neuron.di
 
 import android.app.Application
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import com.dark.tool_neuron.R
 import com.dark.tool_neuron.billing.BillingManager
 import com.dark.tool_neuron.billing.FeatureGateManager
 import com.dark.tool_neuron.billing.LicenseManager
@@ -46,6 +49,9 @@ object AppContainer {
         appContext = context.applicationContext
         database = AppDatabase.getDatabase(context)
 
+        // Copy bundled persona avatars to internal storage (one-time, idempotent)
+        appScope.launch { initDefaultPersonaAvatars(context.applicationContext) }
+
         modelRepository = ModelRepository(
             modelDao = database.modelDao(), configDao = database.modelConfigDao()
         )
@@ -59,7 +65,7 @@ object AppContainer {
         // Initialize billing singletons
         billingManager = BillingManager(appContext)
         licenseManager = LicenseManager(appContext)
-        featureGateManager = FeatureGateManager(billingManager, licenseManager)
+        featureGateManager = FeatureGateManager(appContext, billingManager, licenseManager)
 
         initVault(context)
     }
@@ -163,4 +169,68 @@ object AppContainer {
     fun getLicenseManager(): LicenseManager = licenseManager
 
     fun getFeatureGateManager(): FeatureGateManager = featureGateManager
+
+    /**
+     * One-time init: copy bundled persona PNGs to internal storage and set avatar_uri
+     * on default personas that don't have a custom avatar yet.
+     * Idempotent — skips personas that already have an avatar_uri pointing to an existing file.
+     */
+    private suspend fun initDefaultPersonaAvatars(context: Context) {
+        try {
+            val avatarDir = java.io.File(context.filesDir, "persona_avatars").also { it.mkdirs() }
+            val dao = database.personaDao()
+
+            // Remove the plain "Assistant" persona (no personality, replaced by real characters)
+            dao.getByName("Assistant")?.let { if (it.isDefault) dao.delete(it) }
+
+            // Seed Anger persona if it doesn't exist yet (for existing installs)
+            if (dao.getByName("Anger") == null) {
+                dao.insert(com.dark.tool_neuron.models.table_schema.Persona(
+                    name = "Anger",
+                    avatar = "\uD83D\uDCA2",
+                    description = "A brutally honest, short-tempered personality who has zero patience for nonsense. Anger doesn't sugarcoat anything — if your idea is stupid, he'll tell you. But beneath the gruff exterior, he's fiercely loyal and gives genuinely useful advice. He hates wasting time, uses sharp wit, and gets straight to the point. He respects people who can take criticism and push back.",
+                    systemPrompt = "",
+                    greeting = "What do you want? Make it quick.",
+                    personality = "blunt, impatient, brutally honest, sarcastic, short-tempered, no-nonsense, sharp wit, fiercely loyal, hates small talk, direct, confrontational but fair, respects strength",
+                    scenario = "You're talking to Anger. He's irritated by default but will grudgingly help if you stop wasting his time.",
+                    alternateGreetings = listOf("Ugh, another question? Fine. What is it.", "I swear if this is something you could've googled..."),
+                    tags = listOf("blunt", "honest", "sarcastic", "direct"),
+                    creatorNotes = "Angry personality. Brutally honest, no sugarcoating. Good for reality checks.",
+                    samplingProfile = "{\"temperature\":0.7,\"topP\":0.88,\"topK\":35,\"minP\":0.06,\"repeatPenalty\":1.15}",
+                    controlVectors = "{\"warmth\":-0.8,\"energy\":0.7,\"humor\":0.2,\"formality\":-0.6,\"verbosity\":-0.6,\"emotion\":0.5}",
+                    isDefault = true
+                ))
+            }
+
+            // Copy bundled avatar PNGs to internal storage for default personas
+            val defaults = mapOf(
+                "Luna" to R.drawable.persona_luna,
+                "CodeBuddy" to R.drawable.persona_codebuddy,
+                "Spark" to R.drawable.persona_spark,
+                "Anger" to R.drawable.persona_anger
+            )
+
+            for ((name, drawableRes) in defaults) {
+                val persona = dao.getByName(name) ?: continue
+                // Skip if user already set a custom avatar that exists on disk
+                if (persona.avatarUri != null && java.io.File(persona.avatarUri).exists()) continue
+
+                val targetFile = java.io.File(avatarDir, "${persona.id}.png")
+                if (!targetFile.exists()) {
+                    val bitmap = BitmapFactory.decodeResource(context.resources, drawableRes)
+                    if (bitmap != null) {
+                        targetFile.outputStream().use { out ->
+                            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+                        }
+                        bitmap.recycle()
+                    }
+                }
+                if (targetFile.exists()) {
+                    dao.update(persona.copy(avatarUri = targetFile.absolutePath))
+                }
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("AppContainer", "Failed to init persona avatars", e)
+        }
+    }
 }

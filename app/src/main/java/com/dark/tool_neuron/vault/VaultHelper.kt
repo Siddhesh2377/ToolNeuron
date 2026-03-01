@@ -102,9 +102,27 @@ object VaultHelper {
                 // Retry the operation once after recovery
                 block()
             } catch (retryException: Exception) {
-                Log.e(TAG, "$operation failed after recovery attempt: ${retryException.message}")
-                VaultLogger.log(LogLevel.ERROR, "RECOVERY", "$operation failed after recovery: ${retryException.message}", retryException.stackTraceToString())
-                throw retryException
+                Log.e(TAG, "$operation failed after recovery, attempting fresh vault: ${retryException.message}")
+                VaultLogger.log(LogLevel.ERROR, "RECOVERY", "$operation failed after recovery, creating fresh vault", retryException.stackTraceToString())
+
+                // Last resort: delete the corrupted vault and start fresh
+                try {
+                    mutex.withLock {
+                        if (initialized) {
+                            vault.close()
+                        }
+                        initialized = false
+                        _isReady.value = false
+                    }
+                    val vaultDir = java.io.File(appContext.filesDir, "memory_vault")
+                    vaultDir.deleteRecursively()
+                    Log.w(TAG, "Deleted corrupted vault, re-creating fresh")
+                    initialize(appContext)
+                    block()
+                } catch (freshException: Exception) {
+                    Log.e(TAG, "$operation failed even after fresh vault: ${freshException.message}")
+                    throw freshException
+                }
             }
         }
     }

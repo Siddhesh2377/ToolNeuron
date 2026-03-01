@@ -66,8 +66,8 @@ class EmbeddingEngine {
 
                 val success = nativeLib.nativeLoadEmbeddingModel(
                     path = config.modelPath,
-                    threads = config.threads,
-                    contextSize = config.contextSize
+                    nThreads = config.threads,
+                    nCtx = config.contextSize
                 )
 
                 if (!success) {

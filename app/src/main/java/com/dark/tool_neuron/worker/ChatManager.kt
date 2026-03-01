@@ -84,7 +84,8 @@ class ChatManager {
         ragResults: List<RagResultItem>? = null,
         toolChainSteps: List<ToolChainStepData>? = null,
         agentPlan: String? = null,
-        agentSummary: String? = null
+        agentSummary: String? = null,
+        personaName: String? = null
     ): Result<Messages> = withContext(Dispatchers.IO) {
         withVaultReady {
             val message = Messages(
@@ -97,7 +98,8 @@ class ChatManager {
                 ragResults = ragResults,
                 toolChainSteps = toolChainSteps,
                 agentPlan = agentPlan,
-                agentSummary = agentSummary
+                agentSummary = agentSummary,
+                personaName = personaName
             )
             VaultHelper.addMessage(chatId, message)
             message

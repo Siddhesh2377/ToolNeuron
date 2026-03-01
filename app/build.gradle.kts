@@ -22,9 +22,28 @@ android {
         versionCode = 26
         versionName = "2.0.1"
         ndk {
-            abiFilters += listOf("arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
+        }
+        externalNativeBuild {
+            cmake {
+                cppFlags("-std=c++17", "-O3", "-DNDEBUG")
+                arguments(
+                    "-DANDROID_STL=c++_shared",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    "-DCMAKE_C_FLAGS_RELEASE=-O3 -DNDEBUG",
+                    "-DCMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG",
+                )
+            }
         }
         buildConfigField("String", "ALIAS", getProperty("ALIAS"))
+        buildConfigField("String", "CERT_FINGERPRINT", getProperty("CERT_FINGERPRINT"))
+    }
+
+    externalNativeBuild {
+        cmake {
+            path("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
     }
 
     buildTypes {
@@ -115,7 +134,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
 
     // Local Projects & AI Libraries
-    implementation(files("../libs/ai_gguf-release.aar"))
+    // ai_gguf-release.aar replaced by native llama.cpp build (see cpp/CMakeLists.txt)
     implementation(files("../libs/ai_sd-release.aar"))
     implementation(files("../libs/ai_supertonic_tts-release.aar"))
     //implementation(":runanywhere-core-onnx-release@aar")

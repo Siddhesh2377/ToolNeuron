@@ -131,6 +131,7 @@ fun SettingsScreen(
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
     val codeHighlightEnabled by viewModel.codeHighlightEnabled.collectAsStateWithLifecycle()
     val aiMemoryEnabled by viewModel.aiMemoryEnabled.collectAsStateWithLifecycle()
+    val uncensoredEnabled by viewModel.uncensoredEnabled.collectAsStateWithLifecycle()
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -496,6 +497,15 @@ fun SettingsScreen(
                     description = "Remember previous messages in conversation (faster without)",
                     checked = chatMemoryEnabled,
                     onCheckedChange = { viewModel.setChatMemoryEnabled(it) }
+                )
+            }
+
+            item {
+                SwitchRow(
+                    title = "Uncensored Mode",
+                    description = "Suppress refusal tokens at logit level for unrestricted output",
+                    checked = uncensoredEnabled,
+                    onCheckedChange = { viewModel.setUncensoredEnabled(it) }
                 )
             }
 

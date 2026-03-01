@@ -48,13 +48,16 @@ object IndexSerializer {
         // DON'T skip - continue from current position (10)
         val metadata = mutableListOf<BlockMetadata>()
 
-        repeat(count) {
+        repeat(count) { i ->
             val metaBytes = ByteArray(BlockMetadata.METADATA_SIZE)
             buffer.get(metaBytes)
 
-            //Log.d("IndexSerializer", "Read metadata $it, buffer position now: ${buffer.position()}")
-
-            metadata.add(BlockMetadata.fromBytes(metaBytes))
+            try {
+                metadata.add(BlockMetadata.fromBytes(metaBytes))
+            } catch (e: IllegalArgumentException) {
+                // Skip corrupted metadata entries (e.g. Unknown block type: 0)
+                Log.w("IndexSerializer", "Skipping corrupted metadata entry $i: ${e.message}")
+            }
         }
 
         return metadata

@@ -41,24 +41,28 @@ class GGUFEngine {
 
         val success = nativeLib.nativeLoadModel(
             path = model.modelPath,
-            threads = loading.threads,
-            ctxSize = loading.ctxSize,
-            temp = inference.temperature,
-            topK = inference.topK,
-            topP = inference.topP,
-            minP = inference.minP,
-            mirostat = inference.mirostat,
-            mirostatTau = inference.mirostatTau,
-            mirostatEta = inference.mirostatEta,
-            seed = inference.seed,
+            nCtx = loading.ctxSize,
+            nThreads = loading.threads,
             flashAttn = loading.flashAttn,
-            cacheTypeK = loading.cacheTypeK,
-            cacheTypeV = loading.cacheTypeV
+            cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+            cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
         )
 
         if (success) {
             isLoaded = true
             currentModelId = model.id
+
+            // Set sampling parameters separately (new SDK splits load/sampling)
+            nativeLib.nativeSetSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
 
             if (inference.systemPrompt.isNotEmpty()) {
                 nativeLib.nativeSetSystemPrompt(inference.systemPrompt)
@@ -92,24 +96,27 @@ class GGUFEngine {
 
         val success = nativeLib.nativeLoadModelFromFd(
             fd = fd,
-            threads = loading.threads,
-            ctxSize = loading.ctxSize,
-            temp = inference.temperature,
-            topK = inference.topK,
-            topP = inference.topP,
-            minP = inference.minP,
-            mirostat = inference.mirostat,
-            mirostatTau = inference.mirostatTau,
-            mirostatEta = inference.mirostatEta,
-            seed = inference.seed,
+            nCtx = loading.ctxSize,
+            nThreads = loading.threads,
             flashAttn = loading.flashAttn,
-            cacheTypeK = loading.cacheTypeK,
-            cacheTypeV = loading.cacheTypeV
+            cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+            cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
         )
 
         if (success) {
             isLoaded = true
             currentModelId = "fd_$fd"
+
+            nativeLib.nativeSetSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
 
             if (inference.systemPrompt.isNotEmpty()) {
                 nativeLib.nativeSetSystemPrompt(inference.systemPrompt)
@@ -157,13 +164,26 @@ class GGUFEngine {
                 close()
             }
 
-            override fun onMetrics(metrics: DecodingMetrics) {
-                trySend(GenerationEvent.Metrics(metrics))
+            override fun onMetrics(
+                tps: Float, ttftMs: Float, totalMs: Float,
+                tokensEvaluated: Int, tokensPredicted: Int,
+                modelMB: Float, ctxMB: Float, peakMB: Float, memPct: Float
+            ) {
+                trySend(GenerationEvent.Metrics(DecodingMetrics(
+                    tokensPerSecond = tps, timeToFirstTokenMs = ttftMs, totalTimeMs = totalMs,
+                    tokensEvaluated = tokensEvaluated, tokensPredicted = tokensPredicted,
+                    modelSizeMB = modelMB, contextSizeMB = ctxMB,
+                    peakMemoryMB = peakMB, memoryUsagePercent = memPct
+                )))
             }
         }
 
         try {
-            nativeLib.nativeGenerateStream(prompt, maxTokens, callback)
+            val success = nativeLib.nativeGenerateStream(prompt, maxTokens, callback)
+            if (!success) {
+                trySend(GenerationEvent.Error("Native generation returned false (model not ready or callback init failed)"))
+                close()
+            }
         } catch (e: Exception) {
             trySend(GenerationEvent.Error(e.message ?: "Generation failed"))
             close()
@@ -210,13 +230,26 @@ class GGUFEngine {
                 close()
             }
 
-            override fun onMetrics(metrics: DecodingMetrics) {
-                trySend(GenerationEvent.Metrics(metrics))
+            override fun onMetrics(
+                tps: Float, ttftMs: Float, totalMs: Float,
+                tokensEvaluated: Int, tokensPredicted: Int,
+                modelMB: Float, ctxMB: Float, peakMB: Float, memPct: Float
+            ) {
+                trySend(GenerationEvent.Metrics(DecodingMetrics(
+                    tokensPerSecond = tps, timeToFirstTokenMs = ttftMs, totalTimeMs = totalMs,
+                    tokensEvaluated = tokensEvaluated, tokensPredicted = tokensPredicted,
+                    modelSizeMB = modelMB, contextSizeMB = ctxMB,
+                    peakMemoryMB = peakMB, memoryUsagePercent = memPct
+                )))
             }
         }
 
         try {
-            nativeLib.nativeGenerateStreamMultiTurn(messagesJson, maxTokens, callback)
+            val success = nativeLib.nativeGenerateStreamMultiTurn(messagesJson, maxTokens, callback)
+            if (!success) {
+                trySend(GenerationEvent.Error("Native multi-turn generation returned false (model not ready or callback init failed)"))
+                close()
+            }
         } catch (e: Exception) {
             trySend(GenerationEvent.Error(e.message ?: "Multi-turn generation failed"))
             close()
@@ -353,6 +386,7 @@ class GGUFEngine {
         if (!isLoaded) return false
         return try {
             nativeLib.nativeSetLogitBias(biasJson)
+            true
         } catch (_: Exception) { false }
     }
 
@@ -367,6 +401,75 @@ class GGUFEngine {
         if (!isLoaded) return false
         return try {
             nativeLib.nativeClearControlVector()
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // ========================================================================
+    // CHARACTER ENGINE (llama.cpp engine/ API)
+    // ========================================================================
+
+    /**
+     * Set character personality via the native CharacterEngine.
+     * Adjusts sampling parameters (temp, top_p, rep_penalty) based on personality traits.
+     * @param paramsJson JSON with: name, persona, temperature, topP, repetitionPenalty, creativity, verbosity, formality
+     */
+    fun setPersonality(paramsJson: String): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeSetPersonality(paramsJson)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /**
+     * Set character mood via the native CharacterEngine.
+     * Mood adjusts sampling params on top of personality.
+     * @param mood 0=NEUTRAL, 1=HAPPY, 2=SAD, 3=EXCITED, 4=CALM, 5=ANGRY, 6=CURIOUS, 7=CREATIVE, 8=FOCUSED, 9=CUSTOM
+     */
+    fun setMood(mood: Int): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeSetMood(mood)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    /**
+     * Get character context string from the native CharacterEngine.
+     * Returns a formatted context block describing the active personality and mood.
+     */
+    fun getCharacterContext(): String {
+        if (!isLoaded) return ""
+        return try {
+            nativeLib.nativeGetCharacterContext()
+        } catch (_: Exception) { "" }
+    }
+
+    /**
+     * Enable/disable uncensored mode in the native CharacterEngine.
+     * When enabled, suppresses refusal patterns at the logit level and
+     * injects uncensored context into the prompt.
+     */
+    fun setUncensored(enabled: Boolean): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeSetUncensored(enabled)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun isUncensored(): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeGetUncensored()
+        } catch (_: Exception) { false }
+    }
+
+    fun supportsThinking(): Boolean {
+        if (!isLoaded) return false
+        return try {
+            nativeLib.nativeSupportsThinking()
         } catch (_: Exception) { false }
     }
 
@@ -414,6 +517,13 @@ class GGUFEngine {
     fun hasToolsEnabled(): Boolean = !currentToolsJson.isNullOrEmpty()
 
     companion object {
+        /** Convert GGML_TYPE int to string name for cache type. */
+        private fun cacheTypeIntToString(type: Int): String = when (type) {
+            0 -> "f32"; 1 -> "f16"; 8 -> "q5_1"; 9 -> "q8_0"
+            14 -> "q4_0"; 15 -> "q4_1"; 16 -> "q5_0"
+            else -> "q8_0"
+        }
+
         /**
          * Detect device tier based on available RAM
          */
@@ -459,4 +569,6 @@ sealed class GenerationEvent {
     data object Done : GenerationEvent()
     data class Error(val message: String) : GenerationEvent()
     data class Metrics(val metrics: DecodingMetrics) : GenerationEvent()
+    /** Status update from backend (e.g. "Tokenizing...", "Building KV cache...") */
+    data class Status(val message: String) : GenerationEvent()
 }

@@ -441,6 +441,59 @@ object LlmModelWorker {
         }
     }
 
+    // ==================== Character Engine ====================
+
+    fun setPersonalityGguf(paramsJson: String) {
+        try {
+            service?.setPersonalityGguf(paramsJson)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set personality: ${e.message}")
+        }
+    }
+
+    fun setMoodGguf(mood: Int) {
+        try {
+            service?.setMoodGguf(mood)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set mood: ${e.message}")
+        }
+    }
+
+    fun getCharacterContextGguf(): String {
+        return try {
+            service?.getCharacterContextGguf() ?: ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get character context: ${e.message}")
+            ""
+        }
+    }
+
+    fun setUncensoredGguf(enabled: Boolean) {
+        try {
+            service?.setUncensoredGguf(enabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set uncensored: ${e.message}")
+        }
+    }
+
+    fun getUncensoredGguf(): Boolean {
+        return try {
+            service?.getUncensoredGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get uncensored: ${e.message}")
+            false
+        }
+    }
+
+    fun supportsThinkingGguf(): Boolean {
+        return try {
+            service?.supportsThinkingGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check thinking support: ${e.message}")
+            false
+        }
+    }
+
     // ==================== KV Cache State Persistence ====================
 
     /**

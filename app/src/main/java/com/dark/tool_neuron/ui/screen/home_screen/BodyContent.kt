@@ -22,12 +22,14 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
@@ -42,6 +44,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import java.io.File
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.ui.ActionIcon
 import com.dark.tool_neuron.models.ui.ActionItem
@@ -61,6 +66,7 @@ import com.dark.tool_neuron.ui.components.lazyMarkdownItems
 import com.dark.tool_neuron.ui.components.PluginResultCard
 import com.dark.tool_neuron.ui.components.ThinkingBlock
 import com.dark.tool_neuron.util.ThinkingParser
+import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.AgentPhase
@@ -83,9 +89,11 @@ fun BodyContent(
     llmModelViewModel: LLMModelViewModel
 ) {
     val messages = chatViewModel.messages
+    val activePersona by chatViewModel.activePersona.collectAsState()
     val isGenerating by chatViewModel.isGenerating.collectAsState()
     val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsState()
     val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsState()
+    val streamingStatus by chatViewModel.streamingStatus.collectAsState()
     val streamingImage by chatViewModel.streamingImage.collectAsState()
     val imageProgress by chatViewModel.imageGenerationProgress.collectAsState()
     val imageStep by chatViewModel.imageGenerationStep.collectAsState()
@@ -103,6 +111,11 @@ fun BodyContent(
     val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
     val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsState()
     val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsState()
+
+    // Cache all personas by name so saved messages can show correct avatar
+    val personaDao = remember { com.dark.tool_neuron.di.AppContainer.getPersonaDao() }
+    val allPersonas by personaDao.getAll().collectAsState(initial = emptyList())
+    val personaByName = remember(allPersonas) { allPersonas.associateBy { it.name } }
 
     val listState = rememberLazyListState()
 
@@ -125,6 +138,7 @@ fun BodyContent(
                 StreamingView(
                     userMessage = streamingUserMessage!!,
                     assistantMessage = streamingAssistantMessage,
+                    statusMessage = streamingStatus,
                     streamingImage = streamingImage,
                     imageProgress = imageProgress,
                     imageStep = imageStep,
@@ -133,6 +147,7 @@ fun BodyContent(
                     memoryResults = currentMemoryResults,
                     appState = appState,
                     messages = messages,
+                    persona = activePersona,
                     toolChainSteps = toolChainSteps,
                     currentToolChainRound = currentToolChainRound,
                     agentPhase = agentPhase,
@@ -157,9 +172,13 @@ fun BodyContent(
                             }
                             else -> {
                                 val isLastAssistant = index == lastAssistantIndex
-                                // Header: RAG, tool chain, thinking, image/plugin
+                                // Header: avatar + RAG, tool chain, thinking, image/plugin
                                 item(key = "${message.msgId}-header") {
-                                    AssistantMessageHeader(message)
+                                    // Look up full persona (with avatarUri) from cached DB map
+                                    val msgPersona = message.personaName?.let { name ->
+                                        personaByName[name] ?: activePersona?.takeIf { it.name == name }
+                                    }
+                                    AssistantMessageHeader(message, msgPersona)
                                 }
                                 // Markdown content — each element is a lazy item
                                 if (message.content.contentType == ContentType.Text) {
@@ -170,7 +189,7 @@ fun BodyContent(
                                             keyPrefix = message.msgId,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 4.dp)
+                                                .padding(horizontal = 12.dp)
                                         )
                                     }
                                 }
@@ -255,6 +274,7 @@ fun BodyContent(
 private fun StreamingView(
     userMessage: String,
     assistantMessage: String,
+    statusMessage: String? = null,
     streamingImage: Bitmap?,
     imageProgress: Float,
     imageStep: String,
@@ -263,6 +283,7 @@ private fun StreamingView(
     memoryResults: List<com.dark.tool_neuron.worker.ScoredVaultContent> = emptyList(),
     appState: com.dark.tool_neuron.models.state.AppState,
     messages: List<Messages> = emptyList(),
+    persona: Persona? = null,
     toolChainSteps: List<com.dark.tool_neuron.models.messages.ToolChainStepData> = emptyList(),
     currentToolChainRound: Int = 0,
     agentPhase: AgentPhase = AgentPhase.Idle,
@@ -364,8 +385,11 @@ private fun StreamingView(
             }
             // Show streaming text when in simple flow or during plan/summary generation
             agentPhase == AgentPhase.Idle || agentPhase == AgentPhase.Complete -> {
+                PersonaAvatarRow(persona)
                 if (assistantMessage.isNotEmpty()) {
                     AssistantStreamingBubble(text = assistantMessage)
+                } else if (statusMessage != null) {
+                    ShimmerStatusBubble(text = statusMessage)
                 }
             }
         }
@@ -650,9 +674,9 @@ private fun UserMessageBubble(message: Messages) {
     }
 }
 
-/** Header part of assistant message: RAG results, tool chain, thinking block, non-text content. */
+/** Header part of assistant message: avatar, RAG results, tool chain, thinking block, non-text content. */
 @Composable
-private fun AssistantMessageHeader(message: Messages) {
+private fun AssistantMessageHeader(message: Messages, persona: Persona? = null) {
     val hasRagResults = remember(message.ragResults) {
         message.ragResults?.isNotEmpty() == true
     }
@@ -664,6 +688,9 @@ private fun AssistantMessageHeader(message: Messages) {
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
     ) {
+        // Persona avatar + name
+        PersonaAvatarRow(persona)
+
         if (hasRagResults) {
             message.ragResults?.let { results ->
                 SavedRagResultsDisplay(results = results)
@@ -1019,7 +1046,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     )
 
                     Text(
-                        text = "${metrics.totalTokens} tokens",
+                        text = "${(metrics.tokensEvaluated + metrics.tokensPredicted)} tokens",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1064,22 +1091,22 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     MetricRow(
                         icon = R.drawable.tokens,
                         label = "Total Tokens",
-                        value = metrics.totalTokens.toString()
+                        value = (metrics.tokensEvaluated + metrics.tokensPredicted).toString()
                     )
 
-                    if (metrics.promptTokens > 0) {
+                    if (metrics.tokensEvaluated > 0) {
                         MetricRow(
                             icon = R.drawable.prompt,
                             label = "Prompt Tokens",
-                            value = metrics.promptTokens.toString()
+                            value = metrics.tokensEvaluated.toString()
                         )
                     }
 
-                    if (metrics.generatedTokens > 0) {
+                    if (metrics.tokensPredicted > 0) {
                         MetricRow(
                             icon = R.drawable.generated,
                             label = "Generated Tokens",
-                            value = metrics.generatedTokens.toString()
+                            value = metrics.tokensPredicted.toString()
                         )
                     }
 
@@ -1089,11 +1116,11 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                         value = "$formattedSpeed t/s"
                     )
 
-                    if (metrics.timeToFirstToken > 0) {
+                    if (metrics.timeToFirstTokenMs.toLong() > 0) {
                         MetricRow(
                             icon = R.drawable.timer,
                             label = "Time to First Token",
-                            value = "${metrics.timeToFirstToken} ms"
+                            value = "${metrics.timeToFirstTokenMs.toLong()} ms"
                         )
                     }
 
@@ -1762,6 +1789,101 @@ fun SavedRagResultsDisplay(
                 }
             }
         }
+    }
+}
+
+/** Shimmer status indicator shown while waiting for first token. */
+@Composable
+private fun ShimmerStatusBubble(text: String) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.3f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "shimmerAlpha"
+    )
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+    ) {
+        // Pulsing dot
+        Box(
+            modifier = Modifier
+                .size(rDp(8.dp))
+                .graphicsLayer { alpha = shimmerAlpha }
+                .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+        )
+
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = shimmerAlpha),
+            modifier = Modifier.graphicsLayer { alpha = shimmerAlpha }
+        )
+    }
+}
+
+/** Small avatar + name row shown at the top of each assistant message. */
+@Composable
+private fun PersonaAvatarRow(persona: Persona?) {
+    val context = LocalContext.current
+    val displayName = persona?.name?.takeIf { it != "Assistant" } ?: "Assistant"
+
+    Row(
+        modifier = Modifier.padding(horizontal = rDp(12.dp), vertical = rDp(2.dp)),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+    ) {
+        Surface(
+            modifier = Modifier.size(rDp(24.dp)),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.secondaryContainer
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                when {
+                    // Avatar file (bundled or user-uploaded)
+                    persona?.avatarUri != null -> {
+                        AsyncImage(
+                            model = ImageRequest.Builder(context)
+                                .data(File(persona.avatarUri))
+                                .build(),
+                            contentDescription = displayName,
+                            modifier = Modifier.fillMaxSize().clip(CircleShape),
+                            contentScale = ContentScale.Crop
+                        )
+                    }
+                    // Emoji avatar
+                    persona?.avatar?.isNotBlank() == true -> {
+                        Text(
+                            text = persona.avatar,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    }
+                    // Default icon
+                    else -> {
+                        Icon(
+                            Icons.Default.Person,
+                            contentDescription = null,
+                            modifier = Modifier.size(rDp(16.dp)),
+                            tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+        }
+
+        Text(
+            text = displayName,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 

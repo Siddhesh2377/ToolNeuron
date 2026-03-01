@@ -137,17 +137,21 @@ class LLMService : Service() {
 
                             is GenerationEvent.Metrics -> {
                                 callback.onMetrics(
-                                    event.metrics.totalTokens,
-                                    event.metrics.promptTokens,
-                                    event.metrics.generatedTokens,
+                                    event.metrics.tokensEvaluated + event.metrics.tokensPredicted,
+                                    event.metrics.tokensEvaluated,
+                                    event.metrics.tokensPredicted,
                                     event.metrics.tokensPerSecond,
-                                    event.metrics.timeToFirstToken,
-                                    event.metrics.totalTimeMs
+                                    event.metrics.timeToFirstTokenMs.toLong(),
+                                    event.metrics.totalTimeMs.toLong()
                                 )
                             }
 
                             is GenerationEvent.ToolCall -> {
                                 callback.onToolCall(event.name, event.args)
+                            }
+
+                            is GenerationEvent.Status -> {
+                                // Status events handled at ViewModel level, not via AIDL
                             }
                         }
                     }
@@ -212,16 +216,20 @@ class LLMService : Service() {
                             }
                             is GenerationEvent.Metrics -> {
                                 callback.onMetrics(
-                                    event.metrics.totalTokens,
-                                    event.metrics.promptTokens,
-                                    event.metrics.generatedTokens,
+                                    event.metrics.tokensEvaluated + event.metrics.tokensPredicted,
+                                    event.metrics.tokensEvaluated,
+                                    event.metrics.tokensPredicted,
                                     event.metrics.tokensPerSecond,
-                                    event.metrics.timeToFirstToken,
-                                    event.metrics.totalTimeMs
+                                    event.metrics.timeToFirstTokenMs.toLong(),
+                                    event.metrics.totalTimeMs.toLong()
                                 )
                             }
                             is GenerationEvent.ToolCall -> {
                                 callback.onToolCall(event.name, event.args)
+                            }
+
+                            is GenerationEvent.Status -> {
+                                // Status events handled at ViewModel level, not via AIDL
                             }
                         }
                     }
@@ -263,6 +271,32 @@ class LLMService : Service() {
 
         override fun clearControlVectorGguf(): Boolean {
             return ggufEngine.clearControlVector()
+        }
+
+        // ==================== Character Engine ====================
+
+        override fun setPersonalityGguf(paramsJson: String) {
+            ggufEngine.setPersonality(paramsJson)
+        }
+
+        override fun setMoodGguf(mood: Int) {
+            ggufEngine.setMood(mood)
+        }
+
+        override fun getCharacterContextGguf(): String {
+            return ggufEngine.getCharacterContext()
+        }
+
+        override fun setUncensoredGguf(enabled: Boolean) {
+            ggufEngine.setUncensored(enabled)
+        }
+
+        override fun getUncensoredGguf(): Boolean {
+            return ggufEngine.isUncensored()
+        }
+
+        override fun supportsThinkingGguf(): Boolean {
+            return ggufEngine.supportsThinking()
         }
 
         // ==================== KV Cache State Persistence ====================

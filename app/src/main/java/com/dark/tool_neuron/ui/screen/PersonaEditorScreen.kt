@@ -169,14 +169,25 @@ fun PersonaEditorScreen(
     ) { uri: Uri? ->
         if (uri != null) {
             scope.launch(Dispatchers.IO) {
-                val targetId = existingPersona?.id ?: "new_${System.currentTimeMillis()}"
-                val targetFile = File(avatarDir, "$targetId.png")
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    targetFile.outputStream().use { output ->
-                        input.copyTo(output)
+                try {
+                    val targetId = existingPersona?.id ?: "new_${System.currentTimeMillis()}"
+                    // Use timestamp in filename so the path changes → forces Compose recomposition + Coil cache miss
+                    val targetFile = File(avatarDir, "${targetId}_${System.currentTimeMillis()}.png")
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        targetFile.outputStream().use { output ->
+                            input.copyTo(output)
+                        }
                     }
+                    // Delete old avatar file if it's a different file in our avatar dir
+                    val oldPath = avatarUri
+                    if (oldPath != null && oldPath != targetFile.absolutePath) {
+                        val oldFile = File(oldPath)
+                        if (oldFile.parentFile?.name == "persona_avatars") oldFile.delete()
+                    }
+                    avatarUri = targetFile.absolutePath
+                } catch (e: Exception) {
+                    android.util.Log.e("PersonaEditor", "Failed to copy avatar", e)
                 }
-                avatarUri = targetFile.absolutePath
             }
         }
     }

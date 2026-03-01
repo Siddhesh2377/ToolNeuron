@@ -2,6 +2,7 @@ package com.dark.tool_neuron
 
 import android.app.Application
 import android.util.Log
+import com.dark.tool_neuron.billing.IntegrityGuard
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.plugins.DeviceInfoPlugin
@@ -39,6 +40,9 @@ class NVApplication : Application() {
         super.onCreate()
         Log.d(TAG, "Application onCreate")
 
+        // Initialize integrity guard before anything else
+        IntegrityGuard.init(BuildConfig.CERT_FINGERPRINT)
+
         // Initialize app container first
         AppContainer.init(applicationContext, this)
 
@@ -68,6 +72,20 @@ class NVApplication : Application() {
         Log.d(TAG, "TTSManager initialized")
 
         val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Restore bypass setting from DataStore so it survives app restarts
+        appScope.launch {
+            try {
+                val settings = AppSettingsDataStore(applicationContext)
+                val bypassEnabled = settings.toolCallingBypassEnabled.first()
+                if (bypassEnabled) {
+                    PluginManager.setToolCallingBypassEnabled(true)
+                    Log.d(TAG, "Restored tool calling bypass from settings: ON")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to restore bypass setting", e)
+            }
+        }
 
         // Run data integrity check after vault is ready
         appScope.launch {

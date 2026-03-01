@@ -97,6 +97,7 @@ import androidx.compose.ui.layout.ContentScale
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import java.io.File
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material3.AlertDialog
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -289,6 +290,10 @@ fun BottomBar(
 
     // Active persona
     val activePersona by chatViewModel.activePersona.collectAsStateWithLifecycle()
+
+    // Thinking mode
+    val thinkingEnabled by chatViewModel.thinkingModeEnabled.collectAsStateWithLifecycle()
+    val modelSupportsThinking by chatViewModel.modelSupportsThinking.collectAsStateWithLifecycle()
 
     // App settings
     val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
@@ -531,6 +536,14 @@ fun BottomBar(
                             icon = Icons.Outlined.Language
                         )
                     }
+
+                    // 5. Thinking Mode Toggle — always visible, disabled if model doesn't support it
+                    ActionToggleButton(
+                        onCheckedChange = { chatViewModel.setThinkingMode(it) },
+                        checked = thinkingEnabled,
+                        enabled = modelSupportsThinking,
+                        icon = Icons.Default.Psychology
+                    )
 
                     Spacer(Modifier.weight(1f))
 
@@ -790,7 +803,7 @@ private fun MoreOptionsOverlay(
                                             .data(File(activePersona.avatarUri))
                                             .build(),
                                         contentDescription = "Character",
-                                        modifier = Modifier.fillMaxSize(),
+                                        modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(rDp(8.dp))),
                                         contentScale = ContentScale.Crop
                                     )
                                 }
@@ -1010,3 +1023,4 @@ private fun ReloadModelDialog(
         shape = RoundedCornerShape(rDp(16.dp))
     )
 }
+

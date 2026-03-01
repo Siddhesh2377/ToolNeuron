@@ -32,6 +32,9 @@ interface PersonaDao {
     @Query("SELECT * FROM personas WHERE id = :id")
     suspend fun getById(id: String): Persona?
 
+    @Query("SELECT * FROM personas WHERE name = :name LIMIT 1")
+    suspend fun getByName(name: String): Persona?
+
     @Query("SELECT * FROM personas WHERE is_default = 1")
     suspend fun getDefaults(): List<Persona>
 

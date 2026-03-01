@@ -152,6 +152,20 @@ class GenerationManager {
 
     fun clearControlVector(): Boolean = LlmModelWorker.clearControlVectorGguf()
 
+    // ==================== Character Engine ====================
+
+    fun setPersonality(paramsJson: String) = LlmModelWorker.setPersonalityGguf(paramsJson)
+
+    fun setMood(mood: Int) = LlmModelWorker.setMoodGguf(mood)
+
+    fun getCharacterContext(): String = LlmModelWorker.getCharacterContextGguf()
+
+    fun setUncensored(enabled: Boolean) = LlmModelWorker.setUncensoredGguf(enabled)
+
+    fun isUncensored(): Boolean = LlmModelWorker.getUncensoredGguf()
+
+    fun supportsThinking(): Boolean = LlmModelWorker.supportsThinkingGguf()
+
     // ==================== KV Cache State Persistence ====================
 
     fun getKvCacheStateSize(): Long = LlmModelWorker.getStateSizeGguf()

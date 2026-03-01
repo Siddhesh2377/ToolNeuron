@@ -29,6 +29,14 @@ interface ILLMService {
     boolean loadControlVectorsGguf(String vectorsJson);
     boolean clearControlVectorGguf();
 
+    // Character engine (llama.cpp engine API)
+    void setPersonalityGguf(String paramsJson);
+    void setMoodGguf(int mood);
+    String getCharacterContextGguf();
+    void setUncensoredGguf(boolean enabled);
+    boolean getUncensoredGguf();
+    boolean supportsThinkingGguf();
+
     // KV cache state persistence
     long getStateSizeGguf();
     boolean stateSaveToFileGguf(String path);

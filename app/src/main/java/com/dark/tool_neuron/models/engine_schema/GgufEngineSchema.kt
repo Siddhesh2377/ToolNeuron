@@ -18,7 +18,7 @@ data class GgufLoadingParams(
     val batchSize: Int = 512,
     val useMmap: Boolean = true,
     val useMlock: Boolean = false,
-    val flashAttn: Boolean = true,      // Flash attention (reduces memory bandwidth)
+    val flashAttn: Boolean = false,     // Disabled: crashes in ggml_compute_forward_dup with q8_0 KV on armv8.2
     val cacheTypeK: Int = 9,            // GGML_TYPE_Q8_0 (quantized KV cache keys)
     val cacheTypeV: Int = 9             // GGML_TYPE_Q8_0 (quantized KV cache values)
 ) {

@@ -12,5 +12,8 @@ enum class BlockType(val code: Byte) {
         private val map = values().associateBy { it.code }
         fun fromCode(code: Byte): BlockType = map[code]
             ?: throw IllegalArgumentException("Unknown block type: $code")
+
+        /** Safe variant that returns null for invalid/corrupted block type bytes. */
+        fun fromCodeOrNull(code: Byte): BlockType? = map[code]
     }
 }

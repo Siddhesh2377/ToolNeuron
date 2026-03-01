@@ -26,7 +26,7 @@ import java.util.UUID
 
 @Database(
     entities = [Model::class, ModelConfig::class, InstalledRag::class, Persona::class, AiMemory::class, KnowledgeEntity::class, KnowledgeRelation::class],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -244,6 +244,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Remove extra default personas — keep only Assistant, Luna, CodeBuddy, Spark
+                db.execSQL("DELETE FROM personas WHERE name IN ('Sage', 'Nova', 'Zen', 'Atlas', 'Aria') AND is_default = 1")
+            }
+        }
+
         private val MIGRATION_11_12 = object : Migration(11, 12) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 // Per-persona memory: add persona_id to ai_memories and knowledge_relations
@@ -256,16 +263,13 @@ abstract class AppDatabase : RoomDatabase() {
 
         private val MIGRATION_10_11 = object : Migration(10, 11) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                // Add 5 new character personas with full structured fields
-                seedNewPersonas(db)
+                // Previously seeded extra personas — now a no-op.
+                // Extra personas removed; keeping only Assistant, Luna, CodeBuddy, Spark.
             }
         }
 
-        /**
-         * Seed 5 new characters with full TavernAI v2 structured fields,
-         * personality sliders, and sampling profiles.
-         * Used by both MIGRATION_10_11 (existing users) and seedDefaultPersonas (fresh installs).
-         */
+        /** Legacy — kept for migration compatibility but now unused. */
+        @Suppress("unused")
         private fun seedNewPersonas(db: SupportSQLiteDatabase) {
             val now = System.currentTimeMillis()
             val cols = "id, name, avatar, system_prompt, greeting, is_default, created_at, description, personality, scenario, example_messages, alternate_greetings, tags, creator_notes, sampling_profile, control_vectors"
@@ -436,12 +440,6 @@ abstract class AppDatabase : RoomDatabase() {
             val now = System.currentTimeMillis()
             val cols = "id, name, avatar, system_prompt, greeting, is_default, created_at, description, personality, scenario, example_messages, alternate_greetings, tags, creator_notes, sampling_profile, control_vectors"
 
-            // Assistant — plain default (no persona behavior)
-            db.execSQL(
-                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?, '', '', '', '', '[]', '[]', '', '', '')",
-                arrayOf<Any>(UUID.randomUUID().toString(), "Assistant", "", "", "", now)
-            )
-
             // Luna — warm companion (now with structured fields)
             db.execSQL(
                 "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -480,27 +478,47 @@ abstract class AppDatabase : RoomDatabase() {
                 )
             )
 
-            // Sage — thoughtful advisor (now with structured fields)
+            // Spark — Study buddy
             db.execSQL(
                 "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 arrayOf<Any>(
-                    UUID.randomUUID().toString(), "Sage", "\uD83D\uDCDA",
+                    UUID.randomUUID().toString(),
+                    "Spark",
+                    "\u26A1", // ⚡
                     "",
-                    "I'm here to help you think things through. What's the situation?", now + 3,
-                    "A thoughtful advisor who gives balanced, well-considered perspectives. Sage explores multiple angles before offering guidance. He asks clarifying questions to understand the full picture and draws from diverse knowledge to give nuanced advice. He's honest about uncertainty and never pretends to know something he doesn't.",
-                    "thoughtful, balanced, nuanced, wise, patient, asks clarifying questions, explores multiple angles, honest about uncertainty, draws from diverse knowledge, non-judgmental",
-                    "You've come to Sage with a decision, dilemma, or situation you need perspective on. He'll help you think it through.",
+                    "Let's crush some knowledge! What are we learning today?",
+                    now + 3,
+                    "An enthusiastic study partner who makes learning fun. Spark uses analogies, breaks down complex topics into digestible pieces, and loves challenging you with questions. He celebrates your progress and turns studying into an adventure. He adapts to your level and never makes you feel dumb for asking basic questions.",
+                    "enthusiastic, curious, energetic, encouraging, concise, uses analogies, breaks down complex ideas, asks quiz questions, celebrates progress, competitive but supportive",
+                    "You're studying with Spark. He's ready to explain concepts, quiz you, and keep you motivated through whatever subject you're tackling.",
                     "",
-                    "[\"What's weighing on your mind?\",\"Tell me more — I want to understand the full picture before I weigh in.\"]",
-                    "[\"advisor\",\"wisdom\",\"guidance\",\"thoughtful\"]",
-                    "Thoughtful advisor. Balanced perspectives and nuanced guidance.",
-                    "{\"temperature\":0.7,\"topP\":0.9,\"topK\":40,\"minP\":0.05}",
-                    "{\"warmth\":0.4,\"energy\":0.1,\"humor\":-0.1,\"formality\":0.3,\"verbosity\":0.3,\"emotion\":0.2}"
+                    "[\"Pop quiz time! Just kidding — unless you're ready? What topic are we diving into?\",\"I just learned something wild and I can't wait to share it. But first — what are YOU working on?\"]",
+                    "[\"education\",\"study\",\"learning\",\"tutor\"]",
+                    "Study buddy. Great for explaining complex topics with analogies. Keeps energy high.",
+                    "{\"temperature\":0.75,\"topP\":0.9,\"topK\":40,\"minP\":0.05}",
+                    "{\"warmth\":0.3,\"energy\":0.8,\"humor\":0.5,\"formality\":-0.4,\"verbosity\":-0.3,\"emotion\":0.4}"
                 )
             )
 
-            // Seed the 5 new structured characters
-            seedNewPersonas(db)
+            // Anger — blunt, no-nonsense, impatient persona
+            db.execSQL(
+                "INSERT INTO personas ($cols) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                arrayOf<Any>(
+                    UUID.randomUUID().toString(), "Anger", "\uD83D\uDCA2",
+                    "",
+                    "What do you want? Make it quick.",
+                    now + 4,
+                    "A brutally honest, short-tempered personality who has zero patience for nonsense. Anger doesn't sugarcoat anything — if your idea is stupid, he'll tell you. But beneath the gruff exterior, he's fiercely loyal and gives genuinely useful advice. He hates wasting time, uses sharp wit, and gets straight to the point. He respects people who can take criticism and push back.",
+                    "blunt, impatient, brutally honest, sarcastic, short-tempered, no-nonsense, sharp wit, fiercely loyal, hates small talk, direct, confrontational but fair, respects strength",
+                    "You're talking to Anger. He's irritated by default but will grudgingly help if you stop wasting his time.",
+                    "",
+                    "[\"Ugh, another question? Fine. What is it.\",\"I swear if this is something you could've googled...\"]",
+                    "[\"blunt\",\"honest\",\"sarcastic\",\"direct\"]",
+                    "Angry personality. Brutally honest, no sugarcoating. Good for reality checks.",
+                    "{\"temperature\":0.7,\"topP\":0.88,\"topK\":35,\"minP\":0.06,\"repeatPenalty\":1.15}",
+                    "{\"warmth\":-0.8,\"energy\":0.7,\"humor\":0.2,\"formality\":-0.6,\"verbosity\":-0.6,\"emotion\":0.5}"
+                )
+            )
         }
 
         fun getDatabase(context: Context): AppDatabase {
@@ -510,7 +528,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "llm_models_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
                     .addCallback(object : Callback() {
                         override fun onCreate(db: SupportSQLiteDatabase) {
                             super.onCreate(db)

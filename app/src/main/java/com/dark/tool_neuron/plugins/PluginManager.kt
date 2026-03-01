@@ -71,8 +71,11 @@ object PluginManager {
     // Premium plugins that require Pro
     private val PREMIUM_PLUGINS = setOf("Web Search", "File Manager", "Dev Utils", "Device Info")
 
-    // Feature gate provider — set by NVApplication at startup
+    // Feature gate provider — set once by NVApplication at startup.
+    // Internal setter prevents external modules or reflection-based attacks
+    // from replacing the provider to bypass premium checks.
     var featureGateProvider: (() -> Boolean)? = null
+        internal set
 
     // Whether multi-turn is active
     private val _multiTurnEnabled = MutableStateFlow(true)
@@ -92,6 +95,10 @@ object PluginManager {
      */
     fun setToolCallingBypassEnabled(enabled: Boolean) {
         _toolCallingBypassEnabled.value = enabled
+        // Re-evaluate model support: bypass ON means any loaded model can use tools
+        if (enabled) {
+            _isToolCallingModelLoaded.value = true
+        }
         Log.d(TAG, "Tool calling bypass: ${if (enabled) "enabled" else "disabled"}")
     }
 
@@ -135,8 +142,8 @@ object PluginManager {
     fun enablePlugin(pluginName: String): Boolean {
         if (!_plugins.containsKey(pluginName)) return false
 
-        // Check feature gate for premium plugins
-        if (isPremiumPlugin(pluginName) && featureGateProvider?.invoke() != true) {
+        // Check feature gate for premium plugins (bypass overrides premium check)
+        if (isPremiumPlugin(pluginName) && !_toolCallingBypassEnabled.value && featureGateProvider?.invoke() != true) {
             Log.d(TAG, "Plugin $pluginName requires Pro — blocked")
             return false
         }

@@ -39,8 +39,8 @@ r# ==================== NeuronPacket Library ProGuard Rules ====================
 # Kotlin serialization
 -keep @kotlinx.serialization.Serializable class com.neuronpacket.** { *; }
 
-# Keep native library loading
--keepclasseswithmembernames class * {
+# Keep native library loading within neuronpacket
+-keepclasseswithmembernames class com.neuronpacket.** {
     native <methods>;
 }
 

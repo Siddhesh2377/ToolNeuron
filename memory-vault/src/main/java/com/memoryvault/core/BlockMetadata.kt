@@ -77,7 +77,8 @@ data class BlockMetadata(
             //Log.d("BlockMetadata", "Reading blockType byte: $blockTypeByte at position ${buffer.position()}")
 
 
-            val blockType = BlockType.fromCode(blockTypeByte)
+            val blockType = BlockType.fromCodeOrNull(blockTypeByte)
+                ?: throw IllegalArgumentException("Unknown block type: $blockTypeByte")
             val fileOffset = buffer.long
             val compressedSize = buffer.long
             val uncompressedSize = buffer.long

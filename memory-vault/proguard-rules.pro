@@ -17,8 +17,8 @@
 -keep public class com.memoryvault.BackupResult { *; }
 -keep public class com.memoryvault.core.DefragResult { *; }
 
-# Keep data class fields and constructors
--keepclassmembers class * {
+# Keep data class constructors within memoryvault package only
+-keepclassmembers class com.memoryvault.** {
     public <init>(...);
 }
 
@@ -42,8 +42,8 @@
 -keep class javax.crypto.** { *; }
 -dontwarn javax.crypto.**
 
-# Keep serialization methods
--keepclassmembers class * {
+# Keep serialization methods in memoryvault classes
+-keepclassmembers class com.memoryvault.** {
     public byte[] toBytes();
     public static ** fromBytes(byte[]);
 }

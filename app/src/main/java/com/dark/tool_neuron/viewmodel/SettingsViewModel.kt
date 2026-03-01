@@ -109,6 +109,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val aiMemoryEnabled: StateFlow<Boolean> = appSettingsDataStore.aiMemoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val uncensoredEnabled: StateFlow<Boolean> = appSettingsDataStore.uncensoredEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
     // TTS settings
     val ttsSettings: StateFlow<TTSSettings> = ttsDataStore.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TTSSettings())
@@ -159,6 +162,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAiMemoryEnabled(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateAiMemoryEnabled(enabled) }
+    }
+
+    fun setUncensoredEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateUncensoredEnabled(enabled) }
     }
 
     fun selectTheme(themeId: String) {

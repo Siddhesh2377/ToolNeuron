@@ -26,6 +26,7 @@ class AppSettingsDataStore(private val context: Context) {
         private val LAST_MODEL_ID = stringPreferencesKey("last_model_id")
         private val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
         private val AI_MEMORY_ENABLED = booleanPreferencesKey("ai_memory_enabled")
+        private val UNCENSORED_ENABLED = booleanPreferencesKey("uncensored_enabled")
         private val SELECTED_THEME_ID = stringPreferencesKey("selected_theme_id")
     }
 
@@ -133,6 +134,14 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateAiMemoryEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[AI_MEMORY_ENABLED] = enabled }
+    }
+
+    val uncensoredEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[UNCENSORED_ENABLED] ?: false
+    }
+
+    suspend fun updateUncensoredEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[UNCENSORED_ENABLED] = enabled }
     }
 
     val selectedThemeId: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->

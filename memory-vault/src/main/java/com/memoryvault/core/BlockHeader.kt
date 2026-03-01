@@ -42,7 +42,9 @@ data class BlockHeader(
             val mostSig = buffer.long
             val leastSig = buffer.long
             val blockId = UUID(mostSig, leastSig)
-            val blockType = BlockType.fromCode(buffer.get())
+            val typeByte = buffer.get()
+            val blockType = BlockType.fromCodeOrNull(typeByte)
+                ?: throw BlockCorruptedException("Unknown block type: $typeByte")
             val contentSize = buffer.long
             val timestamp = buffer.long
             val checksum = buffer.int

@@ -620,13 +620,23 @@ class MemoryVault(
     }
 
     private suspend fun readVaultItem(metadata: BlockMetadata): VaultItem? {
-        val block = reader.readBlock(metadata.fileOffset)
-        val decrypted = contentProcessor.processForRead(
-            data = block.data,
-            originalSize = metadata.uncompressedSize.toInt(),
-            compressed = block.header.compressionFlag,
-            encrypted = block.header.encryptionFlag
-        )
+        val block = try {
+            reader.readBlock(metadata.fileOffset)
+        } catch (e: Exception) {
+            android.util.Log.w("MemoryVault", "Skipping corrupted block ${metadata.blockId}: ${e.message}")
+            return null
+        }
+        val decrypted = try {
+            contentProcessor.processForRead(
+                data = block.data,
+                originalSize = metadata.uncompressedSize.toInt(),
+                compressed = block.header.compressionFlag,
+                encrypted = block.header.encryptionFlag
+            )
+        } catch (e: Exception) {
+            android.util.Log.w("MemoryVault", "Failed to decrypt block ${metadata.blockId}: ${e.message}")
+            return null
+        }
 
         return when (metadata.blockType) {
             BlockType.MESSAGE -> {
