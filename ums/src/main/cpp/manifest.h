@@ -16,6 +16,7 @@ constexpr uint16_t FORMAT_VERSION = 1;
 constexpr uint32_t DEFAULT_PBKDF2_ITERATIONS = 600000;
 constexpr size_t DEK_SIZE = 32;
 constexpr size_t PBKDF2_SALT_SIZE = 16;
+static constexpr uint16_t FLAG_PLAINTEXT_MODE = 0x0002;
 
 struct CollectionMeta {
     std::string name, filename;
@@ -29,6 +30,11 @@ public:
 
     bool create(const uint8_t* app_key, const uint8_t* user_key);
     bool open(const uint8_t* app_key, const uint8_t* user_key);
+
+    // Plaintext mode: no encryption, no DEK, no key derivation
+    bool create_plaintext();
+    bool open_plaintext();
+    bool is_plaintext() const;
 
     // Passphrase-based: PBKDF2 done internally, salt stored in manifest
     bool create_with_passphrase(const uint8_t* app_key,

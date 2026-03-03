@@ -38,12 +38,13 @@ static constexpr size_t COMPRESS_THRESHOLD = 128;
 
 Collection::Collection(std::string name, std::string filename,
                        fo::IOEngine& io, tn::CryptoEngine& crypto,
-                       const uint8_t* dek)
+                       const uint8_t* dek, bool plaintext)
     : name_(std::move(name)),
       filename_(std::move(filename)),
       io_(io),
       crypto_(crypto),
-      dek_(dek) {}
+      dek_(dek),
+      plaintext_(plaintext) {}
 
 const std::string& Collection::name() const { return name_; }
 const std::string& Collection::filename() const { return filename_; }
@@ -53,6 +54,9 @@ const std::string& Collection::filename() const { return filename_; }
 // ---------------------------------------------------------------------------
 
 std::vector<uint8_t> Collection::encrypt_record(const std::vector<uint8_t>& encoded) {
+    if (plaintext_) {
+        return encoded; // skip AES-GCM, return data as-is
+    }
     auto result = crypto_.encrypt_aes_gcm(
         encoded.data(), encoded.size(),
         dek_, tn::AES_KEY_SIZE,
@@ -66,6 +70,9 @@ std::vector<uint8_t> Collection::encrypt_record(const std::vector<uint8_t>& enco
 }
 
 std::vector<uint8_t> Collection::decrypt_record(const uint8_t* data, size_t len) {
+    if (plaintext_) {
+        return std::vector<uint8_t>(data, data + len); // skip AES-GCM, return copy
+    }
     auto result = crypto_.decrypt_aes_gcm(
         data, len,
         dek_, tn::AES_KEY_SIZE,

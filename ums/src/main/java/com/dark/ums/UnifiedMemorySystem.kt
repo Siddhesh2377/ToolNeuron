@@ -240,6 +240,8 @@ class UnifiedMemorySystem {
     private external fun nativeGetAll(collection: String): Array<ByteArray>?
     private external fun nativeCreateWithPassphrase(basePath: String, appKey: ByteArray, passphrase: ByteArray): Boolean
     private external fun nativeOpenWithPassphrase(basePath: String, appKey: ByteArray, passphrase: ByteArray): Boolean
+    private external fun nativeCreatePlaintext(basePath: String): Boolean
+    private external fun nativeOpenPlaintext(basePath: String): Boolean
     private external fun nativeGetFlags(): Int
     private external fun nativeSetFlags(flags: Int): Boolean
     private external fun nativeAddIndex(collection: String, tag: Int, wireType: Int): Boolean
@@ -258,6 +260,10 @@ class UnifiedMemorySystem {
 
     fun openWithPassphrase(basePath: String, appKey: ByteArray, passphrase: String): Boolean =
         nativeOpenWithPassphrase(basePath, appKey, passphrase.toByteArray())
+
+    fun createPlaintext(basePath: String): Boolean = nativeCreatePlaintext(basePath)
+
+    fun openPlaintext(basePath: String): Boolean = nativeOpenPlaintext(basePath)
 
     fun exists(basePath: String): Boolean = nativeExists(basePath)
 
@@ -300,6 +306,7 @@ class UnifiedMemorySystem {
 
     companion object {
         const val FLAG_MIGRATION_COMPLETE = 0x0001
+        const val FLAG_PLAINTEXT_MODE = 0x0002
 
         // wire type constants matching C++ WireType enum
         const val WIRE_VARINT = 0

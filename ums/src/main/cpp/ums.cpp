@@ -284,6 +284,96 @@ Java_com_dark_ums_UnifiedMemorySystem_nativeOpenWithPassphrase(
 }
 
 JNIEXPORT jboolean JNICALL
+Java_com_dark_ums_UnifiedMemorySystem_nativeCreatePlaintext(
+    JNIEnv* env, jobject, jstring basePath
+) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (g_open) {
+        LOGE("nativeCreatePlaintext: already open");
+        return JNI_FALSE;
+    }
+
+    auto base = jstr(env, basePath);
+    fo::PathGuard guard(base);
+    g_io = std::make_unique<fo::IOEngine>(std::move(guard));
+    if (!g_io->init()) {
+        LOGE("nativeCreatePlaintext: IOEngine init failed");
+        return JNI_FALSE;
+    }
+    g_io->make_dir("index");
+
+    g_crypto = std::make_unique<tn::CryptoEngine>();
+    g_manifest = std::make_unique<ums::Manifest>(*g_io, *g_crypto, "manifest.ums");
+
+    bool ok = g_manifest->create_plaintext();
+    if (!ok) {
+        LOGE("nativeCreatePlaintext: manifest create_plaintext failed");
+        return JNI_FALSE;
+    }
+
+    g_wal = std::make_unique<ums::WAL>(*g_io, "wal.ums");
+    g_wal->open();
+    g_open = true;
+    return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
+Java_com_dark_ums_UnifiedMemorySystem_nativeOpenPlaintext(
+    JNIEnv* env, jobject, jstring basePath
+) {
+    std::lock_guard<std::mutex> lock(g_mtx);
+    if (g_open) {
+        LOGE("nativeOpenPlaintext: already open");
+        return JNI_FALSE;
+    }
+
+    auto base = jstr(env, basePath);
+    fo::PathGuard guard(base);
+    g_io = std::make_unique<fo::IOEngine>(std::move(guard));
+    if (!g_io->init()) {
+        LOGE("nativeOpenPlaintext: IOEngine init failed");
+        return JNI_FALSE;
+    }
+
+    g_crypto = std::make_unique<tn::CryptoEngine>();
+    g_manifest = std::make_unique<ums::Manifest>(*g_io, *g_crypto, "manifest.ums");
+
+    bool ok = g_manifest->open_plaintext();
+    if (!ok) {
+        LOGE("nativeOpenPlaintext: manifest open_plaintext failed");
+        return JNI_FALSE;
+    }
+
+    // Load registered collections with plaintext=true
+    for (auto& [name, meta] : g_manifest->collections()) {
+        auto col = std::make_unique<ums::Collection>(
+            name, meta.filename, *g_io, *g_crypto, nullptr, true
+        );
+        col->load();
+        g_collections[name] = std::move(col);
+    }
+
+    g_wal = std::make_unique<ums::WAL>(*g_io, "wal.ums");
+    g_wal->open();
+
+    // Replay any uncommitted WAL entries
+    g_wal->replay([](const ums::WalEntry& entry) {
+        auto* col = get_collection(entry.collection);
+        if (!col) return;
+        if (entry.op == ums::WalOp::PUT) {
+            auto rec = ums::Record::decode(entry.data.data(), entry.data.size());
+            col->put(rec);
+        } else if (entry.op == ums::WalOp::DELETE) {
+            col->remove(entry.record_id);
+        }
+    });
+    g_wal->checkpoint();
+
+    g_open = true;
+    return JNI_TRUE;
+}
+
+JNIEXPORT jboolean JNICALL
 Java_com_dark_ums_UnifiedMemorySystem_nativeExists(
     JNIEnv* env, jobject, jstring basePath
 ) {
@@ -326,8 +416,10 @@ Java_com_dark_ums_UnifiedMemorySystem_nativeEnsureCollection(
     ums::CollectionMeta meta{n, filename, 0, 0};
     g_manifest->register_collection(meta);
 
+    bool pt = g_manifest->is_plaintext();
     auto col = std::make_unique<ums::Collection>(
-        n, filename, *g_io, *g_crypto, g_manifest->dek()
+        n, filename, *g_io, *g_crypto,
+        pt ? nullptr : g_manifest->dek(), pt
     );
     g_collections[n] = std::move(col);
     g_manifest->save();

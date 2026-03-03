@@ -187,6 +187,59 @@ bool Manifest::unwrap_dek(const uint8_t* app_key, const uint8_t* user_key,
 }
 
 // ---------------------------------------------------------------------------
+// create_plaintext() — create manifest with FLAG_PLAINTEXT_MODE, no DEK
+// ---------------------------------------------------------------------------
+
+bool Manifest::create_plaintext() {
+    flags_ |= FLAG_PLAINTEXT_MODE;
+
+    // No DEK, no wrapped_dek, no key_check, no PBKDF2 salt needed
+    wrapped_dek_.clear();
+    key_check_.clear();
+    pbkdf2_salt_.resize(PBKDF2_SALT_SIZE, 0); // zeroed salt (serialization expects fixed size)
+    pbkdf2_iterations_ = 0;
+
+    // DEK buffer stays zeroed (initialized by SecureBuffer constructor)
+    collections_.clear();
+
+    return save();
+}
+
+// ---------------------------------------------------------------------------
+// open_plaintext() — read manifest, verify FLAG_PLAINTEXT_MODE, skip key ops
+// ---------------------------------------------------------------------------
+
+bool Manifest::open_plaintext() {
+    auto result = io_.read(path_);
+    if (!result.success) {
+        LOGE("open_plaintext: failed to read manifest file");
+        return false;
+    }
+
+    if (!deserialize(result.data)) {
+        LOGE("open_plaintext: failed to deserialize manifest");
+        return false;
+    }
+
+    if (!is_plaintext()) {
+        LOGE("open_plaintext: manifest does not have FLAG_PLAINTEXT_MODE set");
+        return false;
+    }
+
+    // Skip verify_key_check and unwrap_dek entirely.
+    // DEK stays zeroed — it won't be used.
+    return true;
+}
+
+// ---------------------------------------------------------------------------
+// is_plaintext() — check if FLAG_PLAINTEXT_MODE bit is set
+// ---------------------------------------------------------------------------
+
+bool Manifest::is_plaintext() const {
+    return (flags_ & FLAG_PLAINTEXT_MODE) != 0;
+}
+
+// ---------------------------------------------------------------------------
 // create() — generate new manifest with random DEK
 // ---------------------------------------------------------------------------
 

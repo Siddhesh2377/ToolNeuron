@@ -17,7 +17,7 @@ class Collection {
 public:
     Collection(std::string name, std::string filename,
                fo::IOEngine& io, tn::CryptoEngine& crypto,
-               const uint8_t* dek);
+               const uint8_t* dek, bool plaintext = false);
 
     uint32_t put(const Record& record);  // returns record_id
     Record get(uint32_t record_id);
@@ -43,7 +43,8 @@ private:
     std::string name_, filename_;
     fo::IOEngine& io_;
     tn::CryptoEngine& crypto_;
-    const uint8_t* dek_;  // 32-byte DEK
+    const uint8_t* dek_;  // 32-byte DEK (nullptr when plaintext)
+    bool plaintext_ = false;
     uint32_t next_id_ = 1;
     std::unordered_map<uint32_t, Record> records_;
     std::unordered_map<uint16_t, FieldIndex> indexes_;
