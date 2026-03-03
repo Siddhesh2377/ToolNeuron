@@ -14,68 +14,76 @@ object UmsCollections {
 object Tags {
 
     object Model {
-        const val MODEL_NAME = 1
-        const val MODEL_PATH = 2
-        const val PATH_TYPE = 3       // VARINT: 0=Local, 1=SAF
-        const val PROVIDER_TYPE = 4   // VARINT: 0=GGUF, 1=Diffusion, 2=TTS
-        const val FILE_SIZE = 5       // FIXED64
-        const val IS_ACTIVE = 6       // VARINT: 0/1
+        const val ENTITY_ID = 1       // BYTES: original String UUID
+        const val MODEL_NAME = 2
+        const val MODEL_PATH = 3
+        const val PATH_TYPE = 4       // BYTES: enum name (LOCAL, REMOTE)
+        const val PROVIDER_TYPE = 5   // BYTES: enum name (GGUF, OLLAMA, CUSTOM)
+        const val FILE_SIZE = 6       // FIXED64
+        const val IS_ACTIVE = 7       // VARINT: 0/1
     }
 
     object Config {
-        const val MODEL_ID = 1        // VARINT (foreign key)
-        const val LOADING_PARAMS = 2  // BYTES (JSON)
-        const val INFERENCE_PARAMS = 3 // BYTES (JSON)
+        const val ENTITY_ID = 1       // BYTES: original String UUID
+        const val MODEL_ID = 2        // BYTES: String FK to Model.id
+        const val LOADING_PARAMS = 3  // BYTES (JSON)
+        const val INFERENCE_PARAMS = 4 // BYTES (JSON)
     }
 
     object Persona {
-        const val NAME = 1
-        const val SYSTEM_PROMPT = 2
-        const val DESCRIPTION = 3
-        const val PERSONALITY = 4
-        const val SCENARIO = 5
-        const val EXAMPLE_MESSAGES = 6
-        const val ALTERNATE_GREETINGS = 7  // BYTES (JSON)
-        const val TAGS = 8                  // BYTES (JSON)
-        const val AVATAR_URI = 9
-        const val CREATOR_NOTES = 10
-        const val SAMPLING_PROFILE = 11    // BYTES (JSON)
-        const val CONTROL_VECTORS = 12     // BYTES (JSON)
-        const val CREATED_AT = 13          // FIXED64
+        const val ENTITY_ID = 1
+        const val NAME = 2
+        const val AVATAR = 3          // BYTES: emoji string
+        const val SYSTEM_PROMPT = 4
+        const val GREETING = 5
+        const val IS_DEFAULT = 6      // VARINT: 0/1
+        const val CREATED_AT = 7      // FIXED64
+        const val DESCRIPTION = 8
+        const val PERSONALITY = 9
+        const val SCENARIO = 10
+        const val EXAMPLE_MESSAGES = 11
+        const val ALTERNATE_GREETINGS = 12 // BYTES (JSON array)
+        const val TAGS = 13                 // BYTES (JSON array)
+        const val AVATAR_URI = 14
+        const val CREATOR_NOTES = 15
+        const val SAMPLING_PROFILE = 16    // BYTES (JSON)
+        const val CONTROL_VECTORS = 17     // BYTES (JSON)
     }
 
     object Memory {
-        const val FACT = 1
-        const val CATEGORY = 2
-        const val IMPORTANCE = 3      // FIXED32 (float)
-        const val CREATED_AT = 4      // FIXED64
-        const val LAST_ACCESSED_AT = 5 // FIXED64
-        const val ACCESS_COUNT = 6    // VARINT
-        const val SOURCE_CONTEXT = 7
-        const val EMBEDDING = 8       // BYTES (JSON)
-        const val IS_SUMMARIZED = 9   // VARINT: 0/1
-        const val SUMMARY_GROUP_ID = 10 // VARINT
-        const val PERSONA_ID = 11
+        const val ENTITY_ID = 1
+        const val FACT = 2
+        const val CATEGORY = 3       // BYTES: enum name (PERSONAL, PREFERENCE, etc.)
+        const val SOURCE_CHAT_ID = 4 // BYTES: nullable
+        const val CREATED_AT = 5     // FIXED64
+        const val UPDATED_AT = 6     // FIXED64
+        const val LAST_ACCESSED_AT = 7 // FIXED64
+        const val ACCESS_COUNT = 8   // VARINT
+        const val EMBEDDING = 9      // BYTES: raw embedding bytes
+        const val IS_SUMMARIZED = 10 // VARINT: 0/1
+        const val SUMMARY_GROUP_ID = 11 // BYTES: nullable
+        const val PERSONA_ID = 12
     }
 
     object KgEntity {
-        const val NAME = 1
-        const val TYPE = 2
-        const val DESCRIPTION = 3
-        const val ATTRIBUTES = 4
-        const val CREATED_AT = 5      // FIXED64
-        const val LAST_UPDATED_AT = 6 // FIXED64
-        const val MENTION_COUNT = 7   // VARINT
+        const val ENTITY_ID = 1
+        const val NAME = 2
+        const val TYPE = 3           // BYTES: enum name (PERSON, PLACE, etc.)
+        const val EMBEDDING = 4      // BYTES: raw embedding bytes
+        const val FIRST_SEEN = 5     // FIXED64
+        const val LAST_SEEN = 6      // FIXED64
+        const val MENTION_COUNT = 7  // VARINT
     }
 
     object KgRelation {
-        const val SOURCE_ENTITY_ID = 1 // VARINT
-        const val TARGET_ENTITY_ID = 2 // VARINT
-        const val RELATION_TYPE = 3
-        const val WEIGHT = 4          // FIXED32 (float)
-        const val CONTEXT = 5
-        const val CREATED_AT = 6      // FIXED64
-        const val PERSONA_ID = 7
+        const val ENTITY_ID = 1
+        const val SUBJECT_ID = 2     // BYTES: String FK
+        const val PREDICATE = 3
+        const val OBJECT_ID = 4      // BYTES: String FK
+        const val CONFIDENCE = 5     // FIXED32 (float)
+        const val SOURCE_FACT_ID = 6 // BYTES: nullable FK
+        const val CREATED_AT = 7     // FIXED64
+        const val PERSONA_ID = 8
     }
 
     object Chat {
