@@ -27,4 +27,7 @@ rootProject.name = "Tool-Neuron"
 include(":app")
 include(":memory-vault")
 include(":neuron-packet")
+include(":system_encryptor")
+include(":file_ops")
+include(":ums")
 
