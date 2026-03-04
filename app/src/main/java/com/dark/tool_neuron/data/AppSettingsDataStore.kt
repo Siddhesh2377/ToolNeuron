@@ -26,6 +26,8 @@ class AppSettingsDataStore(private val context: Context) {
         private val LAST_MODEL_ID = stringPreferencesKey("last_model_id")
         private val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
         private val AI_MEMORY_ENABLED = booleanPreferencesKey("ai_memory_enabled")
+        private val SECURITY_MODE = stringPreferencesKey("security_mode")
+        private val SHOWCASE_SEEN = booleanPreferencesKey("showcase_seen")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -132,6 +134,22 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateAiMemoryEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[AI_MEMORY_ENABLED] = enabled }
+    }
+
+    val securityMode: Flow<String> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[SECURITY_MODE] ?: "REGULAR"
+    }
+
+    suspend fun saveSecurityMode(mode: String) {
+        context.appSettingsDataStore.edit { it[SECURITY_MODE] = mode }
+    }
+
+    val showcaseSeen: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[SHOWCASE_SEEN] ?: false
+    }
+
+    suspend fun saveShowcaseSeen(seen: Boolean) {
+        context.appSettingsDataStore.edit { it[SHOWCASE_SEEN] = seen }
     }
 
     suspend fun clear() {
