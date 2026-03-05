@@ -93,7 +93,6 @@ import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.StatusBadge
 import com.dark.tool_neuron.ui.theme.maple
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.utils.SizeCategory
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.RepoGroupInfo
@@ -264,12 +263,12 @@ private fun ModelsTab(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         Icon(
                             imageVector = TnIcons.AlertTriangle,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(48.dp)),
+                            modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.error
                         )
                         Text(
@@ -295,12 +294,12 @@ private fun ModelsTab(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Icon(
                             imageVector = TnIcons.SearchOff,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(48.dp)),
+                            modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
@@ -368,9 +367,9 @@ private fun RepoCardListView(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
-            contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                .then(if (isLoading) Modifier.blur(4.dp) else Modifier),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
             flingBehavior = ScrollableDefaults.flingBehavior()
         ) {
             items(
@@ -409,13 +408,13 @@ private fun StoreRepoCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)),
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius),
         onClick = onClick
     ) {
         Row(
-            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            modifier = Modifier.padding(Standards.CardPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             ModelTypeBadge(info.modelType)
 
@@ -428,7 +427,7 @@ private fun StoreRepoCard(
                     overflow = TextOverflow.Ellipsis
                 )
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     if (info.author.isNotEmpty()) {
@@ -441,7 +440,7 @@ private fun StoreRepoCard(
                     if (hasActiveDownload) {
                         CaptionText(text = "·")
                         LoadingIndicator(
-                            modifier = Modifier.size(rDp(10.dp)),
+                            modifier = Modifier.size(10.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -451,7 +450,7 @@ private fun StoreRepoCard(
             Icon(
                 imageVector = TnIcons.ArrowRight,
                 contentDescription = "View models",
-                modifier = Modifier.size(rDp(20.dp)),
+                modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -482,9 +481,9 @@ private fun RepoDetailView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
+                .padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             ActionButton(
                 onClickListener = { viewModel.selectRepository(null) },
@@ -517,9 +516,9 @@ private fun RepoDetailView(
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .then(if (isLoading) Modifier.blur(rDp(4.dp)) else Modifier),
-                contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    .then(if (isLoading) Modifier.blur(4.dp) else Modifier),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
                 flingBehavior = ScrollableDefaults.flingBehavior()
             ) {
                 items(
@@ -560,12 +559,12 @@ private fun InstalledModelsTab(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Icon(
                     imageVector = TnIcons.Database,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(64.dp)),
+                    modifier = Modifier.size(64.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Text(
@@ -578,8 +577,8 @@ private fun InstalledModelsTab(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             items(models, key = { it.id }) { model ->
                 InstalledModelCard(
@@ -637,12 +636,12 @@ private fun InstalledModelCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
     ) {
         Row(
-            modifier = Modifier.padding(rDp(Standards.CardPadding)),
+            modifier = Modifier.padding(Standards.CardPadding),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             // Provider type icon
             Icon(
@@ -651,7 +650,7 @@ private fun InstalledModelCard(
                     else -> TnIcons.Photo
                 },
                 contentDescription = null,
-                modifier = Modifier.size(rDp(Standards.IconMd)),
+                modifier = Modifier.size(Standards.IconMd),
                 tint = if (model.isActive) MaterialTheme.colorScheme.primary
                        else MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -693,11 +692,11 @@ private fun InstalledModelCard(
             // Actions
             if (isDeleting) {
                 Box(
-                    modifier = Modifier.size(rDp(Standards.ActionIconSize)),
+                    modifier = Modifier.size(Standards.ActionIconSize),
                     contentAlignment = Alignment.Center
                 ) {
                     LoadingIndicator(
-                        modifier = Modifier.size(rDp(Standards.IconMd)),
+                        modifier = Modifier.size(Standards.IconMd),
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -745,7 +744,7 @@ private fun ModelDetailsDialog(
         },
         text = {
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
                 val typeLabel = when (model.providerType) {
@@ -774,7 +773,7 @@ private fun ModelDetailsDialog(
 
                 if (configLoaded && config != null) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = rDp(4.dp)),
+                        modifier = Modifier.padding(vertical = 4.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
 
@@ -794,7 +793,7 @@ private fun ModelDetailsDialog(
                             DetailRow("Threads", if (schema.loadingParams.threads == 0) "Auto" else "${schema.loadingParams.threads}")
                             DetailRow("Memory Map", if (schema.loadingParams.useMmap) "Enabled" else "Disabled")
 
-                            Spacer(modifier = Modifier.height(rDp(4.dp)))
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Inference Config",
                                 style = MaterialTheme.typography.labelLarge,
@@ -827,7 +826,7 @@ private fun ModelDetailsDialog(
                             }
 
                             if (inferenceObj != null) {
-                                Spacer(modifier = Modifier.height(rDp(4.dp)))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
                                     text = "Inference Config",
                                     style = MaterialTheme.typography.labelLarge,
@@ -894,8 +893,8 @@ private fun SettingsTab(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = rDp(Standards.SpacingLg), vertical = rDp(Standards.SpacingSm)),
-        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+        contentPadding = PaddingValues(horizontal = Standards.SpacingLg, vertical = Standards.SpacingSm),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         // Device Info Section
         item {
@@ -967,7 +966,7 @@ private fun DeviceInfoCard(deviceInfo: Map<String, String>) {
             }
         }
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+        Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
             previewEntries.forEach { (key, value) ->
                 DeviceInfoRow(
                     label = key.replaceFirstChar {
@@ -982,7 +981,7 @@ private fun DeviceInfoCard(deviceInfo: Map<String, String>) {
                 enter = expandVertically() + fadeIn(),
                 exit = shrinkVertically() + fadeOut()
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                     remainingEntries.forEach { (key, value) ->
                         DeviceInfoRow(
                             label = key.replaceFirstChar {
@@ -1028,18 +1027,18 @@ private fun RepositoryCard(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)),
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius),
         onClick = onValidate
     ) {
         Column(
-            modifier = Modifier.padding(rDp(Standards.CardPadding)),
-            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+            modifier = Modifier.padding(Standards.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
         ) {
             // Row 1: validation dot + name + actions + switch
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 // Validation status dot
                 val dotColor = when (validationResult) {
@@ -1050,13 +1049,13 @@ private fun RepositoryCard(
                 }
                 if (validationResult is ValidationResult.Checking) {
                     LoadingIndicator(
-                        modifier = Modifier.size(rDp(10.dp)),
+                        modifier = Modifier.size(10.dp),
                         color = dotColor
                     )
                 } else {
                     Box(
                         modifier = Modifier
-                            .size(rDp(6.dp))
+                            .size(6.dp)
                             .background(dotColor, RoundedCornerShape(50))
                     )
                 }
@@ -1099,7 +1098,7 @@ private fun RepositoryCard(
             // Row 2: repo path + category + GGUF count (inline)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs)),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1142,7 +1141,7 @@ private fun AddRepositoryDialog(
     var selectedType by remember { mutableStateOf(ModelType.GGUF) }
 
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Add Repository") }, text = {
-        Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             OutlinedTextField(
                 value = repoName,
                 onValueChange = { repoName = it },
@@ -1162,7 +1161,7 @@ private fun AddRepositoryDialog(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = selectedType == ModelType.GGUF,
@@ -1214,7 +1213,7 @@ private fun EditRepositoryDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit Repository") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = repoName,
                     onValueChange = { repoName = it },
@@ -1240,7 +1239,7 @@ private fun EditRepositoryDialog(
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
                         selected = selectedType == ModelType.GGUF,
@@ -1262,10 +1261,10 @@ private fun EditRepositoryDialog(
                 )
 
                 // Category chips displayed as a grid
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp)), modifier = Modifier.scrollable(rememberScrollState(), orientation = Orientation.Horizontal)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.scrollable(rememberScrollState(), orientation = Orientation.Horizontal)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = selectedCategory == ModelCategory.GENERAL,
@@ -1282,7 +1281,7 @@ private fun EditRepositoryDialog(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = selectedCategory == ModelCategory.RESEARCH,
@@ -1299,7 +1298,7 @@ private fun EditRepositoryDialog(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = selectedCategory == ModelCategory.UNCENSORED,
@@ -1316,7 +1315,7 @@ private fun EditRepositoryDialog(
                     }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = selectedCategory == ModelCategory.CYBERSECURITY,
@@ -1407,14 +1406,14 @@ fun ModelFiltersSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(8.dp))
+            .padding(vertical = 8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = rDp(16.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
                 selected = selectedModelType == null,
@@ -1438,15 +1437,15 @@ fun ModelFiltersSection(
             )
         }
 
-        Spacer(modifier = Modifier.height(rDp(6.dp)))
+        Spacer(modifier = Modifier.height(6.dp))
 
         if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = rDp(16.dp)),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = selectedCategory == null,
@@ -1462,7 +1461,7 @@ fun ModelFiltersSection(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(6.dp)))
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         // Tag chips
@@ -1474,8 +1473,8 @@ fun ModelFiltersSection(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = rDp(16.dp)),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 availableTags.forEach { tag ->
                     FilterChip(
@@ -1486,13 +1485,13 @@ fun ModelFiltersSection(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(6.dp)))
+            Spacer(modifier = Modifier.height(6.dp))
         }
 
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(16.dp)),
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -1502,16 +1501,16 @@ fun ModelFiltersSection(
                 Icon(
                     imageVector = if (showAdvancedFilters) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (showAdvancedFilters) "Hide" else "Show",
-                    modifier = Modifier.size(rDp(20.dp))
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(rDp(4.dp)))
+                Spacer(modifier = Modifier.width(4.dp))
                 Text("Advanced Filters")
                 if (activeFilterCount > 0) {
-                    Spacer(modifier = Modifier.width(rDp(4.dp)))
+                    Spacer(modifier = Modifier.width(4.dp))
                     AssistChip(
                         onClick = {},
                         label = { Text(activeFilterCount.toString()) },
-                        modifier = Modifier.height(rDp(24.dp))
+                        modifier = Modifier.height(24.dp)
                     )
                 }
             }
@@ -1531,8 +1530,8 @@ fun ModelFiltersSection(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // NSFW toggle
                 Row(
@@ -1551,7 +1550,7 @@ fun ModelFiltersSection(
                 }
 
                 // Execution target filter
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "Execution",
                         style = MaterialTheme.typography.labelMedium,
@@ -1559,7 +1558,7 @@ fun ModelFiltersSection(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = executionTarget == null,
@@ -1580,7 +1579,7 @@ fun ModelFiltersSection(
                 }
 
                 if (selectedModelType == null || selectedModelType == ModelType.GGUF) {
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Parameters",
                             style = MaterialTheme.typography.labelMedium,
@@ -1590,7 +1589,7 @@ fun ModelFiltersSection(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B").forEach { param ->
                                 FilterChip(
@@ -1602,7 +1601,7 @@ fun ModelFiltersSection(
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(
                             text = "Quantization",
                             style = MaterialTheme.typography.labelMedium,
@@ -1612,7 +1611,7 @@ fun ModelFiltersSection(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K").forEach { quant ->
                                 FilterChip(
@@ -1625,7 +1624,7 @@ fun ModelFiltersSection(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "Size",
                         style = MaterialTheme.typography.labelMedium,
@@ -1633,7 +1632,7 @@ fun ModelFiltersSection(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         SizeCategory.entries.forEach { size ->
                             FilterChip(
@@ -1649,7 +1648,7 @@ fun ModelFiltersSection(
                     }
                 }
 
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(6.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         text = "Sort By",
                         style = MaterialTheme.typography.labelMedium,
@@ -1657,7 +1656,7 @@ fun ModelFiltersSection(
                     )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         FilterChip(
                             selected = sortBy == SortOption.NAME,
@@ -1680,7 +1679,7 @@ fun ModelFiltersSection(
         }
 
         HorizontalDivider(
-            modifier = Modifier.padding(top = rDp(8.dp)),
+            modifier = Modifier.padding(top = 8.dp),
             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
         )
     }
@@ -1699,8 +1698,8 @@ private fun ModelTypeBadge(modelType: ModelType) {
         color = color,
         fontWeight = FontWeight.Bold,
         modifier = Modifier
-            .background(color.copy(alpha = 0.12f), RoundedCornerShape(rDp(4.dp)))
-            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 2.dp)
     )
 }
 
@@ -1724,11 +1723,11 @@ fun ModelCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = rDp(1.dp)),
-        shape = RoundedCornerShape(rDp(10.dp))
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        shape = RoundedCornerShape(10.dp)
     ) {
         Column(
-            modifier = Modifier.padding(rDp(12.dp))
+            modifier = Modifier.padding(12.dp)
         ) {
             // Top: Type badge + Name + Action button
             Row(
@@ -1738,7 +1737,7 @@ fun ModelCard(
             ) {
                 Row(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ModelTypeBadge(model.modelType)
@@ -1757,7 +1756,7 @@ fun ModelCard(
                             imageVector = TnIcons.CircleCheck,
                             contentDescription = "Installed",
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(rDp(24.dp))
+                            modifier = Modifier.size(24.dp)
                         )
                     }
 
@@ -1779,12 +1778,12 @@ fun ModelCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(4.dp)))
+            Spacer(modifier = Modifier.height(4.dp))
 
             // Size + repo source + key tags in a compact row
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Size chip
@@ -1796,9 +1795,9 @@ fun ModelCard(
                     modifier = Modifier
                         .background(
                             MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                            RoundedCornerShape(rDp(4.dp))
+                            RoundedCornerShape(4.dp)
                         )
-                        .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
                 )
 
                 // Repo source
@@ -1811,9 +1810,9 @@ fun ModelCard(
                         modifier = Modifier
                             .background(
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                RoundedCornerShape(rDp(4.dp))
+                                RoundedCornerShape(4.dp)
                             )
-                            .padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
 
@@ -1826,9 +1825,9 @@ fun ModelCard(
                         modifier = Modifier
                             .background(
                                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                                RoundedCornerShape(rDp(4.dp))
+                                RoundedCornerShape(4.dp)
                             )
-                            .padding(horizontal = rDp(5.dp), vertical = rDp(2.dp))
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -1839,7 +1838,7 @@ fun ModelCard(
                 enter = Motion.Enter,
                 exit = Motion.Exit
             ) {
-                Column(modifier = Modifier.padding(top = rDp(8.dp))) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
                     val progress =
                         if (downloadState is ModelDownloadService.DownloadState.Downloading) {
                             downloadState.progress
@@ -1881,7 +1880,7 @@ fun ModelCard(
                         color = MaterialTheme.colorScheme.primary
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(4.dp)))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     if (isExtracting) {
                         val es = downloadState as ModelDownloadService.DownloadState.Extracting
@@ -1890,8 +1889,8 @@ fun ModelCard(
                                 progress = { es.extractedCount.toFloat() / es.totalFiles },
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(rDp(4.dp))
-                                    .clip(RoundedCornerShape(rDp(2.dp))),
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
                                 color = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
@@ -1899,8 +1898,8 @@ fun ModelCard(
                             LinearProgressIndicator(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(rDp(4.dp))
-                                    .clip(RoundedCornerShape(rDp(2.dp))),
+                                    .height(4.dp)
+                                    .clip(RoundedCornerShape(2.dp)),
                                 color = MaterialTheme.colorScheme.primary,
                                 trackColor = MaterialTheme.colorScheme.surfaceVariant
                             )
@@ -1909,8 +1908,8 @@ fun ModelCard(
                         LinearProgressIndicator(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(rDp(4.dp))
-                                .clip(RoundedCornerShape(rDp(2.dp))),
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )
@@ -1919,8 +1918,8 @@ fun ModelCard(
                             progress = { progress },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(rDp(4.dp))
-                                .clip(RoundedCornerShape(rDp(2.dp))),
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
                         )

@@ -22,7 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
@@ -155,7 +154,7 @@ fun RagDataReaderScreen(
                         onClickListener = onBackClick,
                         icon = TnIcons.ArrowLeft,
                         contentDescription = "Back",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -174,7 +173,7 @@ fun RagDataReaderScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
                     ) {
                         LoadingIndicator()
                         Text("Loading RAG data...")
@@ -227,9 +226,9 @@ fun RagDataReaderScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(rDp(16.dp)),
+                                .padding(16.dp),
                             singleLine = true,
-                            shape = RoundedCornerShape(rDp(12.dp))
+                            shape = RoundedCornerShape(12.dp)
                         )
 
                         // Graph Stats Card
@@ -237,15 +236,15 @@ fun RagDataReaderScreen(
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
                                 ),
-                                shape = RoundedCornerShape(rDp(12.dp))
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 Column(
-                                    modifier = Modifier.padding(rDp(16.dp)),
-                                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
                                     Text(
                                         "Graph Statistics",
@@ -266,15 +265,15 @@ fun RagDataReaderScreen(
                         // Node List
                         LazyColumn(
                             modifier = Modifier.weight(1f),
-                            contentPadding = PaddingValues(rDp(16.dp)),
-                            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             if (filteredNodes.isEmpty()) {
                                 item {
                                     Box(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(rDp(32.dp)),
+                                            .padding(32.dp),
                                         contentAlignment = Alignment.Center
                                     ) {
                                         Text(
@@ -330,11 +329,11 @@ fun NodeCard(
             else
                 MaterialTheme.colorScheme.surfaceVariant
         ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
-            modifier = Modifier.padding(rDp(12.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -354,12 +353,12 @@ fun NodeCard(
                 if (node.edges.isNotEmpty()) {
                     Surface(
                         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                        shape = RoundedCornerShape(rDp(6.dp))
+                        shape = RoundedCornerShape(6.dp)
                     ) {
                         Text(
                             "${node.edges.size} connections",
                             style = MaterialTheme.typography.labelSmall,
-                            modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             color = MaterialTheme.colorScheme.primary,
                             fontWeight = FontWeight.SemiBold
                         )
@@ -402,7 +401,7 @@ fun NodeDetailView(
 ) {
     Column(
         modifier = Modifier
-            .width(rDp(400.dp))
+            .width(400.dp)
             .fillMaxHeight()
             .background(MaterialTheme.colorScheme.surface)
     ) {
@@ -410,7 +409,7 @@ fun NodeDetailView(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp)),
+                .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -423,7 +422,7 @@ fun NodeDetailView(
                 onClickListener = onClose,
                 icon = TnIcons.X,
                 contentDescription = "Close",
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             )
         }
 
@@ -431,8 +430,8 @@ fun NodeDetailView(
 
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Node ID
             item {
@@ -511,7 +510,7 @@ fun NodeDetailView(
             if (node.edges.isNotEmpty()) {
                 item {
                     DetailSection(title = "Connected Nodes (${node.edges.size})") {
-                        Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             node.edges.forEach { edge ->
                                 val connectedNode = graph.getNode(edge.targetId)
                                 if (connectedNode != null) {
@@ -538,9 +537,9 @@ fun ConnectedNodeCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
         ),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(10.dp)
     ) {
-        Column(modifier = Modifier.padding(rDp(12.dp))) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -554,18 +553,18 @@ fun ConnectedNodeCard(
                 )
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(rDp(6.dp))
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
                         "${edge.type.name} • ${(edge.weight * 100).toInt()}%",
                         style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(rDp(4.dp)))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 node.content,
                 style = MaterialTheme.typography.bodySmall,
@@ -582,7 +581,7 @@ fun DetailSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             title,
             style = MaterialTheme.typography.titleMedium,
@@ -592,10 +591,10 @@ fun DetailSection(
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
             ),
-            shape = RoundedCornerShape(rDp(12.dp))
+            shape = RoundedCornerShape(12.dp)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(12.dp)),
+                modifier = Modifier.padding(12.dp),
                 content = content
             )
         }
@@ -636,7 +635,7 @@ fun ErrorScreen(
                         onClickListener = onBackClick,
                         icon = TnIcons.ArrowLeft,
                         contentDescription = "Back",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             )
@@ -650,13 +649,13 @@ fun ErrorScreen(
         ) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(16.dp)),
-                modifier = Modifier.padding(rDp(24.dp))
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(24.dp)
             ) {
                 Icon(
                     TnIcons.AlertTriangle,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(64.dp)),
+                    modifier = Modifier.size(64.dp),
                     tint = MaterialTheme.colorScheme.error
                 )
                 Text(
@@ -666,7 +665,7 @@ fun ErrorScreen(
                 )
                 FilledTonalButton(
                     onClick = onBackClick,
-                    shape = RoundedCornerShape(rDp(12.dp)),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                         contentColor = MaterialTheme.colorScheme.primary
@@ -697,7 +696,7 @@ fun PasswordInputDialog(
         onDismissRequest = onDismiss,
         title = { Text("Enter Password") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     "This RAG is encrypted. Please enter the password to view its contents.",
                     style = MaterialTheme.typography.bodyMedium
@@ -720,7 +719,7 @@ fun PasswordInputDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },
@@ -728,7 +727,7 @@ fun PasswordInputDialog(
             FilledTonalButton(
                 onClick = { if (password.isNotBlank()) onConfirm(password) },
                 enabled = password.isNotBlank(),
-                shape = RoundedCornerShape(rDp(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                     contentColor = MaterialTheme.colorScheme.primary
@@ -740,7 +739,7 @@ fun PasswordInputDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Cancel")
             }

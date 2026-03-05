@@ -32,7 +32,6 @@ import com.dark.tool_neuron.plugins.ui.components.DuckDuckGoSearchUI
 import com.dark.tool_neuron.plugins.ui.components.WebScrapingUI
 import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
@@ -47,10 +46,10 @@ fun WebSearchPluginUI(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(rDp(16.dp)))
+            .clip(RoundedCornerShape(16.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.5f))
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Plugin header
         PluginHeader()
@@ -100,7 +99,7 @@ fun WebSearchPluginUI(
 private fun PluginHeader() {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Plugin icon
@@ -108,12 +107,12 @@ private fun PluginHeader() {
             imageVector = TnIcons.World,
             contentDescription = "Web Search Plugin",
             tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(rDp(24.dp))
+            modifier = Modifier.size(24.dp)
         )
 
         // Plugin info
         Column(
-            verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
             Text(
                 text = "Web Search Plugin",
@@ -138,20 +137,20 @@ private fun EmptyState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(24.dp)),
+            .padding(vertical = 24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Icon(
             imageVector = TnIcons.World,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
-            modifier = Modifier.size(rDp(48.dp))
+            modifier = Modifier.size(48.dp)
         )
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Text(
                 text = "No active tools",
@@ -169,16 +168,16 @@ private fun EmptyState() {
             )
         }
 
-        Spacer(modifier = Modifier.height(rDp(8.dp)))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Available tools list
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(rDp(8.dp)))
+                .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.3f))
-                .padding(rDp(12.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
                 text = "Available Tools:",
@@ -205,7 +204,7 @@ private fun EmptyState() {
 private fun ToolListItem(name: String, description: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.Top
     ) {
         Text(

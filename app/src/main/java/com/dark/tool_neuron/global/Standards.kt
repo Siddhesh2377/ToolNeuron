@@ -40,6 +40,19 @@ object Standards {
     val ChipIconSize = 14.dp
     val ChipSpacing = 6.dp
 
+    // Additional spacing
+    val SpacingXxs = 2.dp
+    val SpacingXxl = 32.dp
+    val SpacingXxxl = 48.dp
+
+    // Border radius
+    val RadiusSm = 6.dp
+    val RadiusMd = 8.dp
+    val RadiusLg = 12.dp
+    val RadiusXl = 16.dp
+    val RadiusXxl = 20.dp
+    val RadiusFull = 100.dp
+
     // Timeline
     val TimelineNodeSize = 8.dp
     val TimelineLineWidth = 2.dp

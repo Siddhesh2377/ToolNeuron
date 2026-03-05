@@ -44,7 +44,6 @@ import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.global.formatRelativeTime
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatListViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -77,7 +76,7 @@ fun HomeDrawerScreen(
         modifier = Modifier
             .fillMaxSize()
             .then(
-                if (isDialogOpen) Modifier.blur(rDp(4.dp)) else Modifier
+                if (isDialogOpen) Modifier.blur(4.dp) else Modifier
             ),
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
@@ -93,7 +92,7 @@ fun HomeDrawerScreen(
                         ActionButton(
                             onClickListener = onVaultManagerClick,
                             icon = TnIcons.Sparkles,
-                            modifier = Modifier.padding(end = rDp(6.dp))
+                            modifier = Modifier.padding(end = 6.dp)
                         )
                         ActionButton(
                             onClickListener = {
@@ -102,7 +101,7 @@ fun HomeDrawerScreen(
                                 }
                             },
                             icon = TnIcons.Plus,
-                            modifier = Modifier.padding(end = rDp(6.dp))
+                            modifier = Modifier.padding(end = 6.dp)
                         )
                     }
                 }
@@ -188,9 +187,9 @@ private fun ChatList(
             modifier = Modifier
                 .fillMaxSize()
                 .then(
-                    if (isManualRefreshing) Modifier.blur(rDp(16.dp)) else Modifier
+                    if (isManualRefreshing) Modifier.blur(16.dp) else Modifier
                 ),
-            contentPadding = PaddingValues(vertical = rDp(8.dp))
+            contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(
                 items = dedupedChats,
@@ -219,20 +218,20 @@ private fun ChatListItem(
         onClick = onClick,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp), vertical = rDp(4.dp)),
-        shape = RoundedCornerShape(rDp(8.dp)),
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceContainer
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(8.dp)),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -270,7 +269,7 @@ private fun ChatListItem(
 
             if (isDeleting) {
                 LoadingIndicator(
-                    modifier = Modifier.size(rDp(20.dp)),
+                    modifier = Modifier.size(20.dp),
                     color = MaterialTheme.colorScheme.primary
                 )
             } else {
@@ -279,13 +278,13 @@ private fun ChatListItem(
                         isDeleting = true
                         onDelete()
                     },
-                    modifier = Modifier.size(rDp(36.dp))
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         TnIcons.Trash,
                         contentDescription = "Delete chat",
                         tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(rDp(18.dp))
+                        modifier = Modifier.size(18.dp)
                     )
                 }
             }
@@ -301,12 +300,12 @@ private fun EmptyState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = TnIcons.Messages,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(64.dp)),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
             )
 
@@ -334,7 +333,7 @@ private fun LoadingState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             LoadingIndicator()
             Text(
@@ -354,18 +353,18 @@ private fun ErrorSnackbar(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(rDp(16.dp)),
+            .padding(16.dp),
         contentAlignment = Alignment.BottomCenter
     ) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.errorContainer
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -378,13 +377,13 @@ private fun ErrorSnackbar(
 
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.size(rDp(24.dp))
+                    modifier = Modifier.size(24.dp)
                 ) {
                     Icon(
                         TnIcons.X,
                         contentDescription = "Dismiss",
                         tint = MaterialTheme.colorScheme.onErrorContainer,
-                        modifier = Modifier.size(rDp(16.dp))
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }

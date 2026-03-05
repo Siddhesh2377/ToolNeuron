@@ -40,7 +40,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import kotlin.math.roundToInt
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -70,10 +69,10 @@ fun PluginOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = rDp(12.dp))
-                        .width(rDp(40.dp))
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp)))
+                        .padding(vertical = 12.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 )
             }
@@ -81,8 +80,8 @@ fun PluginOverlayBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = rDp(600.dp))
-                    .padding(bottom = rDp(16.dp))
+                    .heightIn(max = 600.dp)
+                    .padding(bottom = 16.dp)
             ) {
                 // ── Header ──
                 PluginOverlayHeader(
@@ -90,11 +89,11 @@ fun PluginOverlayBottomSheet(
                     totalCount = plugins.size
                 )
 
-                Spacer(modifier = Modifier.height(rDp(12.dp)))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 LazyColumn(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // ── Config Section ──
                     item {
@@ -108,7 +107,7 @@ fun PluginOverlayBottomSheet(
 
                     item {
                         HorizontalDivider(
-                            modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(4.dp)),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
                             color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                         )
                     }
@@ -145,19 +144,19 @@ private fun ToolCallingConfigSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         SectionHeader(title = "Tool Calling Config")
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(10.dp)),
+            shape = RoundedCornerShape(10.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(12.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Multi-turn toggle
                 SwitchRow(
@@ -173,7 +172,7 @@ private fun ToolCallingConfigSection(
                     enter = Motion.Enter,
                     exit = Motion.Exit
                 ) {
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -187,7 +186,7 @@ private fun ToolCallingConfigSection(
                             )
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                shape = RoundedCornerShape(rDp(4.dp))
+                                shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "${toolCallingConfig.maxRounds}",
@@ -195,8 +194,8 @@ private fun ToolCallingConfigSection(
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(
-                                        horizontal = rDp(8.dp),
-                                        vertical = rDp(2.dp)
+                                        horizontal = 8.dp,
+                                        vertical = 2.dp
                                     )
                                 )
                             }
@@ -229,7 +228,7 @@ private fun PluginOverlayHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -258,7 +257,7 @@ private fun PluginListItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
+            .padding(horizontal = 16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isEnabled) {
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
@@ -266,12 +265,12 @@ private fun PluginListItem(
                 MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(16.dp), vertical = rDp(6.dp))
+                .padding(horizontal = 16.dp, vertical = 6.dp)
         ) {
             // Header Row
             Row(
@@ -323,10 +322,10 @@ private fun PluginListItem(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = rDp(8.dp))
+                        .padding(top = 8.dp)
                 ) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = rDp(6.dp)),
+                        modifier = Modifier.padding(vertical = 6.dp),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
 
@@ -334,7 +333,7 @@ private fun PluginListItem(
                         text = plugin.description,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(bottom = rDp(8.dp))
+                        modifier = Modifier.padding(bottom = 8.dp)
                     )
 
                     // Tools
@@ -344,14 +343,14 @@ private fun PluginListItem(
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = rDp(4.dp))
+                            modifier = Modifier.padding(bottom = 4.dp)
                         )
 
                         plugin.toolDefinitionBuilder.forEach { tool ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = rDp(2.dp))
+                                    .padding(vertical = 2.dp)
                             ) {
                                 Text(
                                     text = "• ",
@@ -387,7 +386,7 @@ private fun EmptyPluginState() {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(rDp(32.dp)),
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -395,7 +394,7 @@ private fun EmptyPluginState() {
             text = "No Plugins Available",
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(bottom = rDp(8.dp))
+            modifier = Modifier.padding(bottom = 8.dp)
         )
         Text(
             text = "Plugins will appear here once they are registered",

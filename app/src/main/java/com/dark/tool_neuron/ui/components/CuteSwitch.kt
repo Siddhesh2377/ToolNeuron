@@ -38,7 +38,6 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.ui.theme.rDp
 
 /**
  * Cute compact switch component with smooth animations
@@ -50,9 +49,9 @@ fun CuteSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    width: Dp = rDp(44.dp),
-    height: Dp = rDp(24.dp),
-    thumbSize: Dp = rDp(18.dp),
+    width: Dp = 44.dp,
+    height: Dp = 24.dp,
+    thumbSize: Dp = 18.dp,
     checkedTrackColor: Color = MaterialTheme.colorScheme.primary,
     uncheckedTrackColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     checkedThumbColor: Color = MaterialTheme.colorScheme.onPrimary,
@@ -75,7 +74,7 @@ fun CuteSwitch(
     )
 
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) width - thumbSize - rDp(3.dp) else rDp(3.dp),
+        targetValue = if (checked) width - thumbSize - 3.dp else 3.dp,
         animationSpec = Motion.interactive(),
         label = "thumbOffset"
     )
@@ -107,7 +106,7 @@ fun CuteSwitch(
                 .size(thumbSize)
                 .scale(thumbScale)
                 .background(thumbColor, CircleShape)
-                .border(rDp(1.5.dp), trackColor.copy(alpha = 0.2f), CircleShape),
+                .border(1.5.dp, trackColor.copy(alpha = 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             // Optional icon in thumb
@@ -116,7 +115,7 @@ fun CuteSwitch(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(12.dp)),
+                    modifier = Modifier.size(12.dp),
                     tint = trackColor
                 )
             }
@@ -134,9 +133,9 @@ fun CuteSwitchResIcon(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    width: Dp = rDp(44.dp),
-    height: Dp = rDp(24.dp),
-    thumbSize: Dp = rDp(18.dp),
+    width: Dp = 44.dp,
+    height: Dp = 24.dp,
+    thumbSize: Dp = 18.dp,
     checkedTrackColor: Color = MaterialTheme.colorScheme.primary,
     uncheckedTrackColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     checkedThumbColor: Color = MaterialTheme.colorScheme.onPrimary,
@@ -159,7 +158,7 @@ fun CuteSwitchResIcon(
     )
 
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) width - thumbSize - rDp(3.dp) else rDp(3.dp),
+        targetValue = if (checked) width - thumbSize - 3.dp else 3.dp,
         animationSpec = Motion.interactive(),
         label = "thumbOffset"
     )
@@ -191,7 +190,7 @@ fun CuteSwitchResIcon(
                 .size(thumbSize)
                 .scale(thumbScale)
                 .background(thumbColor, CircleShape)
-                .border(rDp(1.5.dp), trackColor.copy(alpha = 0.2f), CircleShape),
+                .border(1.5.dp, trackColor.copy(alpha = 0.2f), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             // Optional icon in thumb
@@ -200,7 +199,7 @@ fun CuteSwitchResIcon(
                 Icon(
                     painter = painterResource(icon),
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(12.dp)),
+                    modifier = Modifier.size(12.dp),
                     tint = trackColor
                 )
             }
@@ -249,7 +248,7 @@ fun CuteToggle(
     Surface(
         modifier = modifier
             .scale(scale)
-            .clip(RoundedCornerShape(rDp(20.dp)))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(
                 interactionSource = interactionSource,
                 
@@ -258,12 +257,12 @@ fun CuteToggle(
                 onClick = { onCheckedChange(!checked) }
             ),
         color = backgroundColor,
-        shape = RoundedCornerShape(rDp(20.dp))
+        shape = RoundedCornerShape(20.dp)
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = rDp(12.dp),
-                vertical = rDp(8.dp)
+                horizontal = 12.dp,
+                vertical = 8.dp
             ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -273,9 +272,9 @@ fun CuteToggle(
                     imageVector = iconVector,
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(rDp(16.dp))
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(Modifier.width(rDp(6.dp)))
+                Spacer(Modifier.width(6.dp))
             }
             Text(
                 text = text,
@@ -327,7 +326,7 @@ fun CuteToggle(
     Surface(
         modifier = modifier
             .scale(scale)
-            .clip(RoundedCornerShape(rDp(20.dp)))
+            .clip(RoundedCornerShape(20.dp))
             .clickable(
                 interactionSource = interactionSource,
                 
@@ -336,12 +335,12 @@ fun CuteToggle(
                 onClick = { onCheckedChange(!checked) }
             ),
         color = backgroundColor,
-        shape = RoundedCornerShape(rDp(20.dp))
+        shape = RoundedCornerShape(20.dp)
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = rDp(12.dp),
-                vertical = rDp(8.dp)
+                horizontal = 12.dp,
+                vertical = 8.dp
             ),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -351,9 +350,9 @@ fun CuteToggle(
                     painter = painterResource(iconRes),
                     contentDescription = null,
                     tint = contentColor,
-                    modifier = Modifier.size(rDp(16.dp))
+                    modifier = Modifier.size(16.dp)
                 )
-                Spacer(Modifier.width(rDp(6.dp)))
+                Spacer(Modifier.width(6.dp))
             }
             Text(
                 text = text,
@@ -376,7 +375,7 @@ fun CuteIconToggle(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     iconChecked: ImageVector? = null,
-    size: Dp = rDp(40.dp),
+    size: Dp = 40.dp,
     checkedBackgroundColor: Color = MaterialTheme.colorScheme.primary,
     uncheckedBackgroundColor: Color = MaterialTheme.colorScheme.surfaceVariant,
     checkedContentColor: Color = MaterialTheme.colorScheme.onPrimary,

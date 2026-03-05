@@ -24,7 +24,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
 import com.dark.tool_neuron.ui.icons.TnIcons
 
@@ -63,7 +62,7 @@ fun MemoryResultsDisplay(
             exit = shrinkVertically()
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 results.forEach { result ->
                     MemoryEntryCard(result = result)
@@ -98,15 +97,15 @@ private fun MemoryEntryCard(
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = if (isRevealed) Int.MAX_VALUE else 3,
             overflow = TextOverflow.Ellipsis,
-            modifier = if (!isRevealed) Modifier.blur(rDp(6.dp)) else Modifier
+            modifier = if (!isRevealed) Modifier.blur(6.dp) else Modifier
         )
 
         if (result.category != null || result.tags.isNotEmpty()) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(Standards.SpacingXs)),
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+                    .padding(top = Standards.SpacingXs),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 result.category?.let {
                     InfoBadge(

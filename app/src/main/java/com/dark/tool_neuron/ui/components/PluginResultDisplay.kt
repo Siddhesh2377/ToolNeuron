@@ -25,7 +25,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.plugins.PluginManager
-import com.dark.tool_neuron.ui.theme.rDp
 import org.json.JSONObject
 import com.dark.tool_neuron.ui.icons.TnIcons
 
@@ -42,36 +41,36 @@ fun PluginResultCard(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Summary Row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = if (pluginData.success) {
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
             } else {
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
             },
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Tool,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = if (pluginData.success) {
                             MaterialTheme.colorScheme.tertiary
                         } else {
@@ -106,7 +105,7 @@ fun PluginResultCard(
                             TnIcons.AlertTriangle
                         },
                         contentDescription = if (pluginData.success) "Success" else "Failed",
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = if (pluginData.success) {
                             MaterialTheme.colorScheme.tertiary
                         } else {
@@ -118,7 +117,7 @@ fun PluginResultCard(
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -133,13 +132,13 @@ fun PluginResultCard(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Metrics
                     metrics?.let { m ->
@@ -170,14 +169,14 @@ fun PluginResultCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Surface(
-                            shape = RoundedCornerShape(rDp(6.dp)),
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                         ) {
                             Text(
                                 text = formatJsonForDisplay(pluginData.inputParams),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(rDp(8.dp))
+                                modifier = Modifier.padding(8.dp)
                             )
                         }
                     }
@@ -206,14 +205,14 @@ fun PluginResultCard(
                         } else {
                             // Fallback to text display if plugin not available or JSON parsing failed
                             Surface(
-                                shape = RoundedCornerShape(rDp(6.dp)),
+                                shape = RoundedCornerShape(6.dp),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                             ) {
                                 Text(
                                     text = pluginData.resultData,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(rDp(8.dp))
+                                    modifier = Modifier.padding(8.dp)
                                 )
                             }
                         }
@@ -226,14 +225,14 @@ fun PluginResultCard(
                             color = MaterialTheme.colorScheme.error
                         )
                         Surface(
-                            shape = RoundedCornerShape(rDp(6.dp)),
+                            shape = RoundedCornerShape(6.dp),
                             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
                         ) {
                             Text(
                                 text = pluginData.resultData,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(rDp(8.dp))
+                                modifier = Modifier.padding(8.dp)
                             )
                         }
                     }

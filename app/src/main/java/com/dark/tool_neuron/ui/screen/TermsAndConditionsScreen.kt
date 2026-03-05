@@ -13,7 +13,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.ui.components.ActionTextButton
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
@@ -35,24 +34,24 @@ fun TermsAndConditionsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(it)
-                .padding(horizontal = rDp(20.dp))
+                .padding(horizontal = 20.dp)
         ) {
             // Header
-            Spacer(modifier = Modifier.height(rDp(40.dp)))
+            Spacer(modifier = Modifier.height(40.dp))
 
             Text(
                 text = "Terms & Conditions",
                 style = MaterialTheme.typography.headlineMedium.copy(
                     fontWeight = FontWeight.Bold
                 ),
-                modifier = Modifier.padding(bottom = rDp(8.dp))
+                modifier = Modifier.padding(bottom = 8.dp)
             )
 
             Text(
                 text = "Please read carefully before using ToolNeuron",
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = rDp(24.dp))
+                modifier = Modifier.padding(bottom = 24.dp)
             )
 
             // Scrollable content
@@ -60,7 +59,7 @@ fun TermsAndConditionsScreen(
                 modifier = Modifier
                     .weight(1f)
                     .verticalScroll(scrollState)
-                    .padding(bottom = rDp(16.dp))
+                    .padding(bottom = 16.dp)
             ) {
                 TermsSection(
                     title = "1. Acceptance of Terms",
@@ -395,7 +394,7 @@ fun TermsAndConditionsScreen(
                 )
 
                 // Final acknowledgment
-                Spacer(modifier = Modifier.height(rDp(24.dp)))
+                Spacer(modifier = Modifier.height(24.dp))
 
                 Text(
                     text = "BY CLICKING 'I ACCEPT' BELOW, YOU ACKNOWLEDGE THAT YOU HAVE READ, UNDERSTOOD, AND AGREE TO BE BOUND BY THESE TERMS AND CONDITIONS. YOU ACCEPT FULL RESPONSIBILITY FOR ALL CONTENT GENERATED USING THIS APP.",
@@ -407,17 +406,17 @@ fun TermsAndConditionsScreen(
                     textAlign = TextAlign.Center,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = rDp(16.dp))
+                        .padding(vertical = 16.dp)
                 )
 
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Accept button
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = rDp(16.dp)),
+                    .padding(vertical = 16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 ActionTextButton(
@@ -454,7 +453,7 @@ private fun TermsSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(bottom = rDp(20.dp))
+            .padding(bottom = 20.dp)
     ) {
         Text(
             text = title,
@@ -463,7 +462,7 @@ private fun TermsSection(
                 fontFamily = FontFamily.Monospace
             ),
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = rDp(8.dp))
+            modifier = Modifier.padding(bottom = 8.dp)
         )
 
         Text(

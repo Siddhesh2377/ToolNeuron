@@ -18,7 +18,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.ToolChainStepData
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
@@ -40,32 +39,32 @@ fun ToolChainDisplay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Header
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Wrench,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
@@ -101,7 +100,7 @@ fun ToolChainDisplay(
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -114,7 +113,7 @@ fun ToolChainDisplay(
             exit = Motion.Exit
         ) {
             Column(
-                modifier = Modifier.padding(top = rDp(4.dp))
+                modifier = Modifier.padding(top = 4.dp)
             ) {
                 steps.forEachIndexed { index, step ->
                     ToolChainStep(
@@ -144,20 +143,20 @@ private fun ToolChainStep(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(10.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.Top
         ) {
             // Step number with status icon
             Box(
                 modifier = Modifier
-                    .size(rDp(24.dp))
+                    .size(24.dp)
                     .background(
                         color = if (step.success) {
                             MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
@@ -172,14 +171,14 @@ private fun ToolChainStep(
                     Icon(
                         imageVector = TnIcons.CircleCheck,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                 } else {
                     Icon(
                         imageVector = TnIcons.AlertTriangle,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -187,7 +186,7 @@ private fun ToolChainStep(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -220,14 +219,14 @@ private fun ToolChainStep(
                 // Result preview
                 if (step.result.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(rDp(4.dp)),
+                        shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                     ) {
                         Text(
                             text = step.result.take(150) + if (step.result.length > 150) "..." else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(6.dp)),
+                            modifier = Modifier.padding(6.dp),
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -242,9 +241,9 @@ private fun ToolChainStep(
 private fun ToolChainConnector(isAnimated: Boolean = false) {
     Box(
         modifier = Modifier
-            .padding(start = rDp(23.dp))
-            .width(rDp(2.dp))
-            .height(rDp(16.dp))
+            .padding(start = 23.dp)
+            .width(2.dp)
+            .height(16.dp)
             .background(
                 color = if (isAnimated) {
                     MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
@@ -270,21 +269,21 @@ private fun ToolChainLoadingStep() {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(8.dp),
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(10.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = TnIcons.Wrench,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(rDp(20.dp))
+                    .size(20.dp)
                     .rotate(rotation),
                 tint = MaterialTheme.colorScheme.tertiary
             )

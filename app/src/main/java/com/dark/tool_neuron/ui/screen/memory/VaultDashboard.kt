@@ -40,8 +40,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
 import com.dark.tool_neuron.global.formatBytes
 import com.dark.tool_neuron.global.formatCompactDate
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
@@ -64,15 +62,15 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(bottom = rDp(24.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            contentPadding = PaddingValues(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Header
             item {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(8.dp), vertical = rDp(8.dp)),
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     ActionButton(
@@ -83,12 +81,12 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     Icon(
                         TnIcons.Stack2, null,
                         tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = rDp(8.dp), end = rDp(8.dp))
+                        modifier = Modifier.padding(start = 8.dp, end = 8.dp)
                     )
                     Text(
                         "Memory Vault",
                         fontFamily = ManropeFontFamily,
-                        fontSize = rSp(18.sp),
+                        fontSize = 18.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface,
                         modifier = Modifier.weight(1f)
@@ -110,8 +108,8 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(16.dp)),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        .padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     QuickStatChip(
                         label = "Chats",
@@ -137,7 +135,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     LinearProgressIndicator(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = rDp(16.dp))
+                            .padding(horizontal = 16.dp)
                     )
                 }
             }
@@ -147,21 +145,21 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(16.dp), vertical = rDp(4.dp)),
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         "Conversations",
                         fontFamily = ManropeFontFamily,
-                        fontSize = rSp(13.sp),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary
                     )
                     Text(
                         "${viewModel.chatList.size} total",
                         fontFamily = ManropeFontFamily,
-                        fontSize = rSp(11.sp),
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -173,21 +171,21 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = rDp(32.dp)),
+                            .padding(vertical = 32.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 TnIcons.Message, null,
-                                modifier = Modifier.size(rDp(36.dp)),
+                                modifier = Modifier.size(36.dp),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )
                             Text(
                                 "No conversations yet",
                                 fontFamily = ManropeFontFamily,
-                                fontSize = rSp(13.sp),
+                                fontSize = 13.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(top = rDp(8.dp))
+                                modifier = Modifier.padding(top = 8.dp)
                             )
                         }
                     }
@@ -197,21 +195,21 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     CompactChatCard(
                         chat = chat,
                         onDelete = { viewModel.deleteChat(chat.chatId) },
-                        modifier = Modifier.padding(horizontal = rDp(16.dp))
+                        modifier = Modifier.padding(horizontal = 16.dp)
                     )
                 }
             }
 
             // Section: Tools
             item {
-                Spacer(Modifier.height(rDp(8.dp)))
+                Spacer(Modifier.height(8.dp))
                 Text(
                     "Tools",
                     fontFamily = ManropeFontFamily,
-                    fontSize = rSp(13.sp),
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = rDp(16.dp))
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
@@ -224,44 +222,44 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     isProcessing = viewModel.isDefragging,
                     progress = viewModel.defragProgress,
                     onClick = { viewModel.performDefragmentation() },
-                    modifier = Modifier.padding(horizontal = rDp(16.dp))
+                    modifier = Modifier.padding(horizontal = 16.dp)
                 )
             }
 
             // Collapsible Logs
             item {
-                Spacer(Modifier.height(rDp(8.dp)))
+                Spacer(Modifier.height(8.dp))
                 Surface(
                     onClick = { showLogs = !showLogs },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(16.dp)),
+                        .padding(horizontal = 16.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(rDp(12.dp)),
+                            .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
                             TnIcons.Terminal, null,
-                            modifier = Modifier.size(rDp(18.dp)),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                         Text(
                             "Vault Logs",
                             fontFamily = ManropeFontFamily,
-                            fontSize = rSp(13.sp),
+                            fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
                             if (showLogs) TnIcons.ChevronUp else TnIcons.ChevronDown,
                             null,
-                            modifier = Modifier.size(rDp(18.dp)),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -274,8 +272,8 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(rDp(300.dp))
-                            .padding(horizontal = rDp(16.dp))
+                            .height(300.dp)
+                            .padding(horizontal = 16.dp)
                     ) {
                         TerminalLoggerScreen()
                     }
@@ -296,23 +294,23 @@ private fun QuickStatChip(
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(10.dp)
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
                 value,
                 fontFamily = ManropeFontFamily,
-                fontSize = rSp(15.sp),
+                fontSize = 15.sp,
                 fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 label,
                 fontFamily = ManropeFontFamily,
-                fontSize = rSp(11.sp),
+                fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -328,31 +326,31 @@ private fun CompactChatCard(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(12.dp), vertical = rDp(10.dp)),
+                .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(
                 TnIcons.Message, null,
-                modifier = Modifier.size(rDp(16.dp)),
+                modifier = Modifier.size(16.dp),
                 tint = MaterialTheme.colorScheme.primary
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     "Chat ${chat.chatId.take(8)}",
                     fontFamily = ManropeFontFamily,
-                    fontSize = rSp(13.sp),
+                    fontSize = 13.sp,
                     fontWeight = FontWeight.Medium
                 )
                 Text(
                     "${chat.messageCount} msgs  ·  ${formatCompactDate(chat.lastMessageTime ?: chat.createdAt)}",
                     fontFamily = ManropeFontFamily,
-                    fontSize = rSp(11.sp),
+                    fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -379,36 +377,36 @@ private fun ToolActionCard(
         onClick = if (!isProcessing) onClick else ({}),
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(10.dp)
     ) {
-        Column(modifier = Modifier.padding(rDp(12.dp))) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     icon, null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         title,
                         fontFamily = ManropeFontFamily,
-                        fontSize = rSp(13.sp),
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
                         description,
                         fontFamily = ManropeFontFamily,
-                        fontSize = rSp(11.sp),
+                        fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             if (isProcessing) {
-                Spacer(Modifier.height(rDp(6.dp)))
+                Spacer(Modifier.height(6.dp))
                 LinearProgressIndicator(
                     progress = { progress },
                     modifier = Modifier.fillMaxWidth(),

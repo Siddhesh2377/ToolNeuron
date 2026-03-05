@@ -42,7 +42,6 @@ import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.ModelListItem
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -73,11 +72,11 @@ fun DynamicActionWindow(
         modifier = Modifier
             .fillMaxWidth()
             .animateContentSize(animationSpec = Motion.content()),
-        elevation = CardDefaults.cardElevation(rDp(2.dp)),
+        elevation = CardDefaults.cardElevation(2.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
         ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column {
             SecondaryTabRow(
@@ -87,7 +86,7 @@ fun DynamicActionWindow(
                 indicator = @Composable {
                     TabRowDefaults.SecondaryIndicator(
                         modifier = Modifier.tabIndicatorOffset(selectedTab.ordinal),
-                        height = rDp(2.dp),
+                        height = 2.dp,
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -149,9 +148,9 @@ private fun StatusTabContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = rDp(280.dp))
-            .padding(rDp(10.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .heightIn(max = 280.dp)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         when (appState) {
             is AppState.Welcome -> WelcomeContent()
@@ -170,11 +169,11 @@ private fun StatusTabContent(
         if (hasActiveSubsystems) {
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
-                thickness = rDp(0.5.dp)
+                thickness = 0.5.dp
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (loadedRagCount > 0) {
                     CompactBadge("RAG ($loadedRagCount)", MaterialTheme.colorScheme.primary)
@@ -196,17 +195,17 @@ private fun StatusTabContent(
 @Composable
 private fun CompactBadge(text: String, color: androidx.compose.ui.graphics.Color) {
     Surface(
-        shape = RoundedCornerShape(rDp(4.dp)),
+        shape = RoundedCornerShape(4.dp),
         color = color.copy(alpha = 0.1f)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
                 modifier = Modifier
-                    .size(rDp(4.dp))
+                    .size(4.dp)
                     .background(color, CircleShape)
             )
             Text(
@@ -229,23 +228,23 @@ private fun ModelsTabContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = rDp(240.dp))
+            .heightIn(max = 240.dp)
     ) {
         if (installedModels.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(20.dp)),
+                    .padding(20.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Icon(
                         imageVector = TnIcons.Photo,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(20.dp)),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                     )
                     Text(
@@ -258,8 +257,8 @@ private fun ModelsTabContent(
         } else {
             LazyColumn(
                 modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(rDp(8.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                contentPadding = PaddingValues(8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 items(installedModels, key = { it.id }) { model ->
                     ModelListItem(
@@ -298,10 +297,10 @@ private fun SystemTabContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .heightIn(max = rDp(260.dp))
-            .padding(rDp(10.dp))
+            .heightIn(max = 260.dp)
+            .padding(10.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         // Thinking Mode
         if (isTextModelLoaded) {
@@ -312,13 +311,13 @@ private fun SystemTabContent(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Brain,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(16.dp)),
+                        modifier = Modifier.size(16.dp),
                         tint = if (thinkingEnabled) MaterialTheme.colorScheme.primary
                                else MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -340,7 +339,7 @@ private fun SystemTabContent(
         if (isTextModelLoaded || isImageModelLoaded) {
             SectionHeader("Active Models")
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (isTextModelLoaded) {
                     CompactBadge("Text", MaterialTheme.colorScheme.primary)
@@ -384,28 +383,28 @@ fun ModelListItem(
 ) {
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(8.dp),
         color = if (isLoaded) {
             MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)
         } else {
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         },
-        tonalElevation = if (isLoaded) rDp(1.dp) else rDp(0.dp)
+        tonalElevation = if (isLoaded) 1.dp else 0.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(rDp(6.dp)),
+                    shape = RoundedCornerShape(6.dp),
                     color = if (isLoaded) {
                         MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                     } else {
@@ -417,8 +416,8 @@ fun ModelListItem(
                             else TnIcons.Photo,
                         contentDescription = null,
                         modifier = Modifier
-                            .size(rDp(28.dp))
-                            .padding(rDp(6.dp)),
+                            .size(28.dp)
+                            .padding(6.dp),
                         tint = if (isLoaded) {
                             MaterialTheme.colorScheme.primary
                         } else {
@@ -441,13 +440,13 @@ fun ModelListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         if (isLoaded) {
                             Box(
                                 modifier = Modifier
-                                    .size(rDp(4.dp))
+                                    .size(4.dp)
                                     .background(MaterialTheme.colorScheme.primary, CircleShape)
                             )
                         }
@@ -472,14 +471,14 @@ fun ModelListItem(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.error
                         ),
-                        shape = RoundedCornerShape(rDp(6.dp))
+                        shape = RoundedCornerShape(6.dp)
                     )
                 } else {
                     ActionButton(
                         onClickListener = { onClickListener(model) },
                         icon = TnIcons.ExternalLink,
                         contentDescription = "Load",
-                        shape = RoundedCornerShape(rDp(6.dp)),
+                        shape = RoundedCornerShape(6.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.primary
@@ -500,18 +499,18 @@ private fun SystemMetricRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(1.dp)),
+            .padding(vertical = 1.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = label,
-                modifier = Modifier.size(rDp(14.dp)),
+                modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
             )
             Text(
@@ -534,7 +533,7 @@ private fun InfoRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(1.dp)),
+            .padding(vertical = 1.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
@@ -560,16 +559,16 @@ private fun WelcomeContent() {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(12.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = TnIcons.User,
             contentDescription = null,
-            modifier = Modifier.size(rDp(20.dp)),
+            modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.primary
         )
         Column {
@@ -595,16 +594,16 @@ private fun NoModelLoadedContent() {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(12.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = TnIcons.Photo,
             contentDescription = null,
-            modifier = Modifier.size(rDp(20.dp)),
+            modifier = Modifier.size(20.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Column {
@@ -630,21 +629,21 @@ private fun ModelLoadedContent(state: AppState.ModelLoaded) {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(10.dp)),
+            .padding(10.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.weight(1f)
         ) {
             Icon(
                 imageVector = TnIcons.CircleCheck,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(18.dp)),
+                modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.tertiary
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -673,10 +672,10 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(10.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -684,15 +683,15 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
                 CircularProgressIndicator(
                     progress = { state.progress },
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     color = MaterialTheme.colorScheme.secondary,
-                    strokeWidth = rDp(2.dp),
+                    strokeWidth = 2.dp,
                     trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
                 )
                 Column(modifier = Modifier.weight(1f)) {
@@ -722,8 +721,8 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
             progress = { state.progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(3.dp))
-                .clip(RoundedCornerShape(rDp(2.dp))),
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp)),
             color = MaterialTheme.colorScheme.secondary,
             trackColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f)
         )
@@ -736,7 +735,7 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -744,7 +743,7 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
@@ -762,7 +761,7 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
                     imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(rDp(20.dp))
+                        .size(20.dp)
                         .rotate(rotation),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -794,8 +793,8 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(2.dp))
-                .clip(RoundedCornerShape(rDp(1.dp))),
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp)),
             color = MaterialTheme.colorScheme.primary
         )
     }
@@ -809,7 +808,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -817,7 +816,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
@@ -835,7 +834,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                     imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(rDp(20.dp))
+                        .size(20.dp)
                         .scale(scale),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -868,8 +867,8 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
             progress = { progress },
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(3.dp))
-                .clip(RoundedCornerShape(rDp(2.dp))),
+                .height(3.dp)
+                .clip(RoundedCornerShape(2.dp)),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
         )
@@ -880,7 +879,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clip(RoundedCornerShape(rDp(8.dp)))
+                    .clip(RoundedCornerShape(8.dp))
             )
         }
     }
@@ -891,7 +890,7 @@ private fun GeneratingAudioContent() {
     Column(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         AudioWaveAnimation(MaterialTheme.colorScheme.primary)
         Text(
@@ -903,8 +902,8 @@ private fun GeneratingAudioContent() {
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(2.dp))
-                .clip(RoundedCornerShape(rDp(1.dp))),
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp)),
             color = MaterialTheme.colorScheme.primary
         )
     }
@@ -917,10 +916,10 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(10.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -928,7 +927,7 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
@@ -946,7 +945,7 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
                     imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
-                        .size(rDp(18.dp))
+                        .size(18.dp)
                         .rotate(rotation),
                     tint = MaterialTheme.colorScheme.tertiary
                 )
@@ -971,8 +970,8 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(rDp(2.dp))
-                .clip(RoundedCornerShape(rDp(1.dp))),
+                .height(2.dp)
+                .clip(RoundedCornerShape(1.dp)),
             color = MaterialTheme.colorScheme.tertiary,
             trackColor = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.2f)
         )
@@ -983,9 +982,9 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
 private fun AudioWaveAnimation(color: androidx.compose.ui.graphics.Color) {
     val infiniteTransition = rememberInfiniteTransition(label = "audio_wave")
     Row(
-        horizontalArrangement = Arrangement.spacedBy(rDp(3.dp)),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
         verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier.height(rDp(20.dp))
+        modifier = Modifier.height(20.dp)
     ) {
         repeat(5) { index ->
             val height by infiniteTransition.animateFloat(
@@ -999,9 +998,9 @@ private fun AudioWaveAnimation(color: androidx.compose.ui.graphics.Color) {
             )
             Box(
                 modifier = Modifier
-                    .width(rDp(2.dp))
+                    .width(2.dp)
                     .fillMaxHeight(height)
-                    .clip(RoundedCornerShape(rDp(1.dp)))
+                    .clip(RoundedCornerShape(1.dp))
                     .background(color)
             )
         }
@@ -1016,10 +1015,10 @@ private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComple
             .background(
                 if (state.success) MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
                 else MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(10.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1027,14 +1026,14 @@ private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComple
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(
                     imageVector = if (state.success) TnIcons.CircleCheck else TnIcons.AlertTriangle,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = if (state.success) MaterialTheme.colorScheme.tertiary
                            else MaterialTheme.colorScheme.error
                 )
@@ -1067,16 +1066,16 @@ private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComple
         if (!state.success && state.errorMessage != null) {
             HorizontalDivider(
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-                thickness = rDp(0.5.dp)
+                thickness = 0.5.dp
             )
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
                     imageVector = TnIcons.AlertTriangle,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(12.dp)),
+                    modifier = Modifier.size(12.dp),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                 )
                 Text(
@@ -1103,20 +1102,20 @@ private fun ErrorContent(state: AppState.Error) {
             .fillMaxWidth()
             .background(
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.2f),
-                RoundedCornerShape(rDp(8.dp))
+                RoundedCornerShape(8.dp)
             )
-            .padding(rDp(10.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = TnIcons.AlertTriangle,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(18.dp)),
+                modifier = Modifier.size(18.dp),
                 tint = MaterialTheme.colorScheme.error
             )
             Column(modifier = Modifier.weight(1f)) {
@@ -1140,17 +1139,17 @@ private fun ErrorContent(state: AppState.Error) {
 
         HorizontalDivider(
             color = MaterialTheme.colorScheme.error.copy(alpha = 0.2f),
-            thickness = rDp(0.5.dp)
+            thickness = 0.5.dp
         )
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.Top
         ) {
             Icon(
                 imageVector = TnIcons.AlertTriangle,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(12.dp)),
+                modifier = Modifier.size(12.dp),
                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
             )
             Text(

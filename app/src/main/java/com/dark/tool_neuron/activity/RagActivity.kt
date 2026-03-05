@@ -92,7 +92,6 @@ import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.screen.SecureRagCreationScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -196,7 +195,7 @@ fun RagScreen(
                         icon = TnIcons.ChevronLeft,
                         text = "Back",
                         contentDescription = "Close",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 },
                 actions = {
@@ -211,7 +210,7 @@ fun RagScreen(
                         },
                         icon = TnIcons.Download,
                         contentDescription = "Import Neuron Package",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -252,10 +251,10 @@ fun RagScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp)),
+                        .padding(8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    LoadingIndicator(modifier = Modifier.size(rDp(24.dp)))
+                    LoadingIndicator(modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -264,12 +263,12 @@ fun RagScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp)),
+                        .padding(8.dp),
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(rDp(8.dp))
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(rDp(12.dp)),
+                        modifier = Modifier.padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -282,7 +281,7 @@ fun RagScreen(
                             onClickListener = { ragViewModel.clearError() },
                             icon = TnIcons.X,
                             contentDescription = "Dismiss",
-                            shape = RoundedCornerShape(rDp(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -483,8 +482,8 @@ private fun RagListContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(rags, key = { it.id }) { rag ->
                 RagCard(
@@ -510,12 +509,12 @@ private fun EmptyRagListState(message: String, subMessage: String) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
                 TnIcons.Cpu,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(64.dp)),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Text(
@@ -528,7 +527,7 @@ private fun EmptyRagListState(message: String, subMessage: String) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = rDp(32.dp))
+                modifier = Modifier.padding(horizontal = 32.dp)
             )
         }
     }
@@ -558,12 +557,12 @@ private fun RagCard(
                 else -> MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(rDp(16.dp))
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp))
+                .padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -572,20 +571,20 @@ private fun RagCard(
             ) {
                 Row(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(rDp(48.dp))
-                            .clip(RoundedCornerShape(rDp(12.dp)))
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = getRagSourceIcon(rag.sourceType),
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(24.dp)),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -599,7 +598,7 @@ private fun RagCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -626,7 +625,7 @@ private fun RagCard(
             }
 
             if (rag.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -638,9 +637,9 @@ private fun RagCard(
 
             // Tags
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     rag.getTagsList().take(4).forEach { tag ->
                         TagChip(tag = tag)
@@ -649,9 +648,9 @@ private fun RagCard(
             }
 
             // Actions
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -664,7 +663,7 @@ private fun RagCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
                             ActionTextButton(
@@ -672,12 +671,12 @@ private fun RagCard(
                                 icon = TnIcons.X,
                                 text = "Unload",
                                 contentDescription = "Unload RAG",
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             )
                         }
                         RagStatus.LOADING -> {
                             LoadingIndicator(
-                                modifier = Modifier.size(rDp(20.dp))
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         else -> {
@@ -686,7 +685,7 @@ private fun RagCard(
                                 icon = TnIcons.Download,
                                 text = "Load",
                                 contentDescription = "Load RAG",
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             )
                         }
                     }
@@ -696,7 +695,7 @@ private fun RagCard(
                             onClickListener = viewDataAction,
                             icon = TnIcons.Eye,
                             contentDescription = "View Data",
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
@@ -705,7 +704,7 @@ private fun RagCard(
                             onClickListener = shareAction,
                             icon = TnIcons.Share,
                             contentDescription = "Share",
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
@@ -713,7 +712,7 @@ private fun RagCard(
                         onClickListener = onDelete,
                         icon = TnIcons.Trash,
                         contentDescription = "Delete",
-                        shape = RoundedCornerShape(rDp(8.dp)),
+                        shape = RoundedCornerShape(8.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.error
@@ -736,18 +735,18 @@ private fun StatusBadge(status: RagStatus) {
 
     Surface(
         color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(rDp(4.dp))
+        shape = RoundedCornerShape(4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (status == RagStatus.LOADED) {
                 Icon(
                     TnIcons.Check,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(12.dp)),
+                    modifier = Modifier.size(12.dp),
                     tint = color
                 )
             }
@@ -765,13 +764,13 @@ private fun StatusBadge(status: RagStatus) {
 private fun TagChip(tag: String) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(rDp(4.dp))
+        shape = RoundedCornerShape(4.dp)
     ) {
         Text(
             text = tag,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
@@ -795,7 +794,7 @@ private fun RagDetailBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(24.dp))
+                .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // Header
@@ -819,9 +818,9 @@ private fun RagDetailBottomSheet(
                 StatusBadge(status = rag.status)
             }
 
-            Spacer(modifier = Modifier.height(rDp(16.dp)))
+            Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
-            Spacer(modifier = Modifier.height(rDp(16.dp)))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Description
             if (rag.description.isNotBlank()) {
@@ -830,13 +829,13 @@ private fun RagDetailBottomSheet(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(rDp(4.dp)))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Stats
@@ -845,13 +844,13 @@ private fun RagDetailBottomSheet(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Column(modifier = Modifier.padding(rDp(16.dp))) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     DetailRow("Nodes", "${rag.nodeCount}")
                     DetailRow("Embedding Dimension", "${rag.embeddingDimension}")
                     DetailRow("Size", rag.getFormattedSize())
@@ -867,15 +866,15 @@ private fun RagDetailBottomSheet(
 
             // Tags
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Tags",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     rag.getTagsList().forEach { tag ->
@@ -884,27 +883,27 @@ private fun RagDetailBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(24.dp)))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Actions
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
                             FilledTonalButton(
                                 onClick = onUnload,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(rDp(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
                                 Icon(TnIcons.X, contentDescription = null)
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Unload")
                             }
                         }
@@ -913,12 +912,12 @@ private fun RagDetailBottomSheet(
                                 onClick = {},
                                 modifier = Modifier.weight(1f),
                                 enabled = false,
-                                shape = RoundedCornerShape(rDp(12.dp))
+                                shape = RoundedCornerShape(12.dp)
                             ) {
                                 LoadingIndicator(
-                                    modifier = Modifier.size(rDp(20.dp))
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Loading...")
                             }
                         }
@@ -926,14 +925,14 @@ private fun RagDetailBottomSheet(
                             FilledTonalButton(
                                 onClick = onLoad,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(rDp(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
                                 Icon(TnIcons.Download, contentDescription = null)
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Load")
                             }
                         }
@@ -942,14 +941,14 @@ private fun RagDetailBottomSheet(
                     FilledTonalButton(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(rDp(12.dp)),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
                         Icon(TnIcons.Trash, contentDescription = null)
-                        Spacer(modifier = Modifier.width(rDp(8.dp)))
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Delete")
                     }
                 }
@@ -957,19 +956,19 @@ private fun RagDetailBottomSheet(
                 FilledTonalButton(
                     onClick = onShare,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp)),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.5f),
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
                     Icon(TnIcons.Share, contentDescription = null)
-                    Spacer(modifier = Modifier.width(rDp(8.dp)))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Share RAG")
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(24.dp)))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -979,7 +978,7 @@ private fun DetailRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(4.dp)),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
@@ -1020,7 +1019,7 @@ private fun PasswordDialog(
         },
         title = { Text("Enter Password") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "This RAG is encrypted. Enter the password to load it.",
                     style = MaterialTheme.typography.bodyMedium
@@ -1043,7 +1042,7 @@ private fun PasswordDialog(
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         },
@@ -1051,7 +1050,7 @@ private fun PasswordDialog(
             FilledTonalButton(
                 onClick = { onConfirm(password) },
                 enabled = password.isNotBlank(),
-                shape = RoundedCornerShape(rDp(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                     contentColor = MaterialTheme.colorScheme.primary
@@ -1063,7 +1062,7 @@ private fun PasswordDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Cancel")
             }

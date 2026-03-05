@@ -72,7 +72,6 @@ import com.dark.tool_neuron.ui.components.SectionDivider
 import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.SwitchRow
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlin.math.roundToInt
@@ -150,8 +149,8 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = rDp(Standards.SpacingLg)),
-            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            contentPadding = PaddingValues(horizontal = Standards.SpacingLg),
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             // ==================== General ====================
             item { SectionHeader(title = "General") }
@@ -179,7 +178,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animateContentSize(Motion.content()),
-                            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                         ) {
                             CaptionText(text = "Ruvltra Claude Code 0.5B · ~400 MB")
                             CaptionText(text = "Compact model optimized for tool calling")
@@ -195,12 +194,12 @@ fun SettingsScreen(
                                             progress = { progress },
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(rDp(6.dp))
-                                                .clip(RoundedCornerShape(rDp(3.dp))),
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
                                             color = MaterialTheme.colorScheme.tertiary,
                                             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                         )
-                                        Spacer(Modifier.width(rDp(12.dp)))
+                                        Spacer(Modifier.width(12.dp))
                                         Text(
                                             "${(progress * 100).toInt()}%",
                                             style = MaterialTheme.typography.labelMedium.copy(
@@ -216,8 +215,8 @@ fun SettingsScreen(
                                     LinearProgressIndicator(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(rDp(6.dp))
-                                            .clip(RoundedCornerShape(rDp(3.dp))),
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp)),
                                         color = MaterialTheme.colorScheme.tertiary,
                                         trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                     )
@@ -243,9 +242,9 @@ fun SettingsScreen(
                                         Icon(
                                             TnIcons.Download,
                                             contentDescription = null,
-                                            modifier = Modifier.size(rDp(18.dp))
+                                            modifier = Modifier.size(18.dp)
                                         )
-                                        Spacer(Modifier.width(rDp(8.dp)))
+                                        Spacer(Modifier.width(8.dp))
                                         Text("Download")
                                     }
                                 }
@@ -259,28 +258,28 @@ fun SettingsScreen(
             item {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+                    shape = RoundedCornerShape(Standards.CardCornerRadius),
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                     border = androidx.compose.foundation.BorderStroke(
-                        width = rDp(1.dp),
+                        width = 1.dp,
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
                     )
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(rDp(Standards.SpacingMd)),
-                        verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                            .padding(Standards.SpacingMd),
+                        verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                         ) {
                             Icon(
                                 TnIcons.AlertTriangle,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(rDp(20.dp))
+                                modifier = Modifier.size(20.dp)
                             )
                             Text(
                                 text = "Bypass Model Check",
@@ -306,7 +305,7 @@ fun SettingsScreen(
             }
 
             // ==================== AI Personality & Memory ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "AI Personality & Memory") }
 
@@ -314,10 +313,10 @@ fun SettingsScreen(
                 Surface(
                     onClick = onPersonasClick,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Column(modifier = Modifier.padding(rDp(16.dp))) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "Personas",
                             style = MaterialTheme.typography.titleSmall,
@@ -345,10 +344,10 @@ fun SettingsScreen(
                 Surface(
                     onClick = onAiMemoryClick,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(8.dp)),
+                    shape = RoundedCornerShape(8.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow
                 ) {
-                    Column(modifier = Modifier.padding(rDp(16.dp))) {
+                    Column(modifier = Modifier.padding(16.dp)) {
                         Text(
                             "View Memories",
                             style = MaterialTheme.typography.titleSmall,
@@ -364,7 +363,7 @@ fun SettingsScreen(
             }
 
             // ==================== LLM ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "LLM") }
 
@@ -387,7 +386,7 @@ fun SettingsScreen(
             }
 
             // ==================== Chat ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "Chat") }
 
@@ -401,7 +400,7 @@ fun SettingsScreen(
             }
 
             // ==================== Model Configuration ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item {
                 SectionHeader(title = "Model Configuration") {
@@ -409,7 +408,7 @@ fun SettingsScreen(
                         onClickListener = onModelEditor,
                         icon = TnIcons.Brain,
                         text = "Configure",
-                        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+                        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
                     )
                 }
             }
@@ -433,7 +432,7 @@ fun SettingsScreen(
             }
 
             // ==================== TTS ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "Text-to-Speech") }
 
@@ -445,7 +444,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .animateContentSize(Motion.content()),
-                            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                         ) {
                             CaptionText(text = "Supertonic v2 · ~263 MB")
 
@@ -460,12 +459,12 @@ fun SettingsScreen(
                                             progress = { progress },
                                             modifier = Modifier
                                                 .weight(1f)
-                                                .height(rDp(6.dp))
-                                                .clip(RoundedCornerShape(rDp(3.dp))),
+                                                .height(6.dp)
+                                                .clip(RoundedCornerShape(3.dp)),
                                             color = MaterialTheme.colorScheme.primary,
                                             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                         )
-                                        Spacer(Modifier.width(rDp(12.dp)))
+                                        Spacer(Modifier.width(12.dp))
                                         Text(
                                             "${(progress * 100).toInt()}%",
                                             style = MaterialTheme.typography.labelMedium.copy(
@@ -481,8 +480,8 @@ fun SettingsScreen(
                                     LinearProgressIndicator(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .height(rDp(6.dp))
-                                            .clip(RoundedCornerShape(rDp(3.dp))),
+                                            .height(6.dp)
+                                            .clip(RoundedCornerShape(3.dp)),
                                         color = MaterialTheme.colorScheme.primary,
                                         trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                     )
@@ -508,9 +507,9 @@ fun SettingsScreen(
                                         Icon(
                                             TnIcons.Download,
                                             contentDescription = null,
-                                            modifier = Modifier.size(rDp(18.dp))
+                                            modifier = Modifier.size(18.dp)
                                         )
-                                        Spacer(Modifier.width(rDp(8.dp)))
+                                        Spacer(Modifier.width(8.dp))
                                         Text("Download")
                                     }
                                 }
@@ -532,7 +531,7 @@ fun SettingsScreen(
             // Voice picker
             item {
                 StandardCard(title = "Voice") {
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                         val femaleVoices = voices.filter { it.startsWith("F") }
                         val maleVoices = voices.filter { it.startsWith("M") }
 
@@ -576,7 +575,7 @@ fun SettingsScreen(
             // Speed slider
             item {
                 StandardCard(title = "Speed") {
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -585,14 +584,14 @@ fun SettingsScreen(
                             CaptionText(text = "Playback speed")
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(rDp(4.dp))
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "${"%.2f".format(ttsSettings.speed)}x",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -623,7 +622,7 @@ fun SettingsScreen(
             // Steps slider
             item {
                 StandardCard(title = "Denoising Steps") {
-                    Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+                    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -632,14 +631,14 @@ fun SettingsScreen(
                             CaptionText(text = "Higher = better quality, slower")
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(rDp(4.dp))
+                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "${ttsSettings.steps}",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(2.dp))
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
                         }
@@ -682,7 +681,7 @@ fun SettingsScreen(
             }
 
             // ==================== Image Generation ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "Image Generation") }
 
@@ -696,7 +695,7 @@ fun SettingsScreen(
             }
 
             // ==================== About ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "About") }
 
@@ -713,7 +712,7 @@ fun SettingsScreen(
             }
 
             // ==================== Data Management ====================
-            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
             item { SectionHeader(title = "Data Management") }
 
@@ -721,7 +720,7 @@ fun SettingsScreen(
                 DataManagementSection(viewModel = viewModel)
             }
 
-            item { Spacer(Modifier.height(rDp(Standards.SpacingXl))) }
+            item { Spacer(Modifier.height(Standards.SpacingXl)) }
         }
     }
 }
@@ -786,7 +785,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+    Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
         // Progress indicator
         AnimatedVisibility(
             visible = backupProgress != null && backupProgress !is SystemBackupManager.BackupProgress.Complete
@@ -797,14 +796,14 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+                shape = RoundedCornerShape(Standards.CardCornerRadius)
             ) {
                 Row(
-                    modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                    modifier = Modifier.padding(Standards.CardPadding),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
-                    LoadingIndicator(modifier = Modifier.size(rDp(20.dp)))
+                    LoadingIndicator(modifier = Modifier.size(20.dp))
                     Text(
                         text = when (val p = backupProgress) {
                             is SystemBackupManager.BackupProgress.Starting -> "Starting..."
@@ -828,14 +827,14 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+                shape = RoundedCornerShape(Standards.CardCornerRadius)
             ) {
                 Text(
                     "Operation completed successfully",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Medium,
                     color = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.padding(rDp(Standards.CardPadding))
+                    modifier = Modifier.padding(Standards.CardPadding)
                 )
             }
         }
@@ -843,13 +842,13 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(Standards.CardCornerRadius))
+                shape = RoundedCornerShape(Standards.CardCornerRadius)
             ) {
                 Text(
                     progressStatus.message,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(rDp(Standards.CardPadding))
+                    modifier = Modifier.padding(Standards.CardPadding)
                 )
             }
         }
@@ -858,18 +857,18 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         Surface(
             onClick = { showBackupDialog = true },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            shape = RoundedCornerShape(Standards.CardCornerRadius),
             color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.12f),
-            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f))
         ) {
             Row(
-                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                modifier = Modifier.padding(Standards.CardPadding),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 Icon(
                     TnIcons.CloudUpload, null,
-                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    modifier = Modifier.size(Standards.IconLg),
                     tint = MaterialTheme.colorScheme.tertiary
                 )
                 Column(modifier = Modifier.weight(1f)) {
@@ -892,17 +891,17 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         Surface(
             onClick = { showRestoreDialog = true },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            shape = RoundedCornerShape(Standards.CardCornerRadius),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
         ) {
             Row(
-                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                modifier = Modifier.padding(Standards.CardPadding),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 Icon(
                     TnIcons.CloudDownload, null,
-                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    modifier = Modifier.size(Standards.IconLg),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Column(modifier = Modifier.weight(1f)) {
@@ -925,18 +924,18 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         Surface(
             onClick = { showDeleteDialog = true },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            shape = RoundedCornerShape(Standards.CardCornerRadius),
             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
         ) {
             Row(
-                modifier = Modifier.padding(rDp(Standards.CardPadding)),
+                modifier = Modifier.padding(Standards.CardPadding),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 Icon(
                     TnIcons.TrashX, null,
-                    modifier = Modifier.size(rDp(Standards.IconLg)),
+                    modifier = Modifier.size(Standards.IconLg),
                     tint = MaterialTheme.colorScheme.error
                 )
                 Column(modifier = Modifier.weight(1f)) {
@@ -976,7 +975,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 Text("Create Backup", fontWeight = FontWeight.SemiBold)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                     Text(
                         "Set a password to encrypt your backup. You'll need this password to restore.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1002,7 +1001,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                         isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(4.dp)))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     // Include RAG files checkbox
                     SwitchRow(
@@ -1027,8 +1026,8 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                         val models = backupSizeEstimate!!.modelBreakdown
                         if (models.isNotEmpty()) {
                             Column(
-                                modifier = Modifier.padding(start = rDp(8.dp)),
-                                verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+                                modifier = Modifier.padding(start = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
                             ) {
                                 models.forEach { model ->
                                     Row(
@@ -1090,7 +1089,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     backupPasswordConfirm = ""
                 }) { Text("Cancel") }
             },
-            shape = RoundedCornerShape(rDp(16.dp))
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
@@ -1106,7 +1105,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 Text("Restore from Backup", fontWeight = FontWeight.SemiBold)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                     Text(
                         "This will replace all current data with the backup. The app will restart after restore.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1139,7 +1138,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     restorePassword = ""
                 }) { Text("Cancel") }
             },
-            shape = RoundedCornerShape(rDp(16.dp))
+            shape = RoundedCornerShape(16.dp)
         )
     }
 
@@ -1155,7 +1154,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                     Text(
                         "This will permanently delete all chats, memories, personas, RAG data, and settings. This cannot be undone.",
                         style = MaterialTheme.typography.bodySmall,
@@ -1195,7 +1194,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     deleteConfirmText = ""
                 }) { Text("Cancel") }
             },
-            shape = RoundedCornerShape(rDp(16.dp))
+            shape = RoundedCornerShape(16.dp)
         )
     }
 }

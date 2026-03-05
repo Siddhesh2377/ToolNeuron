@@ -38,7 +38,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
 
 // ==================== Text Components ====================
 
@@ -56,7 +55,7 @@ fun SectionTitle(
         style = MaterialTheme.typography.labelLarge,
         fontWeight = FontWeight.SemiBold,
         color = color,
-        modifier = modifier.padding(vertical = rDp(Standards.SpacingXs))
+        modifier = modifier.padding(vertical = Standards.SpacingXs)
     )
 }
 
@@ -119,28 +118,28 @@ fun SwitchRow(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(Standards.CardPadding), vertical = rDp(Standards.SpacingSm)),
+                .padding(horizontal = Standards.CardPadding, vertical = Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             // Optional icon
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(Standards.IconMd)),
+                    modifier = Modifier.size(Standards.IconMd),
                     tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
             } else if (iconRes != null) {
                 Icon(
                     painter = painterResource(iconRes),
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(Standards.IconMd)),
+                    modifier = Modifier.size(Standards.IconMd),
                     tint = if (enabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                 )
             }
@@ -191,13 +190,13 @@ fun <T> SegmentedToggleGroup(
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(Standards.SpacingXs)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+                .padding(Standards.SpacingXs),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
         ) {
             items.forEach { item ->
                 val isSelected = item == selectedItem
@@ -240,8 +239,8 @@ private fun SegmentedToggleItem(
 
     Surface(
         modifier = modifier
-            .height(rDp(Standards.ToggleGroupHeight))
-            .clip(RoundedCornerShape(rDp(Standards.CardSmallCornerRadius - 2.dp)))
+            .height(Standards.ToggleGroupHeight)
+            .clip(RoundedCornerShape(Standards.CardSmallCornerRadius - 2.dp))
             .clickable(
                 enabled = enabled,
                 role = Role.Tab,
@@ -250,13 +249,13 @@ private fun SegmentedToggleItem(
                 onClick = onClick
             ),
         color = backgroundColor,
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius - 2.dp))
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius - 2.dp)
     ) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(Standards.SpacingSm))
+                .padding(horizontal = Standards.SpacingSm)
         ) {
             Text(
                 text = label,
@@ -285,7 +284,7 @@ fun <T> MultiToggleRow(
 ) {
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
     ) {
         items.forEach { item ->
             val isSelected = selectedItems.contains(item)
@@ -309,8 +308,8 @@ fun <T> MultiToggleRow(
 
             Surface(
                 modifier = Modifier
-                    .height(rDp(Standards.ToggleGroupHeight))
-                    .clip(RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)))
+                    .height(Standards.ToggleGroupHeight)
+                    .clip(RoundedCornerShape(Standards.CardSmallCornerRadius))
                     .clickable(
                         enabled = enabled,
                         interactionSource = remember { MutableInteractionSource() },
@@ -318,11 +317,11 @@ fun <T> MultiToggleRow(
                         onClick = { onItemToggle(item) }
                     ),
                 color = backgroundColor,
-                shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+                shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
             ) {
                 Box(
                     contentAlignment = Alignment.Center,
-                    modifier = Modifier.padding(horizontal = rDp(Standards.SpacingMd))
+                    modifier = Modifier.padding(horizontal = Standards.SpacingMd)
                 ) {
                     Text(
                         text = itemLabel(item),
@@ -367,31 +366,31 @@ fun StandardCard(
             .fillMaxWidth()
             .then(clickModifier),
         color = containerColor,
-        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
-        tonalElevation = rDp(Standards.CardElevation)
+        shape = RoundedCornerShape(Standards.CardCornerRadius),
+        tonalElevation = Standards.CardElevation
     ) {
         Column(
-            modifier = Modifier.padding(rDp(Standards.CardPadding)),
-            verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            modifier = Modifier.padding(Standards.CardPadding),
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             if (title != null || icon != null || iconRes != null || trailing != null) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     if (icon != null) {
                         Icon(
                             imageVector = icon,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(Standards.IconMd)),
+                            modifier = Modifier.size(Standards.IconMd),
                             tint = iconTint
                         )
                     } else if (iconRes != null) {
                         Icon(
                             painter = painterResource(iconRes),
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(Standards.IconMd)),
+                            modifier = Modifier.size(Standards.IconMd),
                             tint = iconTint
                         )
                     }
@@ -446,25 +445,25 @@ fun InfoCard(
     Surface(
         modifier = modifier,
         color = containerColor,
-        shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(Standards.SpacingSm), vertical = rDp(Standards.SpacingXs)),
+            modifier = Modifier.padding(horizontal = Standards.SpacingSm, vertical = Standards.SpacingXs),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
         ) {
             if (icon != null) {
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(Standards.IconSm)),
+                    modifier = Modifier.size(Standards.IconSm),
                     tint = contentColor
                 )
             } else if (iconRes != null) {
                 Icon(
                     painter = painterResource(iconRes),
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(Standards.IconSm)),
+                    modifier = Modifier.size(Standards.IconSm),
                     tint = contentColor
                 )
             }
@@ -497,13 +496,13 @@ fun InfoBadge(
     contentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     Surface(
-        modifier = modifier.height(rDp(Standards.BadgeHeight)),
+        modifier = modifier.height(Standards.BadgeHeight),
         color = containerColor,
-        shape = RoundedCornerShape(rDp(Standards.SpacingXs))
+        shape = RoundedCornerShape(Standards.SpacingXs)
     ) {
         Box(
             contentAlignment = Alignment.Center,
-            modifier = Modifier.padding(horizontal = rDp(Standards.SpacingSm))
+            modifier = Modifier.padding(horizontal = Standards.SpacingSm)
         ) {
             Text(
                 text = text,
@@ -537,11 +536,11 @@ fun StatusBadge(
     Row(
         modifier = modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
     ) {
         Box(
             modifier = Modifier
-                .size(rDp(6.dp))
+                .size(6.dp)
                 .background(dotColor, RoundedCornerShape(50))
         )
         Text(
@@ -568,7 +567,7 @@ fun SectionHeader(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(rDp(Standards.SectionHeaderHeight)),
+            .height(Standards.SectionHeaderHeight),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -597,14 +596,14 @@ fun SectionDivider(
         Row(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = rDp(Standards.SpacingSm)),
+                .padding(vertical = Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(rDp(1.dp))
+                    .height(1.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
             )
             Text(
@@ -615,7 +614,7 @@ fun SectionDivider(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .height(rDp(1.dp))
+                    .height(1.dp)
                     .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
             )
         }
@@ -623,8 +622,8 @@ fun SectionDivider(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(vertical = rDp(Standards.SpacingSm))
-                .height(rDp(1.dp))
+                .padding(vertical = Standards.SpacingSm)
+                .height(1.dp)
                 .background(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
         )
     }

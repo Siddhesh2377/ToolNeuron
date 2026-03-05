@@ -55,7 +55,6 @@ import com.dark.tool_neuron.ui.components.MarkdownText
 import com.dark.tool_neuron.ui.components.lazyMarkdownItems
 import com.dark.tool_neuron.ui.components.PluginResultCard
 import com.dark.tool_neuron.ui.theme.maple
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.AgentPhase
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
@@ -181,8 +180,8 @@ fun BodyContent(
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(vertical = rDp(8.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                    contentPadding = PaddingValues(vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
 
                     deduped.forEachIndexed { index, message ->
@@ -234,7 +233,7 @@ fun BodyContent(
                         }
                     }
                     item {
-                        Spacer(modifier = Modifier.height(rDp(16.dp)))
+                        Spacer(modifier = Modifier.height(16.dp))
                     }
                 }
             }
@@ -264,7 +263,7 @@ fun BodyContent(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
+                        .padding(horizontal = 16.dp, vertical = 16.dp),
                     contentAlignment = Alignment.TopCenter
                 ) {
                     val ragCount by com.dark.tool_neuron.plugins.PluginManager.enabledPluginNames.collectAsStateWithLifecycle()
@@ -342,8 +341,8 @@ private fun StreamingView(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(scrollState)
-            .padding(rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         UserMessageBubble(
             message = Messages(
@@ -395,7 +394,7 @@ private fun StreamingView(
             }
         }
 
-        Spacer(modifier = Modifier.height(rDp(16.dp)))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
@@ -409,19 +408,19 @@ private fun ImageGenerationStreamingBubble(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             CircularProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.size(rDp(24.dp)),
+                modifier = Modifier.size(24.dp),
                 color = MaterialTheme.colorScheme.primary,
-                strokeWidth = rDp(3.dp)
+                strokeWidth = 3.dp
             )
 
             Column {
@@ -444,7 +443,7 @@ private fun ImageGenerationStreamingBubble(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1))
-                    .clip(RoundedCornerShape(rDp(12.dp)))
+                    .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 MorphingImagePreview(
@@ -595,8 +594,8 @@ private fun AssistantStreamingBubble(text: String) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            .padding(vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         if (parsedMessage.thinkingContent != null) {
             ThinkingBlock(
@@ -607,12 +606,12 @@ private fun AssistantStreamingBubble(text: String) {
 
         if (parsedMessage.actualContent.isNotEmpty()) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.Top
             ) {
                 Box(
                     modifier = Modifier
-                        .size(rDp(8.dp))
+                        .size(8.dp)
                         .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
                 )
 
@@ -651,10 +650,10 @@ private fun ThinkingBlock(
     )
 
     Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(12.dp)),
-        shape = RoundedCornerShape(rDp(10.dp)),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        shape = RoundedCornerShape(10.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-        tonalElevation = rDp(2.dp)
+        tonalElevation = 2.dp
     ) {
         Column {
             Row(
@@ -664,19 +663,19 @@ private fun ThinkingBlock(
                         userToggled = true
                         userExpandState = !isExpanded
                     }
-                    .padding(vertical = rDp(8.dp), horizontal = rDp(12.dp)),
+                    .padding(vertical = 8.dp, horizontal = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.BulbFilled,
                         contentDescription = null,
                         modifier = Modifier
-                            .size(rDp(16.dp))
+                            .size(16.dp)
                             .graphicsLayer { alpha = if (isStreaming) pulseAlpha else 1f },
                         tint = MaterialTheme.colorScheme.tertiary
                     )
@@ -691,7 +690,7 @@ private fun ThinkingBlock(
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(20.dp)),
+                    modifier = Modifier.size(20.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -709,7 +708,7 @@ private fun ThinkingBlock(
                         text = thinkingText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(rDp(12.dp))
+                        modifier = Modifier.padding(12.dp)
                     )
                 }
             }
@@ -729,10 +728,10 @@ private fun EmptyMessagesState() {
             Icon(
                 imageVector = TnIcons.User,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(64.dp)),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
             )
-            Spacer(Modifier.height(rDp(16.dp)))
+            Spacer(Modifier.height(16.dp))
             Text(
                 "No Conversation Yet.!!",
                 style = MaterialTheme.typography.titleMedium,
@@ -754,19 +753,19 @@ private fun UserMessageBubble(message: Messages) {
         horizontalArrangement = Arrangement.End
     ) {
         Surface(
-            shape = RoundedCornerShape(rDp(12.dp)),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
             contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             modifier = Modifier
-                .padding(horizontal = rDp(8.dp), vertical = rDp(5.dp))
-                .widthIn(max = rDp(280.dp))
+                .padding(horizontal = 8.dp, vertical = 5.dp)
+                .widthIn(max = 280.dp)
         ) {
             SelectionContainer {
                 MarkdownText(
                     text = message.content.content,
                     modifier = Modifier.padding(
-                        horizontal = rDp(12.dp),
-                        vertical = rDp(6.dp)
+                        horizontal = 12.dp,
+                        vertical = 6.dp
                     )
                 )
             }
@@ -786,7 +785,7 @@ private fun AssistantMessageHeader(message: Messages, imageBlurEnabled: Boolean 
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (hasRagResults) {
             message.ragResults?.let { results ->
@@ -852,7 +851,7 @@ private fun AssistantMessageFooter(
 
     Column(
         modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         if (showMetrics) {
             message.decodingMetrics?.let { metrics ->
@@ -970,8 +969,8 @@ private fun MessageActionRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp)),
-        horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         MultiActionButton(actions = actions)
@@ -991,15 +990,15 @@ private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = tr
     var isImageRevealed by remember(imageBlurEnabled) { mutableStateOf(!imageBlurEnabled) }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp)),
-        modifier = Modifier.padding(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.padding(12.dp)
     ) {
         message.content.imagePrompt?.let { prompt ->
             Text(
                 text = "Prompt: $prompt",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = rDp(4.dp))
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
 
@@ -1018,13 +1017,13 @@ private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = tr
                     modifier = Modifier
                         .fillMaxWidth()
                         .aspectRatio(1f)
-                        .clip(RoundedCornerShape(rDp(12.dp)))
+                        .clip(RoundedCornerShape(12.dp))
                         .clickable { isImageRevealed = !isImageRevealed },
                     contentAlignment = Alignment.Center
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        shape = RoundedCornerShape(rDp(12.dp)),
+                        shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Image(
@@ -1052,12 +1051,12 @@ private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = tr
                         ) {
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
                                 Icon(
                                     imageVector = TnIcons.Sparkles,
                                     contentDescription = "Reveal image",
-                                    modifier = Modifier.size(rDp(32.dp)),
+                                    modifier = Modifier.size(32.dp),
                                     tint = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(
@@ -1078,7 +1077,7 @@ private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = tr
                 text = "Seed: $seed",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                modifier = Modifier.padding(horizontal = rDp(4.dp))
+                modifier = Modifier.padding(horizontal = 4.dp)
             )
         }
     }
@@ -1098,32 +1097,32 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Summary row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Gauge,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                     Text(
@@ -1149,7 +1148,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1164,13 +1163,13 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricRow(
                         icon = TnIcons.Coins,
@@ -1220,7 +1219,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     memoryMetrics?.let { mem ->
                         if (mem.modelSizeMB > 0 || mem.peakMemoryMB > 0) {
                             HorizontalDivider(
-                                modifier = Modifier.padding(vertical = rDp(4.dp)),
+                                modifier = Modifier.padding(vertical = 4.dp),
                                 color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)
                             )
 
@@ -1229,7 +1228,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.padding(bottom = rDp(4.dp))
+                                modifier = Modifier.padding(bottom = 4.dp)
                             )
 
                             if (mem.modelSizeMB > 0) {
@@ -1278,31 +1277,31 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Coins,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
@@ -1330,7 +1329,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1344,13 +1343,13 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     if (metrics.modelSizeMB > 0) {
                         MetricRow(
@@ -1400,32 +1399,32 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Summary row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Photo,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
@@ -1451,7 +1450,7 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1466,13 +1465,13 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     MetricRow(
                         icon = TnIcons.Photo,
@@ -1527,13 +1526,13 @@ private fun MetricRow(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(14.dp)),
+                modifier = Modifier.size(14.dp),
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
             )
             Text(
@@ -1566,32 +1565,32 @@ fun RagResultsDisplay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Summary row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Database,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.secondary
                     )
                     Text(
@@ -1617,7 +1616,7 @@ fun RagResultsDisplay(
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1632,13 +1631,13 @@ fun RagResultsDisplay(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     results.take(5).forEachIndexed { index, result ->
                         RagResultItem(result = result, index = index)
@@ -1654,7 +1653,7 @@ fun RagResultsDisplay(
                             text = "... and ${results.size - 5} more results",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = rDp(4.dp))
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                 }
@@ -1676,7 +1675,7 @@ private fun RagResultItem(
     }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1684,7 +1683,7 @@ private fun RagResultItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1704,14 +1703,14 @@ private fun RagResultItem(
 
             Surface(
                 color = scoreColor.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(rDp(4.dp))
+                shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
                     text = "$scorePercent%",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = scoreColor,
-                    modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
         }
@@ -1739,32 +1738,32 @@ fun SavedRagResultsDisplay(
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = 12.dp)
     ) {
         // Summary row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(8.dp),
             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = TnIcons.Database,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.secondary
                     )
                     Text(
@@ -1790,7 +1789,7 @@ fun SavedRagResultsDisplay(
                 Icon(
                     imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -1805,13 +1804,13 @@ fun SavedRagResultsDisplay(
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     results.take(5).forEachIndexed { index, result ->
                         SavedRagResultItemRow(result = result, index = index)
@@ -1827,7 +1826,7 @@ fun SavedRagResultsDisplay(
                             text = "... and ${results.size - 5} more results",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(top = rDp(4.dp))
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
                 }
@@ -1849,7 +1848,7 @@ private fun SavedRagResultItemRow(
     }
 
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -1857,7 +1856,7 @@ private fun SavedRagResultItemRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
@@ -1877,14 +1876,14 @@ private fun SavedRagResultItemRow(
 
             Surface(
                 color = scoreColor.copy(alpha = 0.15f),
-                shape = RoundedCornerShape(rDp(4.dp))
+                shape = RoundedCornerShape(4.dp)
             ) {
                 Text(
                     text = "$scorePercent%",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
                     color = scoreColor,
-                    modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                 )
             }
         }

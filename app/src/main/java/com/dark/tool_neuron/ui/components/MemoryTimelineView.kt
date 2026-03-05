@@ -19,13 +19,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -40,7 +40,7 @@ fun MemoryTimelineView(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .padding(rDp(Standards.SpacingLg)),
+                .padding(Standards.SpacingLg),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -52,11 +52,11 @@ fun MemoryTimelineView(
         return
     }
 
-    val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+    val dateFormat = remember { SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault()) }
 
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(rDp(0.dp))
+        verticalArrangement = Arrangement.spacedBy(0.dp)
     ) {
         itemsIndexed(entries) { index, entry ->
             val isLast = index == entries.lastIndex
@@ -69,12 +69,12 @@ fun MemoryTimelineView(
                 // Timeline column: dot + vertical line
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.width(rDp(24.dp))
+                    modifier = Modifier.width(24.dp)
                 ) {
                     // Dot
                     Box(
                         modifier = Modifier
-                            .size(rDp(Standards.TimelineNodeSize))
+                            .size(Standards.TimelineNodeSize)
                             .background(
                                 MaterialTheme.colorScheme.secondary,
                                 CircleShape
@@ -85,7 +85,7 @@ fun MemoryTimelineView(
                     if (!isLast) {
                         Box(
                             modifier = Modifier
-                                .width(rDp(Standards.TimelineLineWidth))
+                                .width(Standards.TimelineLineWidth)
                                 .fillMaxHeight()
                                 .background(
                                     MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
@@ -94,13 +94,13 @@ fun MemoryTimelineView(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(rDp(Standards.SpacingSm)))
+                Spacer(modifier = Modifier.width(Standards.SpacingSm))
 
                 // Content card
                 Column(
                     modifier = Modifier
                         .weight(1f)
-                        .padding(bottom = rDp(Standards.SpacingMd))
+                        .padding(bottom = Standards.SpacingMd)
                 ) {
                     // Timestamp
                     Text(
@@ -109,7 +109,7 @@ fun MemoryTimelineView(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
 
-                    Spacer(modifier = Modifier.height(rDp(Standards.SpacingXs)))
+                    Spacer(modifier = Modifier.height(Standards.SpacingXs))
 
                     // Content preview in a card
                     StandardCard(
@@ -126,7 +126,7 @@ fun MemoryTimelineView(
                         val category = entry.category
                         if (category != null) {
                             Row(
-                                horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))
+                                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
                             ) {
                                 InfoBadge(
                                     text = category,

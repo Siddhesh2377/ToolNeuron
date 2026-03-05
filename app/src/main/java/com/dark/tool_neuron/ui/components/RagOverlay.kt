@@ -56,7 +56,6 @@ import com.dark.tool_neuron.global.formatDateOnly
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -87,10 +86,10 @@ fun RagOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = rDp(12.dp))
-                        .width(rDp(40.dp))
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp)))
+                        .padding(vertical = 12.dp)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 )
             }
@@ -98,8 +97,8 @@ fun RagOverlayBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = rDp(500.dp))
-                    .padding(bottom = rDp(16.dp))
+                    .heightIn(max = 500.dp)
+                    .padding(bottom = 16.dp)
             ) {
                 // Header
                 RagOverlayHeader(
@@ -109,7 +108,7 @@ fun RagOverlayBottomSheet(
                     onInstallRag = onInstallRag
                 )
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Tabs
                 SecondaryTabRow(
@@ -129,7 +128,7 @@ fun RagOverlayBottomSheet(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Content
                 when (selectedTab) {
@@ -185,13 +184,13 @@ private fun RagOverlayHeader(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(16.dp)),
+            .padding(horizontal = 16.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
             SectionHeader(title = "RAG Management") {
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     InfoBadge(
                         text = "$loadedCount active",
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
@@ -206,12 +205,12 @@ private fun RagOverlayHeader(
             }
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ActionTextButton(
                 onClickListener = onOpenRagActivity,
                 icon = TnIcons.Plus,
                 text = "Create",
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             )
         }
     }
@@ -225,23 +224,23 @@ private fun EmptyRagState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(rDp(32.dp)),
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
             TnIcons.Cpu,
             contentDescription = null,
-            modifier = Modifier.size(rDp(48.dp)),
+            modifier = Modifier.size(48.dp),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         )
-        Spacer(modifier = Modifier.height(rDp(16.dp)))
+        Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = message,
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(modifier = Modifier.height(rDp(8.dp)))
+        Spacer(modifier = Modifier.height(8.dp))
         Text(
             text = suggestion,
             style = MaterialTheme.typography.bodySmall,
@@ -262,8 +261,8 @@ private fun RagList(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxWidth(),
-        contentPadding = PaddingValues(horizontal = rDp(16.dp), vertical = rDp(8.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(rags, key = { it.id }) { rag ->
             RagListItem(
@@ -302,12 +301,12 @@ private fun RagListItem(
                 else -> MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(12.dp))
+                .padding(12.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -321,10 +320,10 @@ private fun RagListItem(
                     Icon(
                         imageVector = getRagSourceIcon(rag.sourceType),
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(24.dp)),
+                        modifier = Modifier.size(24.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
-                    Spacer(modifier = Modifier.width(rDp(8.dp)))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Column {
                         Text(
                             text = rag.name,
@@ -344,7 +343,7 @@ private fun RagListItem(
                 // Status indicator and controls
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
@@ -383,7 +382,7 @@ private fun RagListItem(
             }
 
             if (rag.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(rDp(4.dp)))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -394,8 +393,8 @@ private fun RagListItem(
             }
 
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(rDp(4.dp)))
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     rag.getTagsList().take(3).forEach { tag ->
                         RagTag(tag = tag)
                     }
@@ -410,9 +409,9 @@ private fun RagListItem(
             }
 
             // Action row
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
+            Spacer(modifier = Modifier.height(8.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.2f))
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -425,7 +424,7 @@ private fun RagListItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (showLoadButton) {
                         when (rag.status) {
                             RagStatus.LOADED -> {
@@ -433,14 +432,14 @@ private fun RagListItem(
                                     onClickListener = onUnload,
                                     icon = TnIcons.X,
                                     text = "Unload",
-                                    shape = RoundedCornerShape(rDp(12.dp))
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                             }
                             RagStatus.LOADING -> {
                                 Box(
                                     modifier = Modifier
-                                        .size(rDp(32.dp))
-                                        .padding(rDp(4.dp))
+                                        .size(32.dp)
+                                        .padding(4.dp)
                                 ) {
                                     LoadingIndicator(
                                         modifier = Modifier.fillMaxSize()
@@ -452,7 +451,7 @@ private fun RagListItem(
                                     onClickListener = onLoad,
                                     icon = TnIcons.Download,
                                     text = "Load",
-                                    shape = RoundedCornerShape(rDp(12.dp))
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                             }
                         }
@@ -460,12 +459,12 @@ private fun RagListItem(
 
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(rDp(32.dp))
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             TnIcons.Trash,
                             contentDescription = "Delete",
-                            modifier = Modifier.size(rDp(18.dp)),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }

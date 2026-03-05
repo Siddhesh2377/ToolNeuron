@@ -42,7 +42,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.table_schema.InstalledRag
-import com.dark.tool_neuron.ui.theme.rDp
 import com.neuronpacket.LoadingMode
 import com.dark.tool_neuron.ui.icons.TnIcons
 
@@ -96,7 +95,7 @@ fun RagExportDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 // Packet Info Section
                 SectionHeader(title = "Packet Information")
@@ -119,7 +118,7 @@ fun RagExportDialog(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedTextField(
                         value = author,
@@ -132,12 +131,12 @@ fun RagExportDialog(
                         value = version,
                         onValueChange = { version = it },
                         label = { Text("Version") },
-                        modifier = Modifier.width(rDp(80.dp)),
+                        modifier = Modifier.width(80.dp),
                         singleLine = true
                     )
                 }
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Security Section
                 SectionHeader(title = "Security")
@@ -203,7 +202,7 @@ fun RagExportDialog(
 
                 AnimatedVisibility(visible = addReadOnlyUsers) {
                     Column(
-                        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         // Display existing read-only users
                         readOnlyUsers.forEachIndexed { index, (username, _) ->
@@ -211,23 +210,23 @@ fun RagExportDialog(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                                 ),
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             ) {
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(rDp(8.dp)),
+                                        .padding(8.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
                                     Row(
                                         verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Icon(
                                             TnIcons.User,
                                             contentDescription = null,
-                                            modifier = Modifier.size(rDp(20.dp))
+                                            modifier = Modifier.size(20.dp)
                                         )
                                         Text(
                                             text = username,
@@ -246,7 +245,7 @@ fun RagExportDialog(
                         // Add new read-only user
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
@@ -282,7 +281,7 @@ fun RagExportDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Export Options Section
                 SectionHeader(title = "Export Options")
@@ -395,12 +394,12 @@ private fun LoadingModeOption(
         } else {
             MaterialTheme.colorScheme.surface
         },
-        shape = RoundedCornerShape(rDp(8.dp))
+        shape = RoundedCornerShape(8.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(8.dp)),
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             RadioButton(

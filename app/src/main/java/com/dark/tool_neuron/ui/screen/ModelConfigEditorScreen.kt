@@ -26,7 +26,6 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CuteSwitch
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ModelConfigEditorViewModel
 import com.dark.tool_neuron.ui.icons.TnIcons
 
@@ -79,14 +78,14 @@ fun ModelConfigEditorScreen(
                         },
                         icon = TnIcons.ChevronLeft,
                         text = if (showingEditor && selectedModel != null) "Models" else "Back",
-                        modifier = Modifier.padding(start = rDp(6.dp))
+                        modifier = Modifier.padding(start = 6.dp)
                     )
                 },
                 actions = {
                     if (showingEditor && selectedModel != null) {
                         IconButton(
                             onClick = { viewModel.saveConfiguration() },
-                            modifier = Modifier.padding(end = rDp(6.dp))
+                            modifier = Modifier.padding(end = 6.dp)
                         ) {
                             Icon(
                                 imageVector = TnIcons.DeviceFloppy,
@@ -177,7 +176,7 @@ fun ModelConfigEditorScreen(
                 ),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = rDp(32.dp))
+                    .padding(bottom = 32.dp)
             ) {
                 SuccessMessage()
             }
@@ -201,12 +200,12 @@ private fun ModelListPanel(
                 text = "Models (${models.size})",
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(rDp(16.dp))
+                modifier = Modifier.padding(16.dp)
             )
 
             LazyColumn(
-                contentPadding = PaddingValues(horizontal = rDp(8.dp), vertical = rDp(8.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(models, key = { it.id }) { model ->
                     ModelListItem(
@@ -238,15 +237,15 @@ private fun ModelListItem(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(rDp(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         color = backgroundColor,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .padding(rDp(12.dp))
+                .padding(12.dp)
                 .fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -256,7 +255,7 @@ private fun ModelListItem(
                     else -> TnIcons.Database
                 },
                 contentDescription = null,
-                modifier = Modifier.size(rDp(24.dp)),
+                modifier = Modifier.size(24.dp),
                 tint = if (isSelected) {
                     MaterialTheme.colorScheme.primary
                 } else {
@@ -282,7 +281,7 @@ private fun ModelListItem(
                 Icon(
                     imageVector = TnIcons.CircleCheck,
                     contentDescription = "Active",
-                    modifier = Modifier.size(rDp(16.dp)),
+                    modifier = Modifier.size(16.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -297,7 +296,7 @@ private fun ConfigEditorPanel(
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(rDp(16.dp))
+        modifier = modifier.padding(16.dp)
     ) {
         // Header
         Row(
@@ -319,12 +318,12 @@ private fun ConfigEditorPanel(
             }
         }
 
-        Spacer(modifier = Modifier.height(rDp(16.dp)))
+        Spacer(modifier = Modifier.height(16.dp))
 
         // Config content based on model type
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
                 when (model.providerType) {
@@ -346,7 +345,7 @@ private fun ConfigEditorPanel(
 private fun GgufConfigEditor(viewModel: ModelConfigEditorViewModel) {
     val ggufConfig by viewModel.ggufConfig.collectAsStateWithLifecycle()
 
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(16.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ConfigSection("Loading Parameters") {
             IntField(
                 label = "Threads",
@@ -457,7 +456,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
     val diffusionConfig by viewModel.diffusionConfig.collectAsStateWithLifecycle()
     val inferenceParams by viewModel.diffusionInferenceParams.collectAsStateWithLifecycle()
 
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(16.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ConfigSection("Model Configuration") {
             IntField(
                 label = "Text Embedding Size",
@@ -533,7 +532,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
             )
 
             // Scheduler dropdown
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = "Scheduler",
                     style = MaterialTheme.typography.bodyMedium,
@@ -542,7 +541,7 @@ private fun DiffusionConfigEditor(viewModel: ModelConfigEditorViewModel) {
 
                 Row(
                     modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf("dpm", "euler", "euler_a", "ddim", "pndm").forEach { scheduler ->
                         FilterChip(
@@ -592,7 +591,7 @@ private fun ConfigSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             text = title,
             style = MaterialTheme.typography.titleSmall,
@@ -601,12 +600,12 @@ private fun ConfigSection(
         )
 
         Surface(
-            shape = RoundedCornerShape(rDp(12.dp)),
+            shape = RoundedCornerShape(12.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(16.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 content()
             }
@@ -623,7 +622,7 @@ private fun IntField(
     step: Int = 1,
     description: String? = null
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -645,14 +644,14 @@ private fun IntField(
             }
 
             Surface(
-                shape = RoundedCornerShape(rDp(8.dp)),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
                 Text(
                     text = value.toString(),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = rDp(12.dp), vertical = rDp(6.dp))
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
@@ -675,7 +674,7 @@ private fun FloatField(
     step: Float,
     description: String? = null
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -697,14 +696,14 @@ private fun FloatField(
             }
 
             Surface(
-                shape = RoundedCornerShape(rDp(8.dp)),
+                shape = RoundedCornerShape(8.dp),
                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
             ) {
                 Text(
                     text = "%.2f".format(value),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(horizontal = rDp(12.dp), vertical = rDp(6.dp))
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                 )
             }
         }
@@ -760,7 +759,7 @@ private fun TextField(
     multiline: Boolean = false,
     minLines: Int = 1
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
@@ -773,7 +772,7 @@ private fun TextField(
             modifier = Modifier.fillMaxWidth(),
             minLines = if (multiline) minLines else 1,
             maxLines = if (multiline) 6 else 1,
-            shape = RoundedCornerShape(rDp(8.dp))
+            shape = RoundedCornerShape(8.dp)
         )
     }
 }
@@ -786,12 +785,12 @@ private fun EmptyModelsState() {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
                 imageVector = TnIcons.BrainCircuit,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(64.dp)),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Text(
@@ -816,12 +815,12 @@ private fun EmptySelectionState(modifier: Modifier = Modifier) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Icon(
                 imageVector = TnIcons.Settings,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(48.dp)),
+                modifier = Modifier.size(48.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Text(
@@ -849,13 +848,13 @@ private fun LoadingOverlay() {
 @Composable
 private fun SuccessMessage() {
     Surface(
-        shape = RoundedCornerShape(rDp(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         color = MaterialTheme.colorScheme.primaryContainer,
-        shadowElevation = rDp(8.dp)
+        shadowElevation = 8.dp
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(20.dp), vertical = rDp(12.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

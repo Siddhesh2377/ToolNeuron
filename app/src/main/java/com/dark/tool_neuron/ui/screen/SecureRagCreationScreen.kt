@@ -22,7 +22,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.models.table_schema.RagSourceType
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.util.DocumentParser
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import com.neuronpacket.LoadingMode
@@ -139,8 +138,8 @@ fun SecureRagCreationScreen(
             .fillMaxSize()
             .padding(padding)
             .imePadding(),
-        contentPadding = PaddingValues(horizontal = rDp(16.dp), vertical = rDp(12.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         // Embedding model card — shown when model needs download, is downloading, or needs init
         if (!isEmbeddingReady) {
@@ -165,12 +164,12 @@ fun SecureRagCreationScreen(
                 placeholder = { Text("My Knowledge Base") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                shape = RoundedCornerShape(rDp(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 leadingIcon = {
                     Icon(
                         TnIcons.Tag,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(20.dp)),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -191,9 +190,9 @@ fun SecureRagCreationScreen(
                 placeholder = { Text("Paste or type your knowledge here...") },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = rDp(120.dp)),
+                    .heightIn(min = 120.dp),
                 minLines = 4,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             )
         }
 
@@ -353,9 +352,9 @@ fun SecureRagCreationScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(rDp(48.dp)),
+                    .height(48.dp),
                 enabled = canCreate,
-                shape = RoundedCornerShape(rDp(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -366,9 +365,9 @@ fun SecureRagCreationScreen(
                 Icon(
                     TnIcons.Plus,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(20.dp))
+                    modifier = Modifier.size(20.dp)
                 )
-                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = when {
                         state.isCreating -> "Creating..."
@@ -389,23 +388,23 @@ fun SecureRagCreationScreen(
             Surface(
                 onClick = { showAdvanced = !showAdvanced },
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(10.dp))
+                shape = RoundedCornerShape(10.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(14.dp), vertical = rDp(10.dp)),
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Row(
-                        horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             TnIcons.Adjustments,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(18.dp)),
+                            modifier = Modifier.size(18.dp),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
@@ -417,7 +416,7 @@ fun SecureRagCreationScreen(
                     Icon(
                         if (showAdvanced) TnIcons.ChevronUp else TnIcons.ChevronDown,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(20.dp)),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -434,14 +433,14 @@ fun SecureRagCreationScreen(
                     placeholder = { Text("What is this RAG about?") },
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 2,
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
 
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedTextField(
                         value = state.domain,
@@ -449,7 +448,7 @@ fun SecureRagCreationScreen(
                         label = { Text("Domain") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                     OutlinedTextField(
                         value = state.tags,
@@ -458,7 +457,7 @@ fun SecureRagCreationScreen(
                         placeholder = { Text("comma, separated") },
                         modifier = Modifier.weight(1f),
                         singleLine = true,
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
             }
@@ -472,10 +471,10 @@ fun SecureRagCreationScreen(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Spacer(modifier = Modifier.height(rDp(6.dp)))
+                    Spacer(modifier = Modifier.height(6.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         DocumentType.entries.forEach { docType ->
                             FilterChip(
@@ -487,7 +486,7 @@ fun SecureRagCreationScreen(
                                         Icon(
                                             TnIcons.Check,
                                             contentDescription = null,
-                                            modifier = Modifier.size(rDp(14.dp))
+                                            modifier = Modifier.size(14.dp)
                                         )
                                     }
                                 } else null
@@ -510,7 +509,7 @@ fun SecureRagCreationScreen(
         }
 
         // Bottom spacer
-        item { Spacer(modifier = Modifier.height(rDp(16.dp))) }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 
     if (showAddUserDialog) {
@@ -547,10 +546,10 @@ private fun FileDropZone(
     Surface(
         onClick = if (fileUri == null) onPickFile else ({}),
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(12.dp)),
+        shape = RoundedCornerShape(12.dp),
         color = bgColor,
         border = BorderStroke(
-            width = rDp(1.5f.dp),
+            width = 1.5f.dp,
             color = borderColor
         )
     ) {
@@ -559,14 +558,14 @@ private fun FileDropZone(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = rDp(20.dp), horizontal = rDp(16.dp)),
+                    .padding(vertical = 20.dp, horizontal = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(
                     TnIcons.FileUpload,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(32.dp)),
+                    modifier = Modifier.size(32.dp),
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
                 )
                 Text(
@@ -586,21 +585,21 @@ private fun FileDropZone(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(rDp(12.dp)),
+                    .padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 // File type icon
                 Surface(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                    shape = RoundedCornerShape(rDp(8.dp))
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Icon(
                         documentType.icon,
                         contentDescription = null,
                         modifier = Modifier
-                            .padding(rDp(8.dp))
-                            .size(rDp(22.dp)),
+                            .padding(8.dp)
+                            .size(22.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
@@ -625,7 +624,7 @@ private fun FileDropZone(
                 // Change file button
                 FilledTonalIconButton(
                     onClick = onPickFile,
-                    modifier = Modifier.size(rDp(32.dp)),
+                    modifier = Modifier.size(32.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
                     )
@@ -633,14 +632,14 @@ private fun FileDropZone(
                     Icon(
                         TnIcons.ArrowsExchange,
                         contentDescription = "Change file",
-                        modifier = Modifier.size(rDp(16.dp))
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
                 // Remove file button
                 FilledTonalIconButton(
                     onClick = onClearFile,
-                    modifier = Modifier.size(rDp(32.dp)),
+                    modifier = Modifier.size(32.dp),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
                         contentColor = MaterialTheme.colorScheme.error
@@ -649,7 +648,7 @@ private fun FileDropZone(
                     Icon(
                         TnIcons.X,
                         contentDescription = "Remove file",
-                        modifier = Modifier.size(rDp(16.dp))
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
@@ -684,13 +683,13 @@ private fun EmbeddingModelCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = containerColor),
-        shape = RoundedCornerShape(rDp(12.dp))
+        shape = RoundedCornerShape(12.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(14.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -698,7 +697,7 @@ private fun EmbeddingModelCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     modifier = Modifier.weight(1f)
                 ) {
@@ -709,7 +708,7 @@ private fun EmbeddingModelCard(
                             else -> TnIcons.CloudDownload
                         },
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(22.dp)),
+                        modifier = Modifier.size(22.dp),
                         tint = iconTint
                     )
                     Column {
@@ -733,14 +732,14 @@ private fun EmbeddingModelCard(
                 when {
                     isDownloading -> {
                         LoadingIndicator(
-                            modifier = Modifier.size(rDp(24.dp)),
+                            modifier = Modifier.size(24.dp),
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
                     isDownloaded -> {
                         FilledTonalButton(
                             onClick = onInitialize,
-                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Text("Initialize", style = MaterialTheme.typography.labelMedium)
                         }
@@ -748,14 +747,14 @@ private fun EmbeddingModelCard(
                     else -> {
                         FilledTonalButton(
                             onClick = onDownload,
-                            contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                         ) {
                             Icon(
                                 TnIcons.Download,
                                 contentDescription = null,
-                                modifier = Modifier.size(rDp(16.dp))
+                                modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(rDp(4.dp)))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text("Download", style = MaterialTheme.typography.labelMedium)
                         }
                     }
@@ -768,8 +767,8 @@ private fun EmbeddingModelCard(
                     progress = { downloadProgress },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp))),
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
@@ -777,8 +776,8 @@ private fun EmbeddingModelCard(
                 LinearProgressIndicator(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp))),
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp)),
                     color = MaterialTheme.colorScheme.primary,
                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                 )
@@ -795,7 +794,7 @@ private fun EncryptionSection(
     onTogglePasswordVisibility: () -> Unit,
     onAddUser: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -820,7 +819,7 @@ private fun EncryptionSection(
         }
 
         AnimatedVisibility(visible = state.isEncrypted) {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = state.adminPassword,
                     onValueChange = { onStateChange(state.copy(adminPassword = it)) },
@@ -842,12 +841,12 @@ private fun EncryptionSection(
                             )
                         }
                     },
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     OutlinedButton(
                         onClick = {
@@ -859,10 +858,10 @@ private fun EncryptionSection(
                             ))
                         },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(TnIcons.Database, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
-                        Spacer(modifier = Modifier.width(rDp(4.dp)))
+                        Icon(TnIcons.Database, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             if (state.loadingMode == LoadingMode.EMBEDDED) "Embedded" else "Transient",
                             style = MaterialTheme.typography.labelMedium
@@ -872,10 +871,10 @@ private fun EncryptionSection(
                     OutlinedButton(
                         onClick = onAddUser,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Icon(TnIcons.UserPlus, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
-                        Spacer(modifier = Modifier.width(rDp(4.dp)))
+                        Icon(TnIcons.UserPlus, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text("Add User", style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -886,20 +885,20 @@ private fun EncryptionSection(
                         colors = CardDefaults.cardColors(
                             containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         ),
-                        shape = RoundedCornerShape(rDp(10.dp))
+                        shape = RoundedCornerShape(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(rDp(10.dp))) {
+                        Column(modifier = Modifier.padding(10.dp)) {
                             Text(
                                 "Users (${state.readOnlyUsers.size})",
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
-                            Spacer(modifier = Modifier.height(rDp(6.dp)))
+                            Spacer(modifier = Modifier.height(6.dp))
                             state.readOnlyUsers.forEach { user ->
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .padding(vertical = rDp(3.dp)),
+                                        .padding(vertical = 3.dp),
                                     horizontalArrangement = Arrangement.SpaceBetween,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -913,12 +912,12 @@ private fun EncryptionSection(
                                             MaterialTheme.colorScheme.primaryContainer
                                         else
                                             MaterialTheme.colorScheme.secondaryContainer,
-                                        shape = RoundedCornerShape(rDp(4.dp))
+                                        shape = RoundedCornerShape(4.dp)
                                     ) {
                                         Text(
                                             user.permissions.name,
                                             style = MaterialTheme.typography.labelSmall,
-                                            modifier = Modifier.padding(horizontal = rDp(6.dp), vertical = rDp(2.dp))
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                                         )
                                     }
                                 }
@@ -941,19 +940,19 @@ private fun CreationProgressCard(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
         ),
-        shape = RoundedCornerShape(rDp(10.dp))
+        shape = RoundedCornerShape(10.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(14.dp)),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             CircularProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.size(rDp(36.dp)),
-                strokeWidth = rDp(3.dp)
+                modifier = Modifier.size(36.dp),
+                strokeWidth = 3.dp
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -987,7 +986,7 @@ private fun AddUserDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add User") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(10.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = "Add a user who can access this RAG",
                     style = MaterialTheme.typography.bodySmall,
@@ -1001,7 +1000,7 @@ private fun AddUserDialog(
                     placeholder = { Text("e.g., Reader, Guest") },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 OutlinedTextField(
@@ -1022,12 +1021,12 @@ private fun AddUserDialog(
                     },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     FilterChip(
                         selected = selectedPermission == Permission.READ,

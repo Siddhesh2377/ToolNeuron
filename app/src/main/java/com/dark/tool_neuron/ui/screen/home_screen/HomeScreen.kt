@@ -78,7 +78,6 @@ import com.dark.tool_neuron.ui.components.MemoryOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.icons.TnIcons
-import com.dark.tool_neuron.ui.theme.rDp
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.material3.AlertDialog
@@ -181,25 +180,25 @@ fun TopBar(
         ActionButton(
             onClickListener = onMenuClick,
             icon = TnIcons.Menu,
-            modifier = Modifier.padding(start = rDp(6.dp))
+            modifier = Modifier.padding(start = 6.dp)
         )
     }, actions = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActionButton(
                 onClickListener = onSettingsClick,
                 icon = TnIcons.Settings,
-                modifier = Modifier.padding(end = rDp(6.dp))
+                modifier = Modifier.padding(end = 6.dp)
             )
             ActionButton(
                 onClickListener = {
                     onStoreButtonClicked()
-                }, icon = TnIcons.Download, modifier = Modifier.padding(end = rDp(6.dp))
+                }, icon = TnIcons.Download, modifier = Modifier.padding(end = 6.dp)
             )
             ActionButton(
                 onClickListener = {
                     // Open ModelLoadingActivity which will launch SAF picker automatically
                     context.startActivity(Intent(context, ModelLoadingActivity::class.java))
-                }, icon = TnIcons.Upload, modifier = Modifier.padding(end = rDp(6.dp))
+                }, icon = TnIcons.Upload, modifier = Modifier.padding(end = 6.dp)
             )
         }
     })
@@ -300,19 +299,19 @@ fun BottomBar(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp))
+                        .padding(8.dp)
                         .background(
                             MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.6f),
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
-                        .padding(horizontal = rDp(12.dp), vertical = rDp(10.dp)),
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(
                         imageVector = TnIcons.AlertTriangle,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(18.dp)),
+                        modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onErrorContainer
                     )
                     Text(
@@ -325,19 +324,19 @@ fun BottomBar(
                 LazyColumn(
                     Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp))
-                        .heightIn(max = rDp(200.dp))
+                        .padding(8.dp)
+                        .heightIn(max = 200.dp)
                         .background(
                             MaterialTheme.colorScheme.primary.copy(0.04f)
                                 .compositeOver(MaterialTheme.colorScheme.background),
-                            shape = RoundedCornerShape(rDp(8.dp))
-                        ), contentPadding = PaddingValues(bottom = rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
+                        ), contentPadding = PaddingValues(bottom = 8.dp)
                 ) {
                     items(installedModels) { modelConfig ->
                         ModelListItem(
                             Modifier
-                                .padding(top = rDp(8.dp))
-                                .padding(horizontal = rDp(8.dp)),
+                                .padding(top = 8.dp)
+                                .padding(horizontal = 8.dp),
                             isLoaded = currentModelID == modelConfig.id,
                             model = modelConfig
                         ) { selectedModel ->
@@ -367,13 +366,13 @@ fun BottomBar(
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .imePadding()
-                    .padding(horizontal = rDp(8.dp))
-                    .padding(top = rDp(8.dp), bottom = rDp(10.dp))
+                    .padding(horizontal = 8.dp)
+                    .padding(top = 8.dp, bottom = 10.dp)
             ) {
                 Row(
                     Modifier
                         .fillMaxWidth()
-                        .heightIn(max = rDp(200.dp))
+                        .heightIn(max = 200.dp)
                 ) {
                     TextField(
                         value = value,
@@ -437,7 +436,7 @@ fun BottomBar(
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ActionIconSpace)),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.ActionIconSpace),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     // 1. Mode toggle switch (Text/Image)
@@ -452,7 +451,7 @@ fun BottomBar(
                         },
                         textModelLoaded = isTextModelLoaded,
                         imageModelLoaded = isImageModelLoaded,
-                        modifier = Modifier.padding(start = rDp(12.dp))
+                        modifier = Modifier.padding(start = 12.dp)
                     )
 
                     // 2. More Options
@@ -502,7 +501,7 @@ fun BottomBar(
                                 onClickListener = {
                                     chatViewModel.stop()
                                 },
-                                modifier = Modifier.padding(end = rDp(12.dp)),
+                                modifier = Modifier.padding(end = 12.dp),
                                 colors = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
                                     contentColor = MaterialTheme.colorScheme.primary
@@ -548,7 +547,7 @@ fun BottomBar(
                                 },
                                 icon = TnIcons.Send,
                                 shape = MaterialShapes.Ghostish.toShape(),
-                                modifier = Modifier.padding(end = rDp(12.dp)),
+                                modifier = Modifier.padding(end = 12.dp),
                                 colors = IconButtonDefaults.filledIconButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.3f),
                                     contentColor = MaterialTheme.colorScheme.primary
@@ -580,8 +579,8 @@ private fun QuickLookChipRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(4.dp), vertical = rDp(2.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(Standards.ChipSpacing))
+                .padding(horizontal = 4.dp, vertical = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.ChipSpacing)
         ) {
             if (loadedRagCount > 0 && isRagEnabled) {
                 StatusChip(
@@ -624,19 +623,19 @@ private fun StatusChip(
     Surface(
         onClick = onClick,
         color = color.copy(alpha = 0.12f),
-        shape = RoundedCornerShape(rDp(Standards.ChipCornerRadius)),
-        modifier = Modifier.height(rDp(Standards.ChipHeight))
+        shape = RoundedCornerShape(Standards.ChipCornerRadius),
+        modifier = Modifier.height(Standards.ChipHeight)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(horizontal = rDp(Standards.ChipHorizontalPadding))
+            modifier = Modifier.padding(horizontal = Standards.ChipHorizontalPadding)
         ) {
             Box(
                 modifier = Modifier
-                    .size(rDp(6.dp))
+                    .size(6.dp)
                     .background(color, RoundedCornerShape(50))
             )
-            Spacer(Modifier.width(rDp(4.dp)))
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = label,
                 style = MaterialTheme.typography.labelSmall,
@@ -669,33 +668,33 @@ private fun MoreOptionsOverlay(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = rDp(8.dp))
-                .padding(bottom = rDp(8.dp))
+                .padding(horizontal = 8.dp)
+                .padding(bottom = 8.dp)
                 .background(
                     MaterialTheme.colorScheme.primary.copy(0.04f)
                         .compositeOver(MaterialTheme.colorScheme.background),
-                    shape = RoundedCornerShape(rDp(10.dp))
+                    shape = RoundedCornerShape(10.dp)
                 )
-                .padding(rDp(12.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // RAG section
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+                shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = rDp(Standards.CardPadding), vertical = rDp(Standards.SpacingSm)),
+                        .padding(horizontal = Standards.CardPadding, vertical = Standards.SpacingSm),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                 ) {
                     Icon(
                         imageVector = TnIcons.Database,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(Standards.IconMd)),
+                        modifier = Modifier.size(Standards.IconMd),
                         tint = if (loadedRagCount > 0) MaterialTheme.colorScheme.primary
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
                     )
@@ -730,13 +729,13 @@ private fun MoreOptionsOverlay(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                    shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
+                    shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(rDp(Standards.CardPadding)),
-                        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                            .padding(Standards.CardPadding),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
                             text = "Plugins",
@@ -750,7 +749,7 @@ private fun MoreOptionsOverlay(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = rDp(2.dp)),
+                                    .padding(vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
@@ -815,7 +814,7 @@ private fun ReloadModelDialog(
             Text("Load Previous Model?", fontWeight = FontWeight.SemiBold)
         },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+            Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
                 Text(
                     "You previously had a model loaded. Would you like to load it again?",
                     style = MaterialTheme.typography.bodySmall,
@@ -844,6 +843,6 @@ private fun ReloadModelDialog(
                 Text("Skip")
             }
         },
-        shape = RoundedCornerShape(rDp(16.dp))
+        shape = RoundedCornerShape(16.dp)
     )
 }

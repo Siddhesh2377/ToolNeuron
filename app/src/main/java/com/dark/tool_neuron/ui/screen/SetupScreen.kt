@@ -59,7 +59,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.icons.TnIcons
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SetupOption
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
@@ -101,7 +100,7 @@ fun SetupScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = rDp(24.dp)),
+                .padding(horizontal = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -126,7 +125,7 @@ fun SetupScreen(
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(rDp(8.dp)))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             "You can Minimize the app, Will Notify You",
                             style = MaterialTheme.typography.bodyMedium,
@@ -134,7 +133,7 @@ fun SetupScreen(
                             textAlign = TextAlign.Center
                         )
 
-                        Spacer(Modifier.height(rDp(24.dp)))
+                        Spacer(Modifier.height(24.dp))
 
                         // Progress bar
                         Row(
@@ -146,12 +145,12 @@ fun SetupScreen(
                                     progress = { progress },
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(rDp(6.dp))
-                                        .clip(RoundedCornerShape(rDp(3.dp))),
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 )
-                                Spacer(Modifier.width(rDp(12.dp)))
+                                Spacer(Modifier.width(12.dp))
                                 Text(
                                     "${(progress * 100).toInt()}%",
                                     style = MaterialTheme.typography.labelMedium.copy(
@@ -164,8 +163,8 @@ fun SetupScreen(
                                 LinearProgressIndicator(
                                     modifier = Modifier
                                         .weight(1f)
-                                        .height(rDp(6.dp))
-                                        .clip(RoundedCornerShape(rDp(3.dp))),
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
                                     color = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 )
@@ -179,7 +178,7 @@ fun SetupScreen(
                             ),
                             color = MaterialTheme.colorScheme.onSurface
                         )
-                        Spacer(Modifier.height(rDp(8.dp)))
+                        Spacer(Modifier.height(8.dp))
                         Text(
                             "Choose Your Setup!",
                             style = MaterialTheme.typography.bodyMedium,
@@ -189,7 +188,7 @@ fun SetupScreen(
                 }
             }
 
-            Spacer(Modifier.height(rDp(32.dp)))
+            Spacer(Modifier.height(32.dp))
 
             // Options list with staggered animation
             val options = listOf(
@@ -225,7 +224,7 @@ fun SetupScreen(
                     }
 
                     if (index < options.lastIndex) {
-                        Spacer(Modifier.height(rDp(8.dp)))
+                        Spacer(Modifier.height(8.dp))
                     }
                 }
             }
@@ -237,7 +236,7 @@ fun SetupScreen(
                 exit = shrinkVertically() + fadeOut()
             ) {
                 Column(
-                    modifier = Modifier.padding(top = rDp(16.dp)),
+                    modifier = Modifier.padding(top = 16.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
@@ -246,7 +245,7 @@ fun SetupScreen(
                         color = MaterialTheme.colorScheme.error,
                         textAlign = TextAlign.Center
                     )
-                    Spacer(Modifier.height(rDp(8.dp)))
+                    Spacer(Modifier.height(8.dp))
                     TextButton(onClick = { viewModel.retryDownload() }) {
                         Text("Retry")
                     }
@@ -255,7 +254,7 @@ fun SetupScreen(
 
             // Restore from Backup section
             if (!isDownloading) {
-                Spacer(Modifier.height(rDp(24.dp)))
+                Spacer(Modifier.height(24.dp))
                 RestoreFromBackupCard(viewModel = viewModel)
             }
         }
@@ -302,15 +301,15 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
     if (progress != null && progress !is SystemBackupManager.BackupProgress.Error) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            shape = RoundedCornerShape(Standards.CardCornerRadius),
             color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(14.dp)),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                LoadingIndicator(modifier = Modifier.size(rDp(20.dp)))
+                LoadingIndicator(modifier = Modifier.size(20.dp))
                 Text(
                     text = when (progress) {
                         is SystemBackupManager.BackupProgress.Starting -> "Restoring..."
@@ -328,19 +327,19 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
         Surface(
             onClick = { showRestoreDialog = true },
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+            shape = RoundedCornerShape(Standards.CardCornerRadius),
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-            border = BorderStroke(rDp(1.dp), MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = rDp(16.dp), vertical = rDp(14.dp)),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Icon(
                     TnIcons.Restore, null,
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(rDp(20.dp))
+                    modifier = Modifier.size(20.dp)
                 )
                 Text(
                     "Restore from Backup",
@@ -352,7 +351,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
 
         // Error from previous attempt
         if (progress is SystemBackupManager.BackupProgress.Error) {
-            Spacer(Modifier.height(rDp(8.dp)))
+            Spacer(Modifier.height(8.dp))
             Text(
                 text = progress.message,
                 style = MaterialTheme.typography.bodySmall,
@@ -373,7 +372,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
             icon = { Icon(TnIcons.Restore, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Restore from Backup", fontWeight = FontWeight.SemiBold) },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "Enter your backup password, then select the backup file.",
                         style = MaterialTheme.typography.bodySmall,
@@ -402,7 +401,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                     restorePassword = ""
                 }) { Text("Cancel") }
             },
-            shape = RoundedCornerShape(rDp(16.dp))
+            shape = RoundedCornerShape(16.dp)
         )
     }
 }
@@ -439,14 +438,14 @@ private fun SetupOptionCard(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(Standards.CardCornerRadius)),
+        shape = RoundedCornerShape(Standards.CardCornerRadius),
         color = backgroundColor,
         enabled = enabled && !isDownloading
     ) {
         Row(
             modifier = Modifier.padding(
-                horizontal = rDp(16.dp),
-                vertical = rDp(14.dp)
+                horizontal = 16.dp,
+                vertical = 14.dp
             ),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
@@ -464,14 +463,14 @@ private fun SetupOptionCard(
                     imageVector = TnIcons.RadioButton,
                     contentDescription = "Downloading",
                     tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(rDp(20.dp))
+                    modifier = Modifier.size(20.dp)
                 )
             } else {
                 Icon(
                     imageVector = TnIcons.Download,
                     contentDescription = "Download",
                     tint = contentColor.copy(alpha = 0.7f),
-                    modifier = Modifier.size(rDp(20.dp))
+                    modifier = Modifier.size(20.dp)
                 )
             }
         }

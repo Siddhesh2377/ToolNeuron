@@ -82,7 +82,6 @@ import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.ui.theme.maple
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionModelInfo
 import com.dark.tool_neuron.worker.ModelDataParser
@@ -302,7 +301,7 @@ fun ModelLoadingScreen(
                         onClickListener = onClose,
                         icon = TnIcons.X,
                         contentDescription = "Close",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }, colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
@@ -363,13 +362,13 @@ fun ModelLoadingScreen(
             ) {
                 Column(
                     Modifier
-                        .size(rDp(200.dp))
+                        .size(200.dp)
                       ,
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center
                 ) {
                     LoadingIndicator()
-                    Spacer(Modifier.height(rDp(8.dp)))
+                    Spacer(Modifier.height(8.dp))
                     Text("Processing Model....", fontFamily = maple, fontWeight = FontWeight.Bold)
                 }
             }
@@ -383,34 +382,34 @@ private fun EmptyState(onPickModel: () -> Unit) {
         modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
-            modifier = Modifier.padding(rDp(24.dp)),
-            shape = RoundedCornerShape(rDp(24.dp)),
+            modifier = Modifier.padding(24.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = rDp(2.dp)
+            tonalElevation = 2.dp
         ) {
             Column(
-                modifier = Modifier.padding(rDp(32.dp)),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(20.dp))
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(rDp(80.dp))
-                        .clip(RoundedCornerShape(rDp(20.dp)))
+                        .size(80.dp)
+                        .clip(RoundedCornerShape(20.dp))
                         .background(MaterialTheme.colorScheme.primary.copy(0.1f)),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = TnIcons.Brain,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(40.dp)),
+                        modifier = Modifier.size(40.dp),
                         tint = MaterialTheme.colorScheme.primary
                     )
                 }
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         "No Model Loaded",
@@ -429,8 +428,8 @@ private fun EmptyState(onPickModel: () -> Unit) {
                     onClickListener = onPickModel,
                     icon = TnIcons.Upload,
                     contentDescription = "Pick Model",
-                    shape = RoundedCornerShape(rDp(16.dp)),
-                    modifier = Modifier.size(rDp(64.dp))
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier.size(64.dp)
                 )
 
                 Text(
@@ -450,17 +449,17 @@ private fun LoadingStateView() {
         modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
-            modifier = Modifier.padding(rDp(24.dp)),
-            shape = RoundedCornerShape(rDp(24.dp)),
+            modifier = Modifier.padding(24.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.surfaceContainerHigh
         ) {
             Column(
-                modifier = Modifier.padding(rDp(32.dp)),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(20.dp))
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
                 LoadingIndicator(
-                    modifier = Modifier.size(rDp(48.dp))
+                    modifier = Modifier.size(48.dp)
                 )
                 Text(
                     "Loading Model...",
@@ -497,25 +496,25 @@ private fun ModelInfoView(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // Header Card with Model Icon & Info
         Surface(
-            shape = RoundedCornerShape(rDp(20.dp)),
+            shape = RoundedCornerShape(20.dp),
             color = MaterialTheme.colorScheme.primaryContainer,
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
-            Column(modifier = Modifier.padding(rDp(20.dp))) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(rDp(56.dp))
-                            .clip(RoundedCornerShape(rDp(14.dp)))
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(14.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(0.2f)),
                         contentAlignment = Alignment.Center
                     ) {
@@ -525,7 +524,7 @@ private fun ModelInfoView(
                                 else -> TnIcons.Brain
                             },
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(32.dp)),
+                            modifier = Modifier.size(32.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -538,7 +537,7 @@ private fun ModelInfoView(
                             maxLines = 2
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -549,7 +548,7 @@ private fun ModelInfoView(
 
                             // Model type badge
                             Surface(
-                                shape = RoundedCornerShape(rDp(4.dp)),
+                                shape = RoundedCornerShape(4.dp),
                                 color = MaterialTheme.colorScheme.primary.copy(0.2f)
                             ) {
                                 Text(
@@ -561,7 +560,7 @@ private fun ModelInfoView(
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary,
                                     modifier = Modifier.padding(
-                                        horizontal = rDp(6.dp), vertical = rDp(2.dp)
+                                        horizontal = 6.dp, vertical = 2.dp
                                     ),
                                     fontWeight = FontWeight.Bold
                                 )
@@ -573,14 +572,14 @@ private fun ModelInfoView(
                         onClickListener = onChangeModel,
                         icon = TnIcons.Refresh,
                         contentDescription = "Change Model",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 }
 
                 // Installation Status Badge
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
                 HorizontalDivider(color = MaterialTheme.colorScheme.onPrimaryContainer.copy(0.1f))
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
 
                 AnimatedContent(
                     targetState = installState, label = "install_state", transitionSpec = {
@@ -592,7 +591,7 @@ private fun ModelInfoView(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             when (state) {
@@ -601,7 +600,7 @@ private fun ModelInfoView(
                                         TnIcons.CircleCheck,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(rDp(24.dp))
+                                        modifier = Modifier.size(24.dp)
                                     )
                                     Column {
                                         Text(
@@ -622,7 +621,7 @@ private fun ModelInfoView(
 
                                 InstallState.Installing -> {
                                     LoadingIndicator(
-                                        modifier = Modifier.size(rDp(24.dp))
+                                        modifier = Modifier.size(24.dp)
                                     )
                                     Text(
                                         "Processing...",
@@ -638,7 +637,7 @@ private fun ModelInfoView(
                                         tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(
                                             0.6f
                                         ),
-                                        modifier = Modifier.size(rDp(24.dp))
+                                        modifier = Modifier.size(24.dp)
                                     )
                                     Column {
                                         Text(
@@ -669,7 +668,7 @@ private fun ModelInfoView(
 
                         // Action Buttons Row
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             // Settings button for Diffusion models
                             if (info is DiffusionModelInfo && state == InstallState.Installed) {
@@ -677,7 +676,7 @@ private fun ModelInfoView(
                                     onClickListener = { showDiffusionSettings = true },
                                     icon = TnIcons.Settings,
                                     contentDescription = "Configure",
-                                    shape = RoundedCornerShape(rDp(12.dp))
+                                    shape = RoundedCornerShape(12.dp)
                                 )
                             }
 
@@ -698,7 +697,7 @@ private fun ModelInfoView(
                                         InstallState.NotInstalled -> "Install"
                                         InstallState.Installed -> "Uninstall"
                                         else -> "Action"
-                                    }, shape = RoundedCornerShape(rDp(12.dp))
+                                    }, shape = RoundedCornerShape(12.dp)
                                 )
                             }
                         }
@@ -732,12 +731,12 @@ private fun ModelInfoView(
                     info.parameters.entries.forEachIndexed { index, (key, value) ->
                         InfoRow(key, value)
                         if (index < info.parameters.size - 1) {
-                            Spacer(modifier = Modifier.height(rDp(8.dp)))
+                            Spacer(modifier = Modifier.height(8.dp))
                             HorizontalDivider(
                                 color = MaterialTheme.colorScheme.onSurface.copy(0.08f),
                                 thickness = 1.dp
                             )
-                            Spacer(modifier = Modifier.height(rDp(8.dp)))
+                            Spacer(modifier = Modifier.height(8.dp))
                         }
                     }
                 }
@@ -757,12 +756,12 @@ private fun ModelInfoView(
                         additionalData.entries.forEachIndexed { index, (key, value) ->
                             InfoRow(key, value)
                             if (index < additionalData.size - 1) {
-                                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 HorizontalDivider(
                                     color = MaterialTheme.colorScheme.onSurface.copy(0.08f),
                                     thickness = 1.dp
                                 )
-                                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                                Spacer(modifier = Modifier.height(8.dp))
                             }
                         }
                     }
@@ -770,7 +769,7 @@ private fun ModelInfoView(
             }
         }
 
-        Spacer(modifier = Modifier.height(rDp(16.dp)))
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     // Diffusion Settings Dialog
@@ -805,7 +804,7 @@ private fun DiffusionConfigDialog(
         )
     }, text = {
         Column(
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.verticalScroll(rememberScrollState())
         ) {
             // Backend Section
@@ -889,7 +888,7 @@ private fun DiffusionConfigDialog(
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         FilterChip(
                             selected = textEmbeddingSize == 768,
                             onClick = { textEmbeddingSize = 768 },
@@ -921,7 +920,7 @@ private fun DiffusionConfigDialog(
         TextButton(onClick = onDismiss) {
             Text("Cancel")
         }
-    }, shape = RoundedCornerShape(rDp(20.dp))
+    }, shape = RoundedCornerShape(20.dp)
     )
 }
 
@@ -957,14 +956,14 @@ private fun ErrorStateView(message: String, onRetry: () -> Unit) {
         modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
     ) {
         Surface(
-            modifier = Modifier.padding(rDp(24.dp)),
-            shape = RoundedCornerShape(rDp(24.dp)),
+            modifier = Modifier.padding(24.dp),
+            shape = RoundedCornerShape(24.dp),
             color = MaterialTheme.colorScheme.errorContainer
         ) {
             Column(
-                modifier = Modifier.padding(rDp(32.dp)),
+                modifier = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
                     "Error Loading Model",
@@ -983,7 +982,7 @@ private fun ErrorStateView(message: String, onRetry: () -> Unit) {
                     onClickListener = onRetry,
                     icon = TnIcons.Refresh,
                     contentDescription = "Try Another Model",
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
         }
@@ -994,12 +993,12 @@ private fun ErrorStateView(message: String, onRetry: () -> Unit) {
 private fun InfoSection(
     title: String, content: @Composable () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(
             title,
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = rDp(4.dp))
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
         content()
     }
@@ -1008,11 +1007,11 @@ private fun InfoSection(
 @Composable
 private fun InfoCard(content: @Composable () -> Unit) {
     Surface(
-        shape = RoundedCornerShape(rDp(16.dp)),
+        shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceContainerHigh
     ) {
         Column(
-            modifier = Modifier.padding(rDp(16.dp))
+            modifier = Modifier.padding(16.dp)
         ) {
             content()
         }
@@ -1032,7 +1031,7 @@ private fun InfoRow(label: String, value: String) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.weight(1.2f)
         )
-        Spacer(Modifier.width(rDp(16.dp)))
+        Spacer(Modifier.width(16.dp))
         Text(
             value,
             style = MaterialTheme.typography.bodyMedium,

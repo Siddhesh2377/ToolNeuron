@@ -43,7 +43,6 @@ import com.dark.tool_neuron.models.state.getDisplayText
 import com.dark.tool_neuron.models.state.getIcon
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.state.AppStateManager
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
@@ -81,17 +80,17 @@ fun TitleRow(
     Box(modifier = modifier) {
         Surface(
             color = backgroundColor,
-            shape = RoundedCornerShape(rDp(26.dp)),
-            modifier = Modifier.height(rDp(Standards.ActionIconSize))
+            shape = RoundedCornerShape(26.dp),
+            modifier = Modifier.height(Standards.ActionIconSize)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = rDp(12.dp))
+                modifier = Modifier.padding(horizontal = 12.dp)
             ) {
                 if (isLoading) {
                     LoadingIndicator(
-                        modifier = Modifier.size(rDp(16.dp)),
+                        modifier = Modifier.size(16.dp),
                         color = iconColor
                     )
                 } else {
@@ -99,7 +98,7 @@ fun TitleRow(
                         imageVector = icon,
                         contentDescription = null,
                         tint = iconColor,
-                        modifier = Modifier.size(rDp(18.dp))
+                        modifier = Modifier.size(18.dp)
                     )
                 }
 
@@ -154,23 +153,23 @@ fun ModelListItem(
         modifier = modifier, colors = CardDefaults.cardColors(
             containerColor = if (isLoaded) MaterialTheme.colorScheme.primary.copy(0.12f)
             else MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)
-        ), shape = RoundedCornerShape(rDp(10.dp))
+        ), shape = RoundedCornerShape(10.dp)
     ) {
         Row(
-            modifier = Modifier.padding(rDp(12.dp)),
+            modifier = Modifier.padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
             Row(
                 modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp)),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
                     imageVector = if (model.providerType.name == "GGUF") TnIcons.Sparkles
                         else TnIcons.Photo,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(20.dp)),
+                    modifier = Modifier.size(20.dp),
                     tint = if (isLoaded) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
@@ -192,7 +191,7 @@ fun ModelListItem(
             }
 
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (onDeleteListener != null && !isLoaded) {
@@ -200,7 +199,7 @@ fun ModelListItem(
                         onClickListener = { showDeleteConfirm = true },
                         icon = TnIcons.Trash,
                         contentDescription = "Delete",
-                        shape = RoundedCornerShape(rDp(8.dp)),
+                        shape = RoundedCornerShape(8.dp),
                         colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
                             contentColor = MaterialTheme.colorScheme.error
@@ -221,14 +220,14 @@ fun ModelListItem(
                                 containerColor = MaterialTheme.colorScheme.error.copy(0.12f),
                                 contentColor = MaterialTheme.colorScheme.error
                             ),
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
                     } else {
                         ActionButton(
                             onClickListener = { onClickListener(model) },
                             icon = TnIcons.ExternalLink,
                             contentDescription = "Load",
-                            shape = RoundedCornerShape(rDp(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
                             colors = androidx.compose.material3.IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.primary.copy(0.12f),
                                 contentColor = MaterialTheme.colorScheme.primary
