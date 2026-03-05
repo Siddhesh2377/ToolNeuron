@@ -26,10 +26,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Pending
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -47,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.ToolState
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Animated card component for displaying tool execution state
@@ -176,7 +173,7 @@ private fun ToolStateIndicator(state: ToolState) {
     ) { targetState ->
         when (targetState) {
             is ToolState.Idle -> Icon(
-                imageVector = Icons.Default.Pending,
+                imageVector = TnIcons.Clock,
                 contentDescription = "Idle",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                 modifier = Modifier.size(rDp(20.dp))
@@ -189,14 +186,14 @@ private fun ToolStateIndicator(state: ToolState) {
             )
 
             is ToolState.Success -> Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = "Success",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(rDp(20.dp))
             )
 
             is ToolState.Error -> Icon(
-                imageVector = Icons.Default.Error,
+                imageVector = TnIcons.AlertTriangle,
                 contentDescription = "Error",
                 tint = MaterialTheme.colorScheme.error,
                 modifier = Modifier.size(rDp(20.dp))

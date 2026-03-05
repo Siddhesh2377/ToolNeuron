@@ -22,13 +22,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ButtonDefaults
@@ -72,7 +65,11 @@ import com.dark.tool_neuron.worker.PersonaCleanupHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
+import com.dark.tool_neuron.ui.icons.TnIcons
+
+private val WHITESPACE_REGEX = "\\s+".toRegex()
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -159,11 +156,11 @@ fun PersonaEditorScreen(
 
     // Token count for description
     LaunchedEffect(description) {
-        descriptionTokenCount = description.split(Regex("\\s+")).count { it.isNotBlank() }
+        descriptionTokenCount = description.split(WHITESPACE_REGEX).count { it.isNotBlank() }
     }
 
     // Avatar image picker
-    val avatarDir = remember { File(context.filesDir, "persona_avatars").also { it.mkdirs() } }
+    val avatarDir = remember { AppPaths.personaAvatars(context).also { it.mkdirs() } }
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -250,7 +247,7 @@ fun PersonaEditorScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                 },
@@ -310,7 +307,7 @@ fun PersonaEditorScreen(
                                 }
                                 else -> {
                                     Icon(
-                                        Icons.Default.Person,
+                                        TnIcons.User,
                                         contentDescription = null,
                                         modifier = Modifier.size(36.dp),
                                         tint = MaterialTheme.colorScheme.onSecondaryContainer
@@ -329,7 +326,7 @@ fun PersonaEditorScreen(
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Icon(
-                                Icons.Default.Edit,
+                                TnIcons.Edit,
                                 contentDescription = "Change avatar",
                                 modifier = Modifier.size(14.dp),
                                 tint = MaterialTheme.colorScheme.onPrimary
@@ -350,7 +347,7 @@ fun PersonaEditorScreen(
                                     contentColor = MaterialTheme.colorScheme.error
                                 )
                             ) {
-                                Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Icon(TnIcons.Trash, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("Delete", style = MaterialTheme.typography.labelMedium)
                             }
@@ -420,7 +417,7 @@ fun PersonaEditorScreen(
             ) {
                 SectionLabel("Alternate Greetings")
                 IconButton(onClick = { alternateGreetings.add("") }) {
-                    Icon(Icons.Default.Add, contentDescription = "Add greeting")
+                    Icon(TnIcons.Plus, contentDescription = "Add greeting")
                 }
             }
 
@@ -452,7 +449,7 @@ fun PersonaEditorScreen(
                             )
                             IconButton(onClick = { alternateGreetings.removeAt(index) }) {
                                 Icon(
-                                    Icons.Default.Close,
+                                    TnIcons.X,
                                     contentDescription = "Remove",
                                     modifier = Modifier.size(18.dp)
                                 )
@@ -536,7 +533,7 @@ fun PersonaEditorScreen(
                             label = { Text(tag) },
                             trailingIcon = {
                                 Icon(
-                                    Icons.Default.Close,
+                                    TnIcons.X,
                                     contentDescription = "Remove",
                                     modifier = Modifier.size(14.dp)
                                 )

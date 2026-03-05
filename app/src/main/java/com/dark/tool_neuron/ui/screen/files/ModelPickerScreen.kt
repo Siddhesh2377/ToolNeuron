@@ -14,9 +14,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,6 +44,7 @@ import java.util.Locale
 import kotlin.math.log10
 import kotlin.math.min
 import kotlin.math.pow
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class PickerMode {
     FILE,      // Pick .gguf files
@@ -110,7 +108,7 @@ fun ModelPickerScreen(
                             currentPath = File(currentPath).parentFile?.absolutePath ?: rootPath
                         } else onClose()
                     }) {
-                        Icon(Icons.AutoMirrored.Outlined.ArrowBack, "Back")
+                        Icon(TnIcons.ArrowLeft, "Back")
                     }
                 },
                 title = { PathBreadcrumbText(currentPath) },
@@ -118,7 +116,7 @@ fun ModelPickerScreen(
                     if (!hasAllFiles) {
                         ActionButton(
                             onClickListener = { openAllFilesAccessSettings(context) },
-                            icon = Icons.Outlined.Settings,
+                            icon = TnIcons.Settings,
                             contentDescription = "Grant access"
                         )
                     } else {
@@ -133,13 +131,13 @@ fun ModelPickerScreen(
                                     pickerMode = if (isFolder) PickerMode.FOLDER else PickerMode.FILE
                                 },
                                 text = if (pickerMode == PickerMode.FILE) "File" else "Folder",
-                                icon = if (pickerMode == PickerMode.FILE) R.drawable.ai_model else null,
-                                iconChecked = R.drawable.load_model
+                                icon = if (pickerMode == PickerMode.FILE) TnIcons.Brain else null,
+                                iconChecked = TnIcons.Upload
                             )
 
                             ActionButton(
                                 onClickListener = { currentPath = rootPath },
-                                icon = Icons.Outlined.Home,
+                                icon = TnIcons.Home,
                                 contentDescription = "Home"
                             )
                         }
@@ -242,7 +240,7 @@ private fun PermissionGate(
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 Icon(
-                    Icons.Outlined.Folder,
+                    TnIcons.Folder,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(48.dp)),
                     tint = MaterialTheme.colorScheme.primary
@@ -265,12 +263,12 @@ private fun PermissionGate(
                 Row(horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
                     ActionButton(
                         onClickListener = { openAllFilesAccessSettings(ctx) },
-                        icon = Icons.Outlined.Settings,
+                        icon = TnIcons.Settings,
                         contentDescription = "Open Settings"
                     )
                     ActionButton(
                         onClickListener = onCheck,
-                        icon = Icons.Outlined.Refresh,
+                        icon = TnIcons.Refresh,
                         contentDescription = "Refresh"
                     )
                 }
@@ -305,7 +303,7 @@ private fun ErrorState(error: String, onRetry: () -> Unit) {
                 )
                 ActionButton(
                     onClickListener = onRetry,
-                    icon = Icons.Outlined.Refresh,
+                    icon = TnIcons.Refresh,
                     contentDescription = "Retry"
                 )
             }
@@ -334,7 +332,7 @@ private fun FileList(
                 FileListItem(
                     icon = {
                         Icon(
-                            Icons.Outlined.Folder,
+                            TnIcons.Folder,
                             null,
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -344,7 +342,7 @@ private fun FileList(
                     trailing = {
                         ActionButton(
                             onClickListener = { onNavigate(parent) },
-                            icon = Icons.Outlined.ArrowUpward,
+                            icon = TnIcons.ArrowUp,
                             contentDescription = "Go up",
                             modifier = Modifier.size(rDp(32.dp))
                         )
@@ -362,9 +360,7 @@ private fun FileList(
             FileListItem(
                 icon = {
                     Icon(
-                        painter = painterResource(
-                            if (item.isDir) R.drawable.load_model else R.drawable.ai_model
-                        ),
+                        imageVector = if (item.isDir) TnIcons.Upload else TnIcons.Brain,
                         contentDescription = null,
                         tint = if (canSelect) {
                             MaterialTheme.colorScheme.primary
@@ -382,7 +378,7 @@ private fun FileList(
                         if (canSelect) {
                             ActionButton(
                                 onClickListener = { onShowInfo(item) },
-                                icon = Icons.Outlined.Info,
+                                icon = TnIcons.InfoCircle,
                                 contentDescription = "Info",
                                 modifier = Modifier.size(rDp(32.dp))
                             )
@@ -394,7 +390,7 @@ private fun FileList(
                             item.isDir && pickerMode == PickerMode.FILE -> {
                                 ActionButton(
                                     onClickListener = { onNavigate(item.file) },
-                                    icon = Icons.Outlined.ChevronRight,
+                                    icon = TnIcons.ChevronRight,
                                     contentDescription = "Open",
                                     modifier = Modifier.size(rDp(32.dp))
                                 )
@@ -403,7 +399,7 @@ private fun FileList(
                             item.isDir && pickerMode == PickerMode.FOLDER -> {
                                 ActionButton(
                                     onClickListener = { onPick(item.file, ProviderType.DIFFUSION) },
-                                    icon = Icons.Outlined.Check,
+                                    icon = TnIcons.Check,
                                     contentDescription = "Select",
                                     modifier = Modifier.size(rDp(32.dp))
                                 )
@@ -412,7 +408,7 @@ private fun FileList(
                             !item.isDir && pickerMode == PickerMode.FILE -> {
                                 ActionButton(
                                     onClickListener = { onPick(item.file, ProviderType.GGUF) },
-                                    icon = Icons.Outlined.Check,
+                                    icon = TnIcons.Check,
                                     contentDescription = "Select",
                                     modifier = Modifier.size(rDp(32.dp))
                                 )
@@ -512,7 +508,7 @@ private fun FileDetailDialog(
                     )
                     ActionButton(
                         onClickListener = onDismiss,
-                        icon = Icons.Outlined.Close,
+                        icon = TnIcons.X,
                         contentDescription = "Close",
                         modifier = Modifier.size(rDp(32.dp))
                     )
@@ -563,7 +559,7 @@ private fun FileDetailDialog(
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
                         Icon(
-                            Icons.Outlined.Check,
+                            TnIcons.Check,
                             contentDescription = null,
                             modifier = Modifier.size(rDp(18.dp))
                         )

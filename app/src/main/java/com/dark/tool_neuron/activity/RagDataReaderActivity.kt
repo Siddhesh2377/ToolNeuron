@@ -10,9 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -38,6 +35,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @AndroidEntryPoint
 class RagDataReaderActivity : ComponentActivity() {
@@ -155,7 +153,7 @@ fun RagDataReaderScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onBackClick,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
@@ -219,11 +217,11 @@ fun RagDataReaderScreen(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
                             placeholder = { Text("Search nodes...") },
-                            leadingIcon = { Icon(Icons.Default.Search, null) },
+                            leadingIcon = { Icon(TnIcons.Search, null) },
                             trailingIcon = {
                                 if (searchQuery.isNotEmpty()) {
                                     IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(Icons.Default.Clear, null)
+                                        Icon(TnIcons.XCircle, null)
                                     }
                                 }
                             },
@@ -299,12 +297,14 @@ fun RagDataReaderScreen(
                     }
 
                     // Node Detail View
-                    if (selectedNode != null) {
+                    val node = selectedNode
+                    val g = graph
+                    if (node != null && g != null) {
                         VerticalDivider()
 
                         NodeDetailView(
-                            node = selectedNode!!,
-                            graph = graph!!,
+                            node = node,
+                            graph = g,
                             onClose = { selectedNode = null }
                         )
                     }
@@ -421,7 +421,7 @@ fun NodeDetailView(
             )
             ActionButton(
                 onClickListener = onClose,
-                icon = Icons.Default.Close,
+                icon = TnIcons.X,
                 contentDescription = "Close",
                 shape = RoundedCornerShape(rDp(12.dp))
             )
@@ -634,7 +634,7 @@ fun ErrorScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onBackClick,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
@@ -654,7 +654,7 @@ fun ErrorScreen(
                 modifier = Modifier.padding(rDp(24.dp))
             ) {
                 Icon(
-                    Icons.Default.Error,
+                    TnIcons.AlertTriangle,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(64.dp)),
                     tint = MaterialTheme.colorScheme.error
@@ -714,7 +714,7 @@ fun PasswordInputDialog(
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
                                 contentDescription = if (showPassword) "Hide password" else "Show password"
                             )
                         }

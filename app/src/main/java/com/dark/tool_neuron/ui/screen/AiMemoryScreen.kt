@@ -18,11 +18,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -62,6 +57,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -114,7 +110,7 @@ fun AiMemoryScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                 },
@@ -122,7 +118,7 @@ fun AiMemoryScreen(
                     if (staleCount > 0) {
                         IconButton(onClick = { showClearStaleDialog = true }) {
                             Icon(
-                                Icons.Default.DeleteSweep,
+                                TnIcons.TrashX,
                                 contentDescription = "Clear Stale",
                                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
                             )
@@ -145,11 +141,11 @@ fun AiMemoryScreen(
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp, vertical = 4.dp),
                 placeholder = { Text("Search memories...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                leadingIcon = { Icon(TnIcons.Search, contentDescription = null) },
                 trailingIcon = {
                     if (searchQuery.isNotBlank()) {
                         IconButton(onClick = { searchQuery = "" }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear")
+                            Icon(TnIcons.X, contentDescription = "Clear")
                         }
                     }
                 },
@@ -329,7 +325,7 @@ private fun MemoryItem(
                     modifier = Modifier.size(32.dp)
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        TnIcons.X,
                         contentDescription = "Delete",
                         modifier = Modifier.size(16.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)

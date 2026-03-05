@@ -19,17 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.outlined.ChatBubbleOutline
-import androidx.compose.material.icons.outlined.CleaningServices
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material.icons.outlined.Layers
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Storage
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -53,15 +42,17 @@ import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.theme.rSp
+import com.dark.tool_neuron.global.formatBytes
+import com.dark.tool_neuron.global.formatCompactDate
 import com.dark.tool_neuron.viewmodel.memory.VaultManagementViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun VaultDashboard(onNavigateBack: () -> Unit) {
     val viewModel: VaultManagementViewModel = viewModel()
     var showLogs by remember { mutableStateOf(false) }
+
+    val dedupedChats = remember(viewModel.chatList) { viewModel.chatList.distinctBy { it.chatId } }
 
     LaunchedEffect(Unit) {
         viewModel.loadVaultStats()
@@ -86,11 +77,11 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                 ) {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                     Icon(
-                        Icons.Outlined.Layers, null,
+                        TnIcons.Stack2, null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.padding(start = rDp(8.dp), end = rDp(8.dp))
                     )
@@ -107,7 +98,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                             viewModel.loadVaultStats()
                             viewModel.loadChatList()
                         },
-                        icon = Icons.Outlined.Refresh,
+                        icon = TnIcons.Refresh,
                         contentDescription = "Refresh"
                     )
                 }
@@ -187,7 +178,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                Icons.Outlined.ChatBubbleOutline, null,
+                                TnIcons.Message, null,
                                 modifier = Modifier.size(rDp(36.dp)),
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
                             )
@@ -202,7 +193,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                     }
                 }
             } else {
-                items(viewModel.chatList, key = { it.chatId }) { chat ->
+                items(dedupedChats, key = { it.chatId }) { chat ->
                     CompactChatCard(
                         chat = chat,
                         onDelete = { viewModel.deleteChat(chat.chatId) },
@@ -229,7 +220,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                 ToolActionCard(
                     title = "Defragment",
                     description = "Reclaim unused space",
-                    icon = Icons.Outlined.CleaningServices,
+                    icon = TnIcons.Eraser,
                     isProcessing = viewModel.isDefragging,
                     progress = viewModel.defragProgress,
                     onClick = { viewModel.performDefragmentation() },
@@ -256,7 +247,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                         horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
                     ) {
                         Icon(
-                            Icons.Outlined.Terminal, null,
+                            TnIcons.Terminal, null,
                             modifier = Modifier.size(rDp(18.dp)),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -268,7 +259,7 @@ fun VaultDashboard(onNavigateBack: () -> Unit) {
                             modifier = Modifier.weight(1f)
                         )
                         Icon(
-                            if (showLogs) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
+                            if (showLogs) TnIcons.ChevronUp else TnIcons.ChevronDown,
                             null,
                             modifier = Modifier.size(rDp(18.dp)),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -347,7 +338,7 @@ private fun CompactChatCard(
             horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
         ) {
             Icon(
-                Icons.Outlined.ChatBubbleOutline, null,
+                TnIcons.Message, null,
                 modifier = Modifier.size(rDp(16.dp)),
                 tint = MaterialTheme.colorScheme.primary
             )
@@ -367,7 +358,7 @@ private fun CompactChatCard(
             }
             ActionButton(
                 onClickListener = onDelete,
-                icon = Icons.Outlined.Delete,
+                icon = TnIcons.Trash,
                 contentDescription = "Delete"
             )
         }
@@ -427,10 +418,3 @@ private fun ToolActionCard(
     }
 }
 
-// ==================== Formatting ====================
-
-private fun formatCompactDate(timestamp: Long): String {
-    if (timestamp == 0L) return "N/A"
-    val sdf = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}

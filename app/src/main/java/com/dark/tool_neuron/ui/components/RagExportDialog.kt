@@ -14,11 +14,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -49,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.ui.theme.rDp
 import com.neuronpacket.LoadingMode
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Export configuration data class matching NeuronPacket ExportConfig
@@ -158,12 +154,12 @@ fun RagExportDialog(
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null)
+                        Icon(TnIcons.Lock, contentDescription = null)
                     },
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
                                 contentDescription = if (showPassword) "Hide password" else "Show password"
                             )
                         }
@@ -183,7 +179,7 @@ fun RagExportDialog(
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     leadingIcon = {
-                        Icon(Icons.Default.Lock, contentDescription = null)
+                        Icon(TnIcons.Lock, contentDescription = null)
                     },
                     isError = passwordError != null,
                     supportingText = passwordError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
@@ -229,7 +225,7 @@ fun RagExportDialog(
                                         horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
                                     ) {
                                         Icon(
-                                            Icons.Default.Person,
+                                            TnIcons.User,
                                             contentDescription = null,
                                             modifier = Modifier.size(rDp(20.dp))
                                         )

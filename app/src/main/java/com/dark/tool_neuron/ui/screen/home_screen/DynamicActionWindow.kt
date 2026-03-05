@@ -14,12 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -45,12 +44,15 @@ import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class DynamicWindowTab {
     STATUS,
     MODELS,
     SYSTEM
 }
+
+private val WHITESPACE_REGEX = "\\s+".toRegex()
 
 @Composable
 fun DynamicActionWindow(
@@ -61,10 +63,10 @@ fun DynamicActionWindow(
     isMemoryEnabled: Boolean = false,
     ttsModelLoaded: Boolean = false
 ) {
-    val appState by AppStateManager.appState.collectAsState()
+    val appState by AppStateManager.appState.collectAsStateWithLifecycle()
     var selectedTab by remember { mutableStateOf(DynamicWindowTab.STATUS) }
-    val installedModels by modelViewModel.installedModels.collectAsState(initial = emptyList())
-    val currentModelID by modelViewModel.currentModelID.collectAsState()
+    val installedModels by modelViewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
+    val currentModelID by modelViewModel.currentModelID.collectAsStateWithLifecycle()
 
     Card(
         modifier = Modifier
@@ -245,7 +247,7 @@ private fun ModelsTabContent(
                     verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.vl_models),
+                        imageVector = TnIcons.Photo,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(20.dp)),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -293,9 +295,9 @@ private fun SystemTabContent(
     chatViewModel: ChatViewModel
 ) {
     val context = LocalContext.current
-    val isTextModelLoaded by modelViewModel.isGgufModelLoaded.collectAsState()
-    val isImageModelLoaded by modelViewModel.isDiffusionModelLoaded.collectAsState()
-    val thinkingEnabled by chatViewModel.thinkingModeEnabled.collectAsState()
+    val isTextModelLoaded by modelViewModel.isGgufModelLoaded.collectAsStateWithLifecycle()
+    val isImageModelLoaded by modelViewModel.isDiffusionModelLoaded.collectAsStateWithLifecycle()
+    val thinkingEnabled by chatViewModel.thinkingModeEnabled.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -318,7 +320,7 @@ private fun SystemTabContent(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Psychology,
+                        imageVector = TnIcons.Brain,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(16.dp)),
                         tint = if (thinkingEnabled) MaterialTheme.colorScheme.primary
@@ -355,9 +357,9 @@ private fun SystemTabContent(
 
         // System Resources
         SectionHeader("Resources")
-        SystemMetricRow(Icons.Default.Memory, "RAM", getMemoryUsage(context))
-        SystemMetricRow(Icons.Default.Storage, "CPU Cores", getCpuCores())
-        SystemMetricRow(Icons.Default.Speed, "Threads", getActiveThreads())
+        SystemMetricRow(TnIcons.Cpu, "RAM", getMemoryUsage(context))
+        SystemMetricRow(TnIcons.Database, "CPU Cores", getCpuCores())
+        SystemMetricRow(TnIcons.Gauge, "Threads", getActiveThreads())
 
         // Device Info
         SectionHeader("Device")
@@ -415,10 +417,8 @@ fun ModelListItem(
                     }
                 ) {
                     Icon(
-                        painter = painterResource(
-                            if (model.providerType.name == "GGUF") R.drawable.smart_temp_message
-                            else R.drawable.vl_models
-                        ),
+                        imageVector = if (model.providerType == com.dark.tool_neuron.models.enums.ProviderType.GGUF) TnIcons.Sparkles
+                            else TnIcons.Photo,
                         contentDescription = null,
                         modifier = Modifier
                             .size(rDp(28.dp))
@@ -470,7 +470,7 @@ fun ModelListItem(
                 if (loaded) {
                     ActionTextButton(
                         onClickListener = { onClickListener(model) },
-                        icon = Icons.Default.SubdirectoryArrowLeft,
+                        icon = TnIcons.CornerDownLeft,
                         text = "Unload",
                         colors = ButtonDefaults.buttonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
@@ -481,7 +481,7 @@ fun ModelListItem(
                 } else {
                     ActionButton(
                         onClickListener = { onClickListener(model) },
-                        icon = Icons.Default.ArrowOutward,
+                        icon = TnIcons.ExternalLink,
                         contentDescription = "Load",
                         shape = RoundedCornerShape(rDp(6.dp)),
                         colors = IconButtonDefaults.filledIconButtonColors(
@@ -571,7 +571,7 @@ private fun WelcomeContent() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            painter = painterResource(R.drawable.user),
+            imageVector = TnIcons.User,
             contentDescription = null,
             modifier = Modifier.size(rDp(20.dp)),
             tint = MaterialTheme.colorScheme.primary
@@ -606,7 +606,7 @@ private fun NoModelLoadedContent() {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            painter = painterResource(R.drawable.vl_models),
+            imageVector = TnIcons.Photo,
             contentDescription = null,
             modifier = Modifier.size(rDp(20.dp)),
             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -646,7 +646,7 @@ private fun ModelLoadedContent(state: AppState.ModelLoaded) {
             modifier = Modifier.weight(1f)
         ) {
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(18.dp)),
                 tint = MaterialTheme.colorScheme.tertiary
@@ -736,7 +736,7 @@ private fun LoadingModelContent(state: AppState.LoadingModel) {
 
 @Composable
 private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel: ChatViewModel) {
-    val streamingText by chatViewModel.streamingAssistantMessage.collectAsState()
+    val streamingText by chatViewModel.streamingAssistantMessage.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -763,7 +763,7 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
                     label = "rotation"
                 )
                 Icon(
-                    painter = painterResource(R.drawable.tool),
+                    imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
                         .size(rDp(20.dp))
@@ -788,7 +788,7 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
             }
             if (streamingText.isNotEmpty()) {
                 Text(
-                    text = "${streamingText.split("\\s+".toRegex()).size}",
+                    text = "${streamingText.split(WHITESPACE_REGEX).size}",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary
@@ -807,9 +807,9 @@ private fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel:
 
 @Composable
 private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewModel: ChatViewModel) {
-    val streamingImage by chatViewModel.streamingImage.collectAsState()
-    val progress by chatViewModel.imageGenerationProgress.collectAsState()
-    val step by chatViewModel.imageGenerationStep.collectAsState()
+    val streamingImage by chatViewModel.streamingImage.collectAsStateWithLifecycle()
+    val progress by chatViewModel.imageGenerationProgress.collectAsStateWithLifecycle()
+    val step by chatViewModel.imageGenerationStep.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier.fillMaxWidth(),
@@ -836,7 +836,7 @@ private fun GeneratingImageContent(state: AppState.GeneratingImage, chatViewMode
                     label = "scale"
                 )
                 Icon(
-                    painter = painterResource(R.drawable.tool),
+                    imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
                         .size(rDp(20.dp))
@@ -947,7 +947,7 @@ private fun ExecutingPluginContent(state: AppState.ExecutingPlugin) {
                     label = "rotation"
                 )
                 Icon(
-                    painter = painterResource(R.drawable.tool),
+                    imageVector = TnIcons.Wrench,
                     contentDescription = null,
                     modifier = Modifier
                         .size(rDp(18.dp))
@@ -1036,7 +1036,7 @@ private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComple
                 modifier = Modifier.weight(1f)
             ) {
                 Icon(
-                    imageVector = if (state.success) Icons.Default.CheckCircle else Icons.Default.Error,
+                    imageVector = if (state.success) TnIcons.CircleCheck else TnIcons.AlertTriangle,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = if (state.success) MaterialTheme.colorScheme.tertiary
@@ -1078,7 +1078,7 @@ private fun PluginExecutionCompleteContent(state: AppState.PluginExecutionComple
                 verticalAlignment = Alignment.Top
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.error),
+                    imageVector = TnIcons.AlertTriangle,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(12.dp)),
                     tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
@@ -1118,7 +1118,7 @@ private fun ErrorContent(state: AppState.Error) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Error,
+                imageVector = TnIcons.AlertTriangle,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(18.dp)),
                 tint = MaterialTheme.colorScheme.error
@@ -1152,7 +1152,7 @@ private fun ErrorContent(state: AppState.Error) {
             verticalAlignment = Alignment.Top
         ) {
             Icon(
-                painter = painterResource(R.drawable.error),
+                imageVector = TnIcons.AlertTriangle,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(12.dp)),
                 tint = MaterialTheme.colorScheme.error.copy(alpha = 0.7f)

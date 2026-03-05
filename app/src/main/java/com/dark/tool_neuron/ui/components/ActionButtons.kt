@@ -22,8 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +63,7 @@ import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.ui.ActionIcon
 import com.dark.tool_neuron.models.ui.ActionItem
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @SuppressLint("ModifierParameter")
@@ -99,7 +98,7 @@ fun ActionButton(
 @Composable
 fun ActionProgressButton(
     onClickListener: () -> Unit,
-    icon: ImageVector = Icons.Default.Stop,
+    icon: ImageVector = TnIcons.PlayerStop,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
     shape: Shape = MaterialShapes.Circle.toShape(),

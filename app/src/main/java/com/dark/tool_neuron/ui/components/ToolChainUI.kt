@@ -7,11 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,9 +16,9 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.messages.ToolChainStepData
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Displays a sequential tool chain with animated connectors.
@@ -67,7 +62,7 @@ fun ToolChainDisplay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.tool),
+                        imageVector = TnIcons.Wrench,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.tertiary
@@ -103,7 +98,7 @@ fun ToolChainDisplay(
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -184,14 +179,14 @@ private fun ToolChainStep(
             ) {
                 if (step.success) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = TnIcons.CircleCheck,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Error,
+                        imageVector = TnIcons.AlertTriangle,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.error
@@ -295,7 +290,7 @@ private fun ToolChainLoadingStep() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                painter = painterResource(R.drawable.tool),
+                imageVector = TnIcons.Wrench,
                 contentDescription = null,
                 modifier = Modifier
                     .size(rDp(20.dp))

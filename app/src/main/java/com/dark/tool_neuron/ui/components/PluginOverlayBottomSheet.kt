@@ -1,8 +1,12 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,10 +21,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,9 +45,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.ui.theme.rDp
-import com.mp.ai_gguf.toolcalling.GrammarMode
-import com.mp.ai_gguf.toolcalling.ToolCallingConfig
+import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,16 +56,13 @@ fun PluginOverlayBottomSheet(
     plugins: List<PluginInfo>,
     enabledPluginNames: Set<String>,
     expandedPluginIds: Set<String>,
-    grammarMode: GrammarMode = GrammarMode.LAZY,
     multiTurnEnabled: Boolean = true,
     toolCallingConfig: ToolCallingConfig = ToolCallingConfig(),
     onDismiss: () -> Unit,
     onPluginToggle: (String, Boolean) -> Unit,
     onPluginExpand: (String) -> Unit,
-    onGrammarModeChange: (GrammarMode) -> Unit = {},
     onMultiTurnToggle: (Boolean) -> Unit = {},
-    onMaxRoundsChange: (Int) -> Unit = {},
-    onMaxTokensPerTurnChange: (Int) -> Unit = {}
+    onMaxRoundsChange: (Int) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -91,7 +88,7 @@ fun PluginOverlayBottomSheet(
                     .heightIn(max = rDp(600.dp))
                     .padding(bottom = rDp(16.dp))
             ) {
-                // Header
+                // ── Header ──
                 PluginOverlayHeader(
                     enabledCount = enabledPluginNames.size,
                     totalCount = plugins.size
@@ -103,16 +100,13 @@ fun PluginOverlayBottomSheet(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
                 ) {
-                    // Tool Calling Config Section
+                    // ── Config Section ──
                     item {
                         ToolCallingConfigSection(
-                            grammarMode = grammarMode,
                             multiTurnEnabled = multiTurnEnabled,
                             toolCallingConfig = toolCallingConfig,
-                            onGrammarModeChange = onGrammarModeChange,
                             onMultiTurnToggle = onMultiTurnToggle,
-                            onMaxRoundsChange = onMaxRoundsChange,
-                            onMaxTokensPerTurnChange = onMaxTokensPerTurnChange
+                            onMaxRoundsChange = onMaxRoundsChange
                         )
                     }
 
@@ -123,7 +117,7 @@ fun PluginOverlayBottomSheet(
                         )
                     }
 
-                    // Plugin List
+                    // ── Plugin List ──
                     if (plugins.isEmpty()) {
                         item { EmptyPluginState() }
                     } else {
@@ -143,25 +137,23 @@ fun PluginOverlayBottomSheet(
     }
 }
 
+// ── Config Section ──
+
 @Composable
 private fun ToolCallingConfigSection(
-    grammarMode: GrammarMode,
     multiTurnEnabled: Boolean,
     toolCallingConfig: ToolCallingConfig,
-    onGrammarModeChange: (GrammarMode) -> Unit,
     onMultiTurnToggle: (Boolean) -> Unit,
-    onMaxRoundsChange: (Int) -> Unit,
-    onMaxTokensPerTurnChange: (Int) -> Unit
+    onMaxRoundsChange: (Int) -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+        verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
         SectionHeader(title = "Tool Calling Config")
 
-        // Grammar Mode Toggle
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(rDp(10.dp)),
@@ -171,23 +163,6 @@ private fun ToolCallingConfigSection(
                 modifier = Modifier.padding(rDp(12.dp)),
                 verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
-                    BodyLabel(
-                        text = "Grammar Mode",
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    CaptionText(
-                        text = if (grammarMode == GrammarMode.STRICT) "Strict: Forces JSON tool output"
-                        else "Lazy: Model chooses text or tool"
-                    )
-                    ActionToggleGroup(
-                        items = listOf(GrammarMode.STRICT, GrammarMode.LAZY),
-                        selectedItem = grammarMode,
-                        onItemSelected = onGrammarModeChange,
-                        itemLabel = { it.name }
-                    )
-                }
-
                 // Multi-turn toggle
                 SwitchRow(
                     title = "Multi-turn",
@@ -196,11 +171,13 @@ private fun ToolCallingConfigSection(
                     onCheckedChange = onMultiTurnToggle
                 )
 
-                // Max Rounds Slider (only visible when multi-turn is enabled)
-                AnimatedVisibility(visible = multiTurnEnabled) {
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
-                    ) {
+                // Max Rounds Slider (only when multi-turn enabled)
+                AnimatedVisibility(
+                    visible = multiTurnEnabled,
+                    enter = fadeIn(spring()) + expandVertically(spring()),
+                    exit = fadeOut(spring()) + shrinkVertically(spring())
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
@@ -246,39 +223,7 @@ private fun ToolCallingConfigSection(
     }
 }
 
-@Composable
-private fun GrammarModeChip(
-    mode: GrammarMode,
-    onModeChange: (GrammarMode) -> Unit
-) {
-    Surface(
-        modifier = Modifier
-            .clip(RoundedCornerShape(rDp(8.dp)))
-            .clickable {
-                onModeChange(
-                    if (mode == GrammarMode.STRICT) GrammarMode.LAZY else GrammarMode.STRICT
-                )
-            },
-        shape = RoundedCornerShape(rDp(8.dp)),
-        color = if (mode == GrammarMode.STRICT) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-        } else {
-            MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
-        }
-    ) {
-        Text(
-            text = if (mode == GrammarMode.STRICT) "STRICT" else "LAZY",
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = if (mode == GrammarMode.STRICT) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.tertiary
-            },
-            modifier = Modifier.padding(horizontal = rDp(12.dp), vertical = rDp(6.dp))
-        )
-    }
-}
+// ── Header ──
 
 @Composable
 private fun PluginOverlayHeader(
@@ -293,9 +238,9 @@ private fun PluginOverlayHeader(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column {
-            SectionHeader(title = "Plugins (Beta)") {
+            SectionHeader(title = "Plugins") {
                 InfoBadge(
-                    text = "$enabledCount / $totalCount enabled",
+                    text = "$enabledCount / $totalCount active",
                     containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
                     contentColor = MaterialTheme.colorScheme.tertiary
                 )
@@ -303,6 +248,8 @@ private fun PluginOverlayHeader(
         }
     }
 }
+
+// ── Plugin Card ──
 
 @Composable
 private fun PluginListItem(
@@ -336,43 +283,23 @@ private fun PluginListItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Build,
-                        contentDescription = null,
-                        tint = if (isEnabled) {
-                            MaterialTheme.colorScheme.tertiary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        modifier = Modifier.size(rDp(24.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = plugin.name,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-
-                    Spacer(modifier = Modifier.width(rDp(12.dp)))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = plugin.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Text(
-                            text = "${plugin.toolDefinitionBuilder.size} tools",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Text(
+                        text = "${plugin.toolDefinitionBuilder.size} tool${if (plugin.toolDefinitionBuilder.size != 1) "s" else ""}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Switch(
                         checked = isEnabled,
                         onCheckedChange = onToggle,
@@ -384,30 +311,29 @@ private fun PluginListItem(
 
                     IconButton(onClick = onExpand) {
                         Icon(
-                            imageVector = if (isExpanded) {
-                                Icons.Default.ExpandLess
-                            } else {
-                                Icons.Default.ExpandMore
-                            },
+                            imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                             contentDescription = if (isExpanded) "Collapse" else "Expand"
                         )
                     }
                 }
             }
 
-            // Expanded Content
-            AnimatedVisibility(visible = isExpanded) {
+            // Expanded Details
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = fadeIn(spring()) + expandVertically(spring()),
+                exit = fadeOut(spring()) + shrinkVertically(spring())
+            ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = rDp(12.dp))
+                        .padding(top = rDp(8.dp))
                 ) {
                     HorizontalDivider(
-                        modifier = Modifier.padding(vertical = rDp(8.dp)),
+                        modifier = Modifier.padding(vertical = rDp(6.dp)),
                         color = MaterialTheme.colorScheme.outlineVariant
                     )
 
-                    // Description
                     Text(
                         text = plugin.description,
                         style = MaterialTheme.typography.bodyMedium,
@@ -415,45 +341,21 @@ private fun PluginListItem(
                         modifier = Modifier.padding(bottom = rDp(8.dp))
                     )
 
-                    // Author and Version
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = rDp(8.dp)),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            text = "Author: ${plugin.author}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = "v${plugin.version}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    // Tools List
+                    // Tools
                     if (plugin.toolDefinitionBuilder.isNotEmpty()) {
-                        HorizontalDivider(
-                            modifier = Modifier.padding(vertical = rDp(8.dp)),
-                            color = MaterialTheme.colorScheme.outlineVariant
-                        )
-
                         Text(
-                            text = "Available Tools:",
+                            text = "Tools:",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(bottom = rDp(8.dp))
+                            modifier = Modifier.padding(bottom = rDp(4.dp))
                         )
 
                         plugin.toolDefinitionBuilder.forEach { tool ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = rDp(4.dp))
+                                    .padding(vertical = rDp(2.dp))
                             ) {
                                 Text(
                                     text = "• ",
@@ -482,6 +384,8 @@ private fun PluginListItem(
     }
 }
 
+// ── Empty State ──
+
 @Composable
 private fun EmptyPluginState() {
     Column(
@@ -491,14 +395,6 @@ private fun EmptyPluginState() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            imageVector = Icons.Default.Build,
-            contentDescription = null,
-            modifier = Modifier
-                .size(rDp(64.dp))
-                .padding(bottom = rDp(16.dp)),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
-        )
         Text(
             text = "No Plugins Available",
             style = MaterialTheme.typography.titleMedium,

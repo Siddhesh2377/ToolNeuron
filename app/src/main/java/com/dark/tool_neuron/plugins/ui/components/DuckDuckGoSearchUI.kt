@@ -18,10 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -39,6 +35,7 @@ import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.maple
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * UI component for DuckDuckGo Search Tool
@@ -53,7 +50,7 @@ fun DuckDuckGoSearchUI(
 
     ToolCard(
         title = "DuckDuckGo Search",
-        icon = Icons.Default.Search,
+        icon = TnIcons.Search,
         state = state,
         modifier = modifier
     ) {
@@ -160,7 +157,7 @@ private fun SearchMetadata(response: DuckDuckGoSearchResponse) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.AccessTime,
+                imageVector = TnIcons.Clock,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.size(rDp(16.dp))
@@ -231,7 +228,7 @@ private fun SearchResultItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Link,
+                imageVector = TnIcons.Link,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.tertiary,
                 modifier = Modifier.size(rDp(12.dp))
@@ -258,7 +255,7 @@ private fun NoResultsMessage() {
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
         Icon(
-            imageVector = Icons.Default.Search,
+            imageVector = TnIcons.Search,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
             modifier = Modifier.size(rDp(40.dp))

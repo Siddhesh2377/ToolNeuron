@@ -36,13 +36,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Download
-import androidx.compose.material.icons.outlined.Refresh
-import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -98,6 +91,8 @@ import com.dark.tool_neuron.worker.ModelLoadResult
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
+import com.dark.tool_neuron.ui.icons.TnIcons
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 
 class ModelLoadingActivity : ComponentActivity() {
     private val modelParser = ModelDataParser()
@@ -119,10 +114,11 @@ class ModelLoadingActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        kotlinx.coroutines.MainScope().launch {
+        // Run on IO — unloadModel is a lightweight native release
+        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
             modelParser.unloadModel(loadedEngine)
         }
+        super.onDestroy()
     }
 }
 
@@ -304,7 +300,7 @@ fun ModelLoadingScreen(
                 }, actions = {
                     ActionButton(
                         onClickListener = onClose,
-                        icon = Icons.Outlined.Close,
+                        icon = TnIcons.X,
                         contentDescription = "Close",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
@@ -405,7 +401,7 @@ private fun EmptyState(onPickModel: () -> Unit) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        painterResource(R.drawable.ai_model),
+                        imageVector = TnIcons.Brain,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(40.dp)),
                         tint = MaterialTheme.colorScheme.primary
@@ -431,7 +427,7 @@ private fun EmptyState(onPickModel: () -> Unit) {
 
                 ActionButton(
                     onClickListener = onPickModel,
-                    icon = R.drawable.load_model,
+                    icon = TnIcons.Upload,
                     contentDescription = "Pick Model",
                     shape = RoundedCornerShape(rDp(16.dp)),
                     modifier = Modifier.size(rDp(64.dp))
@@ -522,12 +518,10 @@ private fun ModelInfoView(
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
-                            painterResource(
-                                when (info.providerType) {
-                                    ProviderType.DIFFUSION -> R.drawable.load_model // Add image icon
-                                    else -> R.drawable.ai_model
-                                }
-                            ),
+                            imageVector = when (info.providerType) {
+                                ProviderType.DIFFUSION -> TnIcons.Upload
+                                else -> TnIcons.Brain
+                            },
                             contentDescription = null,
                             modifier = Modifier.size(rDp(32.dp)),
                             tint = MaterialTheme.colorScheme.primary
@@ -575,7 +569,7 @@ private fun ModelInfoView(
 
                     ActionButton(
                         onClickListener = onChangeModel,
-                        icon = Icons.Outlined.Refresh,
+                        icon = TnIcons.Refresh,
                         contentDescription = "Change Model",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
@@ -602,7 +596,7 @@ private fun ModelInfoView(
                             when (state) {
                                 InstallState.Installed -> {
                                     Icon(
-                                        Icons.Filled.CheckCircle,
+                                        TnIcons.CircleCheck,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(rDp(24.dp))
@@ -638,7 +632,7 @@ private fun ModelInfoView(
 
                                 InstallState.NotInstalled -> {
                                     Icon(
-                                        Icons.Outlined.Download,
+                                        TnIcons.Download,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(
                                             0.6f
@@ -680,7 +674,7 @@ private fun ModelInfoView(
                             if (info is DiffusionModelInfo && state == InstallState.Installed) {
                                 ActionButton(
                                     onClickListener = { showDiffusionSettings = true },
-                                    icon = Icons.Outlined.Settings,
+                                    icon = TnIcons.Settings,
                                     contentDescription = "Configure",
                                     shape = RoundedCornerShape(rDp(12.dp))
                                 )
@@ -696,9 +690,9 @@ private fun ModelInfoView(
                                             else -> {}
                                         }
                                     }, icon = when (state) {
-                                        InstallState.NotInstalled -> Icons.Outlined.Download
-                                        InstallState.Installed -> Icons.Outlined.Delete
-                                        else -> Icons.Outlined.Download
+                                        InstallState.NotInstalled -> TnIcons.Download
+                                        InstallState.Installed -> TnIcons.Trash
+                                        else -> TnIcons.Download
                                     }, contentDescription = when (state) {
                                         InstallState.NotInstalled -> "Install"
                                         InstallState.Installed -> "Uninstall"
@@ -986,7 +980,7 @@ private fun ErrorStateView(message: String, onRetry: () -> Unit) {
 
                 ActionButton(
                     onClickListener = onRetry,
-                    icon = Icons.Outlined.Refresh,
+                    icon = TnIcons.Refresh,
                     contentDescription = "Try Another Model",
                     shape = RoundedCornerShape(rDp(12.dp))
                 )

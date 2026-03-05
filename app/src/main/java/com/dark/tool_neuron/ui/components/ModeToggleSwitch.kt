@@ -7,9 +7,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,6 +21,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun ModeToggleSwitch(
@@ -89,7 +87,7 @@ fun ModeToggleSwitch(
                 IconButton(
                     isSelected = !isImageMode,
                     isEnabled = textModelLoaded,
-                    icon = Icons.Default.TextFields,
+                    icon = TnIcons.Code,
                     contentDescription = "Text mode",
                     onClick = {
                         if (!isImageMode) return@IconButton
@@ -101,7 +99,7 @@ fun ModeToggleSwitch(
                 IconButton(
                     isSelected = isImageMode,
                     isEnabled = imageModelLoaded,
-                    icon = Icons.Default.Image,
+                    icon = TnIcons.Photo,
                     contentDescription = "Image mode",
                     onClick = {
                         if (isImageMode) return@IconButton

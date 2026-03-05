@@ -22,13 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -53,6 +46,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.Persona
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -61,6 +55,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +68,7 @@ fun PersonaScreen(
 ) {
     val context = LocalContext.current
     val personaRepo = remember { AppContainer.getPersonaRepo() }
-    val personas by personaRepo.getAll().collectAsState(initial = emptyList())
+    val personas by personaRepo.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
 
     // Import launcher
@@ -112,13 +107,13 @@ fun PersonaScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                 },
                 actions = {
                     IconButton(onClick = { importLauncher.launch("application/json") }) {
-                        Icon(Icons.Default.FileOpen, contentDescription = "Import character card")
+                        Icon(TnIcons.FileSearch, contentDescription = "Import character card")
                     }
                 }
             )
@@ -128,7 +123,7 @@ fun PersonaScreen(
                 onClick = onCreatePersona,
                 containerColor = MaterialTheme.colorScheme.primaryContainer
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Character")
+                Icon(TnIcons.Plus, contentDescription = "Create Character")
             }
         }
     ) { padding ->
@@ -237,7 +232,7 @@ private fun PersonaCard(
                         }
                         else -> {
                             Icon(
-                                Icons.Default.Person,
+                                TnIcons.User,
                                 contentDescription = null,
                                 modifier = Modifier.size(24.dp),
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer
@@ -260,7 +255,7 @@ private fun PersonaCard(
                     if (isSelected) {
                         Spacer(modifier = Modifier.width(6.dp))
                         Icon(
-                            Icons.Default.Check,
+                            TnIcons.Check,
                             contentDescription = "Selected",
                             modifier = Modifier.size(16.dp),
                             tint = MaterialTheme.colorScheme.primary
@@ -280,7 +275,7 @@ private fun PersonaCard(
             if (onEdit != null) {
                 IconButton(onClick = onEdit, modifier = Modifier.size(36.dp)) {
                     Icon(
-                        Icons.Default.Edit,
+                        TnIcons.Edit,
                         contentDescription = "Edit",
                         modifier = Modifier.size(18.dp),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant

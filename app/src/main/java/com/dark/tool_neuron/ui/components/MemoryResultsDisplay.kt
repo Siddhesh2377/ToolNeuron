@@ -9,9 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -26,10 +23,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun MemoryResultsDisplay(
@@ -42,7 +39,7 @@ fun MemoryResultsDisplay(
 
     StandardCard(
         modifier = modifier,
-        iconRes = R.drawable.memory_vault,
+        icon = TnIcons.ShieldLock,
         title = "Memory Vault Results",
         description = "${results.size} memories found",
         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f),
@@ -54,7 +51,7 @@ fun MemoryResultsDisplay(
                 contentColor = MaterialTheme.colorScheme.secondary
             )
             Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

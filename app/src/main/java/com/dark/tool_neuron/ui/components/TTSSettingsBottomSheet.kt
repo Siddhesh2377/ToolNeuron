@@ -19,9 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -45,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.tts.TTSSettings
 import com.dark.tool_neuron.ui.theme.rDp
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -183,7 +181,7 @@ private fun TTSSettingsHeader(isModelLoaded: Boolean) {
         }
 
         Icon(
-            imageVector = Icons.AutoMirrored.Filled.VolumeUp,
+            imageVector = TnIcons.Volume,
             contentDescription = null,
             modifier = Modifier.size(rDp(28.dp)),
             tint = if (isModelLoaded) MaterialTheme.colorScheme.primary
@@ -213,7 +211,7 @@ private fun TTSModelStatus(isModelLoaded: Boolean) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(20.dp)),
                 tint = if (isModelLoaded) MaterialTheme.colorScheme.primary

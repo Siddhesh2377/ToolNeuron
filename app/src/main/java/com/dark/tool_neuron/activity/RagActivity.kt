@@ -35,23 +35,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -100,6 +83,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.global.formatDateWithTime
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
@@ -115,6 +99,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @AndroidEntryPoint
 class RagActivity : ComponentActivity() {
@@ -207,7 +192,7 @@ fun RagScreen(
                 navigationIcon = {
                     ActionTextButton(
                         onClickListener = onClose,
-                        icon = Icons.Default.ChevronLeft,
+                        icon = TnIcons.ChevronLeft,
                         text = "Back",
                         contentDescription = "Close",
                         shape = RoundedCornerShape(rDp(12.dp))
@@ -223,7 +208,7 @@ fun RagScreen(
                                 "*/*"
                             ))
                         },
-                        icon = Icons.Default.Download,
+                        icon = TnIcons.Download,
                         contentDescription = "Import Neuron Package",
                         shape = RoundedCornerShape(rDp(12.dp))
                     )
@@ -294,7 +279,7 @@ fun RagScreen(
                         )
                         ActionButton(
                             onClickListener = { ragViewModel.clearError() },
-                            icon = Icons.Default.Close,
+                            icon = TnIcons.X,
                             contentDescription = "Dismiss",
                             shape = RoundedCornerShape(rDp(8.dp)),
                             colors = IconButtonDefaults.filledIconButtonColors(
@@ -415,7 +400,9 @@ fun RagScreen(
                 ragToLoad = null
             },
             onConfirm = { password ->
-                ragViewModel.loadRag(ragToLoad!!, password)
+                ragToLoad?.let { rag ->
+                    ragViewModel.loadRag(rag, password)
+                }
                 showPasswordDialog = false
                 ragToLoad = null
             }
@@ -525,7 +512,7 @@ private fun EmptyRagListState(message: String, subMessage: String) {
             verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
         ) {
             Icon(
-                Icons.Default.Memory,
+                TnIcons.Cpu,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(64.dp)),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -670,7 +657,7 @@ private fun RagCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formatDate(rag.createdAt),
+                    text = formatDateWithTime(rag.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -680,7 +667,7 @@ private fun RagCard(
                         RagStatus.LOADED -> {
                             ActionTextButton(
                                 onClickListener = onUnload,
-                                icon = Icons.Default.Close,
+                                icon = TnIcons.X,
                                 text = "Unload",
                                 contentDescription = "Unload RAG",
                                 shape = RoundedCornerShape(rDp(8.dp))
@@ -695,7 +682,7 @@ private fun RagCard(
                         else -> {
                             ActionTextButton(
                                 onClickListener = onLoad,
-                                icon = Icons.Default.Download,
+                                icon = TnIcons.Download,
                                 text = "Load",
                                 contentDescription = "Load RAG",
                                 shape = RoundedCornerShape(rDp(8.dp))
@@ -706,7 +693,7 @@ private fun RagCard(
                     onViewData?.let { viewDataAction ->
                         ActionButton(
                             onClickListener = viewDataAction,
-                            icon = Icons.Default.Visibility,
+                            icon = TnIcons.Eye,
                             contentDescription = "View Data",
                             shape = RoundedCornerShape(rDp(8.dp))
                         )
@@ -715,7 +702,7 @@ private fun RagCard(
                     onShare?.let { shareAction ->
                         ActionButton(
                             onClickListener = shareAction,
-                            icon = Icons.Default.Share,
+                            icon = TnIcons.Share,
                             contentDescription = "Share",
                             shape = RoundedCornerShape(rDp(8.dp))
                         )
@@ -723,7 +710,7 @@ private fun RagCard(
 
                     ActionButton(
                         onClickListener = onDelete,
-                        icon = Icons.Default.Delete,
+                        icon = TnIcons.Trash,
                         contentDescription = "Delete",
                         shape = RoundedCornerShape(rDp(8.dp)),
                         colors = IconButtonDefaults.filledIconButtonColors(
@@ -757,7 +744,7 @@ private fun StatusBadge(status: RagStatus) {
         ) {
             if (status == RagStatus.LOADED) {
                 Icon(
-                    Icons.Default.Check,
+                    TnIcons.Check,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(12.dp)),
                     tint = color
@@ -870,9 +857,9 @@ private fun RagDetailBottomSheet(
                     DetailRow("Domain", rag.domain)
                     DetailRow("Language", rag.language)
                     DetailRow("Version", rag.version)
-                    DetailRow("Created", formatDate(rag.createdAt))
+                    DetailRow("Created", formatDateWithTime(rag.createdAt))
                     rag.lastLoadedAt?.let {
-                        DetailRow("Last Loaded", formatDate(it))
+                        DetailRow("Last Loaded", formatDateWithTime(it))
                     }
                 }
             }
@@ -915,7 +902,7 @@ private fun RagDetailBottomSheet(
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = null)
+                                Icon(TnIcons.X, contentDescription = null)
                                 Spacer(modifier = Modifier.width(rDp(8.dp)))
                                 Text("Unload")
                             }
@@ -945,7 +932,7 @@ private fun RagDetailBottomSheet(
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null)
+                                Icon(TnIcons.Download, contentDescription = null)
                                 Spacer(modifier = Modifier.width(rDp(8.dp)))
                                 Text("Load")
                             }
@@ -961,7 +948,7 @@ private fun RagDetailBottomSheet(
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
+                        Icon(TnIcons.Trash, contentDescription = null)
                         Spacer(modifier = Modifier.width(rDp(8.dp)))
                         Text("Delete")
                     }
@@ -976,7 +963,7 @@ private fun RagDetailBottomSheet(
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = null)
+                    Icon(TnIcons.Share, contentDescription = null)
                     Spacer(modifier = Modifier.width(rDp(8.dp)))
                     Text("Share RAG")
                 }
@@ -1009,18 +996,14 @@ private fun DetailRow(label: String, value: String) {
 }
 
 private fun getRagSourceIcon(sourceType: RagSourceType): ImageVector = when (sourceType) {
-    RagSourceType.TEXT -> Icons.Default.Book
-    RagSourceType.CHAT -> Icons.AutoMirrored.Filled.Chat
-    RagSourceType.FILE -> Icons.Default.Description
-    RagSourceType.MEDICAL_TEXT -> Icons.Default.Description  // Legacy support
-    RagSourceType.NEURON_PACKET -> Icons.Default.Memory
-    RagSourceType.MEMORY_VAULT -> Icons.Default.Storage
+    RagSourceType.TEXT -> TnIcons.Books
+    RagSourceType.CHAT -> TnIcons.MessageCircle
+    RagSourceType.FILE -> TnIcons.FileText
+    RagSourceType.MEDICAL_TEXT -> TnIcons.FileText  // Legacy support
+    RagSourceType.NEURON_PACKET -> TnIcons.Cpu
+    RagSourceType.MEMORY_VAULT -> TnIcons.Database
 }
 
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
 
 @Composable
 private fun PasswordDialog(
@@ -1033,7 +1016,7 @@ private fun PasswordDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Lock, contentDescription = null)
+            Icon(TnIcons.Lock, contentDescription = null)
         },
         title = { Text("Enter Password") },
         text = {
@@ -1054,7 +1037,7 @@ private fun PasswordDialog(
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
                                 contentDescription = null
                             )
                         }

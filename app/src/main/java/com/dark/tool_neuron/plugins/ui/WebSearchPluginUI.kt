@@ -18,8 +18,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,6 +33,7 @@ import com.dark.tool_neuron.plugins.ui.components.WebScrapingUI
 import com.dark.tool_neuron.plugins.viewmodel.WebSearchViewModel
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Main UI component for Web Search Plugin
@@ -106,7 +105,7 @@ private fun PluginHeader() {
     ) {
         // Plugin icon
         Icon(
-            imageVector = Icons.Default.Language,
+            imageVector = TnIcons.World,
             contentDescription = "Web Search Plugin",
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.size(rDp(24.dp))
@@ -144,7 +143,7 @@ private fun EmptyState() {
         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
     ) {
         Icon(
-            imageVector = Icons.Default.Language,
+            imageVector = TnIcons.World,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
             modifier = Modifier.size(rDp(48.dp))

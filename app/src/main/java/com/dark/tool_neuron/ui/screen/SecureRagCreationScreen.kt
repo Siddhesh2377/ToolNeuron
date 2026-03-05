@@ -9,11 +9,6 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
-import androidx.compose.material.icons.automirrored.filled.Label
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,13 +29,14 @@ import com.neuronpacket.LoadingMode
 import com.neuronpacket.Permission
 import com.neuronpacket.UserCredentials
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class DocumentType(val label: String, val mimeTypes: Array<String>, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    TEXT("Text", arrayOf("text/plain"), Icons.Default.Description),
-    PDF("PDF", arrayOf(DocumentParser.MimeTypes.PDF), Icons.AutoMirrored.Filled.InsertDriveFile),
-    WORD("Word", arrayOf(DocumentParser.MimeTypes.DOCX, DocumentParser.MimeTypes.DOC), Icons.Default.Description),
-    EXCEL("Excel", arrayOf(DocumentParser.MimeTypes.XLSX, DocumentParser.MimeTypes.XLS), Icons.Default.GridOn),
-    EPUB("EPUB", arrayOf(DocumentParser.MimeTypes.EPUB), Icons.AutoMirrored.Filled.MenuBook)
+    TEXT("Text", arrayOf("text/plain"), TnIcons.FileText),
+    PDF("PDF", arrayOf(DocumentParser.MimeTypes.PDF), TnIcons.File),
+    WORD("Word", arrayOf(DocumentParser.MimeTypes.DOCX, DocumentParser.MimeTypes.DOC), TnIcons.FileText),
+    EXCEL("Excel", arrayOf(DocumentParser.MimeTypes.XLSX, DocumentParser.MimeTypes.XLS), TnIcons.LayoutGrid),
+    EPUB("EPUB", arrayOf(DocumentParser.MimeTypes.EPUB), TnIcons.Books)
 }
 
 data class RagCreationState(
@@ -172,7 +168,7 @@ fun SecureRagCreationScreen(
                 shape = RoundedCornerShape(rDp(12.dp)),
                 leadingIcon = {
                     Icon(
-                        Icons.AutoMirrored.Filled.Label,
+                        TnIcons.Tag,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(20.dp)),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -368,7 +364,7 @@ fun SecureRagCreationScreen(
                 )
             ) {
                 Icon(
-                    Icons.Default.Add,
+                    TnIcons.Plus,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(20.dp))
                 )
@@ -407,7 +403,7 @@ fun SecureRagCreationScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            Icons.Default.Tune,
+                            TnIcons.Adjustments,
                             contentDescription = null,
                             modifier = Modifier.size(rDp(18.dp)),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -419,7 +415,7 @@ fun SecureRagCreationScreen(
                         )
                     }
                     Icon(
-                        if (showAdvanced) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        if (showAdvanced) TnIcons.ChevronUp else TnIcons.ChevronDown,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(20.dp)),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -489,7 +485,7 @@ fun SecureRagCreationScreen(
                                 leadingIcon = if (state.selectedDocumentType == docType) {
                                     {
                                         Icon(
-                                            Icons.Default.Check,
+                                            TnIcons.Check,
                                             contentDescription = null,
                                             modifier = Modifier.size(rDp(14.dp))
                                         )
@@ -568,7 +564,7 @@ private fun FileDropZone(
                 verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
             ) {
                 Icon(
-                    Icons.Default.UploadFile,
+                    TnIcons.FileUpload,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(32.dp)),
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -635,7 +631,7 @@ private fun FileDropZone(
                     )
                 ) {
                     Icon(
-                        Icons.Default.SwapHoriz,
+                        TnIcons.ArrowsExchange,
                         contentDescription = "Change file",
                         modifier = Modifier.size(rDp(16.dp))
                     )
@@ -651,7 +647,7 @@ private fun FileDropZone(
                     )
                 ) {
                     Icon(
-                        Icons.Default.Close,
+                        TnIcons.X,
                         contentDescription = "Remove file",
                         modifier = Modifier.size(rDp(16.dp))
                     )
@@ -707,9 +703,9 @@ private fun EmbeddingModelCard(
                 ) {
                     Icon(
                         imageVector = when {
-                            isDownloading -> Icons.Default.CloudDownload
-                            isDownloaded -> Icons.Default.Memory
-                            else -> Icons.Default.CloudDownload
+                            isDownloading -> TnIcons.CloudDownload
+                            isDownloaded -> TnIcons.Cpu
+                            else -> TnIcons.CloudDownload
                         },
                         contentDescription = null,
                         modifier = Modifier.size(rDp(22.dp)),
@@ -755,7 +751,7 @@ private fun EmbeddingModelCard(
                             contentPadding = PaddingValues(horizontal = rDp(14.dp), vertical = rDp(6.dp))
                         ) {
                             Icon(
-                                Icons.Default.Download,
+                                TnIcons.Download,
                                 contentDescription = null,
                                 modifier = Modifier.size(rDp(16.dp))
                             )
@@ -839,9 +835,9 @@ private fun EncryptionSection(
                         IconButton(onClick = onTogglePasswordVisibility) {
                             Icon(
                                 if (showPasswordVisibility)
-                                    Icons.Default.VisibilityOff
+                                    TnIcons.EyeOff
                                 else
-                                    Icons.Default.Visibility,
+                                    TnIcons.Eye,
                                 contentDescription = null
                             )
                         }
@@ -865,7 +861,7 @@ private fun EncryptionSection(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
-                        Icon(Icons.Default.Storage, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
+                        Icon(TnIcons.Database, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
                         Spacer(modifier = Modifier.width(rDp(4.dp)))
                         Text(
                             if (state.loadingMode == LoadingMode.EMBEDDED) "Embedded" else "Transient",
@@ -878,7 +874,7 @@ private fun EncryptionSection(
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(rDp(12.dp))
                     ) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
+                        Icon(TnIcons.UserPlus, contentDescription = null, modifier = Modifier.size(rDp(16.dp)))
                         Spacer(modifier = Modifier.width(rDp(4.dp)))
                         Text("Add User", style = MaterialTheme.typography.labelMedium)
                     }
@@ -1019,7 +1015,7 @@ private fun AddUserDialog(
                     trailingIcon = {
                         IconButton(onClick = { showPassword = !showPassword }) {
                             Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
                                 contentDescription = null
                             )
                         }

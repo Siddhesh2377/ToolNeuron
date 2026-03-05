@@ -26,15 +26,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Backup
-import androidx.compose.material.icons.outlined.DeleteForever
-import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,6 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.global.formatBackupTimestamp
+import com.dark.tool_neuron.global.formatBytes
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -81,10 +74,8 @@ import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -147,7 +138,7 @@ fun SettingsScreen(
                 navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                 }
@@ -249,7 +240,7 @@ fun SettingsScreen(
                                 else -> {
                                     FilledTonalButton(onClick = { viewModel.downloadToolCallingModel() }) {
                                         Icon(
-                                            Icons.Default.Download,
+                                            TnIcons.Download,
                                             contentDescription = null,
                                             modifier = Modifier.size(rDp(18.dp))
                                         )
@@ -285,7 +276,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                         ) {
                             Icon(
-                                Icons.Default.Warning,
+                                TnIcons.AlertTriangle,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(rDp(20.dp))
@@ -415,7 +406,7 @@ fun SettingsScreen(
                 SectionHeader(title = "Model Configuration") {
                     ActionTextButton(
                         onClickListener = onModelEditor,
-                        icon = Icons.Default.Psychology,
+                        icon = TnIcons.Brain,
                         text = "Configure",
                         shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
                     )
@@ -429,12 +420,12 @@ fun SettingsScreen(
                     )
                 }
             } else {
-                items(installedModels.size) { index ->
+                items(installedModels.size, key = { installedModels[it].id }) { index ->
                     val model = installedModels[index]
                     StandardCard(
                         title = model.modelName,
                         description = model.providerType.name,
-                        icon = Icons.Default.Psychology,
+                        icon = TnIcons.Brain,
                         onClick = onModelEditor
                     )
                 }
@@ -514,7 +505,7 @@ fun SettingsScreen(
                                 else -> {
                                     FilledTonalButton(onClick = { viewModel.downloadTts() }) {
                                         Icon(
-                                            Icons.Default.Download,
+                                            TnIcons.Download,
                                             contentDescription = null,
                                             modifier = Modifier.size(rDp(18.dp))
                                         )
@@ -771,26 +762,24 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
         }
     }
 
-    // Auto-dismiss progress after completion/error
+    // Auto-dismiss progress after completion, or restart after restore
     LaunchedEffect(backupProgress) {
         if (backupProgress is SystemBackupManager.BackupProgress.Complete) {
-            kotlinx.coroutines.delay(2000)
-            viewModel.clearBackupProgress()
-        }
-    }
-
-    // Restart process after successful restore — Hilt singletons hold stale DB/DAO refs
-    LaunchedEffect(backupProgress) {
-        if (backupProgress is SystemBackupManager.BackupProgress.Complete && showRestoreDialog) {
-            kotlinx.coroutines.delay(500)
-            showRestoreDialog = false
-            val activity = context as? Activity
-            activity?.let {
-                val intent = it.packageManager.getLaunchIntentForPackage(it.packageName)
-                    ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                it.finishAffinity()
-                if (intent != null) it.startActivity(intent)
-                Runtime.getRuntime().exit(0)
+            if (showRestoreDialog) {
+                // Restart process — Hilt singletons hold stale DB/DAO refs
+                kotlinx.coroutines.delay(500)
+                showRestoreDialog = false
+                val activity = context as? Activity
+                activity?.let {
+                    val intent = it.packageManager.getLaunchIntentForPackage(it.packageName)
+                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    it.finishAffinity()
+                    if (intent != null) it.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                }
+            } else {
+                kotlinx.coroutines.delay(2000)
+                viewModel.clearBackupProgress()
             }
         }
     }
@@ -877,7 +866,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
             ) {
                 Icon(
-                    Icons.Outlined.Backup, null,
+                    TnIcons.CloudUpload, null,
                     modifier = Modifier.size(rDp(Standards.IconLg)),
                     tint = MaterialTheme.colorScheme.tertiary
                 )
@@ -910,7 +899,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
             ) {
                 Icon(
-                    Icons.Outlined.Restore, null,
+                    TnIcons.CloudDownload, null,
                     modifier = Modifier.size(rDp(Standards.IconLg)),
                     tint = MaterialTheme.colorScheme.primary
                 )
@@ -944,7 +933,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
             ) {
                 Icon(
-                    Icons.Outlined.DeleteForever, null,
+                    TnIcons.TrashX, null,
                     modifier = Modifier.size(rDp(Standards.IconLg)),
                     tint = MaterialTheme.colorScheme.error
                 )
@@ -980,7 +969,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 backupPassword = ""
                 backupPasswordConfirm = ""
             },
-            icon = { Icon(Icons.Outlined.Backup, null, tint = MaterialTheme.colorScheme.tertiary) },
+            icon = { Icon(TnIcons.CloudUpload, null, tint = MaterialTheme.colorScheme.tertiary) },
             title = {
                 Text("Create Backup", fontWeight = FontWeight.SemiBold)
             },
@@ -1055,7 +1044,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                                             modifier = Modifier.weight(1f)
                                         )
                                         Text(
-                                            if (model.canBackup) formatFileSize(model.sizeBytes)
+                                            if (model.canBackup) formatBytes(model.sizeBytes)
                                             else model.reason,
                                             style = MaterialTheme.typography.labelSmall,
                                             color = if (model.canBackup)
@@ -1072,7 +1061,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                     // Size estimate
                     backupSizeEstimate?.let { estimate ->
                         Text(
-                            "Estimated size: ${formatFileSize(estimate.totalSize)}",
+                            "Estimated size: ${formatBytes(estimate.totalSize)}",
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1084,7 +1073,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 TextButton(
                     onClick = {
                         showBackupDialog = false
-                        val timestamp = SimpleDateFormat("yyyyMMdd_HHmm", Locale.getDefault()).format(Date())
+                        val timestamp = formatBackupTimestamp()
                         backupLauncher.launch("toolneuron_backup_$timestamp.tnbackup")
                     },
                     enabled = backupPassword.length >= 4 && backupPassword == backupPasswordConfirm
@@ -1110,7 +1099,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 showRestoreDialog = false
                 restorePassword = ""
             },
-            icon = { Icon(Icons.Outlined.Restore, null, tint = MaterialTheme.colorScheme.primary) },
+            icon = { Icon(TnIcons.CloudDownload, null, tint = MaterialTheme.colorScheme.primary) },
             title = {
                 Text("Restore from Backup", fontWeight = FontWeight.SemiBold)
             },
@@ -1159,7 +1148,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 showDeleteDialog = false
                 deleteConfirmText = ""
             },
-            icon = { Icon(Icons.Outlined.DeleteForever, null, tint = MaterialTheme.colorScheme.error) },
+            icon = { Icon(TnIcons.TrashX, null, tint = MaterialTheme.colorScheme.error) },
             title = {
                 Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
             },
@@ -1209,11 +1198,3 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
     }
 }
 
-private fun formatFileSize(bytes: Long): String {
-    return when {
-        bytes < 1024 -> "${bytes} B"
-        bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-        bytes < 1024L * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024.0))
-        else -> String.format("%.2f GB", bytes / (1024.0 * 1024.0 * 1024.0))
-    }
-}

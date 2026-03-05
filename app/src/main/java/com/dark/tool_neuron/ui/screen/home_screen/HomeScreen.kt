@@ -22,11 +22,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Settings
-import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -86,7 +81,6 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.rDp
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
-import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material3.AlertDialog
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.viewmodel.ChatViewModel
@@ -186,26 +180,26 @@ fun TopBar(
     }, navigationIcon = {
         ActionButton(
             onClickListener = onMenuClick,
-            icon = Icons.Default.Menu,
+            icon = TnIcons.Menu,
             modifier = Modifier.padding(start = rDp(6.dp))
         )
     }, actions = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActionButton(
                 onClickListener = onSettingsClick,
-                icon = Icons.Outlined.Settings,
+                icon = TnIcons.Settings,
                 modifier = Modifier.padding(end = rDp(6.dp))
             )
             ActionButton(
                 onClickListener = {
                     onStoreButtonClicked()
-                }, icon = R.drawable.download, modifier = Modifier.padding(end = rDp(6.dp))
+                }, icon = TnIcons.Download, modifier = Modifier.padding(end = rDp(6.dp))
             )
             ActionButton(
                 onClickListener = {
                     // Open ModelLoadingActivity which will launch SAF picker automatically
                     context.startActivity(Intent(context, ModelLoadingActivity::class.java))
-                }, icon = R.drawable.load_model, modifier = Modifier.padding(end = rDp(6.dp))
+                }, icon = TnIcons.Upload, modifier = Modifier.padding(end = rDp(6.dp))
             )
         }
     })
@@ -316,7 +310,7 @@ fun BottomBar(
                     horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.error),
+                        imageVector = TnIcons.AlertTriangle,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(18.dp)),
                         tint = MaterialTheme.colorScheme.onErrorContainer
@@ -465,7 +459,7 @@ fun BottomBar(
                     ActionToggleButton(
                         onCheckedChange = { showMoreOptions = !showMoreOptions },
                         checked = showMoreOptions,
-                        icon = Icons.Outlined.Tune
+                        icon = TnIcons.Adjustments
                     )
 
                     // 3. Model selector
@@ -476,7 +470,7 @@ fun BottomBar(
                             } else {
                                 chatViewModel.showModelList()
                             }
-                        }, checked = showModelList, icon = R.drawable.ai_model
+                        }, checked = showModelList, icon = TnIcons.Brain
                     )
 
                     // 4. Web Search Toggle
@@ -485,7 +479,7 @@ fun BottomBar(
                             onCheckedChange = { pluginViewModel.toggleWebSearch(!isWebSearchEnabled) },
                             checked = isWebSearchEnabled,
                             enabled = isToolCallingModelLoaded,
-                            icon = Icons.Outlined.Language
+                            icon = TnIcons.World
                         )
                     }
 
@@ -552,7 +546,7 @@ fun BottomBar(
                                         }
                                     }
                                 },
-                                icon = R.drawable.send_chat,
+                                icon = TnIcons.Send,
                                 shape = MaterialShapes.Ghostish.toShape(),
                                 modifier = Modifier.padding(end = rDp(12.dp)),
                                 colors = IconButtonDefaults.filledIconButtonColors(
@@ -699,7 +693,7 @@ private fun MoreOptionsOverlay(
                     horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.rag),
+                        imageVector = TnIcons.Database,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(Standards.IconMd)),
                         tint = if (loadedRagCount > 0) MaterialTheme.colorScheme.primary
@@ -720,7 +714,7 @@ private fun MoreOptionsOverlay(
                     }
                     ActionTextButton(
                         onClickListener = onRagManage,
-                        icon = R.drawable.rag,
+                        icon = TnIcons.Database,
                         text = "Manage"
                     )
                     ActionSwitch(
@@ -784,7 +778,7 @@ private fun MoreOptionsOverlay(
 
                         ActionTextButton(
                             onClickListener = onManagePlugins,
-                            icon = R.drawable.tools,
+                            icon = TnIcons.Wrench,
                             text = "Configure"
                         )
                     }
@@ -813,7 +807,7 @@ private fun ReloadModelDialog(
         onDismissRequest = onDismiss,
         icon = {
             Icon(
-                Icons.Outlined.Memory, null,
+                TnIcons.Cpu, null,
                 tint = MaterialTheme.colorScheme.primary
             )
         },

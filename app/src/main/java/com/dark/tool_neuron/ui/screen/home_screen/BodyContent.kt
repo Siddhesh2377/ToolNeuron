@@ -17,13 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -42,6 +35,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.ui.ActionIcon
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -70,6 +64,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
 import java.util.Base64
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 // ── Pre-compiled regex (avoid allocation in composition) ──
 
@@ -677,7 +672,7 @@ private fun ThinkingBlock(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.thinking),
+                        imageVector = TnIcons.BulbFilled,
                         contentDescription = null,
                         modifier = Modifier
                             .size(rDp(16.dp))
@@ -693,7 +688,7 @@ private fun ThinkingBlock(
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(20.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -741,7 +736,7 @@ private fun EmptyMessagesState() {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
-                painter = painterResource(R.drawable.user),
+                imageVector = TnIcons.User,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(64.dp)),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
@@ -935,18 +930,18 @@ private fun MessageActionRow(
         // TTS action: 3 states - playing (stop icon), synthesizing (loading spinner), idle (speak icon)
         when {
             isPlaying -> add(ActionItem(
-                icon = ActionIcon.Vector(Icons.Default.Stop),
+                icon = ActionIcon.Vector(TnIcons.PlayerStop),
                 onClick = { onStopTTS() },
                 contentDescription = "Stop"
             ))
             isSynthesizing -> add(ActionItem(
-                icon = ActionIcon.Resource(R.drawable.volume),
+                icon = ActionIcon.Vector(TnIcons.Volume),
                 onClick = { onStopTTS() },
                 contentDescription = "Synthesizing",
                 isLoading = true
             ))
             else -> add(ActionItem(
-                icon = ActionIcon.Resource(R.drawable.volume),
+                icon = ActionIcon.Vector(TnIcons.Volume),
                 onClick = { onSpeak(message) },
                 contentDescription = "Speak"
             ))
@@ -955,13 +950,13 @@ private fun MessageActionRow(
         // Copy action
         if (showCopied) {
             add(ActionItem(
-                icon = ActionIcon.Vector(Icons.Default.CheckCircle),
+                icon = ActionIcon.Vector(TnIcons.CircleCheck),
                 onClick = {},
                 contentDescription = "Copied"
             ))
         } else {
             add(ActionItem(
-                icon = ActionIcon.Resource(R.drawable.copy),
+                icon = ActionIcon.Vector(TnIcons.Copy),
                 onClick = {
                     scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("message", textContent))) }
                     showCopied = true
@@ -973,7 +968,7 @@ private fun MessageActionRow(
         // Regenerate action (always visible, disabled during generation)
         if (onRegenerate != null) {
             add(ActionItem(
-                icon = ActionIcon.Vector(Icons.Default.Refresh),
+                icon = ActionIcon.Vector(TnIcons.Refresh),
                 onClick = { if (isRegenerateEnabled) onRegenerate() },
                 contentDescription = "Regenerate",
                 enabled = isRegenerateEnabled
@@ -1069,7 +1064,7 @@ private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = tr
                                 verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
                             ) {
                                 Icon(
-                                    painter = painterResource(R.drawable.smart_temp_message),
+                                    imageVector = TnIcons.Sparkles,
                                     contentDescription = "Reveal image",
                                     modifier = Modifier.size(rDp(32.dp)),
                                     tint = MaterialTheme.colorScheme.onSurface
@@ -1135,7 +1130,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.speed),
+                        imageVector = TnIcons.Gauge,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.primary
@@ -1161,7 +1156,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1197,14 +1192,14 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
                 ) {
                     MetricRow(
-                        icon = R.drawable.tokens,
+                        icon = TnIcons.Coins,
                         label = "Total Tokens",
                         value = (metrics.tokensEvaluated + metrics.tokensPredicted).toString()
                     )
 
                     if (metrics.tokensEvaluated > 0) {
                         MetricRow(
-                            icon = R.drawable.prompt,
+                            icon = TnIcons.Prompt,
                             label = "Prompt Tokens",
                             value = metrics.tokensEvaluated.toString()
                         )
@@ -1212,21 +1207,21 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                     if (metrics.tokensPredicted > 0) {
                         MetricRow(
-                            icon = R.drawable.generated,
+                            icon = TnIcons.Wand,
                             label = "Generated Tokens",
                             value = metrics.tokensPredicted.toString()
                         )
                     }
 
                     MetricRow(
-                        icon = R.drawable.speed,
+                        icon = TnIcons.Gauge,
                         label = "Speed",
                         value = "$formattedSpeed t/s"
                     )
 
                     if (metrics.timeToFirstTokenMs > 0f) {
                         MetricRow(
-                            icon = R.drawable.timer,
+                            icon = TnIcons.Clock,
                             label = "Time to First Token",
                             value = "${"%.0f".format(metrics.timeToFirstTokenMs)} ms"
                         )
@@ -1234,7 +1229,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                     formattedTime?.let { time ->
                         MetricRow(
-                            icon = R.drawable.clock,
+                            icon = TnIcons.Clock,
                             label = "Total Duration",
                             value = "$time s"
                         )
@@ -1258,7 +1253,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                             if (mem.modelSizeMB > 0) {
                                 MetricRow(
-                                    icon = R.drawable.tokens,
+                                    icon = TnIcons.Coins,
                                     label = "Model Size",
                                     value = "${mem.modelSizeMB} MB"
                                 )
@@ -1266,7 +1261,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                             if (mem.contextSizeMB > 0) {
                                 MetricRow(
-                                    icon = R.drawable.tokens,
+                                    icon = TnIcons.Coins,
                                     label = "Context Size",
                                     value = "${mem.contextSizeMB} MB"
                                 )
@@ -1274,7 +1269,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                             if (mem.peakMemoryMB > 0) {
                                 MetricRow(
-                                    icon = R.drawable.tokens,
+                                    icon = TnIcons.Coins,
                                     label = "Peak Memory",
                                     value = "${mem.peakMemoryMB} MB"
                                 )
@@ -1282,7 +1277,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
 
                             if (mem.memoryUsagePercent > 0) {
                                 MetricRow(
-                                    icon = R.drawable.tokens,
+                                    icon = TnIcons.Coins,
                                     label = "Memory Usage",
                                     value = "${"%.1f".format(mem.memoryUsagePercent)}%"
                                 )
@@ -1324,7 +1319,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.tokens),
+                        imageVector = TnIcons.Coins,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.tertiary
@@ -1352,7 +1347,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1388,7 +1383,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
                 ) {
                     if (metrics.modelSizeMB > 0) {
                         MetricRow(
-                            icon = R.drawable.tokens,
+                            icon = TnIcons.Coins,
                             label = "Model Size",
                             value = "${metrics.modelSizeMB} MB"
                         )
@@ -1396,7 +1391,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
 
                     if (metrics.contextSizeMB > 0) {
                         MetricRow(
-                            icon = R.drawable.tokens,
+                            icon = TnIcons.Coins,
                             label = "Context Size",
                             value = "${metrics.contextSizeMB} MB"
                         )
@@ -1404,7 +1399,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
 
                     if (metrics.peakMemoryMB > 0) {
                         MetricRow(
-                            icon = R.drawable.tokens,
+                            icon = TnIcons.Coins,
                             label = "Peak Memory",
                             value = "${metrics.peakMemoryMB} MB"
                         )
@@ -1412,7 +1407,7 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
 
                     if (metrics.memoryUsagePercent > 0) {
                         MetricRow(
-                            icon = R.drawable.tokens,
+                            icon = TnIcons.Coins,
                             label = "Memory Usage",
                             value = "${"%.1f".format(metrics.memoryUsagePercent)}%"
                         )
@@ -1457,7 +1452,7 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.dimensions),
+                        imageVector = TnIcons.Photo,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.tertiary
@@ -1483,7 +1478,7 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1519,37 +1514,37 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
                     verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
                 ) {
                     MetricRow(
-                        icon = R.drawable.dimensions,
+                        icon = TnIcons.Photo,
                         label = "Dimensions",
                         value = "${metrics.width} × ${metrics.height}"
                     )
 
                     MetricRow(
-                        icon = R.drawable.steps,
+                        icon = TnIcons.SortAscending,
                         label = "Steps",
                         value = metrics.steps.toString()
                     )
 
                     MetricRow(
-                        icon = R.drawable.cgf,
+                        icon = TnIcons.Adjustments,
                         label = "CFG Scale",
                         value = "%.1f".format(metrics.cfgScale)
                     )
 
                     MetricRow(
-                        icon = R.drawable.tokens,
+                        icon = TnIcons.Coins,
                         label = "Seed",
                         value = metrics.seed.toString()
                     )
 
                     MetricRow(
-                        icon = R.drawable.scheduler,
+                        icon = TnIcons.CalendarTime,
                         label = "Scheduler",
                         value = metrics.scheduler.uppercase()
                     )
 
                     MetricRow(
-                        icon = R.drawable.clock,
+                        icon = TnIcons.Clock,
                         label = "Generation Time",
                         value = "$formattedTime s"
                     )
@@ -1561,7 +1556,7 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
 
 @Composable
 private fun MetricRow(
-    icon: Int,
+    icon: ImageVector,
     label: String,
     value: String
 ) {
@@ -1575,7 +1570,7 @@ private fun MetricRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                painter = painterResource(icon),
+                imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(14.dp)),
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
@@ -1633,7 +1628,7 @@ fun RagResultsDisplay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.rag),
+                        imageVector = TnIcons.Database,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.secondary
@@ -1659,7 +1654,7 @@ fun RagResultsDisplay(
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -1816,7 +1811,7 @@ fun SavedRagResultsDisplay(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.rag),
+                        imageVector = TnIcons.Database,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = MaterialTheme.colorScheme.secondary
@@ -1842,7 +1837,7 @@ fun SavedRagResultsDisplay(
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant

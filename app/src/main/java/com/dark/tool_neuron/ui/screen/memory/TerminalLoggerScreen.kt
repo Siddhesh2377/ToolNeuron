@@ -26,13 +26,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.FilterAlt
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -68,10 +61,10 @@ import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.ui.theme.ManropeFontFamily
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.ui.theme.rSp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.dark.tool_neuron.global.formatTimeOnly
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +75,11 @@ fun TerminalLoggerScreen() {
     var showFilters by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
 
+    val allLogs by VaultLogger.logs.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
-    val filteredLogs = remember(searchQuery, filterLevel, VaultLogger.logs) {
-        var logs = VaultLogger.logs
+    val filteredLogs = remember(searchQuery, filterLevel, allLogs) {
+        var logs = allLogs
 
         if (filterLevel != null) {
             logs = logs.filter { it.level == filterLevel }
@@ -101,8 +95,8 @@ fun TerminalLoggerScreen() {
         logs
     }
 
-    LaunchedEffect(VaultLogger.logs.size, autoScroll) {
-        if (autoScroll && VaultLogger.logs.isNotEmpty() && !isPaused) {
+    LaunchedEffect(allLogs.size, autoScroll) {
+        if (autoScroll && allLogs.isNotEmpty() && !isPaused) {
             delay(100)
             listState.animateScrollToItem(0)
         }
@@ -143,7 +137,7 @@ fun TerminalLoggerScreen() {
 
             // Status line
             StatusLine(
-                logCount = VaultLogger.logs.size,
+                logCount = allLogs.size,
                 filteredCount = filteredLogs.size,
                 isActive = !isPaused
             )
@@ -189,7 +183,7 @@ fun TerminalLoggerScreen() {
                             modifier = Modifier.size(rDp(40.dp))
                         ) {
                             Icon(
-                                Icons.Default.KeyboardArrowDown,
+                                TnIcons.ChevronDown,
                                 contentDescription = null,
                                 modifier = Modifier.size(rDp(18.dp))
                             )
@@ -244,7 +238,7 @@ fun MinimalTopBar(
                 modifier = Modifier.size(rDp(36.dp))
             ) {
                 Icon(
-                    Icons.Outlined.FilterAlt,
+                    TnIcons.Filter,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = if (showFilters) MaterialTheme.colorScheme.primary
@@ -257,7 +251,7 @@ fun MinimalTopBar(
                 modifier = Modifier.size(rDp(36.dp))
             ) {
                 Icon(
-                    Icons.Default.KeyboardArrowDown,
+                    TnIcons.ChevronDown,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = if (autoScroll) MaterialTheme.colorScheme.primary
@@ -270,7 +264,7 @@ fun MinimalTopBar(
                 modifier = Modifier.size(rDp(36.dp))
             ) {
                 Icon(
-                    if (isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                    if (isPaused) TnIcons.PlayerPlay else TnIcons.PlayerPause,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -282,7 +276,7 @@ fun MinimalTopBar(
                 modifier = Modifier.size(rDp(36.dp))
             ) {
                 Icon(
-                    Icons.Default.Delete,
+                    TnIcons.Trash,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -376,7 +370,7 @@ fun MinimalFilters(
                         modifier = Modifier.size(rDp(32.dp))
                     ) {
                         Icon(
-                            Icons.Default.Clear,
+                            TnIcons.XCircle,
                             contentDescription = null,
                             modifier = Modifier.size(rDp(16.dp))
                         )
@@ -479,7 +473,7 @@ fun RawLogLine(entry: LogEntry) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontFamily = FontFamily.Monospace
                 )) {
-                    append("[${formatCleanTimestamp(entry.timestamp)}] ")
+                    append("[${formatTimeOnly(entry.timestamp)}] ")
                 }
 
                 // Level
@@ -576,11 +570,3 @@ fun getLevelColor(level: LogLevel): Color {
     return getCleanLevelColor(level)
 }
 
-private fun formatCleanTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
-
-private fun loggerFormatTimestamp(timestamp: Long): String {
-    return formatCleanTimestamp(timestamp)
-}

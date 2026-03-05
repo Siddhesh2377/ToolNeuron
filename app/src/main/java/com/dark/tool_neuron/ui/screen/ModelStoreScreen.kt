@@ -31,22 +31,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SearchOff
-import androidx.compose.material.icons.filled.Stop
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -74,7 +58,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -98,6 +81,7 @@ import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.global.Standards
+import com.dark.tool_neuron.global.formatBytes
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.ui.ActionIcon
 import com.dark.tool_neuron.models.ui.ActionItem
@@ -117,6 +101,7 @@ import com.dark.tool_neuron.viewmodel.RepoGroupInfo
 import com.dark.tool_neuron.viewmodel.SortOption
 import java.io.File
 import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class StoreTab {
     MODELS, INSTALLED, SETTINGS
@@ -127,14 +112,14 @@ enum class StoreTab {
 fun ModelStoreScreen(
     onNavigateBack: () -> Unit, viewModel: ModelStoreViewModel = viewModel()
 ) {
-    val selectedTab by viewModel.selectedTab.collectAsState()
-    val models by viewModel.filteredModels.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-    val downloadStates by viewModel.downloadStates.collectAsState()
-    val installedModels by viewModel.installedModels.collectAsState()
-    val deviceInfo by viewModel.deviceInfo.collectAsState()
-    val deleteInProgress by viewModel.deleteInProgress.collectAsState()
+    val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
+    val models by viewModel.filteredModels.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val error by viewModel.error.collectAsStateWithLifecycle()
+    val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val deviceInfo by viewModel.deviceInfo.collectAsStateWithLifecycle()
+    val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var showSearch by remember { mutableStateOf(false) }
@@ -154,19 +139,19 @@ fun ModelStoreScreen(
                 TopAppBar(title = { Text("Model Store") }, navigationIcon = {
                     ActionButton(
                         onClickListener = onNavigateBack,
-                        icon = Icons.AutoMirrored.Filled.ArrowBack,
+                        icon = TnIcons.ArrowLeft,
                         contentDescription = "Back"
                     )
                 }, actions = {
                     if (selectedTab == StoreTab.MODELS) {
                         ActionButton(
                             onClickListener = { viewModel.refreshModels() },
-                            icon = Icons.Default.Refresh,
+                            icon = TnIcons.Refresh,
                             contentDescription = "Refresh"
                         )
                         ActionButton(
                             onClickListener = { showSearch = true },
-                            icon = Icons.Default.Search,
+                            icon = TnIcons.Search,
                             contentDescription = "Search"
                         )
                     }
@@ -262,7 +247,7 @@ private fun ModelsTab(
     onCancelDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
-    val selectedRepo by viewModel.selectedRepository.collectAsState()
+    val selectedRepo by viewModel.selectedRepository.collectAsStateWithLifecycle()
 
     Column(modifier = Modifier.fillMaxSize()) {
         ModelFiltersSection(viewModel = viewModel)
@@ -285,7 +270,7 @@ private fun ModelsTab(
                         verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
                     ) {
                         Icon(
-                            painter = painterResource(R.drawable.error),
+                            imageVector = TnIcons.AlertTriangle,
                             contentDescription = null,
                             modifier = Modifier.size(rDp(48.dp)),
                             tint = MaterialTheme.colorScheme.error
@@ -316,7 +301,7 @@ private fun ModelsTab(
                         verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
                     ) {
                         Icon(
-                            imageVector = Icons.Default.SearchOff,
+                            imageVector = TnIcons.SearchOff,
                             contentDescription = null,
                             modifier = Modifier.size(rDp(48.dp)),
                             tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -378,7 +363,7 @@ private fun RepoCardListView(
     isLoading: Boolean,
     downloadStates: Map<String, ModelDownloadService.DownloadState>
 ) {
-    val groupedRepos = remember(viewModel.filteredModels.collectAsState().value) {
+    val groupedRepos = remember(viewModel.filteredModels.collectAsStateWithLifecycle().value) {
         viewModel.getGroupedRepos()
     }
 
@@ -395,7 +380,7 @@ private fun RepoCardListView(
                 items = groupedRepos.entries.toList(),
                 key = { it.key }
             ) { (repoKey, info) ->
-                val repoModels = viewModel.getModelsForRepo(repoKey)
+                val repoModels = remember(groupedRepos, repoKey) { viewModel.getModelsForRepo(repoKey) }
                 val hasActiveDownload = repoModels.any { model ->
                     val state = downloadStates[model.id]
                     state is ModelDownloadService.DownloadState.Downloading ||
@@ -467,7 +452,7 @@ private fun StoreRepoCard(
             }
 
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                imageVector = TnIcons.ArrowRight,
                 contentDescription = "View models",
                 modifier = Modifier.size(rDp(20.dp)),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -487,10 +472,10 @@ private fun RepoDetailView(
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit
 ) {
-    val repoModels = remember(viewModel.filteredModels.collectAsState().value, repoKey) {
+    val repoModels = remember(viewModel.filteredModels.collectAsStateWithLifecycle().value, repoKey) {
         viewModel.getModelsForRepo(repoKey)
     }
-    val groupedRepos = remember(viewModel.filteredModels.collectAsState().value) {
+    val groupedRepos = remember(viewModel.filteredModels.collectAsStateWithLifecycle().value) {
         viewModel.getGroupedRepos()
     }
     val repoInfo = groupedRepos[repoKey]
@@ -506,7 +491,7 @@ private fun RepoDetailView(
         ) {
             ActionButton(
                 onClickListener = { viewModel.selectRepository(null) },
-                icon = Icons.AutoMirrored.Filled.ArrowBack,
+                icon = TnIcons.ArrowLeft,
                 contentDescription = "Back to repos"
             )
             repoInfo?.let { info ->
@@ -581,7 +566,7 @@ private fun InstalledModelsTab(
                 verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
             ) {
                 Icon(
-                    imageVector = Icons.Default.Storage,
+                    imageVector = TnIcons.Database,
                     contentDescription = null,
                     modifier = Modifier.size(rDp(64.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
@@ -663,12 +648,10 @@ private fun InstalledModelCard(
         ) {
             // Provider type icon
             Icon(
-                painter = painterResource(
-                    when (model.providerType) {
-                        ProviderType.GGUF -> R.drawable.smart_temp_message
-                        else -> R.drawable.vl_models
-                    }
-                ),
+                imageVector = when (model.providerType) {
+                    ProviderType.GGUF -> TnIcons.Sparkles
+                    else -> TnIcons.Photo
+                },
                 contentDescription = null,
                 modifier = Modifier.size(rDp(Standards.IconMd)),
                 tint = if (model.isActive) MaterialTheme.colorScheme.primary
@@ -690,7 +673,7 @@ private fun InstalledModelCard(
                     } else {
                         modelFile.length()
                     }
-                    val sizeFormatted = formatInstalledSize(sizeBytes)
+                    val sizeFormatted = formatBytes(sizeBytes)
                     val typeLabel = when (model.providerType) {
                         ProviderType.DIFFUSION -> "SD"
                         else -> model.providerType.name
@@ -725,12 +708,12 @@ private fun InstalledModelCard(
                 MultiActionButton(
                     actions = listOf(
                         ActionItem(
-                            icon = ActionIcon.Vector(Icons.Default.Info),
+                            icon = ActionIcon.Vector(TnIcons.InfoCircle),
                             onClick = onShowDetails,
                             contentDescription = "Details"
                         ),
                         ActionItem(
-                            icon = ActionIcon.Vector(Icons.Default.Delete),
+                            icon = ActionIcon.Vector(TnIcons.Trash),
                             onClick = onDelete,
                             contentDescription = "Delete"
                         )
@@ -781,12 +764,12 @@ private fun ModelDetailsDialog(
                     if (modelFile.isDirectory) {
                         DetailRow("Storage", "Folder")
                         val folderSize = modelFile.walkTopDown().sumOf { it.length() }
-                        DetailRow("Size", formatInstalledSize(folderSize))
+                        DetailRow("Size", formatBytes(folderSize))
                         val fileCount = modelFile.walkTopDown().count { it.isFile }
                         DetailRow("Files", "$fileCount")
                     } else {
                         DetailRow("Storage", "File")
-                        DetailRow("Size", formatInstalledSize(modelFile.length()))
+                        DetailRow("Size", formatBytes(modelFile.length()))
                     }
                 }
 
@@ -886,14 +869,6 @@ private fun ModelDetailsDialog(
     )
 }
 
-private fun formatInstalledSize(bytes: Long): String {
-    return when {
-        bytes >= 1_073_741_824 -> String.format("%.2f GB", bytes / 1_073_741_824.0)
-        bytes >= 1_048_576 -> String.format("%.1f MB", bytes / 1_048_576.0)
-        bytes >= 1_024 -> String.format("%.1f KB", bytes / 1_024.0)
-        else -> "$bytes B"
-    }
-}
 
 @Composable
 private fun DetailRow(label: String, value: String) {
@@ -937,7 +912,7 @@ private fun SettingsTab(
                 action = {
                     ActionButton(
                         onClickListener = { showAddDialog = true },
-                        icon = Icons.Default.Add,
+                        icon = TnIcons.Plus,
                         contentDescription = "Add Repository"
                     )
                 }
@@ -984,12 +959,12 @@ private fun DeviceInfoCard(deviceInfo: Map<String, String>) {
 
     StandardCard(
         title = "Device Information",
-        iconRes = R.drawable.prompt,
+        icon = TnIcons.Prompt,
         trailing = {
             if (remainingEntries.isNotEmpty()) {
                 ActionButton(
                     onClickListener = { expanded = !expanded },
-                    icon = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    icon = if (expanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (expanded) "Collapse" else "Expand"
                 )
             }
@@ -1105,12 +1080,12 @@ private fun RepositoryCard(
                 MultiActionButton(
                     actions = listOf(
                         ActionItem(
-                            icon = ActionIcon.Vector(Icons.Default.Edit),
+                            icon = ActionIcon.Vector(TnIcons.Edit),
                             onClick = onEdit,
                             contentDescription = "Edit"
                         ),
                         ActionItem(
-                            icon = ActionIcon.Vector(Icons.Default.Delete),
+                            icon = ActionIcon.Vector(TnIcons.Trash),
                             onClick = onDelete,
                             contentDescription = "Delete"
                         )
@@ -1399,7 +1374,7 @@ fun SearchAppBar(
         )
     }, navigationIcon = {
         IconButton(onClick = onCloseSearch) {
-            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Close search")
+            Icon(TnIcons.ArrowLeft, "Close search")
         }
     })
 }
@@ -1409,15 +1384,15 @@ fun SearchAppBar(
 fun ModelFiltersSection(
     viewModel: ModelStoreViewModel
 ) {
-    val selectedModelType by viewModel.selectedModelType.collectAsState()
-    val selectedCategory by viewModel.selectedCategory.collectAsState()
-    val selectedParameters by viewModel.selectedParameters.collectAsState()
-    val selectedQuantizations by viewModel.selectedQuantizations.collectAsState()
-    val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsState()
-    val selectedTags by viewModel.selectedTags.collectAsState()
-    val showNsfw by viewModel.showNsfw.collectAsState()
-    val executionTarget by viewModel.executionTarget.collectAsState()
-    val sortBy by viewModel.sortBy.collectAsState()
+    val selectedModelType by viewModel.selectedModelType.collectAsStateWithLifecycle()
+    val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
+    val selectedParameters by viewModel.selectedParameters.collectAsStateWithLifecycle()
+    val selectedQuantizations by viewModel.selectedQuantizations.collectAsStateWithLifecycle()
+    val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsStateWithLifecycle()
+    val selectedTags by viewModel.selectedTags.collectAsStateWithLifecycle()
+    val showNsfw by viewModel.showNsfw.collectAsStateWithLifecycle()
+    val executionTarget by viewModel.executionTarget.collectAsStateWithLifecycle()
+    val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
 
     var showAdvancedFilters by remember { mutableStateOf(false) }
 
@@ -1494,7 +1469,7 @@ fun ModelFiltersSection(
         }
 
         // Tag chips
-        val availableTags = remember(viewModel.models.collectAsState().value) {
+        val availableTags = remember(viewModel.models.collectAsStateWithLifecycle().value) {
             viewModel.getAvailableTags()
         }
         if (availableTags.isNotEmpty()) {
@@ -1528,7 +1503,7 @@ fun ModelFiltersSection(
                 onClick = { showAdvancedFilters = !showAdvancedFilters }
             ) {
                 Icon(
-                    imageVector = if (showAdvancedFilters) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (showAdvancedFilters) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (showAdvancedFilters) "Hide" else "Show",
                     modifier = Modifier.size(rDp(20.dp))
                 )
@@ -1782,7 +1757,7 @@ fun ModelCard(
                 when {
                     isInstalled -> {
                         Icon(
-                            imageVector = Icons.Default.CheckCircle,
+                            imageVector = TnIcons.CircleCheck,
                             contentDescription = "Installed",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(rDp(24.dp))
@@ -1792,7 +1767,7 @@ fun ModelCard(
                     isDownloading || isExtracting || isProcessing -> {
                         ActionProgressButton(
                             onClickListener = onCancelDownload,
-                            icon = Icons.Default.Stop,
+                            icon = TnIcons.PlayerStop,
                             contentDescription = "Cancel Download"
                         )
                     }
@@ -1800,7 +1775,7 @@ fun ModelCard(
                     else -> {
                         ActionButton(
                             onClickListener = onDownload,
-                            icon = Icons.Default.Download,
+                            icon = TnIcons.Download,
                             contentDescription = "Download Model"
                         )
                     }

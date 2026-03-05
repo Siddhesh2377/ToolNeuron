@@ -14,11 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -31,13 +26,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -48,17 +41,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.vault.ChatInfo
+import com.dark.tool_neuron.global.formatRelativeTime
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ChatListViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +69,9 @@ fun HomeDrawerScreen(
     val currentChatId by chatViewModel.currentChatId.collectAsStateWithLifecycle()
 
     LaunchedEffect(isChatRefreshed) {
-        viewModel.loadChats()
+        if (isChatRefreshed) {
+            viewModel.loadChats()
+        }
     }
 
     Scaffold(
@@ -99,7 +93,7 @@ fun HomeDrawerScreen(
                     Row{
                         ActionButton(
                             onClickListener = onVaultManagerClick,
-                            icon = R.drawable.smart_temp_message,
+                            icon = TnIcons.Sparkles,
                             modifier = Modifier.padding(end = rDp(6.dp))
                         )
                         ActionButton(
@@ -108,7 +102,7 @@ fun HomeDrawerScreen(
                                     onChatSelected(chatId)
                                 }
                             },
-                            icon = Icons.Filled.Add,
+                            icon = TnIcons.Plus,
                             modifier = Modifier.padding(end = rDp(6.dp))
                         )
                     }
@@ -167,18 +161,22 @@ private fun ChatList(
     onChatClick: (String) -> Unit,
     onDeleteChat: (String) -> Unit
 ) {
-    val scope = rememberCoroutineScope()
     var isManualRefreshing by remember { mutableStateOf(false) }
+    val dedupedChats = remember(chats) { chats.distinctBy { it.chatId } }
+
+    // Reset manual refresh flag when real loading completes
+    LaunchedEffect(isRefreshing) {
+        if (!isRefreshing && isManualRefreshing) {
+            delay(300) // Brief visual delay so spinner doesn't vanish instantly
+            isManualRefreshing = false
+        }
+    }
 
     PullToRefreshBox(
         isRefreshing = isManualRefreshing,
         onRefresh = {
-            scope.launch {
-                isManualRefreshing = true
-                onRefresh()
-                delay(2000) // Small delay to show the indicator
-                isManualRefreshing = false
-            }
+            isManualRefreshing = true
+            onRefresh()
         },
         indicator = {
             AnimatedVisibility(isManualRefreshing, modifier = Modifier.align(Alignment.Center)) {
@@ -196,7 +194,7 @@ private fun ChatList(
             contentPadding = PaddingValues(vertical = rDp(8.dp))
         ) {
             items(
-                items = chats,
+                items = dedupedChats,
                 key = { it.chatId }
             ) { chat ->
                 ChatListItem(
@@ -265,7 +263,7 @@ private fun ChatListItem(
                 )
 
                 Text(
-                    text = formatTimestamp(chat.lastMessageTime ?: chat.createdAt),
+                    text = formatRelativeTime(chat.lastMessageTime ?: chat.createdAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -286,7 +284,7 @@ private fun ChatListItem(
                     modifier = Modifier.size(rDp(36.dp))
                 ) {
                     Icon(
-                        Icons.Filled.Delete,
+                        TnIcons.Trash,
                         contentDescription = "Delete chat",
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier.size(rDp(18.dp))
@@ -308,7 +306,7 @@ private fun EmptyState() {
             verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
             Icon(
-                painterResource(R.drawable.chats),
+                imageVector = TnIcons.Messages,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(64.dp)),
                 tint = MaterialTheme.colorScheme.primary.copy(0.4f)
@@ -384,7 +382,7 @@ private fun ErrorSnackbar(
                     modifier = Modifier.size(rDp(24.dp))
                 ) {
                     Icon(
-                        Icons.Filled.Close,
+                        TnIcons.X,
                         contentDescription = "Dismiss",
                         tint = MaterialTheme.colorScheme.onErrorContainer,
                         modifier = Modifier.size(rDp(16.dp))
@@ -395,18 +393,3 @@ private fun ErrorSnackbar(
     }
 }
 
-private fun formatTimestamp(timestamp: Long): String {
-    val now = System.currentTimeMillis()
-    val diff = now - timestamp
-
-    return when {
-        diff < 60_000 -> "now"
-        diff < 3600_000 -> "${diff / 60_000}m"
-        diff < 86400_000 -> "${diff / 3600_000}h"
-        diff < 604800_000 -> "${diff / 86400_000}d"
-        else -> {
-            val sdf = SimpleDateFormat("MMM dd", Locale.getDefault())
-            sdf.format(Date(timestamp))
-        }
-    }
-}

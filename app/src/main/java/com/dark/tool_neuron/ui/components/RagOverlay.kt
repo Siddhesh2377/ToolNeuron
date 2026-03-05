@@ -24,16 +24,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -61,13 +51,12 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.global.formatDateOnly
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.theme.rDp
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -219,7 +208,7 @@ private fun RagOverlayHeader(
         Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
             ActionTextButton(
                 onClickListener = onOpenRagActivity,
-                icon = Icons.Default.Add,
+                icon = TnIcons.Plus,
                 text = "Create",
                 shape = RoundedCornerShape(rDp(12.dp))
             )
@@ -240,7 +229,7 @@ private fun EmptyRagState(
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            Icons.Default.Memory,
+            TnIcons.Cpu,
             contentDescription = null,
             modifier = Modifier.size(rDp(48.dp)),
             tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -429,7 +418,7 @@ private fun RagListItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formatDate(rag.createdAt),
+                    text = formatDateOnly(rag.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
@@ -440,7 +429,7 @@ private fun RagListItem(
                             RagStatus.LOADED -> {
                                 ActionTextButton(
                                     onClickListener = onUnload,
-                                    icon = Icons.Default.Close,
+                                    icon = TnIcons.X,
                                     text = "Unload",
                                     shape = RoundedCornerShape(rDp(12.dp))
                                 )
@@ -460,7 +449,7 @@ private fun RagListItem(
                             else -> {
                                 ActionTextButton(
                                     onClickListener = onLoad,
-                                    icon = Icons.Default.Download,
+                                    icon = TnIcons.Download,
                                     text = "Load",
                                     shape = RoundedCornerShape(rDp(12.dp))
                                 )
@@ -473,7 +462,7 @@ private fun RagListItem(
                         modifier = Modifier.size(rDp(32.dp))
                     ) {
                         Icon(
-                            Icons.Default.Delete,
+                            TnIcons.Trash,
                             contentDescription = "Delete",
                             modifier = Modifier.size(rDp(18.dp)),
                             tint = MaterialTheme.colorScheme.error
@@ -496,15 +485,11 @@ private fun RagTag(tag: String) {
 
 
 private fun getRagSourceIcon(sourceType: RagSourceType) = when (sourceType) {
-    RagSourceType.TEXT -> Icons.Default.Book
-    RagSourceType.CHAT -> Icons.Default.Memory
-    RagSourceType.FILE -> Icons.Default.Storage
-    RagSourceType.MEDICAL_TEXT -> Icons.Default.Book
-    RagSourceType.NEURON_PACKET -> Icons.Default.Memory
-    RagSourceType.MEMORY_VAULT -> Icons.Default.Storage
+    RagSourceType.TEXT -> TnIcons.Books
+    RagSourceType.CHAT -> TnIcons.Cpu
+    RagSourceType.FILE -> TnIcons.Database
+    RagSourceType.MEDICAL_TEXT -> TnIcons.Books
+    RagSourceType.NEURON_PACKET -> TnIcons.Cpu
+    RagSourceType.MEMORY_VAULT -> TnIcons.Database
 }
 
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}

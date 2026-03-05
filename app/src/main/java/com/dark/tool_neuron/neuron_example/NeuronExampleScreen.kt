@@ -19,9 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.SecondaryTabRow
 import androidx.compose.runtime.*
@@ -41,6 +38,7 @@ import com.neuronpacket.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 
 // Main Screen
@@ -105,11 +103,11 @@ import java.io.File
 //                actions = {
 //                    // Load button
 //                    IconButton(onClick = { showLoadDialog = true }) {
-//                        Icon(Icons.Default.FolderOpen, contentDescription = "Load Pack")
+//                        Icon(TnIcons.FolderOpen, contentDescription = "Load Pack")
 //                    }
 //                    // Settings button
 //                    IconButton(onClick = { showSettingsSheet = true }) {
-//                        Icon(Icons.Default.Settings, contentDescription = "Settings")
+//                        Icon(TnIcons.Settings, contentDescription = "Settings")
 //                    }
 //                },
 //                colors = TopAppBarDefaults.topAppBarColors(
@@ -155,7 +153,7 @@ import java.io.File
 //                        )
 //                        IconButton(onClick = { errorMessage = "" }) {
 //                            Icon(
-//                                Icons.Default.Close,
+//                                TnIcons.X,
 //                                contentDescription = "Dismiss",
 //                                tint = MaterialTheme.colorScheme.onErrorContainer
 //                            )
@@ -213,7 +211,7 @@ import java.io.File
 //                        modifier = Modifier.weight(1f),
 //                        enabled = !isLoading
 //                    ) {
-//                        Icon(Icons.Default.TextFields, contentDescription = null, modifier = Modifier.size(18.dp))
+//                        Icon(TnIcons.Code, contentDescription = null, modifier = Modifier.size(18.dp))
 //                        Spacer(modifier = Modifier.width(4.dp))
 //                        Text("Text")
 //                    }
@@ -223,7 +221,7 @@ import java.io.File
 //                        modifier = Modifier.weight(1f),
 //                        enabled = !isLoading
 //                    ) {
-//                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = null, modifier = Modifier.size(18.dp))
+//                        Icon(TnIcons.MessageCircle, contentDescription = null, modifier = Modifier.size(18.dp))
 //                        Spacer(modifier = Modifier.width(4.dp))
 //                        Text("Chat")
 //                    }
@@ -304,7 +302,7 @@ import java.io.File
 //                                    }
 //                                }
 //                            ) {
-//                                Icon(Icons.Default.Search, contentDescription = "Search")
+//                                Icon(TnIcons.Search, contentDescription = "Search")
 //                            }
 //                        }
 //                    },
@@ -354,7 +352,7 @@ import java.io.File
 //                    modifier = Modifier.fillMaxWidth(),
 //                    enabled = !isLoading
 //                ) {
-//                    Icon(Icons.Default.Save, contentDescription = null)
+//                    Icon(TnIcons.DeviceFloppy, contentDescription = null)
 //                    Spacer(modifier = Modifier.width(8.dp))
 //                    Text("Export as Neuron Pack")
 //                }
@@ -377,7 +375,7 @@ import java.io.File
 //                        contentColor = MaterialTheme.colorScheme.error
 //                    )
 //                ) {
-//                    Icon(Icons.Default.Delete, contentDescription = null)
+//                    Icon(TnIcons.Trash, contentDescription = null)
 //                    Spacer(modifier = Modifier.width(8.dp))
 //                    Text("Clear Graph")
 //                }
@@ -879,7 +877,7 @@ private fun ExportDialog(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(
-                        Icons.Default.CheckCircle,
+                        TnIcons.CircleCheck,
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier
@@ -985,8 +983,8 @@ private fun ExportDialog(
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(
-                                        if (passwordVisible) Icons.Default.VisibilityOff
-                                        else Icons.Default.Visibility,
+                                        if (passwordVisible) TnIcons.EyeOff
+                                        else TnIcons.Eye,
                                         contentDescription = "Toggle password"
                                     )
                                 }
@@ -1123,7 +1121,7 @@ private fun ExportDialog(
                                                 }
                                             }
                                         ) {
-                                            Icon(Icons.Default.Delete, contentDescription = "Remove")
+                                            Icon(TnIcons.Trash, contentDescription = "Remove")
                                         }
                                     }
                                 }
@@ -1134,7 +1132,7 @@ private fun ExportDialog(
                             onClick = { showAddUserDialog = true },
                             modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(Icons.Default.PersonAdd, contentDescription = null)
+                            Icon(TnIcons.UserPlus, contentDescription = null)
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Add User")
                         }
@@ -1397,7 +1395,7 @@ private fun LoadPacketDialog(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                Icons.Default.FolderOpen,
+                                TnIcons.FolderOpen,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -1416,7 +1414,7 @@ private fun LoadPacketDialog(
                                 }
                             }
                             Icon(
-                                Icons.Default.ChevronRight,
+                                TnIcons.ChevronRight,
                                 contentDescription = null
                             )
                         }
@@ -1466,8 +1464,8 @@ private fun LoadPacketDialog(
                             trailingIcon = {
                                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                                     Icon(
-                                        if (passwordVisible) Icons.Default.VisibilityOff
-                                        else Icons.Default.Visibility,
+                                        if (passwordVisible) TnIcons.EyeOff
+                                        else TnIcons.Eye,
                                         contentDescription = "Toggle password"
                                     )
                                 }

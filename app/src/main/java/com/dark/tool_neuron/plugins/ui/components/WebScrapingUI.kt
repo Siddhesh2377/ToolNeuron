@@ -21,13 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Schedule
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +45,7 @@ import com.dark.tool_neuron.ui.theme.rDp
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * UI component for Web Scraping Tool
@@ -66,7 +60,7 @@ fun WebScrapingUI(
 
     ToolCard(
         title = "Web Scraping",
-        icon = Icons.Default.Language,
+        icon = TnIcons.World,
         state = state,
         modifier = modifier
     ) {
@@ -119,7 +113,7 @@ private fun ContentMetadata(content: ScrapedContent) {
     ) {
         // URL
         MetadataRow(
-            icon = Icons.Default.Language,
+            icon = TnIcons.World,
             label = "URL",
             value = content.url,
             valueStyle = MetadataValueStyle.Link
@@ -128,7 +122,7 @@ private fun ContentMetadata(content: ScrapedContent) {
         // Title
         if (content.title.isNotEmpty()) {
             MetadataRow(
-                icon = Icons.Default.TextFields,
+                icon = TnIcons.Code,
                 label = "Title",
                 value = content.title,
                 valueStyle = MetadataValueStyle.Normal
@@ -141,7 +135,7 @@ private fun ContentMetadata(content: ScrapedContent) {
         ) {
             // Content length
             MetadataChip(
-                icon = Icons.Default.TextFields,
+                icon = TnIcons.Code,
                 label = "${content.contentLength} chars"
             )
 
@@ -151,7 +145,7 @@ private fun ContentMetadata(content: ScrapedContent) {
                     .format(Date(content.fetchTime))
             }
             MetadataChip(
-                icon = Icons.Default.Schedule,
+                icon = TnIcons.Clock,
                 label = timeFormatted
             )
         }
@@ -160,7 +154,7 @@ private fun ContentMetadata(content: ScrapedContent) {
         content.metadata["selector"]?.let { selector ->
             if (selector != "none") {
                 MetadataRow(
-                    icon = Icons.Default.ContentCopy,
+                    icon = TnIcons.Copy,
                     label = "Selector",
                     value = selector,
                     valueStyle = MetadataValueStyle.Code
@@ -290,7 +284,7 @@ private fun ContentPreview(
             )
 
             Icon(
-                imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                 contentDescription = if (isExpanded) "Collapse" else "Expand",
                 tint = MaterialTheme.colorScheme.primary,
                 modifier = Modifier

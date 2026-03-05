@@ -3,8 +3,6 @@ package com.dark.tool_neuron.ui.screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun TermsAndConditionsScreen(
@@ -427,7 +426,7 @@ fun TermsAndConditionsScreen(
                             onAccept()
                         }
                     },
-                    icon = Icons.Default.Check,
+                    icon = TnIcons.Check,
                     text = if (isScrolledToBottom) "I Accept" else "Scroll to Continue",
                     contentDescription = "Accept Terms",
                     modifier = Modifier.fillMaxWidth(0.8f),

@@ -15,12 +15,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +32,7 @@ import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.ui.theme.rDp
 import org.json.JSONObject
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun PluginResultCard(
@@ -79,7 +74,7 @@ fun PluginResultCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Build,
+                        imageVector = TnIcons.Tool,
                         contentDescription = null,
                         modifier = Modifier.size(rDp(14.dp)),
                         tint = if (pluginData.success) {
@@ -111,9 +106,9 @@ fun PluginResultCard(
                     // Status Badge
                     Icon(
                         imageVector = if (pluginData.success) {
-                            Icons.Default.CheckCircle
+                            TnIcons.CircleCheck
                         } else {
-                            Icons.Default.Error
+                            TnIcons.AlertTriangle
                         },
                         contentDescription = if (pluginData.success) "Success" else "Failed",
                         modifier = Modifier.size(rDp(14.dp)),
@@ -126,7 +121,7 @@ fun PluginResultCard(
                 }
 
                 Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
                     contentDescription = if (isExpanded) "Collapse" else "Expand",
                     modifier = Modifier.size(rDp(18.dp)),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant

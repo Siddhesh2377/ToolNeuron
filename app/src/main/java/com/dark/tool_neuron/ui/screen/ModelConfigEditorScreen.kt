@@ -9,8 +9,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +27,7 @@ import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CuteSwitch
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.ModelConfigEditorViewModel
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -77,7 +76,7 @@ fun ModelConfigEditorScreen(
                                 onBackClick()
                             }
                         },
-                        icon = Icons.Default.ChevronLeft,
+                        icon = TnIcons.ChevronLeft,
                         text = if (showingEditor && selectedModel != null) "Models" else "Back",
                         modifier = Modifier.padding(start = rDp(6.dp))
                     )
@@ -89,7 +88,7 @@ fun ModelConfigEditorScreen(
                             modifier = Modifier.padding(end = rDp(6.dp))
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Save,
+                                imageVector = TnIcons.DeviceFloppy,
                                 contentDescription = "Save",
                                 tint = MaterialTheme.colorScheme.primary
                             )
@@ -266,9 +265,9 @@ private fun ModelListItem(
         ) {
             Icon(
                 imageVector = when (model.providerType) {
-                    ProviderType.GGUF -> Icons.Default.Description
-                    ProviderType.DIFFUSION -> Icons.Default.Image
-                    else -> Icons.Default.Storage
+                    ProviderType.GGUF -> TnIcons.FileText
+                    ProviderType.DIFFUSION -> TnIcons.Photo
+                    else -> TnIcons.Database
                 },
                 contentDescription = null,
                 modifier = Modifier.size(rDp(24.dp)),
@@ -295,7 +294,7 @@ private fun ModelListItem(
 
             if (model.isActive) {
                 Icon(
-                    imageVector = Icons.Default.CheckCircle,
+                    imageVector = TnIcons.CircleCheck,
                     contentDescription = "Active",
                     modifier = Modifier.size(rDp(16.dp)),
                     tint = MaterialTheme.colorScheme.primary
@@ -804,7 +803,7 @@ private fun EmptyModelsState() {
             verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
         ) {
             Icon(
-                imageVector = Icons.Default.ModelTraining,
+                imageVector = TnIcons.BrainCircuit,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(64.dp)),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -834,7 +833,7 @@ private fun EmptySelectionState(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
         ) {
             Icon(
-                imageVector = Icons.Default.Settings,
+                imageVector = TnIcons.Settings,
                 contentDescription = null,
                 modifier = Modifier.size(rDp(48.dp)),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
@@ -873,7 +872,7 @@ private fun SuccessMessage() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.CheckCircle,
+                imageVector = TnIcons.CircleCheck,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onPrimaryContainer
             )

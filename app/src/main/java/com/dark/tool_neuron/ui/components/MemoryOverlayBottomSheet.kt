@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -22,11 +20,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
 import com.dark.tool_neuron.worker.VaultStatsInfo
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,7 +76,7 @@ fun MemoryOverlayBottomSheet(
                 SwitchRow(
                     title = "Enable Memory",
                     description = "Query personal knowledge vault when sending messages",
-                    iconRes = R.drawable.memory_vault,
+                    icon = TnIcons.ShieldLock,
                     checked = isMemoryEnabled,
                     onCheckedChange = onMemoryEnabledChange
                 )
@@ -94,7 +92,7 @@ fun MemoryOverlayBottomSheet(
                         InfoCard(
                             title = "Messages",
                             value = "${vaultStats.messageCount}",
-                            icon = Icons.Default.Storage,
+                            icon = TnIcons.Database,
                             modifier = Modifier.weight(1f)
                         )
                         InfoCard(
