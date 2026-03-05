@@ -1,12 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -132,18 +127,8 @@ fun PluginResultCard(
         // Detailed Results
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier

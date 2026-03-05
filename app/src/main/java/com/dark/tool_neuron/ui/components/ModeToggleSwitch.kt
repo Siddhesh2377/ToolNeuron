@@ -1,7 +1,10 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -37,7 +40,7 @@ fun ModeToggleSwitch(
 
     val backgroundColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        animationSpec = Motion.state(),
         label = "background"
     )
 
@@ -47,10 +50,7 @@ fun ModeToggleSwitch(
         } else {
             rDp(0.dp)
         },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = Motion.content(),
         label = "thumbOffset"
     )
 
@@ -125,16 +125,13 @@ private fun IconButton(
             isEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "iconTint"
     )
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.85f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = Motion.interactive(),
         label = "iconScale"
     )
 

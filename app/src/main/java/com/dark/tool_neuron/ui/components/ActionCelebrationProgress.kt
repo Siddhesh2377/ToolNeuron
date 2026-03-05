@@ -1,7 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -58,7 +58,7 @@ fun ActionCelebrationProgress(
 
     val animP by animateFloatAsState(
         progress().coerceIn(0f, 1f),
-        spring(dampingRatio = 0.8f, stiffness = 300f), label = "cpProg"
+        Motion.interactive(), label = "cpProg"
     )
 
     val particles = remember { mutableStateListOf<CelebrationParticle>() }

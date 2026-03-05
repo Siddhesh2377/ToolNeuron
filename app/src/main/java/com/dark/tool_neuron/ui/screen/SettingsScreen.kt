@@ -6,7 +6,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.core.spring
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -177,7 +177,7 @@ fun SettingsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .animateContentSize(spring()),
+                                .animateContentSize(Motion.content()),
                             verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                         ) {
                             CaptionText(text = "Ruvltra Claude Code 0.5B · ~400 MB")
@@ -443,7 +443,7 @@ fun SettingsScreen(
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .animateContentSize(spring()),
+                                .animateContentSize(Motion.content()),
                             verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
                         ) {
                             CaptionText(text = "Supertonic v2 · ~263 MB")

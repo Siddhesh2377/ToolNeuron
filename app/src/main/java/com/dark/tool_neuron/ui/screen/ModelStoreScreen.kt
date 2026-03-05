@@ -2,12 +2,11 @@ package com.dark.tool_neuron.ui.screen
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.ScrollableDefaults
@@ -201,9 +200,7 @@ fun ModelStoreScreen(
             // Tab Content
             AnimatedContent(
                 targetState = selectedTab, transitionSpec = {
-                    fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) togetherWith fadeOut(
-                        animationSpec = spring(stiffness = Spring.StiffnessMedium)
-                    )
+                    fadeIn(Motion.state()) togetherWith fadeOut(Motion.state())
                 }, label = "tab_content"
             ) { tab ->
                 when (tab) {
@@ -319,8 +316,8 @@ private fun ModelsTab(
                 AnimatedContent(
                     targetState = selectedRepo,
                     transitionSpec = {
-                        fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) togetherWith
-                                fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium))
+                        fadeIn(Motion.state()) togetherWith
+                                fadeOut(Motion.state())
                     },
                     label = "repo_nav"
                 ) { repoKey ->
@@ -1838,17 +1835,9 @@ fun ModelCard(
 
             // Download progress (animated)
             AnimatedVisibility(
-                visible = isDownloading || isExtracting || isProcessing, enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(), exit = shrinkVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut()
+                visible = isDownloading || isExtracting || isProcessing,
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Column(modifier = Modifier.padding(top = rDp(8.dp))) {
                     val progress =

@@ -5,6 +5,7 @@ import android.content.Context
 import android.os.Build
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -71,12 +72,7 @@ fun DynamicActionWindow(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .animateContentSize(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ),
+            .animateContentSize(animationSpec = Motion.content()),
         elevation = CardDefaults.cardElevation(rDp(2.dp)),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainer
@@ -114,8 +110,8 @@ fun DynamicActionWindow(
             AnimatedContent(
                 targetState = selectedTab,
                 transitionSpec = {
-                    fadeIn(animationSpec = tween(200)) togetherWith
-                            fadeOut(animationSpec = tween(200))
+                    fadeIn(Motion.state()) togetherWith
+                            fadeOut(Motion.state())
                 },
                 label = "tab_content"
             ) { tab ->

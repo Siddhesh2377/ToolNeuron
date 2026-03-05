@@ -4,8 +4,8 @@ import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import com.dark.tool_neuron.ui.theme.Motion
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -64,28 +64,25 @@ fun CuteSwitch(
     
     val trackColor by animateColorAsState(
         targetValue = if (checked) checkedTrackColor else uncheckedTrackColor,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = Motion.state(),
         label = "trackColor"
     )
-    
+
     val thumbColor by animateColorAsState(
         targetValue = if (checked) checkedThumbColor else uncheckedThumbColor,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = Motion.state(),
         label = "thumbColor"
     )
-    
+
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) width - thumbSize - rDp(3.dp) else rDp(3.dp),
-        animationSpec = spring(
-            dampingRatio = 0.8f,
-            stiffness = 400f
-        ),
+        animationSpec = Motion.interactive(),
         label = "thumbOffset"
     )
-    
+
     val thumbScale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.9f,
-        animationSpec = tween(durationMillis = 100),
+        animationSpec = Motion.state(),
         label = "thumbScale"
     )
 
@@ -97,7 +94,7 @@ fun CuteSwitch(
             .background(trackColor)
             .clickable(
                 interactionSource = interactionSource,
-                
+
                 enabled = enabled,
                 role = Role.Switch,
                 onClick = { onCheckedChange(!checked) }
@@ -148,31 +145,28 @@ fun CuteSwitchResIcon(
     thumbIconChecked: Int? = null
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    
+
     val trackColor by animateColorAsState(
         targetValue = if (checked) checkedTrackColor else uncheckedTrackColor,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = Motion.state(),
         label = "trackColor"
     )
-    
+
     val thumbColor by animateColorAsState(
         targetValue = if (checked) checkedThumbColor else uncheckedThumbColor,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = Motion.state(),
         label = "thumbColor"
     )
-    
+
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) width - thumbSize - rDp(3.dp) else rDp(3.dp),
-        animationSpec = spring(
-            dampingRatio = 0.8f,
-            stiffness = 400f
-        ),
+        animationSpec = Motion.interactive(),
         label = "thumbOffset"
     )
-    
+
     val thumbScale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.9f,
-        animationSpec = tween(durationMillis = 100),
+        animationSpec = Motion.state(),
         label = "thumbScale"
     )
 
@@ -236,19 +230,19 @@ fun CuteToggle(
     
     val backgroundColor by animateColorAsState(
         targetValue = if (checked) checkedBackgroundColor else uncheckedBackgroundColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "backgroundColor"
     )
     
     val contentColor by animateColorAsState(
         targetValue = if (checked) checkedContentColor else uncheckedContentColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "contentColor"
     )
     
     val scale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.95f,
-        animationSpec = spring(dampingRatio = 0.7f),
+        animationSpec = Motion.interactive(),
         label = "scale"
     )
 
@@ -314,19 +308,19 @@ fun CuteToggle(
     
     val backgroundColor by animateColorAsState(
         targetValue = if (checked) checkedBackgroundColor else uncheckedBackgroundColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "backgroundColor"
     )
     
     val contentColor by animateColorAsState(
         targetValue = if (checked) checkedContentColor else uncheckedContentColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "contentColor"
     )
     
     val scale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.95f,
-        animationSpec = spring(dampingRatio = 0.7f),
+        animationSpec = Motion.interactive(),
         label = "scale"
     )
 
@@ -392,22 +386,19 @@ fun CuteIconToggle(
     
     val backgroundColor by animateColorAsState(
         targetValue = if (checked) checkedBackgroundColor else uncheckedBackgroundColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "backgroundColor"
     )
     
     val contentColor by animateColorAsState(
         targetValue = if (checked) checkedContentColor else uncheckedContentColor,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "contentColor"
     )
     
     val scale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.9f,
-        animationSpec = spring(
-            dampingRatio = 0.6f,
-            stiffness = 300f
-        ),
+        animationSpec = Motion.interactive(),
         label = "scale"
     )
 

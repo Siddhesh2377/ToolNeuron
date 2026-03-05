@@ -2,10 +2,9 @@ package com.dark.tool_neuron.ui.components
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -384,7 +383,7 @@ fun ActionSwitch(
             checked -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "actionSwitchTrack"
     )
 
@@ -394,22 +393,19 @@ fun ActionSwitch(
             checked -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.outline
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "actionSwitchThumb"
     )
 
     val thumbOffset by animateDpAsState(
         targetValue = if (checked) width - thumbSize - rDp(4.dp) else rDp(4.dp),
-        animationSpec = spring(
-            dampingRatio = 0.65f,
-            stiffness = 350f
-        ),
+        animationSpec = Motion.interactive(),
         label = "actionSwitchOffset"
     )
 
     val thumbScale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.9f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        animationSpec = Motion.interactive(),
         label = "actionSwitchScale"
     )
 
@@ -469,10 +465,7 @@ fun <T> ActionToggleGroup(
 
     val indicatorOffset by animateDpAsState(
         targetValue = itemWidth * selectedIndex,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = 350f
-        ),
+        animationSpec = Motion.interactive(),
         label = "toggleIndicatorOffset"
     )
 
@@ -516,7 +509,7 @@ fun <T> ActionToggleGroup(
                             isSelected -> MaterialTheme.colorScheme.onPrimary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        animationSpec = Motion.state(),
                         label = "toggleItemColor$index"
                     )
 

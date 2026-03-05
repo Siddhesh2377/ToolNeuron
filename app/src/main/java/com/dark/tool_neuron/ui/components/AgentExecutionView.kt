@@ -2,6 +2,7 @@ package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -117,18 +118,8 @@ fun AgentExecutionView(
         // Content
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Column(
                 verticalArrangement = Arrangement.spacedBy(rDp(4.dp))

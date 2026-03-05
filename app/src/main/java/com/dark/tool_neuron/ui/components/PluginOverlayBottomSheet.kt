@@ -1,11 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -174,8 +170,8 @@ private fun ToolCallingConfigSection(
                 // Max Rounds Slider (only when multi-turn enabled)
                 AnimatedVisibility(
                     visible = multiTurnEnabled,
-                    enter = fadeIn(spring()) + expandVertically(spring()),
-                    exit = fadeOut(spring()) + shrinkVertically(spring())
+                    enter = Motion.Enter,
+                    exit = Motion.Exit
                 ) {
                     Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
                         Row(
@@ -321,8 +317,8 @@ private fun PluginListItem(
             // Expanded Details
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = fadeIn(spring()) + expandVertically(spring()),
-                exit = fadeOut(spring()) + shrinkVertically(spring())
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Column(
                     modifier = Modifier

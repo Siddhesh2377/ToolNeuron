@@ -1,7 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.tween
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -53,7 +53,7 @@ fun AnimatedTitle(
 
     AnimatedContent(
         targetState = appState, transitionSpec = {
-            fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
+            fadeIn(Motion.entrance()) togetherWith fadeOut(Motion.entrance())
         }, label = "AppStateTitleAnim"
     ) { state ->
         TitleRow(

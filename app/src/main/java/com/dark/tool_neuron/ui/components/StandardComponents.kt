@@ -2,10 +2,7 @@ package com.dark.tool_neuron.ui.components
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -227,7 +224,7 @@ private fun SegmentedToggleItem(
     val backgroundColor by animateColorAsState(
         targetValue = if (isSelected) MaterialTheme.colorScheme.primary
         else Color.Transparent,
-        animationSpec = tween(200),
+        animationSpec = Motion.state(),
         label = "segBg"
     )
 
@@ -237,7 +234,7 @@ private fun SegmentedToggleItem(
             isSelected -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         },
-        animationSpec = tween(200),
+        animationSpec = Motion.state(),
         label = "segContent"
     )
 
@@ -296,7 +293,7 @@ fun <T> MultiToggleRow(
             val backgroundColor by animateColorAsState(
                 targetValue = if (isSelected) MaterialTheme.colorScheme.primary
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                animationSpec = tween(200),
+                animationSpec = Motion.state(),
                 label = "multiToggleBg"
             )
 
@@ -306,7 +303,7 @@ fun <T> MultiToggleRow(
                     isSelected -> MaterialTheme.colorScheme.onPrimary
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 },
-                animationSpec = tween(200),
+                animationSpec = Motion.state(),
                 label = "multiToggleContent"
             )
 
@@ -533,7 +530,7 @@ fun StatusBadge(
 ) {
     val dotColor by animateColorAsState(
         targetValue = if (isActive) activeColor else inactiveColor,
-        animationSpec = tween(300),
+        animationSpec = Motion.state(),
         label = "statusDot"
     )
 

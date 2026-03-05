@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -64,7 +65,7 @@ fun IntroScreen(onFinished: () -> Unit) {
     var setupProgress by remember { mutableFloatStateOf(0f) }
     val animatedProgress by animateFloatAsState(
         targetValue = setupProgress,
-        animationSpec = tween(300),
+        animationSpec = Motion.state(),
         label = "setup_progress"
     )
 

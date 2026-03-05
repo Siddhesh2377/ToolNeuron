@@ -2,6 +2,7 @@ package com.dark.tool_neuron.ui.screen
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -114,31 +115,19 @@ fun ModelConfigEditorScreen(
                             // Going to editor
                             slideInHorizontally(
                                 initialOffsetX = { it },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
+                                animationSpec = Motion.content()
                             ) togetherWith slideOutHorizontally(
                                 targetOffsetX = { -it / 3 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
+                                animationSpec = Motion.content()
                             )
                         } else {
                             // Going back to list
                             slideInHorizontally(
                                 initialOffsetX = { -it / 3 },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
+                                animationSpec = Motion.content()
                             ) togetherWith slideOutHorizontally(
                                 targetOffsetX = { it },
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = Spring.StiffnessMedium
-                                )
+                                animationSpec = Motion.content()
                             )
                         }.using(SizeTransform(clip = false))
                     },
@@ -180,14 +169,11 @@ fun ModelConfigEditorScreen(
                 visible = saveSuccess,
                 enter = fadeIn() + slideInVertically(
                     initialOffsetY = { it },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
+                    animationSpec = Motion.interactive()
                 ),
                 exit = fadeOut() + slideOutVertically(
                     targetOffsetY = { it },
-                    animationSpec = tween(200)
+                    animationSpec = Motion.exit()
                 ),
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -246,7 +232,7 @@ private fun ModelListItem(
         } else {
             MaterialTheme.colorScheme.surface
         },
-        animationSpec = tween(200),
+        animationSpec = Motion.state(),
         label = "itemBg"
     )
 

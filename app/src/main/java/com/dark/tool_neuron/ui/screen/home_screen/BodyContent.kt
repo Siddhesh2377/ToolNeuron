@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -242,8 +243,8 @@ fun BodyContent(
         // Scrim + Dynamic Action Window — single AnimatedVisibility to avoid double state reads
         AnimatedVisibility(
             visible = showDynamicWindow,
-            enter = fadeIn(animationSpec = tween(300)),
-            exit = fadeOut(animationSpec = tween(300))
+            enter = fadeIn(Motion.entrance()),
+            exit = fadeOut(Motion.exit())
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
                 // Scrim background
@@ -697,18 +698,8 @@ private fun ThinkingBlock(
 
             AnimatedVisibility(
                 visible = isExpanded,
-                enter = expandVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(),
-                exit = shrinkVertically(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut()
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 Column {
                     HorizontalDivider(
@@ -1167,18 +1158,8 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
         // Detailed metrics
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier
@@ -1357,18 +1338,8 @@ private fun MemoryMetricsDisplay(metrics: MemoryMetrics) {
 
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier
@@ -1489,18 +1460,8 @@ private fun ImageMetricsDisplay(metrics: ImageGenerationMetrics) {
         // Detailed metrics
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier
@@ -1665,18 +1626,8 @@ fun RagResultsDisplay(
         // Detailed results
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier
@@ -1848,18 +1799,8 @@ fun SavedRagResultsDisplay(
         // Detailed results
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
                 modifier = Modifier

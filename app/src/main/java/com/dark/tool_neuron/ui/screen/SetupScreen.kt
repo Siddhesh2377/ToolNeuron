@@ -5,9 +5,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -27,10 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.RadioButtonChecked
-import androidx.compose.material.icons.outlined.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
@@ -59,8 +54,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.SetupOption
 import com.dark.tool_neuron.viewmodel.SetupViewModel
@@ -72,11 +69,11 @@ fun SetupScreen(
     onSetupComplete: () -> Unit
 ) {
     val viewModel: SetupViewModel = viewModel()
-    val selectedOption by viewModel.selectedOption.collectAsState()
-    val downloadStates by viewModel.downloadStates.collectAsState()
-    val setupComplete by viewModel.setupComplete.collectAsState()
-    val downloadError by viewModel.downloadError.collectAsState()
-    val primaryModelId by viewModel.primaryModelId.collectAsState()
+    val selectedOption by viewModel.selectedOption.collectAsStateWithLifecycle()
+    val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val setupComplete by viewModel.setupComplete.collectAsStateWithLifecycle()
+    val downloadError by viewModel.downloadError.collectAsStateWithLifecycle()
+    val primaryModelId by viewModel.primaryModelId.collectAsStateWithLifecycle()
 
     // Navigate when setup completes
     LaunchedEffect(setupComplete) {
@@ -111,10 +108,10 @@ fun SetupScreen(
             AnimatedContent(
                 targetState = isDownloading,
                 transitionSpec = {
-                    (fadeIn(tween(300)) + slideInVertically(
+                    (fadeIn(Motion.entrance()) + slideInVertically(
                         initialOffsetY = { -it / 4 },
-                        animationSpec = spring(dampingRatio = 0.8f)
-                    )) togetherWith fadeOut(tween(200))
+                        animationSpec = Motion.content()
+                    )) togetherWith fadeOut(Motion.exit())
                 },
                 label = "header"
             ) { downloading ->
@@ -213,11 +210,8 @@ fun SetupScreen(
                         visible = visible,
                         enter = slideInVertically(
                             initialOffsetY = { it },
-                            animationSpec = spring(
-                                dampingRatio = 0.75f,
-                                stiffness = 300f
-                            )
-                        ) + fadeIn(spring(stiffness = 300f))
+                            animationSpec = Motion.interactive()
+                        ) + fadeIn(Motion.content())
                     ) {
                         SetupOptionCard(
                             label = label,
@@ -272,7 +266,7 @@ fun SetupScreen(
 private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
     var showRestoreDialog by remember { mutableStateOf(false) }
     var restorePassword by remember { mutableStateOf("") }
-    val restoreProgress by viewModel.restoreProgress.collectAsState()
+    val restoreProgress by viewModel.restoreProgress.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
     // Restart process after successful restore — Hilt singletons hold stale DB/DAO refs
@@ -341,7 +335,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
             ) {
                 Icon(
-                    Icons.Outlined.Restore, null,
+                    TnIcons.Restore, null,
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(rDp(20.dp))
                 )
@@ -373,7 +367,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                 showRestoreDialog = false
                 restorePassword = ""
             },
-            icon = { Icon(Icons.Outlined.Restore, null, tint = MaterialTheme.colorScheme.primary) },
+            icon = { Icon(TnIcons.Restore, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("Restore from Backup", fontWeight = FontWeight.SemiBold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
@@ -425,7 +419,7 @@ private fun SetupOptionCard(
             isSelected && isDownloading -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
             else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "optionBg"
     )
 
@@ -435,7 +429,7 @@ private fun SetupOptionCard(
             !enabled && !isSelected -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
             else -> MaterialTheme.colorScheme.onSurface
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "optionContent"
     )
 
@@ -464,14 +458,14 @@ private fun SetupOptionCard(
 
             if (isSelected && isDownloading) {
                 Icon(
-                    imageVector = Icons.Default.RadioButtonChecked,
+                    imageVector = TnIcons.RadioButton,
                     contentDescription = "Downloading",
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(rDp(20.dp))
                 )
             } else {
                 Icon(
-                    imageVector = Icons.Default.Download,
+                    imageVector = TnIcons.Download,
                     contentDescription = "Download",
                     tint = contentColor.copy(alpha = 0.7f),
                     modifier = Modifier.size(rDp(20.dp))
