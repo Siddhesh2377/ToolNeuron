@@ -1022,6 +1022,23 @@ class ChatViewModel @Inject constructor(
             _streamingAssistantMessage.value = result
         }
 
+        // Fallback: if no native ToolCall events, try text parsing
+        if (nativeToolCalls.isEmpty() && result.isNotBlank()) {
+            val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
+            parseToolCallsFromText(result)?.let { parsed ->
+                val valid = parsed.filter { (name, _) ->
+                    normalizeToolName(name).lowercase() in enabledNames
+                }
+                if (valid.size < parsed.size) {
+                    Log.w(TAG, "Filtered out ${parsed.size - valid.size} hallucinated tool calls from fallback parsing")
+                }
+                nativeToolCalls.addAll(valid)
+                if (valid.isNotEmpty()) {
+                    Log.d(TAG, "Fallback parsed ${valid.size} tool calls from generateWithToolCalls text")
+                }
+            }
+        }
+
         return GenerationResult(text = result, toolCalls = nativeToolCalls)
     }
 
