@@ -112,7 +112,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
 
     // Local Projects & AI Libraries
-    implementation(files("../libs/ai_gguf-release.aar"))
+    implementation(files("../libs/gguf_lib-release.aar"))
     implementation(files("../libs/ai_sd-release.aar"))
     implementation(files("../libs/ai_supertonic_tts-release.aar"))
     //implementation(":runanywhere-core-onnx-release@aar")
@@ -142,7 +142,6 @@ dependencies {
     // Material Design
     implementation(libs.androidx.material)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.material.icons.extended)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
