@@ -16,8 +16,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -28,6 +26,7 @@ import com.neuronpacket.LoadingMode
 import com.neuronpacket.Permission
 import com.neuronpacket.UserCredentials
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 enum class DocumentType(val label: String, val mimeTypes: Array<String>, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
@@ -820,28 +819,13 @@ private fun EncryptionSection(
 
         AnimatedVisibility(visible = state.isEncrypted) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
+                PasswordTextField(
                     value = state.adminPassword,
                     onValueChange = { onStateChange(state.copy(adminPassword = it)) },
-                    label = { Text("Admin Password") },
+                    label = "Admin Password",
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showPasswordVisibility)
-                        VisualTransformation.None
-                    else
-                        PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = onTogglePasswordVisibility) {
-                            Icon(
-                                if (showPasswordVisibility)
-                                    TnIcons.EyeOff
-                                else
-                                    TnIcons.Eye,
-                                contentDescription = null
-                            )
-                        }
-                    },
-                    shape = RoundedCornerShape(12.dp)
+                    showPasswordState = showPasswordVisibility,
+                    onToggleVisibility = onTogglePasswordVisibility
                 )
 
                 Row(
@@ -1003,25 +987,11 @@ private fun AddUserDialog(
                     shape = RoundedCornerShape(12.dp)
                 )
 
-                OutlinedTextField(
+                PasswordTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
-                    visualTransformation = if (showPassword)
-                        VisualTransformation.None
-                    else
-                        PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
-                                contentDescription = null
-                            )
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
+                    label = "Password",
+                    modifier = Modifier.fillMaxWidth()
                 )
 
                 Row(

@@ -305,10 +305,7 @@ private fun PluginListItem(
                     )
 
                     IconButton(onClick = onExpand) {
-                        Icon(
-                            imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                            contentDescription = if (isExpanded) "Collapse" else "Expand"
-                        )
+                        ExpandCollapseIcon(isExpanded = isExpanded)
                     }
                 }
             }

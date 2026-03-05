@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,11 +48,7 @@ fun MemoryResultsDisplay(
                 containerColor = MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
                 contentColor = MaterialTheme.colorScheme.secondary
             )
-            Icon(
-                imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                contentDescription = if (isExpanded) "Collapse" else "Expand",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            ExpandCollapseIcon(isExpanded = isExpanded)
         }
     ) {
         AnimatedVisibility(

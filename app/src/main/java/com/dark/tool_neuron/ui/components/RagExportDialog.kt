@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -20,7 +19,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -37,9 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.neuronpacket.LoadingMode
@@ -141,45 +137,29 @@ fun RagExportDialog(
                 // Security Section
                 SectionHeader(title = "Security")
 
-                OutlinedTextField(
+                PasswordTextField(
                     value = adminPassword,
                     onValueChange = {
                         adminPassword = it
                         passwordError = null
                     },
-                    label = { Text("Admin Password") },
+                    label = "Admin Password",
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    leadingIcon = {
-                        Icon(TnIcons.Lock, contentDescription = null)
-                    },
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) TnIcons.EyeOff else TnIcons.Eye,
-                                contentDescription = if (showPassword) "Hide password" else "Show password"
-                            )
-                        }
-                    },
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword },
                     isError = passwordError != null
                 )
 
-                OutlinedTextField(
+                PasswordTextField(
                     value = confirmPassword,
                     onValueChange = {
                         confirmPassword = it
                         passwordError = null
                     },
-                    label = { Text("Confirm Password") },
+                    label = "Confirm Password",
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    leadingIcon = {
-                        Icon(TnIcons.Lock, contentDescription = null)
-                    },
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword },
                     isError = passwordError != null,
                     supportingText = passwordError?.let { { Text(it, color = MaterialTheme.colorScheme.error) } }
                 )

@@ -105,12 +105,7 @@ fun AgentExecutionView(
                     }
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(18.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 

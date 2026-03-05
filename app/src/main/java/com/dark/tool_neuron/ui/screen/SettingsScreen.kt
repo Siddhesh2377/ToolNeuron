@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -53,8 +52,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -75,6 +72,7 @@ import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlin.math.roundToInt
+import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -981,23 +979,19 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = backupPassword,
                         onValueChange = { backupPassword = it },
-                        label = { Text("Password") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Password",
+                        modifier = Modifier.fillMaxWidth(),
+                        showToggle = false
                     )
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = backupPasswordConfirm,
                         onValueChange = { backupPasswordConfirm = it },
-                        label = { Text("Confirm Password") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
+                        label = "Confirm Password",
                         modifier = Modifier.fillMaxWidth(),
+                        showToggle = false,
                         isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
                     )
 
@@ -1111,14 +1105,12 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
-                    OutlinedTextField(
+                    PasswordTextField(
                         value = restorePassword,
                         onValueChange = { restorePassword = it },
-                        label = { Text("Backup Password") },
-                        visualTransformation = PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
+                        label = "Backup Password",
+                        modifier = Modifier.fillMaxWidth(),
+                        showToggle = false
                     )
                 }
             },
