@@ -22,10 +22,10 @@ import com.dark.tool_neuron.service.IGgufGenerationCallback
 import com.dark.tool_neuron.service.ILLMService
 import com.dark.tool_neuron.service.IModelLoadCallback
 import com.dark.tool_neuron.service.LLMService
-import com.mp.ai_gguf.models.DecodingMetrics
-import kotlinx.coroutines.CompletableDeferred
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
@@ -45,10 +46,10 @@ object LlmModelWorker {
 
     private const val TAG = "LlmModelWorker"
 
-    private var service: ILLMService? = null
+    // ── Service Binding ──
+    private val _serviceFlow = MutableStateFlow<ILLMService?>(null)
     private var boundContext: Context? = null
-    private val serviceBound = CompletableDeferred<Unit>()
-    private var isBinding = false
+    @Volatile private var isBinding = false
 
     // GGUF state
     private val _isGgufModelLoaded = MutableStateFlow(false)
@@ -61,51 +62,57 @@ object LlmModelWorker {
     private val _diffusionBackendState = MutableStateFlow("Idle")
     val diffusionBackendState: StateFlow<String> = _diffusionBackendState.asStateFlow()
 
-    val _currentGgufModelId = MutableStateFlow<String?>(null)
+    private val _currentGgufModelId = MutableStateFlow<String?>(null)
     val currentGgufModelId: StateFlow<String?> = _currentGgufModelId.asStateFlow()
 
-    val _currentDiffusionModelId = MutableStateFlow<String?>(null)
+    private val _currentDiffusionModelId = MutableStateFlow<String?>(null)
     val currentDiffusionModelId: StateFlow<String?> = _currentDiffusionModelId.asStateFlow()
+
+    fun setCurrentGgufModelId(id: String?) { _currentGgufModelId.value = id }
+    fun setCurrentDiffusionModelId(id: String?) { _currentDiffusionModelId.value = id }
 
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = ILLMService.Stub.asInterface(binder)
+            _serviceFlow.value = ILLMService.Stub.asInterface(binder)
             isBinding = false
-            serviceBound.complete(Unit)
             Log.i(TAG, "Service connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
+            _serviceFlow.value = null
             isBinding = false
             Log.w(TAG, "Service disconnected unexpectedly")
         }
 
         override fun onBindingDied(name: ComponentName?) {
-            service = null
+            _serviceFlow.value = null
             isBinding = false
             Log.e(TAG, "Service binding died")
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            _serviceFlow.value = null
             isBinding = false
             Log.e(TAG, "Service returned null binding")
         }
     }
 
     fun bindService(context: Context) {
-        if (boundContext != null && service != null) {
-            Log.w(TAG, "Service already bound and connected")
-            return
+        synchronized(this) {
+            if (_serviceFlow.value != null) {
+                Log.w(TAG, "Service already bound and connected")
+                return
+            }
+
+            if (isBinding) {
+                Log.w(TAG, "Service binding already in progress")
+                return
+            }
+
+            isBinding = true
         }
 
-        if (isBinding) {
-            Log.w(TAG, "Service binding already in progress")
-            return
-        }
-
-        isBinding = true
         val appContext = context.applicationContext
         val intent = Intent(appContext, LLMService::class.java)
 
@@ -131,7 +138,7 @@ object LlmModelWorker {
         } catch (e: Exception) {
             Log.e(TAG, "Error unbinding service", e)
         } finally {
-            service = null
+            _serviceFlow.value = null
             boundContext = null
             isBinding = false
             _isGgufModelLoaded.value = false
@@ -140,16 +147,64 @@ object LlmModelWorker {
     }
 
     private suspend fun ensureServiceBound(): ILLMService {
-        // Increased timeout for slow devices
-        return withTimeout(10000) {
-            serviceBound.await()
-            service ?: throw IllegalStateException("Service not available")
+        return withTimeout(10_000) {
+            _serviceFlow.first { it != null }!!
         }
     }
 
     /** Wait for the LLM service to be bound (no return value). */
     suspend fun ensureServiceReady() {
-        withTimeout(10000) { serviceBound.await() }
+        withTimeout(10_000) { _serviceFlow.first { it != null } }
+    }
+
+    // ── Shared GGUF Callback Factory ──
+
+    private fun createGgufCallback(
+        scope: ProducerScope<GenerationEvent>
+    ): IGgufGenerationCallback.Stub = object : IGgufGenerationCallback.Stub() {
+        override fun onToken(token: String) {
+            scope.trySend(GenerationEvent.Token(token))
+        }
+
+        override fun onToolCall(name: String, args: String) {
+            scope.trySend(GenerationEvent.ToolCall(name, args))
+        }
+
+        override fun onMetrics(
+            tps: Float, ttftMs: Float, totalMs: Float,
+            tokensEvaluated: Int, tokensPredicted: Int,
+            modelMB: Float, ctxMB: Float, peakMB: Float, memPct: Float
+        ) {
+            scope.trySend(
+                GenerationEvent.Metrics(
+                    DecodingMetrics(
+                        tokensPerSecond = tps,
+                        timeToFirstTokenMs = ttftMs,
+                        totalTimeMs = totalMs,
+                        tokensEvaluated = tokensEvaluated,
+                        tokensPredicted = tokensPredicted,
+                        modelSizeMB = modelMB,
+                        contextSizeMB = ctxMB,
+                        peakMemoryMB = peakMB,
+                        memoryUsagePercent = memPct
+                    )
+                )
+            )
+        }
+
+        override fun onProgress(progress: Float) {
+            scope.trySend(GenerationEvent.Progress(progress))
+        }
+
+        override fun onDone() {
+            scope.trySend(GenerationEvent.Done)
+            scope.close()
+        }
+
+        override fun onError(message: String) {
+            scope.trySend(GenerationEvent.Error(message))
+            scope.close()
+        }
     }
 
     // ==================== GGUF Methods ====================
@@ -234,101 +289,22 @@ object LlmModelWorker {
         }
     }
 
-    fun ggufGenerateStreaming(prompt: String, maxToken: Int): Flow<GenerationEvent> = callbackFlow {
-        serviceBound.await()
-
-        val svc = service
-        if (svc == null) {
-            trySend(GenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
-
-        val callback = object : IGgufGenerationCallback.Stub() {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
-
-            override fun onToolCall(name: String, args: String) {
-                trySend(GenerationEvent.ToolCall(name, args))
-            }
-
-            override fun onMetrics(
-                totalTokens: Int,
-                promptTokens: Int,
-                generatedTokens: Int,
-                tokensPerSecond: Float,
-                timeToFirstToken: Long,
-                totalTimeMs: Long
-            ) {
-                trySend(
-                    GenerationEvent.Metrics(
-                        DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
-                        )
-                    )
-                )
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-        }
-
-        try {
-            svc.generateGguf(prompt, maxToken, callback)
-        } catch (e: Exception) {
-            trySend(GenerationEvent.Error(e.message ?: "Failed to start generation"))
-            close()
-        }
-
-        awaitClose {
-            // Optional: stop generation if flow is cancelled
-        }
-    }.buffer(Channel.UNLIMITED)
-        .flowOn(Dispatchers.IO)
-
     fun ggufStopGeneration() {
-        service?.stopGenerationGguf()
+        _serviceFlow.value?.stopGenerationGguf()
         Log.i(TAG, "GGUF generation stopped")
     }
 
     fun unloadGgufModel() {
-        service?.unloadModelGguf()
+        _serviceFlow.value?.unloadModelGguf()
         _isGgufModelLoaded.value = false
         Log.i(TAG, "GGUF model unloaded")
     }
 
     fun getGgufModelInfo(): String? {
-        return service?.modelInfoGguf
+        return _serviceFlow.value?.modelInfoGguf
     }
 
     // ==================== Tool Calling Methods ====================
-
-    /**
-     * Set tools for tool calling (backward-compatible)
-     * @param toolsJson JSON string containing tool definitions in OpenAI format
-     * @return true if tools were set successfully
-     */
-    fun setToolsGguf(toolsJson: String): Boolean {
-        return try {
-            service?.setToolsJsonGguf(toolsJson) ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to set tools: ${e.message}")
-            false
-        }
-    }
 
     /**
      * Enable tool calling with grammar configuration.
@@ -345,9 +321,25 @@ object LlmModelWorker {
         useTypedGrammar: Boolean = true
     ): Boolean {
         return try {
-            service?.enableToolCallingGguf(toolsJson, grammarMode, useTypedGrammar) ?: false
+            _serviceFlow.value?.enableToolCallingGguf(toolsJson, grammarMode, useTypedGrammar) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enable tool calling: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Direct same-process tool calling setup — bypasses AIDL, properly configures grammar.
+     */
+    fun enableToolCallingDirect(
+        toolDefs: List<com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder>,
+        config: com.dark.gguf_lib.toolcalling.ToolCallingConfig
+    ): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.enableToolCallingDirect(toolDefs, config)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable tool calling (direct): ${e.message}")
             false
         }
     }
@@ -357,7 +349,7 @@ object LlmModelWorker {
      */
     fun clearToolsGguf() {
         try {
-            service?.clearToolsGguf()
+            _serviceFlow.value?.clearToolsGguf()
             Log.i(TAG, "Tools cleared")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear tools: ${e.message}")
@@ -370,7 +362,7 @@ object LlmModelWorker {
      */
     fun isToolCallingSupportedGguf(): Boolean {
         return try {
-            service?.isToolCallingSupportedGguf() ?: false
+            _serviceFlow.value?.isToolCallingSupportedGguf() ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to check tool calling support: ${e.message}")
             false
@@ -383,7 +375,7 @@ object LlmModelWorker {
      */
     fun setGrammarModeGguf(mode: Int) {
         try {
-            service?.setGrammarModeGguf(mode)
+            _serviceFlow.value?.setGrammarModeGguf(mode)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set grammar mode: ${e.message}")
         }
@@ -394,7 +386,7 @@ object LlmModelWorker {
      */
     fun setTypedGrammarGguf(enabled: Boolean) {
         try {
-            service?.setTypedGrammarGguf(enabled)
+            _serviceFlow.value?.setTypedGrammarGguf(enabled)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set typed grammar: ${e.message}")
         }
@@ -404,7 +396,7 @@ object LlmModelWorker {
 
     fun updateSamplerParamsGguf(paramsJson: String): Boolean {
         return try {
-            service?.updateSamplerParamsGguf(paramsJson) ?: false
+            _serviceFlow.value?.updateSamplerParamsGguf(paramsJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update sampler params: ${e.message}")
             false
@@ -413,7 +405,7 @@ object LlmModelWorker {
 
     fun setLogitBiasGguf(biasJson: String): Boolean {
         return try {
-            service?.setLogitBiasGguf(biasJson) ?: false
+            _serviceFlow.value?.setLogitBiasGguf(biasJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set logit bias: ${e.message}")
             false
@@ -422,7 +414,7 @@ object LlmModelWorker {
 
     fun loadControlVectorsGguf(vectorsJson: String): Boolean {
         return try {
-            service?.loadControlVectorsGguf(vectorsJson) ?: false
+            _serviceFlow.value?.loadControlVectorsGguf(vectorsJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load control vectors: ${e.message}")
             false
@@ -431,7 +423,7 @@ object LlmModelWorker {
 
     fun clearControlVectorGguf(): Boolean {
         return try {
-            service?.clearControlVectorGguf() ?: false
+            _serviceFlow.value?.clearControlVectorGguf() ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear control vector: ${e.message}")
             false
@@ -446,7 +438,7 @@ object LlmModelWorker {
      */
     fun getStateSizeGguf(): Long {
         return try {
-            service?.getStateSizeGguf() ?: 0
+            _serviceFlow.value?.getStateSizeGguf() ?: 0
         } catch (e: Exception) {
             Log.e(TAG, "Failed to get state size: ${e.message}")
             0
@@ -462,7 +454,7 @@ object LlmModelWorker {
      */
     fun stateSaveToFileGguf(path: String): Boolean {
         return try {
-            service?.stateSaveToFileGguf(path) ?: false
+            _serviceFlow.value?.stateSaveToFileGguf(path) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to save KV state: ${e.message}")
             false
@@ -478,10 +470,93 @@ object LlmModelWorker {
      */
     fun stateLoadFromFileGguf(path: String): Boolean {
         return try {
-            service?.stateLoadFromFileGguf(path) ?: false
+            _serviceFlow.value?.stateLoadFromFileGguf(path) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load KV state: ${e.message}")
             false
+        }
+    }
+
+    // ==================== New Optimizations ====================
+
+    fun setSpeculativeDecodingGguf(enabled: Boolean, nDraft: Int = 4, ngramSize: Int = 4) {
+        try {
+            _serviceFlow.value?.setSpeculativeDecodingGguf(enabled, nDraft, ngramSize)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set speculative decoding: ${e.message}")
+        }
+    }
+
+    fun setPromptCacheDirGguf(path: String) {
+        try {
+            _serviceFlow.value?.setPromptCacheDirGguf(path)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set prompt cache dir: ${e.message}")
+        }
+    }
+
+    fun warmUpGguf(): Boolean {
+        return try {
+            _serviceFlow.value?.warmUpGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to warm up: ${e.message}")
+            false
+        }
+    }
+
+    fun supportsThinkingGguf(): Boolean {
+        return try {
+            _serviceFlow.value?.supportsThinkingGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to check thinking support: ${e.message}")
+            false
+        }
+    }
+
+    fun setThinkingEnabledGguf(enabled: Boolean) {
+        try {
+            _serviceFlow.value?.setThinkingEnabledGguf(enabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set thinking enabled: ${e.message}")
+        }
+    }
+
+    fun getContextUsageGguf(): Float {
+        return try {
+            _serviceFlow.value?.contextUsageGguf ?: 0f
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get context usage: ${e.message}")
+            0f
+        }
+    }
+
+    // ==================== Upscaler ====================
+
+    suspend fun loadUpscaler(modelPath: String): Boolean {
+        val svc = ensureServiceBound()
+        return suspendCancellableCoroutine { continuation ->
+            val callback = object : IModelLoadCallback.Stub() {
+                override fun onSuccess() {
+                    continuation.resume(true)
+                }
+                override fun onError(message: String) {
+                    Log.e(TAG, "Failed to load upscaler: $message")
+                    continuation.resume(false)
+                }
+            }
+            try {
+                svc.loadUpscaler(modelPath, callback)
+            } catch (e: Exception) {
+                continuation.resumeWithException(e)
+            }
+        }
+    }
+
+    fun releaseUpscaler() {
+        try {
+            _serviceFlow.value?.releaseUpscaler()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release upscaler: ${e.message}")
         }
     }
 
@@ -499,56 +574,9 @@ object LlmModelWorker {
         messagesJson: String,
         maxTokens: Int
     ): Flow<GenerationEvent> = callbackFlow {
-        serviceBound.await()
+        val svc = _serviceFlow.first { it != null }!!
 
-        val svc = service
-        if (svc == null) {
-            trySend(GenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
-
-        val callback = object : IGgufGenerationCallback.Stub() {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
-
-            override fun onToolCall(name: String, args: String) {
-                trySend(GenerationEvent.ToolCall(name, args))
-            }
-
-            override fun onMetrics(
-                totalTokens: Int,
-                promptTokens: Int,
-                generatedTokens: Int,
-                tokensPerSecond: Float,
-                timeToFirstToken: Long,
-                totalTimeMs: Long
-            ) {
-                trySend(
-                    GenerationEvent.Metrics(
-                        DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
-                        )
-                    )
-                )
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-        }
+        val callback = createGgufCallback(this)
 
         try {
             svc.generateGgufMultiTurn(messagesJson, maxTokens, callback)
@@ -658,14 +686,7 @@ object LlmModelWorker {
         showDiffusionProcess: Boolean = false,
         showDiffusionStride: Int = 1
     ): Flow<DiffusionGenerationEvent> = callbackFlow {
-        serviceBound.await()
-
-        val svc = service
-        if (svc == null) {
-            trySend(DiffusionGenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
+        val svc = _serviceFlow.first { it != null }!!
 
         val callback = object : IDiffusionGenerationCallback.Stub() {
             override fun onProgress(
@@ -752,7 +773,7 @@ object LlmModelWorker {
      * Stop diffusion image generation
      */
     fun stopDiffusionGeneration() {
-        service?.stopGenerationDiffusion()
+        _serviceFlow.value?.stopGenerationDiffusion()
         Log.i(TAG, "Diffusion generation stopped")
     }
 
@@ -790,7 +811,7 @@ object LlmModelWorker {
      * Stop diffusion backend
      */
     fun stopDiffusionBackend() {
-        service?.stopDiffusionBackend()
+        _serviceFlow.value?.stopDiffusionBackend()
         _isDiffusionModelLoaded.value = false
         _diffusionBackendState.value = "Idle"
         Log.i(TAG, "Diffusion backend stopped")

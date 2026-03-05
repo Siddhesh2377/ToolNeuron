@@ -129,7 +129,6 @@ class ChatViewModel @Inject constructor(
 
     // Track current generation state
     private var currentUserMessage: Messages? = null
-    private var currentGeneratedContent: String = ""
     private val _currentMetrics = MutableStateFlow<DecodingMetrics?>(null)
     val currentDecodingMetrics: StateFlow<DecodingMetrics?> = _currentMetrics.asStateFlow()
     private var currentMetrics: DecodingMetrics?
@@ -186,14 +185,6 @@ class ChatViewModel @Inject constructor(
 
     private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
-
-    // Processing phase indicator
-    private val _currentProcessingPhase = MutableStateFlow<String?>(null)
-    val currentProcessingPhase: StateFlow<String?> = _currentProcessingPhase
-
-    fun setProcessingPhase(phase: String?) {
-        _currentProcessingPhase.value = phase
-    }
 
     // ==================== Auto-restore last chat ====================
 
@@ -281,7 +272,6 @@ class ChatViewModel @Inject constructor(
         _imageGenerationStep.value = ""
         _isGenerating.value = false
         currentUserMessage = null
-        currentGeneratedContent = ""
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
@@ -347,7 +337,6 @@ class ChatViewModel @Inject constructor(
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
         userMessageAdded = false
-        currentGeneratedContent = ""
         currentMetrics = null
         _error.value = null
 
@@ -436,7 +425,6 @@ class ChatViewModel @Inject constructor(
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
         userMessageAdded = true // already added — skip re-adding user message
-        currentGeneratedContent = ""
         currentMetrics = null
         _error.value = null
 
@@ -976,10 +964,9 @@ class ChatViewModel @Inject constructor(
             when (event) {
                 is GenerationEvent.Token -> {
                     resultBuilder.append(event.text)
-                    currentGeneratedContent = resultBuilder.toString()
                     val now = System.currentTimeMillis()
                     if (now - lastEmitTime >= STREAMING_THROTTLE_MS) {
-                        _streamingAssistantMessage.value = currentGeneratedContent
+                        _streamingAssistantMessage.value = resultBuilder.toString()
                         lastEmitTime = now
                     }
 
@@ -996,8 +983,7 @@ class ChatViewModel @Inject constructor(
                 }
                 is GenerationEvent.Done -> {
                     // Final emit to ensure UI has complete text
-                    currentGeneratedContent = resultBuilder.toString()
-                    _streamingAssistantMessage.value = currentGeneratedContent
+                    _streamingAssistantMessage.value = resultBuilder.toString()
                 }
                 is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
                 is GenerationEvent.Progress -> { /* progress tracked elsewhere */ }
@@ -1018,7 +1004,6 @@ class ChatViewModel @Inject constructor(
         if (repetitionTrimIndex in 1 until result.length) {
             Log.d(TAG, "Trimming repetitive output: keeping ${repetitionTrimIndex} of ${result.length} chars")
             result = result.substring(0, repetitionTrimIndex).trim()
-            currentGeneratedContent = result
             _streamingAssistantMessage.value = result
         }
 
@@ -1685,13 +1670,11 @@ class ChatViewModel @Inject constructor(
         _imageGenerationProgress.value = 0f
         _imageGenerationStep.value = ""
         currentUserMessage = null
-        currentGeneratedContent = ""
         currentGeneratedImage = null
         currentMetrics = null
         currentImageMetrics = null
         userMessageAdded = false
         _currentToolName.value = null
-        _currentProcessingPhase.value = null
         _toolChainSteps.value = emptyList()
         _currentToolChainRound.value = 0
         _agentPhase.value = AgentPhase.Idle
@@ -1709,7 +1692,7 @@ class ChatViewModel @Inject constructor(
         // 1. Snapshot mutable state BEFORE cancellation nukes it via finally→resetStreamingState
         val snapshotChatId = _currentChatId.value
         val snapshotUserMsg = currentUserMessage
-        val snapshotContent = currentGeneratedContent
+        val snapshotContent = _streamingAssistantMessage.value
         val snapshotMetrics = currentMetrics
         val snapshotImage = currentGeneratedImage
         val snapshotImageMetrics = currentImageMetrics

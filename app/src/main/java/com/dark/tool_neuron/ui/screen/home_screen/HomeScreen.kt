@@ -530,13 +530,11 @@ fun BottomBar(
                                                     val userQuery = value
                                                     value = ""
                                                     scope.launch {
-                                                        chatViewModel.setProcessingPhase("Querying RAG...")
                                                         val ragContext = ragViewModel.queryAndStoreResults(userQuery)
                                                         chatViewModel.setRagContext(
                                                             ragContext.ifBlank { null },
                                                             ragViewModel.lastRagResults.value
                                                         )
-                                                        chatViewModel.setProcessingPhase("Generating Response...")
                                                         chatViewModel.sendTextMessage(userQuery)
                                                     }
                                                 } else {
