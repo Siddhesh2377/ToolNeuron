@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen.home_screen
+package com.dark.tool_neuron.ui.screen.home
 
 import android.content.ClipData
 import android.graphics.Bitmap

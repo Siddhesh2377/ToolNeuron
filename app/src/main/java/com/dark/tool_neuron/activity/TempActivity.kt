@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.guide.TermsAndConditionsScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 
 class TempActivity : ComponentActivity() {

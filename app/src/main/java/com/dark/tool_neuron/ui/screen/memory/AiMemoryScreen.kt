@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen
+package com.dark.tool_neuron.ui.screen.memory
 
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.layout.Arrangement

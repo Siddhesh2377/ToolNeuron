@@ -89,7 +89,7 @@ import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
-import com.dark.tool_neuron.ui.screen.SecureRagCreationScreen
+import com.dark.tool_neuron.ui.screen.rag.SecureRagCreationScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import dagger.hilt.android.AndroidEntryPoint

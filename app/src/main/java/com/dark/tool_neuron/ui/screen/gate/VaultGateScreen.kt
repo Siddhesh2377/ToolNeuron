@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screens
+package com.dark.tool_neuron.ui.screen.gate
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable

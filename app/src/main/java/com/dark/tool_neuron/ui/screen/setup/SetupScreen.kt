@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen
+package com.dark.tool_neuron.ui.screen.setup
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts

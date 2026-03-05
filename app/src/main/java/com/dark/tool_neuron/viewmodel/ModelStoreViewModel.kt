@@ -19,11 +19,12 @@ import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
-import com.dark.tool_neuron.ui.screen.StoreTab
+import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 enum class SortOption {
@@ -116,7 +117,7 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     val validationResults: StateFlow<Map<String, ValidationResult>> = _validationResults
 
     // App's internal models directory
-    private val appModelsDir = File(application.filesDir, "models")
+    private val appModelsDir = AppPaths.models(application)
 
     init {
         loadDeviceInfo()

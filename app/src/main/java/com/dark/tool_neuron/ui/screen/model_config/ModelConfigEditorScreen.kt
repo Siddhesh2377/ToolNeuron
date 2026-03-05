@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen
+package com.dark.tool_neuron.ui.screen.model_config
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*

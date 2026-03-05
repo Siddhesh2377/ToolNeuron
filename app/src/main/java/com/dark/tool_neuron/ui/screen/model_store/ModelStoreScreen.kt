@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen
+package com.dark.tool_neuron.ui.screen.model_store
 
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility

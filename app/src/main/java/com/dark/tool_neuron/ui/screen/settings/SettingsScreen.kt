@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen
+package com.dark.tool_neuron.ui.screen.settings
 
 import android.app.Activity
 import android.content.Intent

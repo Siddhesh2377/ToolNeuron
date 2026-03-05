@@ -27,17 +27,16 @@ import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
-import com.dark.tool_neuron.ui.screen.AiMemoryScreen
-import com.dark.tool_neuron.ui.screen.GuideScreen
-import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
-import com.dark.tool_neuron.ui.screen.ModelStoreScreen
-import com.dark.tool_neuron.ui.screen.SetupScreen
-import com.dark.tool_neuron.ui.screen.SettingsScreen
-import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
-import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screen.gate.VaultGateScreen
+import com.dark.tool_neuron.ui.screen.guide.GuideScreen
+import com.dark.tool_neuron.ui.screen.guide.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.home.HomeScreen
+import com.dark.tool_neuron.ui.screen.memory.AiMemoryScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
-import com.dark.tool_neuron.ui.screens.IntroScreen
-import com.dark.tool_neuron.ui.screens.VaultGateScreen
+import com.dark.tool_neuron.ui.screen.model_config.ModelConfigEditorScreen
+import com.dark.tool_neuron.ui.screen.model_store.ModelStoreScreen
+import com.dark.tool_neuron.ui.screen.settings.SettingsScreen
+import com.dark.tool_neuron.ui.screen.setup.SetupScreen
 import com.dark.tool_neuron.viewModel.VaultGateViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
@@ -230,12 +229,13 @@ fun AppNavigation(
 
         // ============ ONBOARDING SCREENS ============
         composable(Screen.Intro.route) {
-            IntroScreen(onFinished = {
+            // IntroScreen was removed — skip straight to Guide or Migration
+            LaunchedEffect(Unit) {
                 val nextRoute = if (needsMigration) Screen.Migration.route else Screen.Guide.route
                 navController.navigate(nextRoute) {
                     popUpTo(Screen.Intro.route) { inclusive = true }
                 }
-            })
+            }
         }
 
         composable(Screen.Migration.route) {

@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screen.home_screen
+package com.dark.tool_neuron.ui.screen.home
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.layout.Arrangement
