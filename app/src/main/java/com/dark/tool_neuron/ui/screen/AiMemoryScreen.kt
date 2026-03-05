@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.di.AppContainer
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -69,9 +70,9 @@ fun AiMemoryScreen(
 ) {
     val memoryRepo = remember { AppContainer.getMemoryRepo() }
     val memoryExtractor = remember {
-        MemoryExtractor(memoryRepo, AppContainer.getGenerationManager())
+        MemoryExtractor(memoryRepo)
     }
-    val allMemories by memoryRepo.getAll().collectAsState(initial = emptyList())
+    val allMemories by memoryRepo.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
 
     var searchQuery by remember { mutableStateOf("") }

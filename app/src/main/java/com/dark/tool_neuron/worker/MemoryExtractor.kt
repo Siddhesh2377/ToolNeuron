@@ -26,7 +26,6 @@ import kotlin.math.sqrt
  */
 class MemoryExtractor(
     private val memoryRepo: UmsMemoryRepository,
-    private val generationManager: GenerationManager,
     private val embeddingEngine: EmbeddingEngine? = null,
     private val knowledgeRepo: UmsKnowledgeRepository? = null
 ) {
@@ -66,13 +65,13 @@ class MemoryExtractor(
         personaName: String? = null,
         personaId: String? = null
     ) {
-        // Skip very short exchanges (greetings, acknowledgments)
-        if (userMessage.length < MIN_MESSAGE_LENGTH && assistantResponse.length < MIN_MESSAGE_LENGTH) {
-            Log.d(TAG, "Skipping extraction: messages too short")
+        // Skip if user message is too short (greetings, acknowledgments can't produce meaningful memories)
+        if (userMessage.length < MIN_MESSAGE_LENGTH) {
+            Log.d(TAG, "Skipping extraction: user message too short")
             return
         }
 
-        if (!generationManager.isTextModelLoaded()) {
+        if (!LlmModelWorker.isGgufModelLoaded.value) {
             Log.d(TAG, "Skipping extraction: no text model loaded")
             return
         }
@@ -109,7 +108,7 @@ class MemoryExtractor(
 
         val response = StringBuilder()
         try {
-            generationManager.generateMultiTurnStreaming(
+            LlmModelWorker.ggufGenerateMultiTurnStreaming(
                 messages.toString(), EXTRACTION_MAX_TOKENS
             ).collect { event ->
                 when (event) {
@@ -247,7 +246,7 @@ Facts:"""
         if (!isEmbeddingAvailable()) return
 
         try {
-            val embedding = embeddingEngine!!.embed(text)
+            val embedding = (embeddingEngine ?: return).embed(text)
             if (embedding != null && embedding.isNotEmpty()) {
                 val bytes = embedding.toByteArray()
                 memoryRepo.updateEmbedding(memoryId, bytes)
@@ -293,9 +292,10 @@ Facts:"""
         if (existingMemories.isEmpty()) return null
 
         // Try embedding-based matching first
-        val candidateEmbedding = if (isEmbeddingAvailable()) {
+        val engine = embeddingEngine
+        val candidateEmbedding = if (engine != null && isEmbeddingAvailable()) {
             try {
-                embeddingEngine!!.embed(candidate)
+                engine.embed(candidate)
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to embed candidate for dedup, falling back to Jaccard: ${e.message}")
                 null
@@ -311,7 +311,7 @@ Facts:"""
             val sim = if (useEmbeddings && memory.embedding != null) {
                 // Embedding-based cosine similarity (more accurate for semantic dedup)
                 val memoryEmb = memory.embedding.toFloatArray()
-                cosineSimilarity(candidateEmbedding!!, memoryEmb).coerceIn(0f, 1f)
+                cosineSimilarity(candidateEmbedding, memoryEmb).coerceIn(0f, 1f)
             } else {
                 // Jaccard fallback
                 textSimilarity(candidate, memory.fact)
@@ -407,9 +407,10 @@ Facts:"""
         val dayMs = 86_400_000L
 
         // Try embedding-based retrieval first
-        val queryEmbedding = if (isEmbeddingAvailable()) {
+        val embedEngine = embeddingEngine
+        val queryEmbedding = if (embedEngine != null && isEmbeddingAvailable()) {
             try {
-                embeddingEngine!!.embed(query)
+                embedEngine.embed(query)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to embed query, falling back to Jaccard: ${e.message}")
                 null
@@ -429,7 +430,7 @@ Facts:"""
             val score = if (useEmbeddings && memory.embedding != null) {
                 // Embedding-based scoring
                 val memoryEmbedding = memory.embedding.toFloatArray()
-                val cosine = cosineSimilarity(queryEmbedding!!, memoryEmbedding)
+                val cosine = cosineSimilarity(queryEmbedding, memoryEmbedding)
                 val clampedCosine = cosine.coerceIn(0f, 1f)
                 clampedCosine * 0.6f + recencyFactor * 0.25f + accessFactor * 0.15f
             } else {

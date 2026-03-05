@@ -1,9 +1,6 @@
 package com.dark.tool_neuron.ui.screen.home_screen
 
 import android.content.Intent
-import android.util.Log
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
@@ -85,18 +82,10 @@ import com.dark.tool_neuron.ui.components.ModelListItem
 import com.dark.tool_neuron.ui.components.MemoryOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.PluginOverlayBottomSheet
 import com.dark.tool_neuron.ui.components.SwitchRow
-import com.dark.tool_neuron.models.table_schema.Persona
+import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.rDp
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.layout.ContentScale
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
-import java.io.File
 import androidx.compose.material.icons.outlined.Memory
 import androidx.compose.material3.AlertDialog
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -105,7 +94,7 @@ import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.viewmodel.MemoryViewModel
 import com.dark.tool_neuron.viewmodel.PluginViewModel
 import com.dark.tool_neuron.viewmodel.RagViewModel
-import com.dark.tool_neuron.worker.GenerationManager
+import com.dark.tool_neuron.models.ModelType
 import kotlinx.coroutines.launch
 
 // Update HomeScreen to wrap with SharedTransitionLayout
@@ -115,14 +104,16 @@ fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
-    onCharacterClick: () -> Unit = {},
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val codeHighlightEnabled by remember { AppSettingsDataStore(context).codeHighlightEnabled }
+    val appSettings = remember { AppSettingsDataStore(context) }
+    val codeHighlightEnabled by appSettings.codeHighlightEnabled
+        .collectAsStateWithLifecycle(initialValue = true)
+    val toolCallingEnabled by appSettings.toolCallingEnabled
         .collectAsStateWithLifecycle(initialValue = true)
 
     // Offer to reload the last loaded model on startup
@@ -141,9 +132,7 @@ fun HomeScreen(
         drawerState = drawerState, drawerContent = {
             ModalDrawerSheet {
                 HomeDrawerScreen(
-                    onVaultManagerClick = {
-                        onVaultManagerClick()
-                    },
+                    onVaultManagerClick = onVaultManagerClick,
                     onChatSelected = {
                         chatViewModel.loadChat(it)
                         scope.launch {
@@ -159,20 +148,17 @@ fun HomeScreen(
             modifier = Modifier.fillMaxSize(),
             topBar = {
                 TopBar(
-                    onStoreButtonClicked = { onStoreButtonClicked() },
+                    onStoreButtonClicked = onStoreButtonClicked,
                     onMenuClick = { scope.launch { drawerState.open() } },
-                    onSettingsClick = { onSettingsClick() },
+                    onSettingsClick = onSettingsClick,
                     showDynamicWindow = { chatViewModel.showDynamicWindow() }
                 )
             },
             bottomBar = {
                 BottomBar(
-                    onSettingsClick = {
-                        onSettingsClick()
-                    },
-                    onCharacterClick = onCharacterClick,
                     chatViewModel = chatViewModel,
-                    llmModelViewModel = llmModelViewModel
+                    llmModelViewModel = llmModelViewModel,
+                    toolCallingEnabled = toolCallingEnabled
                 )
             }) { paddingValues ->
             BodyContent(paddingValues, chatViewModel, llmModelViewModel = llmModelViewModel)
@@ -192,21 +178,6 @@ fun TopBar(
 ) {
     val context = LocalContext.current
 
-    // SAF file picker launcher - opens ModelLoadingActivity with selected URI
-    val filePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            // Persist permission for future access
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
-            // Open ModelLoadingActivity which will automatically use the SAF picker
-            context.startActivity(Intent(context, ModelLoadingActivity::class.java))
-        }
-    }
-
     CenterAlignedTopAppBar(title = {
         AnimatedTitle(
             modifier = Modifier, onShowDynamicWindow = {
@@ -221,7 +192,7 @@ fun TopBar(
     }, actions = {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ActionButton(
-                onClickListener = { onSettingsClick() },
+                onClickListener = onSettingsClick,
                 icon = Icons.Outlined.Settings,
                 modifier = Modifier.padding(end = rDp(6.dp))
             )
@@ -243,13 +214,12 @@ fun TopBar(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BottomBar(
-    onSettingsClick: () -> Unit,
-    onCharacterClick: () -> Unit = {},
     chatViewModel: ChatViewModel = hiltViewModel(),
     llmModelViewModel: LLMModelViewModel = hiltViewModel(),
     ragViewModel: RagViewModel = hiltViewModel(),
     pluginViewModel: PluginViewModel = hiltViewModel(),
-    memoryViewModel: MemoryViewModel = hiltViewModel()
+    memoryViewModel: MemoryViewModel = hiltViewModel(),
+    toolCallingEnabled: Boolean = true
 ) {
     val context = LocalContext.current
     var value by remember { mutableStateOf("") }
@@ -271,7 +241,6 @@ fun BottomBar(
     val registeredPlugins by pluginViewModel.registeredPlugins.collectAsStateWithLifecycle()
     val enabledPluginNames by pluginViewModel.enabledPluginNames.collectAsStateWithLifecycle()
     val expandedPluginIds by pluginViewModel.expandedPluginIds.collectAsStateWithLifecycle()
-    val grammarMode by pluginViewModel.grammarMode.collectAsStateWithLifecycle()
     val multiTurnEnabled by pluginViewModel.multiTurnEnabled.collectAsStateWithLifecycle()
     val toolCallingConfig by pluginViewModel.toolCallingConfig.collectAsStateWithLifecycle()
     val isToolCallingModelLoaded by pluginViewModel.isToolCallingModelLoaded.collectAsStateWithLifecycle()
@@ -287,12 +256,9 @@ fun BottomBar(
     val isWebSearchEnabled by pluginViewModel.isWebSearchEnabled.collectAsStateWithLifecycle()
     val nonWebSearchPlugins by pluginViewModel.nonWebSearchPlugins.collectAsStateWithLifecycle()
 
-    // Active persona
-    val activePersona by chatViewModel.activePersona.collectAsStateWithLifecycle()
-
-    // App settings
-    val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
-    val toolCallingEnabled by appSettingsDataStore.toolCallingEnabled.collectAsStateWithLifecycle(initialValue = true)
+    // Thinking mode
+    val thinkingEnabled by chatViewModel.thinkingModeEnabled.collectAsStateWithLifecycle()
+    val modelSupportsThinking by chatViewModel.modelSupportsThinking.collectAsStateWithLifecycle()
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
@@ -309,7 +275,6 @@ fun BottomBar(
         plugins = nonWebSearchPlugins,
         enabledPluginNames = enabledPluginNames,
         expandedPluginIds = expandedPluginIds,
-        grammarMode = grammarMode,
         multiTurnEnabled = multiTurnEnabled,
         toolCallingConfig = toolCallingConfig,
         onDismiss = { pluginViewModel.hidePluginOverlay() },
@@ -319,10 +284,8 @@ fun BottomBar(
         onPluginExpand = { name ->
             pluginViewModel.togglePluginExpanded(name)
         },
-        onGrammarModeChange = { pluginViewModel.setGrammarMode(it) },
         onMultiTurnToggle = { pluginViewModel.setMultiTurnEnabled(it) },
-        onMaxRoundsChange = { pluginViewModel.setMaxRounds(it) },
-        onMaxTokensPerTurnChange = { pluginViewModel.setMaxTokensPerTurn(it) }
+        onMaxRoundsChange = { pluginViewModel.setMaxRounds(it) }
     )
 
     // Memory Overlay
@@ -425,9 +388,9 @@ fun BottomBar(
                         placeholder = {
                             Text(
                                 text = when (currentGenerationType) {
-                                    GenerationManager.ModelType.TEXT_GENERATION -> "Say Anything…"
-                                    GenerationManager.ModelType.IMAGE_GENERATION -> "Describe the image you want…"
-                                    GenerationManager.ModelType.AUDIO_GENERATION -> "Say Anything…"
+                                    ModelType.TEXT_GENERATION -> "Say Anything…"
+                                    ModelType.IMAGE_GENERATION -> "Describe the image you want…"
+                                    ModelType.AUDIO_GENERATION -> "Say Anything…"
                                 }
                             )
                         },
@@ -445,7 +408,6 @@ fun BottomBar(
                 // Quick-look chips showing active subsystems
                 QuickLookChipRow(
                     loadedRagCount = loadedRags.size,
-                    enabledToolCount = enabledPluginNames.filter { it != "Web Search" }.size,
                     isMemoryEnabled = isMemoryEnabled,
                     isWebSearchEnabled = isWebSearchEnabled,
                     isRagEnabled = isRagEnabledForChat,
@@ -459,11 +421,6 @@ fun BottomBar(
                 // More Options overlay (above action row, like model list)
                 MoreOptionsOverlay(
                     show = showMoreOptions,
-                    activePersona = activePersona,
-                    onCharacterClick = {
-                        showMoreOptions = false
-                        onCharacterClick()
-                    },
                     loadedRagCount = loadedRags.size,
                     isRagEnabled = isRagEnabledForChat,
                     onRagToggle = { ragViewModel.toggleRagForChat(it) },
@@ -491,7 +448,7 @@ fun BottomBar(
                 ) {
                     // 1. Mode toggle switch (Text/Image)
                     ModeToggleSwitch(
-                        isImageMode = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
+                        isImageMode = currentGenerationType == ModelType.IMAGE_GENERATION,
                         onModeChange = { isImageMode ->
                             if (isImageMode) {
                                 chatViewModel.switchToImageGeneration()
@@ -532,9 +489,19 @@ fun BottomBar(
                         )
                     }
 
+                    // 5. Thinking Toggle
+                    if (isTextModelLoaded) {
+                        ActionToggleButton(
+                            onCheckedChange = { chatViewModel.toggleThinkingMode() },
+                            checked = thinkingEnabled,
+                            enabled = isTextModelLoaded,
+                            icon = TnIcons.Brain
+                        )
+                    }
+
                     Spacer(Modifier.weight(1f))
 
-                    // 5. Send/Stop
+                    // 6. Send/Stop
                     when (isGenerating) {
                         true -> {
                             ActionProgressButton(
@@ -556,70 +523,34 @@ fun BottomBar(
                                         // Close overlays on send
                                         showMoreOptions = false
                                         when (currentGenerationType) {
-                                            GenerationManager.ModelType.TEXT_GENERATION -> {
+                                            ModelType.TEXT_GENERATION -> {
                                                 val hasRags = loadedRags.isNotEmpty() && isRagEnabledForChat
-                                                val hasMemory = isMemoryEnabled
 
-                                                if (hasRags || hasMemory) {
+                                                if (hasRags) {
                                                     val userQuery = value
                                                     value = ""
                                                     scope.launch {
-                                                        var combinedContext = ""
-
-                                                        if (hasMemory) {
-                                                            chatViewModel.setProcessingPhase("Querying Memory Vault...")
-                                                            val memoryContext = memoryViewModel.queryMemory(userQuery)
-                                                            if (memoryContext.isNotBlank()) {
-                                                                combinedContext += memoryContext
-                                                                chatViewModel.setMemoryContext(
-                                                                    memoryContext,
-                                                                    memoryViewModel.memoryResults.value
-                                                                )
-                                                            }
-                                                        }
-
-                                                        if (hasRags) {
-                                                            chatViewModel.setProcessingPhase("Querying RAG...")
-                                                            val ragContext = ragViewModel.queryAndStoreResults(userQuery)
-                                                            if (combinedContext.isNotBlank()) {
-                                                                combinedContext += "\n$ragContext"
-                                                            } else {
-                                                                combinedContext += ragContext
-                                                            }
-                                                            chatViewModel.setRagContext(
-                                                                ragContext.ifBlank { null },
-                                                                ragViewModel.lastRagResults.value
-                                                            )
-                                                        }
-
-                                                        if (hasRags && hasMemory && combinedContext.isNotBlank()) {
-                                                            chatViewModel.setRagContext(
-                                                                combinedContext.ifBlank { null },
-                                                                ragViewModel.lastRagResults.value
-                                                            )
-                                                        } else if (!hasRags && hasMemory && combinedContext.isNotBlank()) {
-                                                            chatViewModel.setRagContext(
-                                                                combinedContext.ifBlank { null },
-                                                                emptyList()
-                                                            )
-                                                        }
-
+                                                        chatViewModel.setProcessingPhase("Querying RAG...")
+                                                        val ragContext = ragViewModel.queryAndStoreResults(userQuery)
+                                                        chatViewModel.setRagContext(
+                                                            ragContext.ifBlank { null },
+                                                            ragViewModel.lastRagResults.value
+                                                        )
                                                         chatViewModel.setProcessingPhase("Generating Response...")
                                                         chatViewModel.sendTextMessage(userQuery)
                                                     }
                                                 } else {
                                                     chatViewModel.clearRagContext()
-                                                    chatViewModel.clearMemoryContext()
                                                     chatViewModel.sendTextMessage(value)
                                                     value = ""
                                                 }
                                             }
 
-                                            GenerationManager.ModelType.IMAGE_GENERATION -> {
+                                            ModelType.IMAGE_GENERATION -> {
                                                 chatViewModel.sendImageRequest(value)
                                                 value = ""
                                             }
-                                            GenerationManager.ModelType.AUDIO_GENERATION -> {}
+                                            ModelType.AUDIO_GENERATION -> {}
                                         }
                                     }
                                 },
@@ -642,7 +573,6 @@ fun BottomBar(
 @Composable
 private fun QuickLookChipRow(
     loadedRagCount: Int,
-    enabledToolCount: Int,
     isMemoryEnabled: Boolean,
     isWebSearchEnabled: Boolean = false,
     isRagEnabled: Boolean = true,
@@ -652,7 +582,7 @@ private fun QuickLookChipRow(
     onMemoryChipClick: () -> Unit,
     onWebSearchChipClick: () -> Unit = {}
 ) {
-    val hasAnyActive = (loadedRagCount > 0 && isRagEnabled) || enabledToolCount > 0 || isMemoryEnabled || isWebSearchEnabled || activePluginName != null
+    val hasAnyActive = (loadedRagCount > 0 && isRagEnabled) || isMemoryEnabled || isWebSearchEnabled || activePluginName != null
 
     AnimatedVisibility(visible = hasAnyActive) {
         Row(
@@ -728,9 +658,6 @@ private fun StatusChip(
 @Composable
 private fun MoreOptionsOverlay(
     show: Boolean,
-    // Character
-    activePersona: Persona?,
-    onCharacterClick: () -> Unit,
     // RAG
     loadedRagCount: Int,
     isRagEnabled: Boolean,
@@ -760,88 +687,6 @@ private fun MoreOptionsOverlay(
                 .padding(rDp(12.dp)),
             verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
         ) {
-            // Character Card
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(rDp(Standards.CardSmallCornerRadius)))
-                    .clickable(onClick = onCharacterClick),
-                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
-                shape = RoundedCornerShape(rDp(Standards.CardSmallCornerRadius))
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = rDp(Standards.CardPadding), vertical = rDp(Standards.SpacingSm)),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
-                ) {
-                    // Avatar
-                    Surface(
-                        modifier = Modifier.size(rDp(36.dp)),
-                        shape = RoundedCornerShape(rDp(8.dp)),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            when {
-                                activePersona?.avatarUri != null -> {
-                                    AsyncImage(
-                                        model = ImageRequest.Builder(context)
-                                            .data(File(activePersona.avatarUri))
-                                            .build(),
-                                        contentDescription = "Character",
-                                        modifier = Modifier.fillMaxSize(),
-                                        contentScale = ContentScale.Crop
-                                    )
-                                }
-                                activePersona?.avatar?.isNotBlank() == true -> {
-                                    Text(
-                                        text = activePersona.avatar,
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                }
-                                else -> {
-                                    Icon(
-                                        Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(rDp(20.dp)),
-                                        tint = MaterialTheme.colorScheme.onSecondaryContainer
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    // Name + description
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = activePersona?.name ?: "Default",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1
-                        )
-                        Text(
-                            text = activePersona?.description?.take(60)?.ifBlank {
-                                activePersona.systemPrompt.take(60)
-                            }?.ifBlank { "No character selected" }
-                                ?: "Using model default",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                            maxLines = 1
-                        )
-                    }
-
-                    // Arrow
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "Change character",
-                        modifier = Modifier.size(rDp(20.dp)),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-            }
-
             // RAG section
             Surface(
                 modifier = Modifier.fillMaxWidth(),
@@ -902,7 +747,7 @@ private fun MoreOptionsOverlay(
                         verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
                     ) {
                         Text(
-                            text = "Plugin (select one)",
+                            text = "Plugins",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface

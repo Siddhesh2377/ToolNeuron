@@ -1,14 +1,11 @@
     package com.dark.tool_neuron.di
 
     import android.content.Context
-    import com.dark.tool_neuron.data.VaultManager
     import com.dark.tool_neuron.database.AppDatabase
     import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
-    import com.dark.tool_neuron.repo.ModelRepository
     import com.dark.tool_neuron.repo.RagRepository
     import com.dark.tool_neuron.worker.ChatManager
-    import com.dark.tool_neuron.worker.GenerationManager
     import com.dark.tool_neuron.worker.RagVaultIntegration
     import dagger.Module
     import dagger.Provides
@@ -39,15 +36,6 @@
     @Module
     @InstallIn(SingletonComponent::class)
     object RepositoryModule {
-
-        @Provides
-        @Singleton
-        fun provideModelRepository(): ModelRepository {
-            return ModelRepository(
-                modelRepo = VaultManager.modelRepo ?: error("VaultManager not initialized"),
-                configRepo = VaultManager.configRepo ?: error("VaultManager not initialized")
-            )
-        }
 
         @Provides
         @Singleton
@@ -87,12 +75,6 @@
         @Singleton
         fun provideChatManager(): ChatManager {
             return ChatManager()
-        }
-
-        @Provides
-        @Singleton
-        fun provideGenerationManager(): GenerationManager {
-            return GenerationManager()
         }
 
         @Provides

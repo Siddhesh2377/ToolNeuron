@@ -5,7 +5,6 @@ import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.dark.tool_neuron.data.VaultManager
-import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.AiMemory
 import com.dark.tool_neuron.models.table_schema.MemoryCategory
 import com.dark.tool_neuron.repo.ums.UmsMemoryRepository
@@ -113,12 +112,8 @@ class MemorySummaryWorker(
         val factTexts = facts.map { it.fact }
 
         // Try LLM summarization if a model is loaded
-        val generationManager = try {
-            AppContainer.getGenerationManager()
-        } catch (_: Exception) { null }
-
-        if (generationManager != null && generationManager.isTextModelLoaded()) {
-            val llmSummary = generateLLMSummary(generationManager, category, factTexts)
+        if (LlmModelWorker.isGgufModelLoaded.value) {
+            val llmSummary = generateLLMSummary(category, factTexts)
             if (llmSummary != null) return llmSummary
         }
 
@@ -130,7 +125,6 @@ class MemorySummaryWorker(
      * Use the loaded LLM to generate a natural-language summary.
      */
     private suspend fun generateLLMSummary(
-        generationManager: GenerationManager,
         category: MemoryCategory,
         facts: List<String>
     ): String? {
@@ -151,7 +145,7 @@ Summary:"""
 
         val response = StringBuilder()
         try {
-            generationManager.generateMultiTurnStreaming(
+            LlmModelWorker.ggufGenerateMultiTurnStreaming(
                 messages.toString(), 128
             ).collect { event ->
                 when (event) {

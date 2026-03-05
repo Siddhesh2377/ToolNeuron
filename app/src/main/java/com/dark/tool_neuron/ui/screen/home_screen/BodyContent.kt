@@ -44,8 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.models.ui.ActionIcon
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.models.ui.ActionItem
-import com.dark.tool_neuron.ui.components.MemoryResultsDisplay
 import com.dark.tool_neuron.ui.components.MultiActionButton
 import com.dark.tool_neuron.ui.components.ToolChainDisplay
 import com.dark.tool_neuron.models.messages.ContentType
@@ -64,33 +64,51 @@ import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.AgentPhase
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
-import com.dark.tool_neuron.worker.GenerationManager
-import com.mp.ai_gguf.models.DecodingMetrics
-import kotlinx.coroutines.Dispatchers
+import com.dark.tool_neuron.models.ModelType
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.withContext
 import java.util.Base64
+
+// ── Pre-compiled regex (avoid allocation in composition) ──
+
+private val THINK_TAG_REGEX = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
+private val THINK_OPEN_TAG = "<think>"
+private val THINK_CLOSE_TAG = "</think>"
 
 data class ParsedMessage(
     val thinkingContent: String?,
-    val actualContent: String
+    val actualContent: String,
+    val isThinkingInProgress: Boolean = false
 )
 
-suspend fun parseThinkingTags(content: String): ParsedMessage = withContext(Dispatchers.IO) {
-    // Fast path: skip regex if no think tags present
-    if (!content.contains("<think>")) {
-        return@withContext ParsedMessage(null, content.trim())
+fun parseThinkingTags(content: String): ParsedMessage {
+    // Fast path: no think tags at all
+    if (!content.contains(THINK_OPEN_TAG)) {
+        return ParsedMessage(null, content.trim())
     }
 
-    val thinkingRegex = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
-    val thinkingMatch = thinkingRegex.find(content)
+    // Completed thinking: <think>...</think> present
+    val thinkingMatch = THINK_TAG_REGEX.find(content)
+    if (thinkingMatch != null) {
+        val thinkingContent = thinkingMatch.groupValues[1].trim()
+        val actualContent = content.replace(THINK_TAG_REGEX, "").trim()
+        return ParsedMessage(
+            thinkingContent = thinkingContent.ifEmpty { null },
+            actualContent = actualContent
+        )
+    }
 
-    val thinkingContent = thinkingMatch?.groupValues?.getOrNull(1)?.trim()
-    val actualContent = content.replace(thinkingRegex, "").trim()
-
-    ParsedMessage(thinkingContent, actualContent)
+    // In-progress thinking: <think> opened but no </think> yet (streaming)
+    val openIdx = content.indexOf(THINK_OPEN_TAG)
+    val thinkingContent = content.substring(openIdx + THINK_OPEN_TAG.length).trim()
+    val beforeThink = content.substring(0, openIdx).trim()
+    return ParsedMessage(
+        thinkingContent = thinkingContent.ifEmpty { null },
+        actualContent = beforeThink,
+        isThinkingInProgress = true
+    )
 }
 
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -101,26 +119,30 @@ fun BodyContent(
     llmModelViewModel: LLMModelViewModel
 ) {
     val messages = chatViewModel.messages
-    val isGenerating by chatViewModel.isGenerating.collectAsState()
-    val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsState()
-    val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsState()
-    val streamingImage by chatViewModel.streamingImage.collectAsState()
-    val imageProgress by chatViewModel.imageGenerationProgress.collectAsState()
-    val imageStep by chatViewModel.imageGenerationStep.collectAsState()
-    val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsState()
-    val currentGenerationType by chatViewModel.currentGenerationType.collectAsState()
-    val currentRagResults by chatViewModel.currentRagResults.collectAsState()
-    val currentMemoryResults by chatViewModel.currentMemoryResults.collectAsState()
-    val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsState()
-    val toolChainSteps by chatViewModel.toolChainSteps.collectAsState()
-    val currentToolChainRound by chatViewModel.currentToolChainRound.collectAsState()
-    val agentPhase by chatViewModel.agentPhase.collectAsState()
-    val agentPlan by chatViewModel.agentPlan.collectAsState()
-    val agentSummary by chatViewModel.agentSummary.collectAsState()
-    val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsState()
-    val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsState()
-    val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsState()
-    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsState()
+    val isGenerating by chatViewModel.isGenerating.collectAsStateWithLifecycle()
+    val streamingUserMessage by chatViewModel.streamingUserMessage.collectAsStateWithLifecycle()
+    val streamingAssistantMessage by chatViewModel.streamingAssistantMessage.collectAsStateWithLifecycle()
+    val streamingImage by chatViewModel.streamingImage.collectAsStateWithLifecycle()
+    val imageProgress by chatViewModel.imageGenerationProgress.collectAsStateWithLifecycle()
+    val imageStep by chatViewModel.imageGenerationStep.collectAsStateWithLifecycle()
+    val showDynamicWindow by chatViewModel.showDynamicWindow.collectAsStateWithLifecycle()
+    val currentGenerationType by chatViewModel.currentGenerationType.collectAsStateWithLifecycle()
+    val currentRagResults by chatViewModel.currentRagResults.collectAsStateWithLifecycle()
+    val appState by com.dark.tool_neuron.state.AppStateManager.appState.collectAsStateWithLifecycle()
+    val toolChainSteps by chatViewModel.toolChainSteps.collectAsStateWithLifecycle()
+    val currentToolChainRound by chatViewModel.currentToolChainRound.collectAsStateWithLifecycle()
+    val agentPhase by chatViewModel.agentPhase.collectAsStateWithLifecycle()
+    val agentPlan by chatViewModel.agentPlan.collectAsStateWithLifecycle()
+    val agentSummary by chatViewModel.agentSummary.collectAsStateWithLifecycle()
+    val ttsPlayingMsgId by chatViewModel.ttsPlayingMsgId.collectAsStateWithLifecycle()
+    val ttsIsPlaying by chatViewModel.ttsIsPlaying.collectAsStateWithLifecycle()
+    val ttsSynthesizing by chatViewModel.ttsSynthesizing.collectAsStateWithLifecycle()
+    val ttsModelLoaded by chatViewModel.ttsModelLoaded.collectAsStateWithLifecycle()
+
+    // Image blur setting — collected once, passed down to avoid per-message DataStore creation
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val imageBlurEnabled by remember { com.dark.tool_neuron.data.AppSettingsDataStore(context).imageBlurEnabled }
+        .collectAsStateWithLifecycle(initialValue = true)
 
     val listState = rememberLazyListState()
 
@@ -146,9 +168,8 @@ fun BodyContent(
                     streamingImage = streamingImage,
                     imageProgress = imageProgress,
                     imageStep = imageStep,
-                    isImageGeneration = currentGenerationType == GenerationManager.ModelType.IMAGE_GENERATION,
+                    isImageGeneration = currentGenerationType == ModelType.IMAGE_GENERATION,
                     ragResults = currentRagResults,
-                    memoryResults = currentMemoryResults,
                     appState = appState,
                     messages = messages,
                     toolChainSteps = toolChainSteps,
@@ -158,15 +179,17 @@ fun BodyContent(
                     agentSummary = agentSummary
                 )
             } else {
+                val deduped = remember(messages.size) { messages.distinctBy { it.msgId } }
+                val lastAssistantIndex = remember(deduped.size) { deduped.indexOfLast { it.role == Role.Assistant } }
+
                 LazyColumn(
                     state = listState,
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(vertical = rDp(8.dp)),
                     verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
                 ) {
-                    val lastAssistantIndex = messages.indexOfLast { it.role == Role.Assistant }
 
-                    messages.forEachIndexed { index, message ->
+                    deduped.forEachIndexed { index, message ->
                         when (message.role) {
                             Role.User -> {
                                 item(key = "${message.msgId}-user") {
@@ -177,24 +200,21 @@ fun BodyContent(
                                 val isLastAssistant = index == lastAssistantIndex
                                 // Header: RAG, tool chain, thinking, image/plugin
                                 item(key = "${message.msgId}-header") {
-                                    AssistantMessageHeader(message)
+                                    AssistantMessageHeader(message, imageBlurEnabled)
                                 }
                                 // Markdown content — each element is a lazy item
                                 if (message.content.contentType == ContentType.Text) {
-                                    val parsedText = message.content.content
-                                        .let { raw ->
-                                            // Strip <think>...</think> for the markdown items
-                                            if (raw.contains("<think>")) {
-                                                raw.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "").trim()
-                                            } else raw
-                                        }
+                                    val raw = message.content.content
+                                    val parsedText = if (raw.contains("<think>")) {
+                                        raw.replace(THINK_TAG_REGEX, "").trim()
+                                    } else raw
                                     if (parsedText.isNotEmpty()) {
                                         lazyMarkdownItems(
                                             text = parsedText,
                                             keyPrefix = message.msgId,
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 4.dp)
+                                                .padding(horizontal = 12.dp)
                                         )
                                     }
                                 }
@@ -224,52 +244,43 @@ fun BodyContent(
             }
         }
 
+        // Scrim + Dynamic Action Window — single AnimatedVisibility to avoid double state reads
         AnimatedVisibility(
             visible = showDynamicWindow,
             enter = fadeIn(animationSpec = tween(300)),
             exit = fadeOut(animationSpec = tween(300))
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Black.copy(alpha = 0.6f))
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {
-                        chatViewModel.hideDynamicWindow()
-                    })
-        }
-
-        AnimatedVisibility(
-            visible = showDynamicWindow,
-            enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                initialOffsetY = { -it },
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
+            Box(modifier = Modifier.fillMaxSize()) {
+                // Scrim background
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.6f))
+                        .clickable(
+                            indication = null,
+                            interactionSource = remember { MutableInteractionSource() }
+                        ) {
+                            chatViewModel.hideDynamicWindow()
+                        }
                 )
-            ),
-            exit = fadeOut(animationSpec = tween(300)) + slideOutVertically(
-                targetOffsetY = { -it },
-                animationSpec = tween(300)
-            )
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
-                contentAlignment = Alignment.TopCenter
-            ) {
-                val ragCount by com.dark.tool_neuron.plugins.PluginManager.enabledPluginNames.collectAsState()
-                val ttsLoaded by com.dark.tool_neuron.tts.TTSManager.isModelLoaded.collectAsState()
 
-                DynamicActionWindow(
-                    chatViewModel = chatViewModel,
-                    modelViewModel = llmModelViewModel,
-                    enabledToolCount = ragCount.size,
-                    ttsModelLoaded = ttsLoaded
-                )
+                // Window content with spring animation
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = rDp(16.dp), vertical = rDp(16.dp)),
+                    contentAlignment = Alignment.TopCenter
+                ) {
+                    val ragCount by com.dark.tool_neuron.plugins.PluginManager.enabledPluginNames.collectAsStateWithLifecycle()
+                    val ttsLoaded by com.dark.tool_neuron.tts.TTSManager.isModelLoaded.collectAsStateWithLifecycle()
+
+                    DynamicActionWindow(
+                        chatViewModel = chatViewModel,
+                        modelViewModel = llmModelViewModel,
+                        enabledToolCount = ragCount.size,
+                        ttsModelLoaded = ttsLoaded
+                    )
+                }
             }
         }
     }
@@ -284,7 +295,6 @@ private fun StreamingView(
     imageStep: String,
     isImageGeneration: Boolean,
     ragResults: List<com.dark.tool_neuron.viewmodel.RagQueryDisplayResult> = emptyList(),
-    memoryResults: List<com.dark.tool_neuron.worker.ScoredVaultContent> = emptyList(),
     appState: com.dark.tool_neuron.models.state.AppState,
     messages: List<Messages> = emptyList(),
     toolChainSteps: List<com.dark.tool_neuron.models.messages.ToolChainStepData> = emptyList(),
@@ -352,11 +362,6 @@ private fun StreamingView(
         // Show RAG context if available
         if (ragResults.isNotEmpty()) {
             RagResultsDisplay(results = ragResults)
-        }
-
-        // Show Memory results if available
-        if (memoryResults.isNotEmpty()) {
-            MemoryResultsDisplay(results = memoryResults)
         }
 
         // Agent execution view (Plan → Execute → Summarize)
@@ -457,6 +462,13 @@ private fun ImageGenerationStreamingBubble(
 }
 
 
+private data class ChunkAnimParams(
+    val ampX: Float, val ampY: Float,
+    val durX: Int, val durY: Int,
+    val delayX: Int, val delayY: Int,
+    val scatterX: Float, val scatterY: Float
+)
+
 /**
  * ChatGPT-style morphing color preview.
  *
@@ -500,35 +512,39 @@ private fun MorphingImagePreview(
 
         chunks.forEachIndexed { index, chunk ->
             key(index) {
-                val rng = remember { Random(index * 37 + 7) }
-                val ampX = remember { 25f + rng.nextFloat() * 35f }
-                val ampY = remember { 20f + rng.nextFloat() * 30f }
-                val durX = remember { 3500 + rng.nextInt(2000) }
-                val durY = remember { 3000 + rng.nextInt(2000) }
-                val delayX = remember { rng.nextInt(700) }
-                val delayY = remember { rng.nextInt(700) }
-                val scatterX = remember { (rng.nextFloat() - 0.5f) * 50f }
-                val scatterY = remember { (rng.nextFloat() - 0.5f) * 40f }
+                val params = remember {
+                    val rng = Random(index * 37 + 7)
+                    ChunkAnimParams(
+                        ampX = 25f + rng.nextFloat() * 35f,
+                        ampY = 20f + rng.nextFloat() * 30f,
+                        durX = 3500 + rng.nextInt(2000),
+                        durY = 3000 + rng.nextInt(2000),
+                        delayX = rng.nextInt(700),
+                        delayY = rng.nextInt(700),
+                        scatterX = (rng.nextFloat() - 0.5f) * 50f,
+                        scatterY = (rng.nextFloat() - 0.5f) * 40f
+                    )
+                }
 
                 val driftX by infiniteTransition.animateFloat(
-                    initialValue = -ampX, targetValue = ampX,
+                    initialValue = -params.ampX, targetValue = params.ampX,
                     animationSpec = infiniteRepeatable(
-                        tween(durX, delayMillis = delayX, easing = LinearOutSlowInEasing),
+                        tween(params.durX, delayMillis = params.delayX, easing = LinearOutSlowInEasing),
                         RepeatMode.Reverse
                     ), label = "dx$index"
                 )
                 val driftY by infiniteTransition.animateFloat(
-                    initialValue = -ampY, targetValue = ampY,
+                    initialValue = -params.ampY, targetValue = params.ampY,
                     animationSpec = infiniteRepeatable(
-                        tween(durY, delayMillis = delayY, easing = LinearOutSlowInEasing),
+                        tween(params.durY, delayMillis = params.delayY, easing = LinearOutSlowInEasing),
                         RepeatMode.Reverse
                     ), label = "dy$index"
                 )
 
                 val col = index % cols
                 val row = index / cols
-                val ox = cellW * col + ((driftX + scatterX) * drift).dp
-                val oy = cellH * row + ((driftY + scatterY) * drift).dp
+                val ox = cellW * col + ((driftX + params.scatterX) * drift).dp
+                val oy = cellH * row + ((driftY + params.scatterY) * drift).dp
                 val blobScale = 1f + 0.6f * drift
 
                 Image(
@@ -578,12 +594,7 @@ private fun createFeatheredChunk(src: Bitmap, w: Int, h: Int): Bitmap {
 
 @Composable
 private fun AssistantStreamingBubble(text: String) {
-    val parsedMessage by produceState(
-        initialValue = ParsedMessage(null, text),
-        key1 = text
-    ) {
-        value = parseThinkingTags(text)
-    }
+    val parsedMessage = remember(text) { parseThinkingTags(text) }
 
     Column(
         modifier = Modifier
@@ -592,7 +603,10 @@ private fun AssistantStreamingBubble(text: String) {
         verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
     ) {
         if (parsedMessage.thinkingContent != null) {
-            ThinkingBlock(parsedMessage.thinkingContent!!)
+            ThinkingBlock(
+                thinkingText = parsedMessage.thinkingContent,
+                isStreaming = parsedMessage.isThinkingInProgress
+            )
         }
 
         if (parsedMessage.actualContent.isNotEmpty()) {
@@ -618,8 +632,27 @@ private fun AssistantStreamingBubble(text: String) {
 }
 
 @Composable
-private fun ThinkingBlock(thinkingText: String) {
-    var isExpanded by remember { mutableStateOf(false) }
+private fun ThinkingBlock(
+    thinkingText: String,
+    isStreaming: Boolean = false
+) {
+    // Auto-expand while streaming, auto-collapse when done
+    var userToggled by remember { mutableStateOf(false) }
+    var userExpandState by remember { mutableStateOf(false) }
+
+    val isExpanded = if (userToggled) userExpandState else isStreaming
+
+    // Pulsing dot animation for streaming state
+    val infiniteTransition = rememberInfiniteTransition(label = "thinkPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "thinkPulseAlpha"
+    )
 
     Surface(
         modifier = Modifier.fillMaxWidth().padding(horizontal = rDp(12.dp)),
@@ -631,7 +664,10 @@ private fun ThinkingBlock(thinkingText: String) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clickable { isExpanded = !isExpanded }
+                    .clickable {
+                        userToggled = true
+                        userExpandState = !isExpanded
+                    }
                     .padding(vertical = rDp(8.dp), horizontal = rDp(12.dp)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
@@ -643,11 +679,13 @@ private fun ThinkingBlock(thinkingText: String) {
                     Icon(
                         painter = painterResource(R.drawable.thinking),
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(16.dp)),
+                        modifier = Modifier
+                            .size(rDp(16.dp))
+                            .graphicsLayer { alpha = if (isStreaming) pulseAlpha else 1f },
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
-                        text = "Thinking",
+                        text = if (isStreaming) "Thinking…" else "Thought",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.tertiary
@@ -752,7 +790,7 @@ private fun UserMessageBubble(message: Messages) {
 
 /** Header part of assistant message: RAG results, tool chain, thinking block, non-text content. */
 @Composable
-private fun AssistantMessageHeader(message: Messages) {
+private fun AssistantMessageHeader(message: Messages, imageBlurEnabled: Boolean = true) {
     val hasRagResults = remember(message.ragResults) {
         message.ragResults?.isNotEmpty() == true
     }
@@ -785,19 +823,16 @@ private fun AssistantMessageHeader(message: Messages) {
 
         // Non-text content types
         when (message.content.contentType) {
-            ContentType.Image -> ImageMessageBubble(message)
+            ContentType.Image -> ImageMessageBubble(message, imageBlurEnabled)
             ContentType.PluginResult -> PluginResultCard(message = message)
             else -> {
                 // Thinking block (markdown body is handled by lazyMarkdownItems)
-                val thinkingContent by produceState<String?>(
-                    initialValue = null,
-                    key1 = message.content.content
-                ) {
+                val parsed = remember(message.content.content) {
                     if (message.content.content.contains("<think>")) {
-                        value = parseThinkingTags(message.content.content).thinkingContent
-                    }
+                        parseThinkingTags(message.content.content)
+                    } else null
                 }
-                thinkingContent?.let { ThinkingBlock(it) }
+                parsed?.thinkingContent?.let { ThinkingBlock(it) }
             }
         }
     }
@@ -852,9 +887,7 @@ private fun AssistantMessageFooter(
             // Strip thinking tags for the text content passed to action row
             val textContent = remember(message.content.content) {
                 if (message.content.content.contains("<think>")) {
-                    message.content.content.replace(
-                        Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), ""
-                    ).trim()
+                    message.content.content.replace(THINK_TAG_REGEX, "").trim()
                 } else message.content.content
             }
             if (textContent.isNotEmpty()) {
@@ -968,10 +1001,7 @@ private fun MessageActionRow(
 }
 
 @Composable
-private fun ImageMessageBubble(message: Messages) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    val appSettingsDataStore = remember { com.dark.tool_neuron.data.AppSettingsDataStore(context) }
-    val imageBlurEnabled by appSettingsDataStore.imageBlurEnabled.collectAsState(initial = true)
+private fun ImageMessageBubble(message: Messages, imageBlurEnabled: Boolean = true) {
     var isImageRevealed by remember(imageBlurEnabled) { mutableStateOf(!imageBlurEnabled) }
 
     Column(
@@ -1076,7 +1106,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
         "%.1f".format(metrics.tokensPerSecond)
     }
     val formattedTime = remember(metrics.totalTimeMs) {
-        if (metrics.totalTimeMs > 0) "%.1f".format(metrics.totalTimeMs / 1000f) else null
+        if (metrics.totalTimeMs > 0f) "%.1f".format(metrics.totalTimeMs / 1000f) else null
     }
 
     Column(
@@ -1124,7 +1154,7 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     )
 
                     Text(
-                        text = "${metrics.totalTokens} tokens",
+                        text = "${metrics.tokensEvaluated + metrics.tokensPredicted} tokens",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1169,22 +1199,22 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                     MetricRow(
                         icon = R.drawable.tokens,
                         label = "Total Tokens",
-                        value = metrics.totalTokens.toString()
+                        value = (metrics.tokensEvaluated + metrics.tokensPredicted).toString()
                     )
 
-                    if (metrics.promptTokens > 0) {
+                    if (metrics.tokensEvaluated > 0) {
                         MetricRow(
                             icon = R.drawable.prompt,
                             label = "Prompt Tokens",
-                            value = metrics.promptTokens.toString()
+                            value = metrics.tokensEvaluated.toString()
                         )
                     }
 
-                    if (metrics.generatedTokens > 0) {
+                    if (metrics.tokensPredicted > 0) {
                         MetricRow(
                             icon = R.drawable.generated,
                             label = "Generated Tokens",
-                            value = metrics.generatedTokens.toString()
+                            value = metrics.tokensPredicted.toString()
                         )
                     }
 
@@ -1194,11 +1224,11 @@ private fun MetricsDisplay(metrics: DecodingMetrics, memoryMetrics: MemoryMetric
                         value = "$formattedSpeed t/s"
                     )
 
-                    if (metrics.timeToFirstToken > 0) {
+                    if (metrics.timeToFirstTokenMs > 0f) {
                         MetricRow(
                             icon = R.drawable.timer,
                             label = "Time to First Token",
-                            value = "${metrics.timeToFirstToken} ms"
+                            value = "${"%.0f".format(metrics.timeToFirstTokenMs)} ms"
                         )
                     }
 
