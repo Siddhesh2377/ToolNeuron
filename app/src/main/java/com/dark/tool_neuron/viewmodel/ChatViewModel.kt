@@ -37,9 +37,6 @@ import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import jakarta.inject.Inject
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -387,8 +384,11 @@ class ChatViewModel @Inject constructor(
                     }
                 }
 
-                // Always use simpleFlow — native tool calling is handled via ToolCall events.
-                simpleFlow(prompt, ragContext, maxTokens, isNewChat, hasTools = hasTools)
+                if (hasTools) {
+                    agentFlow(prompt, ragContext, maxTokens, isNewChat)
+                } else {
+                    simpleFlow(prompt, ragContext, maxTokens, isNewChat)
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -452,7 +452,11 @@ class ChatViewModel @Inject constructor(
                 LlmModelWorker.setThinkingEnabledGguf(_thinkingModeEnabled.value && !hasTools)
                 val ragContext = _currentRagContext.value
 
-                simpleFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true, hasTools = hasTools)
+                if (hasTools) {
+                    agentFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true)
+                } else {
+                    simpleFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true)
+                }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -841,8 +845,7 @@ class ChatViewModel @Inject constructor(
         ragContext: String?,
         maxTokens: Int,
         isNewChat: Boolean,
-        isRegeneration: Boolean = false,
-        hasTools: Boolean = false
+        isRegeneration: Boolean = false
     ) {
         AppStateManager.setGeneratingText()
         val fullPrompt = ragContext?.let { "$it\n\n$prompt" } ?: prompt
@@ -850,13 +853,7 @@ class ChatViewModel @Inject constructor(
         if (isNewChat) {
             val conversationMessages = buildConversationMessages(fullPrompt)
             val genResult = generateWithToolCalls(conversationMessages, maxTokens)
-
-            // If native tool calls were emitted, execute them and generate a summary
-            val finalResponse = if (hasTools && genResult.toolCalls.isNotEmpty()) {
-                executeNativeToolCalls(genResult, prompt, conversationMessages, maxTokens)
-            } else {
-                filterToolCallSyntax(genResult.text)
-            }
+            val finalResponse = filterToolCallSyntax(genResult.text)
 
             _streamingAssistantMessage.value = finalResponse
             createChatWithMessages(prompt, finalResponse, currentMetrics)
@@ -865,13 +862,7 @@ class ChatViewModel @Inject constructor(
 
             val conversationMessages = buildConversationMessages(fullPrompt, isRegeneration)
             val genResult = generateWithToolCalls(conversationMessages, maxTokens)
-
-            // If native tool calls were emitted, execute them and generate a summary
-            val finalResponse = if (hasTools && genResult.toolCalls.isNotEmpty()) {
-                executeNativeToolCalls(genResult, prompt, conversationMessages, maxTokens)
-            } else {
-                filterToolCallSyntax(genResult.text)
-            }
+            val finalResponse = filterToolCallSyntax(genResult.text)
 
             _streamingAssistantMessage.value = finalResponse
 
@@ -910,72 +901,6 @@ class ChatViewModel @Inject constructor(
                 resetStreamingState()
             }
         }
-    }
-
-    /**
-     * Execute native tool calls from generation, then generate a follow-up summary.
-     * Returns the final response text incorporating tool results.
-     */
-    private suspend fun executeNativeToolCalls(
-        genResult: GenerationResult,
-        userPrompt: String,
-        originalMessages: List<JSONObject>,
-        maxTokens: Int
-    ): String {
-        val enabledNames = PluginManager.getEnabledToolNames().map { it.lowercase() }
-
-        // Filter to valid tool calls
-        val validCalls = genResult.toolCalls.mapNotNull { (rawName, rawArgs) ->
-            val normalized = normalizeToolName(rawName)
-            if (normalized.lowercase() in enabledNames) normalized to rawArgs else {
-                Log.w(TAG, "Skipping unknown/disabled native tool call: $rawName")
-                null
-            }
-        }
-
-        // Execute all tool calls in parallel
-        val toolResults = coroutineScope {
-            validCalls.map { (normalizedName, rawArgs) ->
-                async {
-                    _currentToolName.value = normalizedName
-                    AppStateManager.setExecutingPlugin("", normalizedName)
-                    try {
-                        val argsObj = try { JSONObject(rawArgs) } catch (_: Exception) { JSONObject() }
-                        val toolCall = ToolCall(name = normalizedName, arguments = argsObj)
-                        val result = PluginManager.executeToolForMultiTurn(toolCall)
-
-                        AppStateManager.setPluginExecutionComplete(
-                            pluginName = result.pluginName,
-                            toolName = normalizedName,
-                            success = !result.isError,
-                            executionTimeMs = result.executionTimeMs
-                        )
-
-                        Log.d(TAG, "Native tool executed: $normalizedName (${result.executionTimeMs}ms)")
-                        "[$normalizedName]: ${result.resultJson.take(500)}"
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Native tool execution failed: $normalizedName: ${e.message}")
-                        "[$normalizedName]: Error: ${e.message}"
-                    }
-                }
-            }.awaitAll()
-        }
-
-        _currentToolName.value = null
-
-        // Generate summary using tool results
-        if (toolResults.isEmpty()) return filterToolCallSyntax(genResult.text)
-
-        AppStateManager.setGeneratingText()
-        val summaryMessages = originalMessages.toMutableList()
-        // Add tool results as context
-        val toolContext = "Tool results:\n${toolResults.joinToString("\n")}"
-        summaryMessages.add(JSONObject().put("role", "system").put("content", toolContext))
-        summaryMessages.add(JSONObject().put("role", "user").put("content",
-            "Using the tool results above, answer the original question: $userPrompt"))
-
-        val summary = generatePlainText(summaryMessages, maxTokens)
-        return filterToolCallSyntax(summary)
     }
 
     // ==================== LLM Generation Helpers ====================
