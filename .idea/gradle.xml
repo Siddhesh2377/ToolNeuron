@@ -11,8 +11,11 @@
           <set>
             <option value="$PROJECT_DIR$" />
             <option value="$PROJECT_DIR$/app" />
+            <option value="$PROJECT_DIR$/file_ops" />
             <option value="$PROJECT_DIR$/memory-vault" />
             <option value="$PROJECT_DIR$/neuron-packet" />
+            <option value="$PROJECT_DIR$/system_encryptor" />
+            <option value="$PROJECT_DIR$/ums" />
           </set>
         </option>
       </GradleProjectSettings>

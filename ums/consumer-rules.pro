@@ -5,8 +5,7 @@
     <init>();
 }
 -keep class com.dark.ums.UmsRecord {
-    internal byte[] data;
-    public <methods>;
+    *;
 }
 -keep class com.dark.ums.UmsRecord$Builder {
     public <methods>;
