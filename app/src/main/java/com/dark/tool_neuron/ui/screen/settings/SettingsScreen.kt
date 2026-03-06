@@ -92,6 +92,7 @@ fun SettingsScreen(
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
     val codeHighlightEnabled by viewModel.codeHighlightEnabled.collectAsStateWithLifecycle()
     val aiMemoryEnabled by viewModel.aiMemoryEnabled.collectAsStateWithLifecycle()
+    val askModelReloadDialog by viewModel.askModelReloadDialog.collectAsStateWithLifecycle()
     val hardwareTuningEnabled by viewModel.hardwareTuningEnabled.collectAsStateWithLifecycle()
     val hardwareProfile by viewModel.hardwareProfile.collectAsStateWithLifecycle()
     val performanceMode by viewModel.performanceMode.collectAsStateWithLifecycle()
@@ -447,6 +448,15 @@ fun SettingsScreen(
                     description = "Remember previous messages in conversation (faster without)",
                     checked = chatMemoryEnabled,
                     onCheckedChange = { viewModel.setChatMemoryEnabled(it) }
+                )
+            }
+
+            item {
+                SwitchRow(
+                    title = "Ask to Reload Model",
+                    description = "Show dialog on startup to reload last model. When off, auto-loads silently.",
+                    checked = askModelReloadDialog,
+                    onCheckedChange = { viewModel.setAskModelReloadDialog(it) }
                 )
             }
 

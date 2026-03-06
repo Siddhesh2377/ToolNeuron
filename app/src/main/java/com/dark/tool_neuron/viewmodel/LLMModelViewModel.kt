@@ -73,7 +73,13 @@ class LLMModelViewModel @Inject constructor(
             } catch (_: Exception) {
                 return@launch
             }
-            _lastModelOffer.value = model
+
+            val askDialog = appSettings.askModelReloadDialog.first()
+            if (askDialog) {
+                _lastModelOffer.value = model  // show dialog
+            } else {
+                loadModel(model)  // auto-load silently
+            }
         }
 
         // Watch for performance mode reload requests

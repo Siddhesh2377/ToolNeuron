@@ -32,6 +32,7 @@ class AppSettingsDataStore(private val context: Context) {
         private val HARDWARE_PROFILE_JSON = stringPreferencesKey("hardware_profile_json")
         private val HARDWARE_TUNING_ENABLED = booleanPreferencesKey("hardware_tuning_enabled")
         private val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
+        private val ASK_MODEL_RELOAD_DIALOG = booleanPreferencesKey("ask_model_reload_dialog")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -179,6 +180,14 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun savePerformanceMode(mode: PerformanceMode) {
         context.appSettingsDataStore.edit { it[PERFORMANCE_MODE] = mode.name }
+    }
+
+    val askModelReloadDialog: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[ASK_MODEL_RELOAD_DIALOG] ?: true
+    }
+
+    suspend fun updateAskModelReloadDialog(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[ASK_MODEL_RELOAD_DIALOG] = enabled }
     }
 
     suspend fun clear() {

@@ -101,6 +101,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val aiMemoryEnabled: StateFlow<Boolean> = appSettingsDataStore.aiMemoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    val askModelReloadDialog: StateFlow<Boolean> = appSettingsDataStore.askModelReloadDialog
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
     // Hardware tuning
     val hardwareTuningEnabled: StateFlow<Boolean> = appSettingsDataStore.hardwareTuningEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
@@ -168,6 +171,10 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAiMemoryEnabled(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateAiMemoryEnabled(enabled) }
+    }
+
+    fun setAskModelReloadDialog(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateAskModelReloadDialog(enabled) }
     }
 
     fun setHardwareTuningEnabled(enabled: Boolean) {
