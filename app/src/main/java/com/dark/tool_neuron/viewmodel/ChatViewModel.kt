@@ -171,6 +171,7 @@ class ChatViewModel @Inject constructor(
     // Model state
     val isTextModelLoaded = LlmModelWorker.isGgufModelLoaded
     val isImageModelLoaded = LlmModelWorker.isDiffusionModelLoaded
+    val isVlmLoaded = LlmModelWorker.isVlmLoaded
 
     // TTS state
     val ttsPlayingMsgId = TTSManager.currentPlayingMsgId
@@ -391,6 +392,116 @@ class ChatViewModel @Inject constructor(
 
     // Keep old name as alias for backward compatibility with callers
     fun sendTextMessage(prompt: String) = sendChat(prompt)
+
+    /**
+     * Send a message with images (VLM). Requires a VLM projector to be loaded.
+     * @param prompt User's text prompt
+     * @param imageData List of raw image file bytes (JPEG/PNG)
+     */
+    fun sendChatWithImages(prompt: String, imageData: List<ByteArray>) {
+        if (!LlmModelWorker.isGgufModelLoaded.value) {
+            reportError("Please load a text generation model first")
+            return
+        }
+        if (!LlmModelWorker.isVlmLoaded.value) {
+            reportError("Please load a vision projector (mmproj) first")
+            return
+        }
+        if (_isGenerating.value) return
+
+        _isGenerating.value = true
+        _streamingUserMessage.value = prompt
+        _streamingAssistantMessage.value = ""
+        userMessageAdded = false
+        currentMetrics = null
+        _error.value = null
+
+        currentUserMessage = Messages(
+            msgId = "",
+            role = Role.User,
+            content = MessageContent(contentType = ContentType.Text, content = prompt),
+            modelId = currentModelId,
+        )
+        AppStateManager.setHasMessages(true)
+
+        generationJob = viewModelScope.launch {
+            try {
+                val maxTokens = getCurrentModelMaxTokens()
+                val isNewChat = isNewConversation
+
+                // Insert image marker into prompt for VLM
+                val marker = LlmModelWorker.getVlmDefaultMarker()
+                val vlmPrompt = if (prompt.contains(marker)) prompt
+                    else marker.repeat(imageData.size) + "\n" + prompt
+
+                val conversationMessages = buildConversationMessages(vlmPrompt)
+                val jsonArray = JSONArray(conversationMessages)
+
+                AppStateManager.setGeneratingText()
+
+                val resultBuilder = StringBuilder()
+                var lastEmitTime = 0L
+
+                LlmModelWorker.vlmGenerateStreaming(
+                    jsonArray.toString(), imageData, maxTokens
+                ).collect { event ->
+                    when (event) {
+                        is GenerationEvent.Token -> {
+                            resultBuilder.append(event.text)
+                            val now = System.currentTimeMillis()
+                            if (now - lastEmitTime >= STREAMING_THROTTLE_MS) {
+                                _streamingAssistantMessage.value = resultBuilder.toString()
+                                lastEmitTime = now
+                            }
+                        }
+                        is GenerationEvent.Done -> {
+                            _streamingAssistantMessage.value = resultBuilder.toString()
+                        }
+                        is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
+                        is GenerationEvent.Progress -> { /* progress tracked elsewhere */ }
+                        is GenerationEvent.Error -> {
+                            Log.e(TAG, "VLM generation error: ${event.message}")
+                            throw Exception(event.message)
+                        }
+                        is GenerationEvent.ToolCall -> { /* VLM doesn't support tool calling */ }
+                    }
+                }
+
+                val finalResponse = resultBuilder.toString()
+                _streamingAssistantMessage.value = finalResponse
+
+                if (isNewChat) {
+                    createChatWithMessages(prompt, finalResponse, currentMetrics)
+                } else {
+                    val chatId = _currentChatId.value ?: return@launch
+                    val pendingUserMsg = currentUserMessage
+                    if (!userMessageAdded && pendingUserMsg != null) {
+                        _messages.add(pendingUserMsg)
+                        userMessageAdded = true
+                    }
+                    if (finalResponse.isNotBlank()) {
+                        val assistantMessage = Messages(
+                            role = Role.Assistant,
+                            content = MessageContent(contentType = ContentType.Text, content = finalResponse),
+                            modelId = currentModelId,
+                            decodingMetrics = currentMetrics,
+                        )
+                        _messages.add(assistantMessage)
+                        chatManager.addMessage(chatId, assistantMessage)
+                        AppStateManager.setGenerationComplete()
+                        AppStateManager.chatRefreshed()
+                    }
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in sendChatWithImages", e)
+                reportError(e.message)
+            } finally {
+                resetStreamingState()
+            }
+        }
+    }
 
     /**
      * Regenerate the last assistant response.

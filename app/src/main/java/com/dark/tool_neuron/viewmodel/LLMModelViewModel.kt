@@ -70,6 +70,7 @@ class LLMModelViewModel @Inject constructor(
     private fun isQnnRuntimeReady(): Boolean {
         val runtimeDir = File(getApplication<Application>().filesDir, "runtime_libs/qnnlibs")
         val marker = File(runtimeDir, ".extracted")
+        Log.d("QNN", runtimeDir.exists().toString())
         return marker.exists() && (runtimeDir.listFiles()?.size ?: 0) > 1
     }
 

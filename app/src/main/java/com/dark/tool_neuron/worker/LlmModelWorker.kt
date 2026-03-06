@@ -613,6 +613,48 @@ object LlmModelWorker {
     }.buffer(Channel.UNLIMITED)
         .flowOn(Dispatchers.IO)
 
+    // ==================== VLM (Vision Language Model) Methods ====================
+
+    private val _isVlmLoaded = MutableStateFlow(false)
+    val isVlmLoaded: StateFlow<Boolean> = _isVlmLoaded.asStateFlow()
+
+    fun loadVlmProjector(path: String, threads: Int = 0): Boolean {
+        val engine = LLMService.instance?.ggufEngine ?: return false
+        val success = engine.loadVlmProjector(path, threads)
+        _isVlmLoaded.value = success
+        if (success) Log.i(TAG, "VLM projector loaded: $path")
+        else Log.e(TAG, "VLM projector failed to load: $path")
+        return success
+    }
+
+    fun loadVlmProjectorFromFd(fd: Int, threads: Int = 0): Boolean {
+        val engine = LLMService.instance?.ggufEngine ?: return false
+        val success = engine.loadVlmProjectorFromFd(fd, threads)
+        _isVlmLoaded.value = success
+        return success
+    }
+
+    fun releaseVlmProjector() {
+        LLMService.instance?.ggufEngine?.releaseVlmProjector()
+        _isVlmLoaded.value = false
+        Log.i(TAG, "VLM projector released")
+    }
+
+    fun getVlmDefaultMarker(): String {
+        return LLMService.instance?.ggufEngine?.getVlmDefaultMarker() ?: "<__image__>"
+    }
+
+    fun vlmGenerateStreaming(
+        messagesJson: String,
+        imageData: List<ByteArray>,
+        maxTokens: Int
+    ): Flow<GenerationEvent> {
+        val engine = LLMService.instance?.ggufEngine
+            ?: return kotlinx.coroutines.flow.flowOf(GenerationEvent.Error("LLM service not available"))
+        return engine.generateVlmFlow(messagesJson, imageData, maxTokens)
+            .flowOn(Dispatchers.IO)
+    }
+
     // ==================== Diffusion Methods ====================
 
     /**
