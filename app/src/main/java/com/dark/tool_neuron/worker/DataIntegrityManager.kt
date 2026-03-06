@@ -13,6 +13,7 @@ import com.dark.tool_neuron.repo.ums.UmsPersonaRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 /**
@@ -212,7 +213,7 @@ class DataIntegrityManager(
      * Avatar file on disk -> no Persona refs it: delete orphaned file.
      */
     private suspend fun checkOrphanedAvatars(): Int {
-        val avatarDir = File(context.filesDir, "persona_avatars")
+        val avatarDir = AppPaths.personaAvatars(context)
         if (!avatarDir.exists() || !avatarDir.isDirectory) return 0
 
         val personas = personaRepo.getAllOnce()

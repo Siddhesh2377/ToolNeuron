@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import android.util.Log
 import com.dark.tool_neuron.data.VaultManager
+import com.dark.tool_neuron.global.AppPaths
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -142,7 +143,7 @@ class SystemBackupManager(private val context: Context) {
 
     suspend fun estimateBackupSize(options: BackupOptions = BackupOptions()): BackupSizeEstimate = withContext(Dispatchers.IO) {
         // UMS directory replaces both Room DB and VaultHelper vault
-        val umsDir = File(context.filesDir, "ums")
+        val umsDir = AppPaths.ums(context)
         val umsSize = if (umsDir.exists()) dirSize(umsDir) else 0L
 
         // Room DB still exists for RAG (and for migration engine reads)
@@ -156,10 +157,10 @@ class SystemBackupManager(private val context: Context) {
                 ?.sumOf { it.length() } ?: 0L
         } else 0L
 
-        val ragDir = File(context.filesDir, "rags")
+        val ragDir = AppPaths.rags(context)
         val ragFilesSize = if (options.includeRagFiles && ragDir.exists()) dirSize(ragDir) else 0L
 
-        val avatarDir = File(context.filesDir, "persona_avatars")
+        val avatarDir = AppPaths.personaAvatars(context)
         val avatarFilesSize = if (avatarDir.exists()) dirSize(avatarDir) else 0L
 
         var modelFilesSize = 0L
@@ -168,7 +169,7 @@ class SystemBackupManager(private val context: Context) {
         if (options.includeModelFiles) {
             val modelRepo = VaultManager.modelRepo
             val models = modelRepo?.getAllOnce() ?: emptyList()
-            val modelsDir = File(context.filesDir, "models")
+            val modelsDir = AppPaths.models(context)
 
             for (model in models) {
                 if (options.modelIdsToInclude.isNotEmpty() && model.id !in options.modelIdsToInclude) continue
@@ -291,7 +292,7 @@ class SystemBackupManager(private val context: Context) {
             // RAG files
             if (options.includeRagFiles) {
                 onProgress(BackupProgress.Collecting("RAG data", ++componentIndex, componentCount))
-                collectDirectoryFiles(File(context.filesDir, "rags")).forEach { (path, data) ->
+                collectDirectoryFiles(AppPaths.rags(context)).forEach { (path, data) ->
                     entries.add(Triple(EntryType.RAG_FILE, path, data))
                     checksums["rag:$path"] = sha256(data)
                 }
@@ -301,7 +302,7 @@ class SystemBackupManager(private val context: Context) {
 
             // Persona avatars
             onProgress(BackupProgress.Collecting("Avatars", ++componentIndex, componentCount))
-            collectDirectoryFiles(File(context.filesDir, "persona_avatars")).forEach { (path, data) ->
+            collectDirectoryFiles(AppPaths.personaAvatars(context)).forEach { (path, data) ->
                 entries.add(Triple(EntryType.AVATAR_FILE, path, data))
                 checksums["avatar:$path"] = sha256(data)
             }
@@ -481,7 +482,7 @@ class SystemBackupManager(private val context: Context) {
 
                 // Restore UMS directory files (v3 backups)
                 if (umsEntries.isNotEmpty()) {
-                    val umsDir = File(context.filesDir, "ums")
+                    val umsDir = AppPaths.ums(context)
                     umsDir.deleteRecursively()
                     umsDir.mkdirs()
 
@@ -562,7 +563,9 @@ class SystemBackupManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Restore failed (pre-destructive phase)", e)
             // No rollback needed — we haven't modified anything yet
-            try { AppContainer.reinitialize(context) } catch (_: Exception) {}
+            try { AppContainer.reinitialize(context) } catch (reinitEx: Exception) {
+                Log.e(TAG, "AppContainer reinitialize failed during restore recovery", reinitEx)
+            }
             onProgress(BackupProgress.Error(e.message ?: "Restore failed"))
             false
         }
@@ -577,7 +580,7 @@ class SystemBackupManager(private val context: Context) {
             // Close and clear UMS
             onProgress(BackupProgress.Collecting("Clearing UMS data"))
             VaultManager.close()
-            File(context.filesDir, "ums").deleteRecursively()
+            AppPaths.ums(context).deleteRecursively()
 
             // Clear Room database (RAG tables)
             onProgress(BackupProgress.Collecting("Clearing database"))
@@ -585,11 +588,11 @@ class SystemBackupManager(private val context: Context) {
 
             // Clear RAG files
             onProgress(BackupProgress.Collecting("Clearing RAG data"))
-            File(context.filesDir, "rags").deleteRecursively()
+            AppPaths.rags(context).deleteRecursively()
 
             // Clear avatar files
             onProgress(BackupProgress.Collecting("Clearing avatars"))
-            File(context.filesDir, "persona_avatars").deleteRecursively()
+            AppPaths.personaAvatars(context).deleteRecursively()
 
             // Clear DataStore preferences
             onProgress(BackupProgress.Collecting("Clearing settings"))
@@ -616,7 +619,7 @@ class SystemBackupManager(private val context: Context) {
             safetyDir.mkdirs()
 
             // Copy UMS directory
-            val umsDir = File(context.filesDir, "ums")
+            val umsDir = AppPaths.ums(context)
             if (umsDir.exists()) {
                 val umsBackup = File(safetyDir, "ums_backup")
                 umsDir.copyRecursively(umsBackup, overwrite = true)
@@ -655,7 +658,7 @@ class SystemBackupManager(private val context: Context) {
         // Restore UMS directory
         val umsBackup = File(safetyDir, "ums_backup")
         if (umsBackup.exists()) {
-            val umsDir = File(context.filesDir, "ums")
+            val umsDir = AppPaths.ums(context)
             umsDir.deleteRecursively()
             umsBackup.copyRecursively(umsDir, overwrite = true)
         }
@@ -723,7 +726,7 @@ class SystemBackupManager(private val context: Context) {
     // ======================== UMS DIRECTORY COLLECTION ========================
 
     private fun collectUmsDirectoryFiles(): List<Pair<String, ByteArray>> {
-        val umsDir = File(context.filesDir, "ums")
+        val umsDir = AppPaths.ums(context)
         if (!umsDir.exists() || !umsDir.isDirectory) return emptyList()
         return umsDir.walkTopDown()
             .filter { it.isFile }
@@ -738,7 +741,7 @@ class SystemBackupManager(private val context: Context) {
 
     private suspend fun collectModelFiles(options: BackupOptions): List<Pair<String, ByteArray>> {
         val results = mutableListOf<Pair<String, ByteArray>>()
-        val modelsDir = File(context.filesDir, "models")
+        val modelsDir = AppPaths.models(context)
         Log.d(TAG, "collectModelFiles: modelsDir=${modelsDir.absolutePath}, exists=${modelsDir.exists()}")
         if (!modelsDir.exists()) {
             Log.w(TAG, "collectModelFiles: models directory does not exist")
@@ -796,7 +799,7 @@ class SystemBackupManager(private val context: Context) {
     }
 
     private fun restoreModelEntry(relativePath: String, data: ByteArray) {
-        val modelsDir = File(context.filesDir, "models")
+        val modelsDir = AppPaths.models(context)
         modelsDir.mkdirs()
         val destFile = File(modelsDir, relativePath)
         destFile.parentFile?.mkdirs()
@@ -1061,7 +1064,7 @@ class SystemBackupManager(private val context: Context) {
                 File(dataStoreDir, path).writeBytes(data)
             }
             EntryType.RAG_FILE -> {
-                val ragDir = File(context.filesDir, "rags")
+                val ragDir = AppPaths.rags(context)
                 ragDir.mkdirs()
                 File(ragDir, path).apply {
                     parentFile?.mkdirs()
@@ -1069,7 +1072,7 @@ class SystemBackupManager(private val context: Context) {
                 }
             }
             EntryType.AVATAR_FILE -> {
-                val avatarDir = File(context.filesDir, "persona_avatars")
+                val avatarDir = AppPaths.personaAvatars(context)
                 avatarDir.mkdirs()
                 File(avatarDir, path).apply {
                     parentFile?.mkdirs()

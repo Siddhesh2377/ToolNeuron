@@ -6,7 +6,11 @@ import android.app.Service
 import android.content.Intent
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.global.DeviceTuner
+import com.dark.tool_neuron.global.HardwareScanner
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
@@ -18,9 +22,11 @@ import com.dark.tool_neuron.worker.ModelDataParser
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -32,7 +38,7 @@ import java.util.zip.ZipInputStream
 
 class ModelDownloadService : Service() {
 
-    private val serviceScope = CoroutineScope(Dispatchers.IO + Job())
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val downloadJobs = mutableMapOf<String, Job>()
     private var notificationIdCounter = NOTIFICATION_ID
 
@@ -149,7 +155,7 @@ class ModelDownloadService : Service() {
             try {
                 updateDownloadState(modelId, DownloadState.Downloading(modelId, 0f, 0, 0))
 
-                val tempDir = File(filesDir, "temp_downloads/$modelId")
+                val tempDir = AppPaths.tempDownloads(applicationContext, modelId)
                 if (tempDir.exists()) {
                     tempDir.deleteRecursively()
                 }
@@ -163,10 +169,10 @@ class ModelDownloadService : Service() {
 
                 when (modelType) {
                     "SD" -> {
-                        val modelsDir = File(filesDir, "models")
+                        val modelsDir = AppPaths.models(applicationContext)
                         modelsDir.mkdirs()
 
-                        val modelDir = File(modelsDir, modelId)
+                        val modelDir = AppPaths.modelDir(applicationContext, modelId)
 
                         if (isZip) {
                             if (modelDir.exists()) {
@@ -208,10 +214,9 @@ class ModelDownloadService : Service() {
                     }
 
                     "GGUF" -> {
-                        val modelsDir = File(filesDir, "models")
-                        modelsDir.mkdirs()
+                        AppPaths.models(applicationContext).mkdirs()
 
-                        val targetFile = File(modelsDir, "$modelId.gguf")
+                        val targetFile = AppPaths.modelFile(applicationContext, modelId)
 
                         if (targetFile.exists()) {
                             targetFile.delete()
@@ -233,10 +238,9 @@ class ModelDownloadService : Service() {
                     }
 
                     "TTS" -> {
-                        val modelsDir = File(filesDir, "models")
-                        modelsDir.mkdirs()
+                        AppPaths.models(applicationContext).mkdirs()
 
-                        val ttsModelDir = File(modelsDir, "supertonic-2")
+                        val ttsModelDir = AppPaths.ttsModel(applicationContext)
                         if (ttsModelDir.exists()) ttsModelDir.deleteRecursively()
                         ttsModelDir.mkdirs()
 
@@ -254,6 +258,34 @@ class ModelDownloadService : Service() {
                             runOnCpu = true,
                             textEmbeddingSize = 0
                         )
+                    }
+
+                    "IMAGE_TOOL" -> {
+                        val toolDir = AppPaths.imageTools(applicationContext)
+                        toolDir.mkdirs()
+
+                        val targetFile = File(toolDir, modelId)
+                        targetFile.parentFile?.mkdirs()
+
+                        if (isZip) {
+                            extractTempDir = File(tempDir, "${modelId}_extract")
+                            extractTempDir.mkdirs()
+
+                            updateDownloadState(modelId, DownloadState.Extracting(modelId))
+                            updateNotification(modelName, 0f, notificationId, isExtracting = true)
+
+                            unzipFile(tempFile!!, extractTempDir, modelId)
+
+                            extractTempDir.listFiles()?.forEach { file ->
+                                file.copyTo(File(toolDir, file.name), overwrite = true)
+                            }
+                            extractTempDir.deleteRecursively()
+                            extractTempDir = null
+                        } else {
+                            tempFile?.copyTo(targetFile, overwrite = true)
+                        }
+
+                        // No database entry — image tool models are managed by ImageToolsViewModel
                     }
                 }
 
@@ -278,7 +310,7 @@ class ModelDownloadService : Service() {
             } catch (e: kotlinx.coroutines.CancellationException) {
                 tempFile?.delete()
                 extractTempDir?.deleteRecursively()
-                File(filesDir, "temp_downloads/$modelId").deleteRecursively()
+                AppPaths.tempDownloads(applicationContext, modelId).deleteRecursively()
 
                 updateDownloadState(modelId, DownloadState.Cancelled(modelId))
                 updateNotification(modelName, 0f, notificationId, isCancelled = true)
@@ -296,7 +328,7 @@ class ModelDownloadService : Service() {
             } catch (e: Exception) {
                 tempFile?.delete()
                 extractTempDir?.deleteRecursively()
-                File(filesDir, "temp_downloads/$modelId").deleteRecursively()
+                AppPaths.tempDownloads(applicationContext, modelId).deleteRecursively()
 
                 updateDownloadState(modelId, DownloadState.Error(modelId, e.message ?: "Unknown error"))
                 updateNotification(modelName, 0f, notificationId, error = e.message)
@@ -574,7 +606,17 @@ class ModelDownloadService : Service() {
             }
 
             ProviderType.GGUF -> {
-                val ggufSchema = GgufEngineSchema()
+                val appSettings = AppSettingsDataStore(this@ModelDownloadService)
+                val tuningEnabled = appSettings.hardwareTuningEnabled.firstOrNull() ?: true
+                val loadingParams = if (tuningEnabled) {
+                    val perfMode = appSettings.performanceMode.firstOrNull() ?: com.dark.tool_neuron.global.PerformanceMode.BALANCED
+                    val modelSizeMB = (fileSize / (1024 * 1024)).toInt()
+                    val profile = HardwareScanner.scan(this@ModelDownloadService)
+                    DeviceTuner.tune(profile, modelSizeMB, modelName, perfMode)
+                } else {
+                    com.dark.tool_neuron.models.engine_schema.GgufLoadingParams()
+                }
+                val ggufSchema = GgufEngineSchema(loadingParams = loadingParams)
                 ModelConfig(
                     modelId = checksum,
                     modelLoadingParams = ggufSchema.toLoadingJson(),

@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 class RagRepository(
@@ -24,7 +25,7 @@ class RagRepository(
     private val context: Context
 ) {
     private val ragsDir: File by lazy {
-        File(context.filesDir, "rags").also { it.mkdirs() }
+        AppPaths.rags(context)
     }
 
     // Loaded graphs in memory

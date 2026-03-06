@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 @SuppressLint("StaticFieldLeak")
@@ -50,7 +51,7 @@ object TTSManager {
 
         if (autoLoad) {
             // Auto-load model if it exists in the models directory
-            val modelsDir = File(appContext.filesDir, "models/$TTS_MODEL_DIR_NAME")
+            val modelsDir = AppPaths.ttsModel(appContext)
             if (modelsDir.exists() && modelsDir.isDirectory) {
                 val success = loadModel(modelsDir.absolutePath)
                 Log.d(TAG, "Auto-loaded TTS model: $success")
@@ -193,7 +194,7 @@ object TTSManager {
 
     fun getModelDirectory(): String? {
         val ctx = context ?: return null
-        val dir = File(ctx.filesDir, "models/$TTS_MODEL_DIR_NAME")
+        val dir = AppPaths.ttsModel(ctx)
         return if (dir.exists()) dir.absolutePath else null
     }
 

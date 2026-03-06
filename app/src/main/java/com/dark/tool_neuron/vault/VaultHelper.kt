@@ -3,6 +3,8 @@ package com.dark.tool_neuron.vault
 import android.content.Context
 import android.util.Log
 import com.dark.tool_neuron.BuildConfig
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.global.formatBytes
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.models.vault.ChatData
 import com.dark.tool_neuron.models.vault.ChatExport
@@ -160,13 +162,6 @@ object VaultHelper {
         )
     }
 
-    private fun formatBytes(bytes: Int): String {
-        return when {
-            bytes < 1024 -> "${bytes}B"
-            bytes < 1024 * 1024 -> "${bytes / 1024}KB"
-            else -> String.format("%.2fMB", bytes / (1024.0 * 1024.0))
-        }
-    }
 
     suspend fun initialize(context: Context) {
         appContext = context.applicationContext
@@ -213,7 +208,7 @@ object VaultHelper {
                     e.printStackTrace()
                     VaultLogger.log(LogLevel.ERROR, "INIT", "Vault initialization failed, attempting recovery...")
 
-                    val vaultDir = java.io.File(context.filesDir, "memory_vault")
+                    val vaultDir = AppPaths.memoryVault(context)
                     vaultDir.deleteRecursively()
 
                     vault = MemoryVault(
@@ -249,7 +244,7 @@ object VaultHelper {
                 vault.close()
             }
 
-            val vaultDir = java.io.File(context.filesDir, "memory_vault")
+            val vaultDir = AppPaths.memoryVault(context)
             val filesDeleted = vaultDir.listFiles()?.size ?: 0
             vaultDir.listFiles()?.forEach { it.delete() }
 

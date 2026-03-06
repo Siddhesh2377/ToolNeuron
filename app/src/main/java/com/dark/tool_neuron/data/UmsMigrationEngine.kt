@@ -6,6 +6,7 @@ import com.dark.tool_neuron.database.AppDatabase
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.vault.VaultHelper
 import com.dark.ums.UnifiedMemorySystem
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 
 interface MigrationProgress {
@@ -31,7 +32,7 @@ class UmsMigrationEngine(
 
     fun needsMigration(): Boolean {
         val roomDb = context.getDatabasePath("llm_models_database").exists()
-        val vault = File(context.filesDir, "memory_vault/vault.mvlt").exists()
+        val vault = AppPaths.vaultFile(context).exists()
         return roomDb || vault
     }
 
@@ -40,7 +41,7 @@ class UmsMigrationEngine(
         val usable = dataDir.usableSpace
         val dbFile = context.getDatabasePath("llm_models_database")
         val dbSize = if (dbFile.exists()) dbFile.length() else 0L
-        val vaultDir = File(context.filesDir, "memory_vault")
+        val vaultDir = AppPaths.memoryVault(context)
         val vaultSize = if (vaultDir.exists()) {
             vaultDir.walkTopDown().filter { it.isFile }.sumOf { it.length() }
         } else 0L
@@ -49,6 +50,15 @@ class UmsMigrationEngine(
     }
 
     suspend fun run() {
+        // Guard: all repos must be non-null before migration
+        if (VaultManager.modelRepo == null || VaultManager.configRepo == null ||
+            VaultManager.personaRepo == null || VaultManager.memoryRepo == null ||
+            VaultManager.knowledgeRepo == null || VaultManager.chatRepo == null
+        ) {
+            progress.onFatalError(0, "VaultManager repos not initialized — cannot migrate")
+            return
+        }
+
         try {
             migrateRoomEntities()
             migrateVaultMessages()
@@ -56,6 +66,15 @@ class UmsMigrationEngine(
         } catch (e: Exception) {
             Log.e(TAG, "Migration failed", e)
             progress.onFatalError(0, "Migration failed: ${e.message}")
+        } finally {
+            // Close legacy VaultHelper if it was initialized during migration
+            try {
+                if (VaultHelper.isInitialized()) {
+                    VaultHelper.close()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to close VaultHelper", e)
+            }
         }
     }
 
@@ -78,13 +97,30 @@ class UmsMigrationEngine(
         val entityDao = db.knowledgeEntityDao()
         val relationDao = db.knowledgeRelationDao()
 
+        // Capture repos with null guard — bail if VaultManager not ready
+        val modelRepo = VaultManager.modelRepo ?: run {
+            failures.add("VaultManager not initialized — cannot migrate"); return
+        }
+        val configRepo = VaultManager.configRepo ?: run {
+            failures.add("VaultManager not initialized — cannot migrate"); return
+        }
+        val personaRepo = VaultManager.personaRepo ?: run {
+            failures.add("VaultManager not initialized — cannot migrate"); return
+        }
+        val memoryRepo = VaultManager.memoryRepo ?: run {
+            failures.add("VaultManager not initialized — cannot migrate"); return
+        }
+        val knowledgeRepo = VaultManager.knowledgeRepo ?: run {
+            failures.add("VaultManager not initialized — cannot migrate"); return
+        }
+
         // Models
         val models = modelDao.getAllOnce()
         progress.onPhaseStart(1, "Models", models.size)
         var migrated = 0; var skipped = 0
         for ((i, model) in models.withIndex()) {
             try {
-                VaultManager.modelRepo!!.insert(model)
+                modelRepo.insert(model)
                 migrated++
             } catch (e: Exception) {
                 failures.add("Model ${model.id}: ${e.message}")
@@ -101,7 +137,7 @@ class UmsMigrationEngine(
         migrated = 0; skipped = 0
         for ((i, config) in configs.withIndex()) {
             try {
-                VaultManager.configRepo!!.insert(config)
+                configRepo.insert(config)
                 migrated++
             } catch (e: Exception) {
                 failures.add("Config ${config.id}: ${e.message}")
@@ -118,7 +154,7 @@ class UmsMigrationEngine(
         migrated = 0; skipped = 0
         for ((i, persona) in personas.withIndex()) {
             try {
-                VaultManager.personaRepo!!.insert(persona)
+                personaRepo.insert(persona)
                 migrated++
             } catch (e: Exception) {
                 failures.add("Persona ${persona.id}: ${e.message}")
@@ -135,7 +171,7 @@ class UmsMigrationEngine(
         migrated = 0; skipped = 0
         for ((i, memory) in memories.withIndex()) {
             try {
-                VaultManager.memoryRepo!!.insert(memory)
+                memoryRepo.insert(memory)
                 migrated++
             } catch (e: Exception) {
                 failures.add("Memory ${memory.id}: ${e.message}")
@@ -152,7 +188,7 @@ class UmsMigrationEngine(
         migrated = 0; skipped = 0
         for ((i, entity) in kgEntities.withIndex()) {
             try {
-                VaultManager.knowledgeRepo!!.insertEntity(entity)
+                knowledgeRepo.insertEntity(entity)
                 migrated++
             } catch (e: Exception) {
                 failures.add("KG Entity ${entity.id}: ${e.message}")
@@ -169,7 +205,7 @@ class UmsMigrationEngine(
         migrated = 0; skipped = 0
         for ((i, relation) in kgRelations.withIndex()) {
             try {
-                VaultManager.knowledgeRepo!!.insertRelation(relation)
+                knowledgeRepo.insertRelation(relation)
                 migrated++
             } catch (e: Exception) {
                 failures.add("KG Relation ${relation.id}: ${e.message}")
@@ -184,7 +220,7 @@ class UmsMigrationEngine(
     // ── Phase 2: VaultHelper → UMS ──
 
     private suspend fun migrateVaultMessages() {
-        val vaultDir = File(context.filesDir, "memory_vault/vault.mvlt")
+        val vaultDir = AppPaths.vaultFile(context)
         if (!vaultDir.exists()) {
             Log.i(TAG, "No vault found, skipping phase 2")
             return
@@ -206,6 +242,10 @@ class UmsMigrationEngine(
             return
         }
 
+        val chatRepo = VaultManager.chatRepo ?: run {
+            progress.onFatalError(7, "VaultManager chat repo not initialized"); return
+        }
+
         progress.onPhaseStart(7, "Chat Messages", allChats.sumOf { it.messageCount })
         var migrated = 0; var skipped = 0
         var itemIndex = 0
@@ -213,13 +253,13 @@ class UmsMigrationEngine(
 
         for (chat in allChats) {
             try {
-                VaultManager.chatRepo!!.createChat(chat.chatId)
+                chatRepo.createChat(chat.chatId)
 
                 val messages = VaultHelper.getMessagesForChat(chat.chatId)
                 for (msg in messages) {
                     try {
                         // Legacy messages get no modelId/personaId (they're null by default)
-                        VaultManager.chatRepo!!.addMessage(chat.chatId, msg)
+                        chatRepo.addMessage(chat.chatId, msg)
                         migrated++
                     } catch (e: Exception) {
                         failures.add("Message ${msg.msgId}: ${e.message}")

@@ -18,7 +18,7 @@ import com.dark.tool_neuron.models.vault.MessageSearchResult
 import com.dark.tool_neuron.models.vault.VaultStatistics
 import com.dark.ums.UmsRecord
 import com.dark.ums.UnifiedMemorySystem
-import com.mp.ai_gguf.models.DecodingMetrics
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -225,7 +225,7 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
         b.putString(Tags.Message.MSG_ID, msgId)
         b.putString(Tags.Message.CHAT_ID, chatId)
         b.putInt(Tags.Message.ROLE, if (role == Role.User) 0 else 1)
-        b.putInt(Tags.Message.CONTENT_TYPE, content.contentType.ordinal)
+        b.putString(Tags.Message.CONTENT_TYPE, content.contentType.name)
         b.putString(Tags.Message.CONTENT, content.content)
         if (content.imageData != null) b.putString(Tags.Message.IMAGE_DATA, content.imageData)
         if (content.imagePrompt != null) b.putString(Tags.Message.IMAGE_PROMPT, content.imagePrompt)
@@ -249,8 +249,12 @@ class UmsChatRepository(private val ums: UnifiedMemorySystem) {
 
     private fun UmsRecord.toMessages(): Messages {
         val roleInt = getInt(Tags.Message.ROLE) ?: 1
-        val ctInt = getInt(Tags.Message.CONTENT_TYPE) ?: 0
-        val contentType = ContentType.entries.getOrElse(ctInt) { ContentType.None }
+        val contentType = getString(Tags.Message.CONTENT_TYPE)?.let { name ->
+            runCatching { ContentType.valueOf(name) }.getOrNull()
+        } ?: getInt(Tags.Message.CONTENT_TYPE)?.let { ordinal ->
+            // Fallback: read legacy ordinal-based values
+            ContentType.entries.getOrElse(ordinal) { ContentType.None }
+        } ?: ContentType.None
 
         val pluginData = getString(Tags.Message.PLUGIN_RESULT_DATA)?.let {
             runCatching { json.decodeFromString<PluginResultData>(it) }.getOrNull()

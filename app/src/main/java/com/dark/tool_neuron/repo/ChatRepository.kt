@@ -8,7 +8,7 @@ import com.dark.tool_neuron.models.messages.Role
 import com.dark.tool_neuron.models.vault.ChatExport
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.models.vault.VaultStatistics
-import com.mp.ai_gguf.models.DecodingMetrics
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 

@@ -19,6 +19,7 @@ import com.memoryvault.VaultItem
 import com.memoryvault.core.BlockType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 import java.util.UUID
 
@@ -100,7 +101,7 @@ class RagVaultIntegration(
             }
 
             val ragId = UUID.randomUUID().toString()
-            val ragsDir = File(context.filesDir, "rags").also { it.mkdirs() }
+            val ragsDir = AppPaths.rags(context)
             val destFile = File(ragsDir, "$ragId.neuron")
 
             val payload = graph.serialize()
@@ -177,7 +178,7 @@ class RagVaultIntegration(
             }
 
             val ragId = UUID.randomUUID().toString()
-            val ragsDir = File(context.filesDir, "rags").also { it.mkdirs() }
+            val ragsDir = AppPaths.rags(context)
             val destFile = File(ragsDir, "$ragId.neuron")
 
             val payload = graph.serialize()
