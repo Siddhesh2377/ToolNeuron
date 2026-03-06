@@ -55,7 +55,7 @@ class DiffusionEngine {
                     runtimeDir = "runtime_libs/qnnlibs",
                     qnnLibsAssetPath = "qnnlibs",
                     safetyCheckerEnabled = safetyCheckerEnabled,
-                    safetyCheckerPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
+                    safetyCheckerAssetPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
                 )
             )
             Log.i(TAG, "DiffusionEngine initialized successfully")

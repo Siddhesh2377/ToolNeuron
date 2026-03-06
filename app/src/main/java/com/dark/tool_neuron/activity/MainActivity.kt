@@ -36,6 +36,7 @@ import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
 import com.dark.tool_neuron.ui.screen.model_config.ModelConfigEditorScreen
 import com.dark.tool_neuron.ui.screen.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.settings.SettingsScreen
+import com.dark.tool_neuron.ui.screen.setup.ImageGenSetupScreen
 import com.dark.tool_neuron.ui.screen.setup.SetupScreen
 import com.dark.tool_neuron.viewModel.VaultGateViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -182,6 +183,7 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object VaultManager : Screen("vault_manager")
     object AiMemory : Screen("ai_memory")
+    object ImageGenSetup : Screen("image_gen_setup")
 }
 
 @Composable
@@ -304,6 +306,9 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
+                onImageGenSetupNeeded = {
+                    navController.navigate(Screen.ImageGenSetup.route)
+                },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
             )
@@ -336,6 +341,23 @@ fun AppNavigation(
         composable(Screen.AiMemory.route) {
             AiMemoryScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.ImageGenSetup.route) {
+            ImageGenSetupScreen(
+                onComplete = {
+                    llmModelViewModel.onQnnSetupComplete()
+                    navController.popBackStack()
+                },
+                onSkip = {
+                    llmModelViewModel.onQnnSetupDismissed()
+                    navController.popBackStack()
+                },
+                onBack = {
+                    llmModelViewModel.onQnnSetupDismissed()
+                    navController.popBackStack()
+                }
             )
         }
     }

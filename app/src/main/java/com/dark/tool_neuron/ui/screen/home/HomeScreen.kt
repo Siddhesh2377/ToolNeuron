@@ -97,6 +97,7 @@ fun HomeScreen(
     onStoreButtonClicked: () -> Unit,
     onSettingsClick: () -> Unit,
     onVaultManagerClick: () -> Unit,
+    onImageGenSetupNeeded: () -> Unit,
     chatViewModel: ChatViewModel,
     llmModelViewModel: LLMModelViewModel
 ) {
@@ -108,6 +109,12 @@ fun HomeScreen(
         .collectAsStateWithLifecycle(initialValue = true)
     val toolCallingEnabled by appSettings.toolCallingEnabled
         .collectAsStateWithLifecycle(initialValue = true)
+
+    // Navigate to QNN setup when a diffusion model needs it
+    val needsQnnSetup by llmModelViewModel.needsQnnSetup.collectAsStateWithLifecycle()
+    LaunchedEffect(needsQnnSetup) {
+        if (needsQnnSetup) onImageGenSetupNeeded()
+    }
 
     // Offer to reload the last loaded model on startup
     val lastModelOffer by llmModelViewModel.lastModelOffer.collectAsStateWithLifecycle()

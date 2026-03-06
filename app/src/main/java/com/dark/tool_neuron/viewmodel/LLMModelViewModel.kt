@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import androidx.core.net.toUri
 import com.dark.tool_neuron.global.AppPaths
+import java.io.File
 
 @HiltViewModel
 class LLMModelViewModel @Inject constructor(
@@ -58,6 +59,31 @@ class LLMModelViewModel @Inject constructor(
     // Last loaded model — shown once on startup to offer reloading
     private val _lastModelOffer = MutableStateFlow<Model?>(null)
     val lastModelOffer: StateFlow<Model?> = _lastModelOffer.asStateFlow()
+
+    // ── QNN Runtime Setup Gate ──
+
+    private val _pendingDiffusionModel = MutableStateFlow<Model?>(null)
+
+    private val _needsQnnSetup = MutableStateFlow(false)
+    val needsQnnSetup: StateFlow<Boolean> = _needsQnnSetup.asStateFlow()
+
+    private fun isQnnRuntimeReady(): Boolean {
+        val runtimeDir = File(getApplication<Application>().filesDir, "runtime_libs/qnnlibs")
+        val marker = File(runtimeDir, ".extracted")
+        return marker.exists() && (runtimeDir.listFiles()?.size ?: 0) > 1
+    }
+
+    fun onQnnSetupComplete() {
+        _needsQnnSetup.value = false
+        val pending = _pendingDiffusionModel.value ?: return
+        _pendingDiffusionModel.value = null
+        loadModel(pending)
+    }
+
+    fun onQnnSetupDismissed() {
+        _needsQnnSetup.value = false
+        _pendingDiffusionModel.value = null
+    }
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
@@ -112,6 +138,13 @@ class LLMModelViewModel @Inject constructor(
     }
 
     fun loadModel(model: Model) {
+        // Gate: DIFFUSION models require QNN runtime to be extracted first
+        if (model.providerType == ProviderType.DIFFUSION && !isQnnRuntimeReady()) {
+            _pendingDiffusionModel.value = model
+            _needsQnnSetup.value = true
+            return
+        }
+
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // Unload any existing model first

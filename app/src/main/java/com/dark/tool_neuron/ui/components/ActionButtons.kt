@@ -274,14 +274,16 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = RoundedCornerShape(6.dp)
+    shape: Shape = RoundedCornerShape(6.dp),
+    enabled: Boolean = true
 ) {
     FilledTonalButton(
         onClick = onClickListener,
         shape = shape,
         colors = colors,
         modifier = modifier.height(Standards.ActionIconSize),
-        contentPadding = PaddingValues(end = 12.dp)
+        contentPadding = PaddingValues(end = 12.dp),
+        enabled = enabled
     ) {
         Icon(icon, contentDescription)
         Spacer(Modifier.width(6.dp))

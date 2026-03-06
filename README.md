@@ -15,7 +15,7 @@
   </a>
 </p>
 
-ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, AI character cards (TavernAI v2 compatible), persistent AI memory, image generation & image tools (upscaling, segmentation, depth estimation, style transfer), hardware-adaptive tuning, knowledge graphs, and full system backup/restore. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
+ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, persistent AI memory, image generation & image tools (upscaling, segmentation), hardware-adaptive tuning, and full system backup/restore. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
 
 [Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
 [Join Discord](https://discord.gg/mVPwHDhrAP) ·
@@ -35,19 +35,19 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 **On-Device TTS**: Text-to-speech with 10 voices, 5 languages, adjustable speed and quality — all processed locally.
 
-**AI Character Cards**: Full TavernAI v2 compatible persona system — import/export character cards, avatar images, template variables (`{{char}}`/`{{user}}`), and post-history reinforcement for consistent roleplay.
+**AI Character Cards** 🚧: TavernAI v2 compatible persona system — data model and storage ready, UI and chat integration under construction.
 
 **Persistent AI Memory**: Mem0-inspired memory system that learns about you across conversations — automatic fact extraction, deduplication, forgetting curve, and persona-aware filtering.
 
-**Plugin System**: 7 built-in plugins — web search, file manager, calculator, clipboard, date/time, device info, and developer utilities — extensible with custom plugins.
+**Plugin System**: 7 built-in plugins — web search, file manager, calculator, notepad, date/time, device info, and developer utilities — extensible with custom plugins.
 
-**Image Tools**: Upscale images, estimate depth, transfer styles, and segment objects — all processed on-device.
+**Image Tools**: Upscale images and segment objects on-device. Depth estimation, style transfer, and LaMa inpainting 🚧 under construction (models pending).
 
 **Hardware-Adaptive Tuning**: Automatic CPU topology scanning (P-core/E-core detection), performance mode selection (Performance / Balanced / Power Saver), and per-model parameter optimization.
 
-**Knowledge Graph**: Named entity and relationship extraction from conversations, building a structured knowledge base that enriches AI context.
+**Knowledge Graph** 🚧: Database schema and storage layer ready. Entity/relationship extraction from conversations and context enrichment under construction.
 
-**System Backup/Restore**: Encrypted `.tnbackup` format (PBKDF2 + AES-256-GCM) covering chats, models, RAGs, personas, memories, knowledge graphs, and settings.
+**System Backup/Restore**: Encrypted `.tnbackup` format (PBKDF2 + AES-256-GCM) covering chats, models, RAGs, memories, and settings.
 
 **Advanced Features**: Function calling, multi-modal generation, customizable inference parameters, and concurrent model downloads.
 
@@ -89,12 +89,12 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 |---------|-------------|
 | **Text Generation** | Run any GGUF model locally (Llama, Mistral, Gemma, Phi, Qwen, etc.) with streaming output |
 | **Image Generation** | Stable Diffusion 1.5 with censored & uncensored variants, inpainting support |
-| **Image Tools** | On-device upscaling, depth estimation, style transfer, and segmentation |
+| **Image Tools** | On-device upscaling and segmentation. Depth, style transfer, inpainting 🚧 under construction |
 | **Text-to-Speech** | On-device TTS with 10 voices, 5 languages, adjustable speed and denoising steps |
-| **AI Character Cards** | TavernAI v2 compatible personas with import/export, avatar images, template vars, post-history reinforcement |
+| **AI Character Cards** | 🚧 Under construction — data model ready, UI and chat integration pending |
 | **AI Memory** | Persistent memory across conversations — automatic fact extraction, deduplication, forgetting curve |
-| **Knowledge Graph** | Named entity & relationship extraction from conversations — structured knowledge that enriches AI context |
-| **Plugin System** | 7 plugins (web search, file manager, calculator, clipboard, date/time, device info, dev utils) with tool calling |
+| **Knowledge Graph** | 🚧 Under construction — database schema ready, extraction pipeline and context enrichment pending |
+| **Plugin System** | 7 plugins (web search, file manager, calculator, notepad, date/time, device info, dev utils) with tool calling |
 | **RAG System** | Document injection with hybrid search (BM25 + vector + RRF + MMR), encrypted knowledge bases |
 | **Memory Vault** | Hardware-backed AES-256-GCM encryption, WAL crash recovery, LZ4 compression |
 | **Hardware Tuning** | CPU topology scanning (P-core/E-core), three performance modes, per-model parameter optimization |
@@ -109,34 +109,22 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 ## AI Personas & Character Cards
 
-Full character card system compatible with **TavernAI v2 / SillyTavern** format. Create, edit, import, and export AI personas with rich personality definitions.
+> **🚧 Under Construction** — The data model and storage layer are implemented. UI screens, chat integration, import/export, and template variable processing are not yet built.
 
-### Character Card Fields
+### What's Ready (Backend)
+- **Persona data model** with full TavernAI v2 fields: name, avatar, description, personality, scenario, example messages, alternate greetings, tags, creator notes, sampling profile, control vectors
+- **UMS storage** with CRUD operations (insert, delete, query by ID)
+- **Backup/restore** includes persona data
 
-| Field | Description |
-|-------|-------------|
-| **Name** | Character's display name |
-| **Avatar** | Image or emoji avatar (stored locally) |
-| **Description** | Character background, lore, and traits |
-| **Personality** | Core personality traits (PList or prose) |
-| **Scenario** | Current scene or context |
-| **First Message** | Opening greeting |
-| **Alternate Greetings** | Multiple greeting variations |
-| **Example Messages** | Dialogue samples for style calibration |
-| **Tags** | Categorization tags |
-| **Creator Notes** | Author notes (not sent to model) |
-| **System Prompt** | Legacy raw system prompt (fallback) |
-
-### Key Features
-- **Template Variables**: `{{char}}` resolves to persona name, `{{user}}` resolves to "User" — applied throughout system prompt and messages
-- **Identity Framing**: Automatic "You are {{char}}" directive prevents the model from confusing character/user identity
-- **Post-History Reinforcement**: Compressed personality reminder injected after chat history (most influential position for small models, based on SillyTavern/MiniMax research)
-- **TavernAI v2 Import/Export**: Import `.json` character cards from SillyTavern, Chub.ai, or any TavernAI v2 source. Export your personas to share
-- **Avatar Images**: Pick images from gallery, stored locally in app files (no external URI permissions needed)
-- **Default Personas**: Ships with Assistant, Luna, CodeBuddy, and Sage
-
-### How It Works
-System prompt is assembled from structured fields: description + personality + scenario + example messages. If no structured fields exist, falls back to raw `systemPrompt`. The post-history instruction is injected right before the model generates, providing maximum influence on small on-device models.
+### What's Planned (Not Yet Implemented)
+- Persona browser/editor UI screen
+- Persona picker/selector in chat
+- Template variable processing (`{{char}}`, `{{user}}`)
+- Identity framing and post-history reinforcement in system prompt
+- TavernAI v2 JSON import/export
+- Avatar image picker
+- Default personas (Assistant, Luna, CodeBuddy, Sage)
+- Per-persona sampling profiles and control vectors
 
 ---
 
@@ -230,17 +218,23 @@ onMetrics(metrics: Metrics)      // Performance metrics
 On-device image processing powered by the DiffusionEngine. All operations run locally — no cloud APIs.
 
 ### Capabilities
-- **Upscaling**: Increase image resolution using on-device upscaler models
-- **Depth Estimation**: Generate depth maps from images
-- **Style Transfer**: Apply artistic styles to images
-- **Segmentation**: Segment objects within images
+| Tool | Status | Model Size |
+|------|--------|------------|
+| **Upscaling** | ✅ Ready | 18 MB |
+| **Segmentation** (MobileSAM) | ✅ Ready | 46 MB |
+| **Depth Estimation** (MiDaS) | 🚧 Model not yet hosted | 66 MB |
+| **Style Transfer** | 🚧 Model not yet hosted | 7 MB |
+| **LaMa Inpainting** | 🚧 Model not yet hosted | 93 MB |
+
+> UI and engine integration for all 5 tools are complete. Depth, style transfer, and LaMa are blocked on ONNX→MNN model conversion and hosting.
 
 ### How It Works
 1. Navigate to Image Tools from the drawer menu
 2. Select an image from your gallery
-3. Choose a tool (upscale, depth, style, segment)
-4. Processing happens entirely on-device
-5. Save or share the result
+3. Choose a tool (upscale, segment, etc.)
+4. Model auto-downloads on first use
+5. Processing happens entirely on-device
+6. Save or share the result
 
 ---
 
@@ -273,18 +267,20 @@ All TTS preferences are persisted and configurable from the Settings screen:
 
 ## Knowledge Graph
 
-Structured knowledge extraction from conversations, building a graph of named entities and their relationships.
+> **🚧 Under Construction** — Database schema and storage layer are implemented. Extraction pipeline, context enrichment, and UI are not yet built.
 
-### Architecture
-- **KnowledgeEntity**: Named entities extracted from conversations (people, places, concepts, etc.)
-- **KnowledgeRelation**: Relationships between entities with typed connections and persona awareness
-- **Persona-Aware**: Knowledge is scoped per persona — each character card maintains its own knowledge graph
-
-### Features
-- **Automatic Extraction**: Entities and relations extracted during conversation
-- **Structured Storage**: Room database tables (`KnowledgeEntity`, `KnowledgeRelation`)
-- **Context Enrichment**: Knowledge graph data enriches AI context for more informed responses
+### What's Ready (Backend)
+- **KnowledgeEntity** table: name, type (PERSON, PLACE, TOPIC, EVENT, PREFERENCE, THING), embedding, mention count, first/last seen
+- **KnowledgeRelation** table: subject/predicate/object triple structure, confidence, source fact linking
+- **UmsKnowledgeRepository**: Full CRUD for entities and relations
+- **Persona-scoped**: Knowledge can be isolated per persona
 - **Backup/Restore**: Knowledge graph triples included in system backup exports
+
+### What's Planned (Not Yet Implemented)
+- Entity/relationship extraction pipeline from LLM conversations
+- Context enrichment (injecting KG data into prompts)
+- Knowledge graph browse/visualize UI
+- Automatic named entity recognition during chat
 
 ---
 
@@ -311,16 +307,18 @@ Extensible plugin architecture that integrates with LLM tool calling. Plugins ex
 - **Constants**: pi, e
 - **Unit Conversion**: Length (m, km, mi, ft, in...), weight (kg, lb, oz...), time (s, min, h, day), data (b, kb, mb, gb, tb), temperature (C, F, K)
 
-#### Clipboard
-- **Read**: Access current clipboard content
-- **Write**: Copy text to system clipboard
+#### Notepad
+- **Write**: Save notes by title within the conversation context
+- **Read**: Retrieve saved notes by title
+- **List**: List all saved notes
+- **Thread-Safe**: ConcurrentHashMap-backed in-memory storage
 
 #### Date & Time
 - **Current Time**: Get date/time with timezone support
 - **Arithmetic**: Add/subtract days, hours, minutes from dates
 - **Timezone Conversion**: Convert between any timezones
 
-#### Device Info
+#### System Info
 - **System**: OS version, device model, CPU architecture
 - **Resources**: RAM usage, battery level, storage available
 - **Network**: Connectivity status
@@ -1040,8 +1038,9 @@ cd ToolNeuron
 
 **Image Tools**:
 - ✅ On-device image upscaling with DiffusionEngine
-- ✅ Depth estimation, style transfer, segmentation
+- ✅ Segmentation (MobileSAM)
 - ✅ Full ImageToolsScreen UI with state machine
+- 🚧 Depth estimation, style transfer, LaMa inpainting (models pending ONNX→MNN conversion)
 
 **Hardware-Adaptive Tuning**:
 - ✅ CPU topology scanning (P-core / E-core / Prime detection)
@@ -1050,10 +1049,13 @@ cd ToolNeuron
 - ✅ Hardware profile display with rescan
 
 **Knowledge Graph**:
-- ✅ Named entity extraction from conversations (KnowledgeEntity table)
-- ✅ Relationship extraction (KnowledgeRelation table)
+- ✅ KnowledgeEntity and KnowledgeRelation database tables
+- ✅ UmsKnowledgeRepository with full CRUD
 - ✅ Persona-scoped knowledge graphs
 - ✅ Included in system backup/restore
+- 🚧 Entity/relationship extraction pipeline from conversations
+- 🚧 Context enrichment (injecting KG data into prompts)
+- 🚧 Knowledge graph browse/visualize UI
 
 **System Backup v2**:
 - ✅ Encrypted .tnbackup format (PBKDF2 + AES-256-GCM)
@@ -1083,13 +1085,14 @@ cd ToolNeuron
 ### Version 2.0.0 (February 2026)
 
 **AI Personas & Character Cards**:
-- ✅ TavernAI v2 compatible character card system
-- ✅ Full character editor (description, personality, scenario, example messages, alternate greetings, tags)
-- ✅ Avatar image support (local storage, Coil 3)
-- ✅ Template variables (`{{char}}`, `{{user}}`)
-- ✅ Identity framing and post-history reinforcement for small models
-- ✅ TavernAI v2 JSON import/export
-- ✅ Default personas (Assistant, Luna, CodeBuddy, Sage)
+- ✅ Persona data model with full TavernAI v2 fields
+- ✅ UmsPersonaRepository with CRUD operations
+- 🚧 Persona browser/editor UI screen
+- 🚧 Persona picker/selector in chat
+- 🚧 Template variables (`{{char}}`, `{{user}}`) processing
+- 🚧 Identity framing and post-history reinforcement
+- 🚧 TavernAI v2 JSON import/export
+- 🚧 Default personas (Assistant, Luna, CodeBuddy, Sage)
 
 **AI Memory System**:
 - ✅ Persistent cross-conversation memory (Mem0-inspired)
@@ -1105,7 +1108,7 @@ cd ToolNeuron
 - ✅ Regenerate last message
 - ✅ Code syntax highlighting (toggleable)
 - ✅ Improved markdown rendering with LazyList integration
-- ✅ Character card quick-access in bottom bar
+- 🚧 Character card quick-access in bottom bar
 
 **RAG Pipeline Improvements**:
 - ✅ Hybrid retrieval: FTS4 BM25 + vector search + RRF + MMR
@@ -1153,11 +1156,11 @@ cd ToolNeuron
 |---------|------------|---------------|---------------------|
 | **Text Generation** | Any GGUF model | Cloud only | Limited models |
 | **Image Generation** | SD 1.5 offline | Cloud only | Rare |
-| **Image Tools** | Upscale, depth, style, segment | Cloud only | None |
+| **Image Tools** | Upscale, segment (depth/style 🚧) | Cloud only | None |
 | **Text-to-Speech** | On-device, 10 voices | Cloud-based | Rare |
-| **Character Cards** | TavernAI v2 compatible | N/A | SillyTavern only |
+| **Character Cards** | 🚧 Under construction | N/A | SillyTavern only |
 | **AI Memory** | Persistent cross-session | Some cloud apps | None |
-| **Knowledge Graph** | Entity/relation extraction | None | None |
+| **Knowledge Graph** | 🚧 Under construction | None | None |
 | **Plugin System** | 7 built-in plugins | Cloud-based | None |
 | **RAG System** | Hybrid BM25+Vector+RRF | Cloud-based | Basic or none |
 | **Hardware Tuning** | Auto P/E-core detection | N/A | Manual only |

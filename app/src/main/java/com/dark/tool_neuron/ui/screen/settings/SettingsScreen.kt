@@ -151,7 +151,7 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding),
-            contentPadding = PaddingValues(horizontal = Standards.SpacingLg),
+            contentPadding = PaddingValues(horizontal = Standards.SpacingMd),
             verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             // ==================== General ====================
@@ -296,10 +296,12 @@ fun SettingsScreen(
 
             // ── Performance Mode ──
             item {
-                Column(modifier = Modifier.padding(horizontal = Standards.SpacingLg)) {
+                Column {
                     Text(
                         text = "Performance Mode",
-                        style = MaterialTheme.typography.titleSmall
+                        style = MaterialTheme.typography.titleSmall,
+                        color = if (hardwareTuningEnabled) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
                     Spacer(Modifier.height(Standards.SpacingSm))
                     ActionToggleGroup(
@@ -313,11 +315,14 @@ fun SettingsScreen(
                                 com.dark.tool_neuron.global.PerformanceMode.POWER_SAVING -> "Power Saver"
                             }
                         },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = hardwareTuningEnabled
                     )
                     Spacer(Modifier.height(Standards.SpacingXs))
                     Text(
-                        text = when (performanceMode) {
+                        text = if (!hardwareTuningEnabled) {
+                            "Enable hardware tuning to use performance presets"
+                        } else when (performanceMode) {
                             com.dark.tool_neuron.global.PerformanceMode.PERFORMANCE -> "Uses all fast cores. Best speed, higher battery use."
                             com.dark.tool_neuron.global.PerformanceMode.BALANCED -> "Uses performance cores only. Good speed and battery balance."
                             com.dark.tool_neuron.global.PerformanceMode.POWER_SAVING -> "Minimal threads and memory. Best battery life."
@@ -376,7 +381,19 @@ fun SettingsScreen(
                         onClickListener = onModelEditor,
                         icon = TnIcons.Sparkles,
                         text = "Configure",
-                        shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
+                        shape = RoundedCornerShape(Standards.CardSmallCornerRadius),
+                        enabled = !hardwareTuningEnabled
+                    )
+                }
+            }
+
+            if (hardwareTuningEnabled) {
+                item {
+                    Text(
+                        text = "Model parameters are managed by the performance engine. Disable hardware tuning to edit manually.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
                     )
                 }
             }
@@ -394,7 +411,7 @@ fun SettingsScreen(
                         title = model.modelName,
                         description = model.providerType.name,
                         icon = TnIcons.Sparkles,
-                        onClick = onModelEditor
+                        onClick = if (!hardwareTuningEnabled) onModelEditor else ({})
                     )
                 }
             }

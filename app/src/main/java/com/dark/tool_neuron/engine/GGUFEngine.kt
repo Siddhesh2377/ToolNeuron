@@ -354,14 +354,9 @@ class GGUFEngine {
 
         fun getRecommendedParams(context: Context): GgufLoadingParams {
             val profile = HardwareScanner.scan(context)
-            val mode = try {
-                val appSettings = com.dark.tool_neuron.data.AppSettingsDataStore(context)
-                kotlinx.coroutines.runBlocking { appSettings.performanceMode.firstOrNull() }
-                    ?: com.dark.tool_neuron.global.PerformanceMode.BALANCED
-            } catch (_: Exception) {
-                com.dark.tool_neuron.global.PerformanceMode.BALANCED
-            }
-            return DeviceTuner.tune(profile, modelSizeMB = 0, mode = mode)
+            // Default to BALANCED — callers with access to coroutine scope should
+            // read performanceMode from DataStore themselves
+            return DeviceTuner.tune(profile, modelSizeMB = 0, mode = com.dark.tool_neuron.global.PerformanceMode.BALANCED)
         }
 
         fun getRecommendedContextSize(context: Context, modelSizeMB: Int, modelName: String = ""): Int {

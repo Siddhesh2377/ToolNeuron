@@ -11,6 +11,7 @@ import com.dark.tool_neuron.models.table_schema.ModelConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
@@ -46,10 +47,18 @@ class ModelDataParser {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
                 ?: return@withContext ModelLoadResult.Error("Cannot open file descriptor for URI")
 
-            val fd = pfd.detachFd()  // Detach so engine owns it
-            val success = engine.loadFromFd(fd, config)
+            val fd = pfd.detachFd()  // Detach so engine owns the fd
+            pfd.close()              // Close the PFD wrapper (no-op after detach, but tidy)
+
+            val success = try {
+                engine.loadFromFd(fd, config)
+            } catch (e: Exception) {
+                closeFdSafely(fd)
+                throw e
+            }
 
             if (success) {
+                // Engine now owns fd — do not close it
                 val infoJson = engine.getModelInfo()
                 if (infoJson != null) {
                     val modelInfo = parseGGUFInfo(infoJson)
@@ -58,6 +67,7 @@ class ModelDataParser {
                     ModelLoadResult.Error("Failed to retrieve model information")
                 }
             } else {
+                closeFdSafely(fd)
                 ModelLoadResult.Error("Failed to load GGUF model from URI")
             }
         } catch (e: Exception) {
@@ -297,28 +307,51 @@ class ModelDataParser {
             return checksumDirectory(file)
         }
 
-        // For files (GGUF models), use file content
+        // Fast partial hash: first 4 MB + file metadata
         val digest = MessageDigest.getInstance("SHA-256")
+        digest.update(file.name.toByteArray())
+        digest.update(file.length().toString().toByteArray())
+
+        val limit = 4L * 1024 * 1024
         file.inputStream().use { input ->
             val buffer = ByteArray(8 * 1024)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
+            var remaining = limit
+            while (remaining > 0) {
+                val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                val len = input.read(buffer, 0, toRead)
+                if (len <= 0) break
+                digest.update(buffer, 0, len)
+                remaining -= len
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**
-     * Calculate SHA-256 checksum from content:// URI using content resolver
+     * Fast partial SHA-256: hashes first 4 MB + file size + display name.
+     * Reading the entire multi-GB file caused OOM-kills on Oppo/Redmi devices
+     * whose OEM memory managers terminate long-running I/O.
      */
     fun checksumSHA256FromUri(context: Context, uri: Uri): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        val fileSize = getFileSizeFromUri(context, uri)
+        val fileName = getFileNameFromUri(context, uri)
+
+        // Mix in metadata so identical-prefix files still differ
+        digest.update(fileName.toByteArray())
+        digest.update(fileSize.toString().toByteArray())
+
+        // Hash only the first 4 MB
+        val limit = 4L * 1024 * 1024
         context.contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(8 * 1024)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
+            var remaining = limit
+            while (remaining > 0) {
+                val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                val len = input.read(buffer, 0, toRead)
+                if (len <= 0) break
+                digest.update(buffer, 0, len)
+                remaining -= len
             }
         } ?: throw IllegalArgumentException("Cannot open input stream for URI: $uri")
         return digest.digest().joinToString("") { "%02x".format(it) }
@@ -345,6 +378,13 @@ class ModelDataParser {
             }
         }
         return name
+    }
+
+    /** Safely close a raw fd obtained via detachFd() */
+    private fun closeFdSafely(fd: Int) {
+        try {
+            ParcelFileDescriptor.adoptFd(fd).close()
+        } catch (_: Throwable) {}
     }
 
     private fun checksumDirectory(dir: File): String {

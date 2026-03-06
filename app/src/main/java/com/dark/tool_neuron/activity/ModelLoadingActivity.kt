@@ -90,6 +90,7 @@ import com.dark.tool_neuron.worker.DiffusionModelInfo
 import com.dark.tool_neuron.worker.ModelDataParser
 import com.dark.tool_neuron.worker.ModelInfo
 import com.dark.tool_neuron.worker.ModelLoadResult
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
@@ -105,10 +106,19 @@ class ModelLoadingActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Check if launched from ModelPickerActivity with a file path
+        val pickerFilePath = intent.getStringExtra(ModelPickerActivity.EXTRA_RESULT_FILE_PATH)
+        val pickerMode = intent.getStringExtra(ModelPickerActivity.EXTRA_PICKER_MODE)
+
         setContent {
             NeuroVerseTheme {
                 ModelLoadingScreen(
                     modelParser = modelParser,
+                    initialFilePath = pickerFilePath,
+                    initialProviderType = when (pickerMode) {
+                        ProviderType.DIFFUSION.name -> ProviderType.DIFFUSION
+                        else -> null
+                    },
                     onEngineLoaded = { loadedEngine = it },
                     onClose = { finish() }
                 )
@@ -117,9 +127,11 @@ class ModelLoadingActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        // Run on IO — unloadModel is a lightweight native release
-        kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-            modelParser.unloadModel(loadedEngine)
+        val engine = loadedEngine
+        if (engine != null) {
+            CoroutineScope(Dispatchers.IO).launch {
+                modelParser.unloadModel(engine)
+            }
         }
         super.onDestroy()
     }
@@ -129,6 +141,8 @@ class ModelLoadingActivity : ComponentActivity() {
 @Composable
 fun ModelLoadingScreen(
     modelParser: ModelDataParser,
+    initialFilePath: String? = null,
+    initialProviderType: ProviderType? = null,
     onEngineLoaded: (Any) -> Unit,
     onClose: () -> Unit
 ) {
@@ -137,6 +151,8 @@ fun ModelLoadingScreen(
     var installState by remember { mutableStateOf<InstallState>(InstallState.NotInstalled) }
     var currentModel by remember { mutableStateOf<Model?>(null) }
     var selectedUri by remember { mutableStateOf<Uri?>(null) }
+    var selectedFilePath by remember { mutableStateOf(initialFilePath) }
+    var selectedProviderType by remember { mutableStateOf(initialProviderType) }
     val scope = rememberCoroutineScope()
     val repository = AppContainer.getModelRepository()
     var isProcessing by remember { mutableStateOf(false) }
@@ -184,7 +200,7 @@ fun ModelLoadingScreen(
                 val modelName = modelParser.getFileNameFromUri(context, uri)
                 val fileSize = modelParser.getFileSizeFromUri(context, uri)
 
-                // Calculate hash for deduplication (this reads the entire file)
+                // Fast partial hash for deduplication (first 4 MB + metadata)
                 val modelHash = modelParser.checksumSHA256FromUri(context, uri)
 
                 val model = Model(
@@ -295,9 +311,55 @@ fun ModelLoadingScreen(
         }
     }
 
-    // Auto-launch file picker on first load if no model selected
+    // Process file path from ModelPickerActivity (direct file system path)
+    LaunchedEffect(selectedFilePath) {
+        val path = selectedFilePath ?: return@LaunchedEffect
+
+        loadingState = LoadingState.Loading
+        scope.launch(Dispatchers.IO) {
+            isProcessing = true
+            try {
+                val file = File(path)
+                val providerType = selectedProviderType ?: ProviderType.GGUF
+                val modelHash = modelParser.checksumSHA256(path)
+
+                val pathType = if (file.isDirectory) PathType.DIRECTORY else PathType.FILE
+                val model = Model(
+                    id = modelHash,
+                    modelPath = path,
+                    modelName = file.name,
+                    pathType = pathType,
+                    providerType = providerType,
+                    fileSize = if (file.isFile) file.length() else null
+                )
+                currentModel = model
+
+                val existingModel = repository.getModelById(model.id)
+                installState = if (existingModel != null) {
+                    InstallState.Installed
+                } else {
+                    InstallState.NotInstalled
+                }
+
+                when (val result = modelParser.loadModel(model, null)) {
+                    is ModelLoadResult.Success -> {
+                        onEngineLoaded(result.engine)
+                        loadingState = LoadingState.Loaded(result.info)
+                    }
+                    is ModelLoadResult.Error -> {
+                        loadingState = LoadingState.Error(result.message)
+                    }
+                }
+            } catch (e: Exception) {
+                loadingState = LoadingState.Error(e.message ?: "Unknown error")
+            }
+            isProcessing = false
+        }
+    }
+
+    // Auto-launch SAF file picker on first load if no model selected and no file path provided
     LaunchedEffect(Unit) {
-        if (selectedUri == null && loadingState == LoadingState.Idle) {
+        if (selectedUri == null && selectedFilePath == null && loadingState == LoadingState.Idle) {
             openFilePicker()
         }
     }
