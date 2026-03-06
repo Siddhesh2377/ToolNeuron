@@ -3,11 +3,16 @@ package com.dark.tool_neuron.engine
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.dark.ai_sd.DepthState
 import com.dark.ai_sd.DiffusionBackendState
 import com.dark.ai_sd.DiffusionGenerationState
 import com.dark.ai_sd.DiffusionModelConfig
 import com.dark.ai_sd.DiffusionRuntimeConfig
+import com.dark.ai_sd.LamaState
+import com.dark.ai_sd.SegmenterState
 import com.dark.ai_sd.StableDiffusionManager
+import com.dark.ai_sd.StyleState
+import com.dark.ai_sd.UpscaleState
 import com.dark.ai_sd.generationParams
 import com.dark.ai_sd.modelConfig
 import com.dark.ai_sd.toBase64Rgb
@@ -216,6 +221,136 @@ class DiffusionEngine {
             is DiffusionBackendState.Starting -> "Starting"
             is DiffusionBackendState.Running -> "Running"
             is DiffusionBackendState.Error -> "Error: ${state.message}"
+        }
+    }
+
+    // ── Upscaler ──
+
+    val upscaleState: StateFlow<UpscaleState>
+        get() = sdManager.upscaleState
+
+    fun loadUpscaler(modelPath: String): Boolean {
+        return try {
+            sdManager.loadUpscaler(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load upscaler: ${e.message}")
+            false
+        }
+    }
+
+    fun upscaleImage(bitmap: Bitmap) {
+        sdManager.upscaleImage(bitmap)
+    }
+
+    fun releaseUpscaler() {
+        try {
+            sdManager.releaseUpscaler()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release upscaler: ${e.message}")
+        }
+    }
+
+    // ── Segmenter (MobileSAM) ──
+
+    val segmenterState: StateFlow<SegmenterState>
+        get() = sdManager.segmenterState
+
+    fun loadSegmenter(encoderPath: String, decoderPath: String): Boolean {
+        return try {
+            sdManager.loadSegmenter(encoderPath, decoderPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load segmenter: ${e.message}")
+            false
+        }
+    }
+
+    fun segmenterEncodeImage(bitmap: Bitmap): Boolean {
+        return sdManager.segmenterEncodeImage(bitmap)
+    }
+
+    fun segmentAtPoint(x: Float, y: Float) {
+        sdManager.segmentAtPoint(x, y)
+    }
+
+    fun segmentWithBox(x1: Float, y1: Float, x2: Float, y2: Float) {
+        sdManager.segmentWithBox(x1, y1, x2, y2)
+    }
+
+    fun releaseSegmenter() {
+        try { sdManager.releaseSegmenter() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release segmenter: ${e.message}")
+        }
+    }
+
+    // ── LaMa Inpainter ──
+
+    val lamaState: StateFlow<LamaState>
+        get() = sdManager.lamaState
+
+    fun loadLamaInpainter(modelPath: String): Boolean {
+        return try {
+            sdManager.loadLamaInpainter(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load LaMa inpainter: ${e.message}")
+            false
+        }
+    }
+
+    fun lamaInpaint(inputBitmap: Bitmap, maskBitmap: Bitmap) {
+        sdManager.lamaInpaint(inputBitmap, maskBitmap)
+    }
+
+    fun releaseLamaInpainter() {
+        try { sdManager.releaseLamaInpainter() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release LaMa inpainter: ${e.message}")
+        }
+    }
+
+    // ── Depth Estimator ──
+
+    val depthState: StateFlow<DepthState>
+        get() = sdManager.depthState
+
+    fun loadDepthEstimator(modelPath: String): Boolean {
+        return try {
+            sdManager.loadDepthEstimator(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load depth estimator: ${e.message}")
+            false
+        }
+    }
+
+    fun estimateDepth(inputBitmap: Bitmap) {
+        sdManager.estimateDepth(inputBitmap)
+    }
+
+    fun releaseDepthEstimator() {
+        try { sdManager.releaseDepthEstimator() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release depth estimator: ${e.message}")
+        }
+    }
+
+    // ── Style Transfer ──
+
+    val styleState: StateFlow<StyleState>
+        get() = sdManager.styleState
+
+    fun loadStyleTransfer(modelPath: String): Boolean {
+        return try {
+            sdManager.loadStyleTransfer(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load style transfer: ${e.message}")
+            false
+        }
+    }
+
+    fun stylize(contentBitmap: Bitmap, styleBitmap: Bitmap, strength: Float = 1.0f) {
+        sdManager.stylize(contentBitmap, styleBitmap, strength)
+    }
+
+    fun releaseStyleTransfer() {
+        try { sdManager.releaseStyleTransfer() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release style transfer: ${e.message}")
         }
     }
 
