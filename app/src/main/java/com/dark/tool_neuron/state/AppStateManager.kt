@@ -20,6 +20,14 @@ object AppStateManager {
     private val _isChatRefreshed = MutableStateFlow(false)
     val isChatRefreshed: StateFlow<Boolean> = _isChatRefreshed.asStateFlow()
 
+    // ── Model Reload Signal ──
+
+    private val _reloadModelRequested = MutableStateFlow(false)
+    val reloadModelRequested: StateFlow<Boolean> = _reloadModelRequested.asStateFlow()
+
+    fun requestModelReload() { _reloadModelRequested.value = true }
+    fun clearReloadRequest() { _reloadModelRequested.value = false }
+
     // Model loading progress tracking
     private var loadingStartTime: Long = 0
 

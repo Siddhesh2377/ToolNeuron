@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.dark.tool_neuron.global.PerformanceMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -27,7 +28,10 @@ class AppSettingsDataStore(private val context: Context) {
         private val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
         private val AI_MEMORY_ENABLED = booleanPreferencesKey("ai_memory_enabled")
         private val SECURITY_MODE = stringPreferencesKey("security_mode")
-        private val SHOWCASE_SEEN = booleanPreferencesKey("showcase_seen")
+        private val GUIDE_SEEN = booleanPreferencesKey("showcase_seen") // key kept for backward compat
+        private val HARDWARE_PROFILE_JSON = stringPreferencesKey("hardware_profile_json")
+        private val HARDWARE_TUNING_ENABLED = booleanPreferencesKey("hardware_tuning_enabled")
+        private val PERFORMANCE_MODE = stringPreferencesKey("performance_mode")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -144,12 +148,37 @@ class AppSettingsDataStore(private val context: Context) {
         context.appSettingsDataStore.edit { it[SECURITY_MODE] = mode }
     }
 
-    val showcaseSeen: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
-        prefs[SHOWCASE_SEEN] ?: false
+    val guideSeen: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[GUIDE_SEEN] ?: false
     }
 
-    suspend fun saveShowcaseSeen(seen: Boolean) {
-        context.appSettingsDataStore.edit { it[SHOWCASE_SEEN] = seen }
+    suspend fun saveGuideSeen(seen: Boolean) {
+        context.appSettingsDataStore.edit { it[GUIDE_SEEN] = seen }
+    }
+
+    val hardwareProfileJson: Flow<String?> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[HARDWARE_PROFILE_JSON]
+    }
+
+    val hardwareTuningEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[HARDWARE_TUNING_ENABLED] ?: true
+    }
+
+    suspend fun saveHardwareProfile(json: String) {
+        context.appSettingsDataStore.edit { it[HARDWARE_PROFILE_JSON] = json }
+    }
+
+    suspend fun updateHardwareTuningEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[HARDWARE_TUNING_ENABLED] = enabled }
+    }
+
+    val performanceMode: Flow<PerformanceMode> = context.appSettingsDataStore.data.map { prefs ->
+        val name = prefs[PERFORMANCE_MODE] ?: PerformanceMode.BALANCED.name
+        try { PerformanceMode.valueOf(name) } catch (_: Exception) { PerformanceMode.BALANCED }
+    }
+
+    suspend fun savePerformanceMode(mode: PerformanceMode) {
+        context.appSettingsDataStore.edit { it[PERFORMANCE_MODE] = mode.name }
     }
 
     suspend fun clear() {

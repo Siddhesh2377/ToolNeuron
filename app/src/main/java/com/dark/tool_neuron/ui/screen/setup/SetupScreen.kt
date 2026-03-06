@@ -25,8 +25,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.Canvas
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
@@ -41,22 +43,31 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlin.math.sin
+import kotlin.random.Random
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.HardwareScanner
+import com.dark.tool_neuron.global.PerformanceMode
 import com.dark.tool_neuron.viewmodel.SetupOption
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import com.dark.tool_neuron.worker.SystemBackupManager
@@ -73,6 +84,7 @@ fun SetupScreen(
     val setupComplete by viewModel.setupComplete.collectAsStateWithLifecycle()
     val downloadError by viewModel.downloadError.collectAsStateWithLifecycle()
     val primaryModelId by viewModel.primaryModelId.collectAsStateWithLifecycle()
+    val showPerformancePicker by viewModel.showPerformancePicker.collectAsStateWithLifecycle()
 
     // Navigate when setup completes
     LaunchedEffect(setupComplete) {
@@ -83,6 +95,41 @@ fun SetupScreen(
     }
 
     val isDownloading = selectedOption != null && selectedOption != SetupOption.POWER_MODE
+
+    AnimatedContent(
+        targetState = showPerformancePicker,
+        transitionSpec = {
+            fadeIn(Motion.entrance()) togetherWith fadeOut(Motion.exit())
+        },
+        label = "setupPhase"
+    ) { showPerfPicker ->
+        if (showPerfPicker) {
+            PerformancePickerContent(viewModel = viewModel)
+        } else {
+            SetupOptionsContent(
+                viewModel = viewModel,
+                selectedOption = selectedOption,
+                downloadStates = downloadStates,
+                downloadError = downloadError,
+                primaryModelId = primaryModelId,
+                isDownloading = isDownloading
+            )
+        }
+    }
+}
+
+// ── Setup Options Phase ──
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SetupOptionsContent(
+    viewModel: SetupViewModel,
+    selectedOption: SetupOption?,
+    downloadStates: Map<String, ModelDownloadService.DownloadState>,
+    downloadError: String?,
+    primaryModelId: String?,
+    isDownloading: Boolean
+) {
     val downloadState = primaryModelId?.let { downloadStates[it] }
 
     val progress = when (downloadState) {
@@ -133,19 +180,16 @@ fun SetupScreen(
 
                         Spacer(Modifier.height(24.dp))
 
-                        // Progress bar
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            if (progress >= 0f) {
-                                LinearProgressIndicator(
-                                    progress = { progress },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
+                        // Progress bar with droplets
+                        if (progress >= 0f) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                DropletProgressBar(
+                                    progress = progress,
+                                    modifier = Modifier.weight(1f).height(40.dp),
+                                    barColor = MaterialTheme.colorScheme.primary,
                                     trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
                                 )
                                 Spacer(Modifier.width(12.dp))
@@ -156,17 +200,17 @@ fun SetupScreen(
                                     ),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            } else {
-                                // Indeterminate for extracting/processing
-                                LinearProgressIndicator(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .height(6.dp)
-                                        .clip(RoundedCornerShape(3.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                                )
                             }
+                        } else {
+                            // Indeterminate for extracting/processing
+                            LinearProgressIndicator(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(6.dp)
+                                    .clip(RoundedCornerShape(3.dp)),
+                                color = MaterialTheme.colorScheme.primary,
+                                trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                            )
                         }
                     } else {
                         Text(
@@ -189,16 +233,22 @@ fun SetupScreen(
             Spacer(Modifier.height(32.dp))
 
             // Options list with staggered animation
-            val options = listOf(
-                SetupOption.TEXT to "Text",
-                SetupOption.TEXT_UNCENSORED to "Text Uncensored",
-                SetupOption.TEXT_TTS to "Text + TTS",
-                SetupOption.IMAGE_GEN to "Image Gen",
-                SetupOption.POWER_MODE to "Power Mode ( SKIP )"
+            data class SetupCard(
+                val option: SetupOption,
+                val icon: androidx.compose.ui.graphics.vector.ImageVector,
+                val title: String,
+                val subtitle: String
             )
 
-            options.forEachIndexed { index, (option, label) ->
-                key(option) {
+            val options = listOf(
+                SetupCard(SetupOption.TEXT, TnIcons.Sparkles, "Text Generation", "LFM2 350M · ~200 MB"),
+                SetupCard(SetupOption.TEXT_TTS, TnIcons.Volume, "Text + Speech", "LFM2 + Supertonic TTS · ~460 MB"),
+                SetupCard(SetupOption.IMAGE_GEN, TnIcons.Photo, "Image Generation", "AbsoluteReality · ~1.1 GB"),
+                SetupCard(SetupOption.POWER_MODE, TnIcons.Bolt, "Power Mode", "Set up later in Store")
+            )
+
+            options.forEachIndexed { index, card ->
+                key(card.option) {
                     var visible by remember { mutableStateOf(false) }
                     LaunchedEffect(Unit) {
                         delay(index * 80L)
@@ -207,17 +257,16 @@ fun SetupScreen(
 
                     AnimatedVisibility(
                         visible = visible,
-                        enter = slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = Motion.interactive()
-                        ) + fadeIn(Motion.content())
+                        enter = fadeIn(Motion.content())
                     ) {
                         SetupOptionCard(
-                            label = label,
-                            isSelected = selectedOption == option,
+                            icon = card.icon,
+                            title = card.title,
+                            subtitle = card.subtitle,
+                            isSelected = selectedOption == card.option,
                             isDownloading = isDownloading,
                             enabled = selectedOption == null,
-                            onClick = { viewModel.selectOption(option) }
+                            onClick = { viewModel.selectOption(card.option) }
                         )
                     }
 
@@ -254,6 +303,109 @@ fun SetupScreen(
             if (!isDownloading) {
                 Spacer(Modifier.height(24.dp))
                 RestoreFromBackupCard(viewModel = viewModel)
+            }
+        }
+    }
+}
+
+// ── Performance Picker Phase ──
+
+@Composable
+private fun PerformancePickerContent(viewModel: SetupViewModel) {
+    val selectedMode by viewModel.selectedPerformanceMode.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val clusterInfo = remember {
+        try {
+            val profile = HardwareScanner.scan(context)
+            val topo = profile.cpuTopology
+            if (topo.scanSucceeded) {
+                buildString {
+                    if (topo.primeCoreCount > 0) append("${topo.primeCoreCount}P")
+                    if (topo.performanceCoreCount > 0) {
+                        if (isNotEmpty()) append("+")
+                        append("${topo.performanceCoreCount}P")
+                    }
+                    if (topo.efficiencyCoreCount > 0) {
+                        if (isNotEmpty()) append("+")
+                        append("${topo.efficiencyCoreCount}E")
+                    }
+                    append(" cores")
+                }
+            } else "${topo.totalPhysicalCores} cores"
+        } catch (_: Exception) { null }
+    }
+
+    Scaffold(modifier = Modifier.fillMaxSize()) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                "Optimize Performance",
+                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                "Choose how your device runs AI models",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            clusterInfo?.let {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Detected: $it",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+            }
+
+            Spacer(Modifier.height(32.dp))
+
+            val modes = listOf(
+                Triple(PerformanceMode.PERFORMANCE, TnIcons.Gauge, "Maximum speed, higher battery usage"),
+                Triple(PerformanceMode.BALANCED, TnIcons.Adjustments, "Good speed with reasonable battery life"),
+                Triple(PerformanceMode.POWER_SAVING, TnIcons.Shield, "Slower but saves battery")
+            )
+
+            modes.forEachIndexed { index, (mode, icon, description) ->
+                var visible by remember { mutableStateOf(false) }
+                LaunchedEffect(Unit) {
+                    delay(index * 80L)
+                    visible = true
+                }
+
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(Motion.content())
+                ) {
+                    PerformanceModeCard(
+                        mode = mode,
+                        icon = icon,
+                        description = description,
+                        isSelected = selectedMode == mode,
+                        onClick = { viewModel.selectPerformanceMode(mode) }
+                    )
+                }
+
+                if (index < modes.lastIndex) {
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            FilledTonalButton(
+                onClick = { viewModel.confirmPerformanceMode() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Continue")
             }
         }
     }
@@ -314,7 +466,7 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
                         is SystemBackupManager.BackupProgress.Collecting -> progress.component
                         is SystemBackupManager.BackupProgress.Processing -> "Restoring ${(progress.progress * 100).toInt()}%"
                         is SystemBackupManager.BackupProgress.Complete -> "Restore complete!"
-                        else -> "Restoring..."
+                        is SystemBackupManager.BackupProgress.Error -> "Restoring..."
                     },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium
@@ -402,11 +554,83 @@ private fun RestoreFromBackupCard(viewModel: SetupViewModel) {
     }
 }
 
+// ==================== Performance Mode Card ====================
+
+@Composable
+private fun PerformanceModeCard(
+    mode: PerformanceMode,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    description: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+        else MaterialTheme.colorScheme.surfaceContainerLow,
+        animationSpec = Motion.state(),
+        label = "perfBg"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer
+        else MaterialTheme.colorScheme.onSurface,
+        animationSpec = Motion.state(),
+        label = "perfContent"
+    )
+
+    val label = when (mode) {
+        PerformanceMode.PERFORMANCE -> "Performance"
+        PerformanceMode.BALANCED -> "Balanced"
+        PerformanceMode.POWER_SAVING -> "Power Saver"
+    }
+
+    Surface(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(16.dp),
+        color = backgroundColor
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected) MaterialTheme.colorScheme.primary else contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(28.dp)
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = contentColor
+                )
+                Text(
+                    text = description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.7f)
+                )
+            }
+            if (isSelected) {
+                Icon(
+                    imageVector = TnIcons.RadioButton,
+                    contentDescription = "Selected",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+    }
+}
+
 // ==================== Option Card ====================
 
 @Composable
 private fun SetupOptionCard(
-    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
     isSelected: Boolean,
     isDownloading: Boolean,
     enabled: Boolean,
@@ -414,7 +638,7 @@ private fun SetupOptionCard(
 ) {
     val backgroundColor by animateColorAsState(
         targetValue = when {
-            isSelected && isDownloading -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+            isSelected && isDownloading -> MaterialTheme.colorScheme.primaryContainer
             else -> MaterialTheme.colorScheme.surfaceContainerLow
         },
         animationSpec = Motion.state(),
@@ -434,26 +658,34 @@ private fun SetupOptionCard(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(Standards.CardCornerRadius),
+        shape = RoundedCornerShape(16.dp),
         color = backgroundColor,
         enabled = enabled && !isDownloading
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = 16.dp,
-                vertical = 14.dp
-            ),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge.copy(
-                    fontWeight = FontWeight.Medium
-                ),
-                color = contentColor
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = if (isSelected && isDownloading) MaterialTheme.colorScheme.primary
+                       else contentColor.copy(alpha = 0.7f),
+                modifier = Modifier.size(28.dp)
             )
-
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
+                    color = contentColor
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = contentColor.copy(alpha = 0.7f)
+                )
+            }
             if (isSelected && isDownloading) {
                 Icon(
                     imageVector = TnIcons.RadioButton,
@@ -461,12 +693,112 @@ private fun SetupOptionCard(
                     tint = MaterialTheme.colorScheme.primary,
                     modifier = Modifier.size(20.dp)
                 )
-            } else {
-                Icon(
-                    imageVector = TnIcons.Download,
-                    contentDescription = "Download",
-                    tint = contentColor.copy(alpha = 0.7f),
-                    modifier = Modifier.size(20.dp)
+            }
+        }
+    }
+}
+
+// ==================== Droplet Progress Bar ====================
+
+private data class Droplet(
+    val x: Float,
+    val startY: Float,
+    val speed: Float,
+    val radius: Float,
+    val alpha: Float,
+    var y: Float = startY,
+    var life: Float = 1f
+)
+
+@Composable
+private fun DropletProgressBar(
+    progress: Float,
+    modifier: Modifier = Modifier,
+    barColor: Color,
+    trackColor: Color
+) {
+    val droplets = remember { mutableListOf<Droplet>() }
+    var tick by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(16L)
+            tick += 0.016f
+        }
+    }
+
+    Canvas(modifier = modifier) {
+        val barHeight = 6.dp.toPx()
+        val barRadius = barHeight / 2f
+        val barY = size.height / 2f - barHeight / 2f
+        val filledWidth = size.width * progress.coerceIn(0f, 1f)
+
+        // ── Track ──
+        drawRoundRect(
+            color = trackColor,
+            topLeft = Offset(0f, barY),
+            size = Size(size.width, barHeight),
+            cornerRadius = CornerRadius(barRadius)
+        )
+
+        // ── Filled bar ──
+        if (filledWidth > 0f) {
+            drawRoundRect(
+                color = barColor,
+                topLeft = Offset(0f, barY),
+                size = Size(filledWidth, barHeight),
+                cornerRadius = CornerRadius(barRadius)
+            )
+        }
+
+        // ── Spawn droplets at the right edge of the filled bar ──
+        if (progress > 0.01f && progress < 1f) {
+            val spawnX = filledWidth
+            val spawnY = barY + barHeight
+
+            // Spawn new droplets periodically
+            val spawnChance = if (sin(tick * 8f) > 0.3f) 0.25f else 0.08f
+            if (Random.nextFloat() < spawnChance && droplets.size < 6) {
+                droplets.add(
+                    Droplet(
+                        x = spawnX + Random.nextFloat() * 8f - 4f,
+                        startY = spawnY,
+                        speed = 1.2f + Random.nextFloat() * 1.5f,
+                        radius = 2f + Random.nextFloat() * 2.5f,
+                        alpha = 0.6f + Random.nextFloat() * 0.4f
+                    )
+                )
+            }
+        }
+
+        // ── Update & draw droplets ──
+        val iterator = droplets.iterator()
+        while (iterator.hasNext()) {
+            val d = iterator.next()
+            d.y += d.speed
+            d.life -= 0.025f
+
+            if (d.life <= 0f || d.y > size.height + 10f) {
+                iterator.remove()
+                continue
+            }
+
+            // Droplet shrinks as it falls
+            val currentRadius = d.radius * d.life.coerceIn(0f, 1f)
+            val currentAlpha = (d.alpha * d.life).coerceIn(0f, 1f)
+
+            drawCircle(
+                color = barColor.copy(alpha = currentAlpha),
+                radius = currentRadius,
+                center = Offset(d.x, d.y)
+            )
+
+            // Small highlight on top of droplet
+            if (currentRadius > 2f) {
+                drawCircle(
+                    color = Color.White.copy(alpha = currentAlpha * 0.4f),
+                    radius = currentRadius * 0.35f,
+                    center = Offset(d.x - currentRadius * 0.2f, d.y - currentRadius * 0.25f)
                 )
             }
         }

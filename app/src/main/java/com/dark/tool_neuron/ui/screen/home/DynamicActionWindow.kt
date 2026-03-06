@@ -1176,7 +1176,15 @@ private fun getMemoryUsage(context: Context): String {
 }
 
 @Composable
-private fun getCpuCores(): String = "${Runtime.getRuntime().availableProcessors()}"
+private fun getCpuCores(): String = remember {
+    try {
+        val text = java.io.File("/sys/devices/system/cpu/present").readText().trim()
+        val parts = text.split("-")
+        if (parts.size == 2) "${parts[1].toInt() + 1}" else "${Runtime.getRuntime().availableProcessors()}"
+    } catch (_: Exception) {
+        "${Runtime.getRuntime().availableProcessors()}"
+    }
+}
 
 @Composable
 private fun getActiveThreads(): String = "${Thread.activeCount()}"

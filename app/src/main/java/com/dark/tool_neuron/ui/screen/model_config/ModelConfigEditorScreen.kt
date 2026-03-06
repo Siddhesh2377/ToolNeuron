@@ -14,12 +14,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
@@ -344,14 +347,45 @@ private fun ConfigEditorPanel(
 @Composable
 private fun GgufConfigEditor(viewModel: ModelConfigEditorViewModel) {
     val ggufConfig by viewModel.ggufConfig.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    val hardwareTuningEnabled by remember {
+        AppSettingsDataStore(context).hardwareTuningEnabled
+    }.collectAsStateWithLifecycle(initialValue = true)
+
+    val loadingLocked = hardwareTuningEnabled
+
+    val physicalCores = remember {
+        try {
+            val text = java.io.File("/sys/devices/system/cpu/present").readText().trim()
+            val parts = text.split("-")
+            if (parts.size == 2) parts[1].toInt() + 1 else Runtime.getRuntime().availableProcessors()
+        } catch (_: Exception) {
+            Runtime.getRuntime().availableProcessors()
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ConfigSection("Loading Parameters") {
+            AnimatedVisibility(
+                visible = loadingLocked,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Text(
+                    text = "Managed by Performance Mode \u2014 disable Hardware Tuning in Settings to edit",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             IntField(
                 label = "Threads",
                 value = ggufConfig.loadingParams.threads,
                 onValueChange = { viewModel.updateGgufThreads(it) },
-                range = 1..16
+                range = 1..physicalCores,
+                enabled = !loadingLocked
             )
 
             IntField(
@@ -359,19 +393,22 @@ private fun GgufConfigEditor(viewModel: ModelConfigEditorViewModel) {
                 value = ggufConfig.loadingParams.ctxSize,
                 onValueChange = { viewModel.updateGgufContextSize(it) },
                 range = 512..32768,
-                step = 512
+                step = 512,
+                enabled = !loadingLocked
             )
 
             SwitchField(
                 label = "Use Memory Mapping (mmap)",
                 checked = ggufConfig.loadingParams.useMmap,
-                onCheckedChange = { viewModel.updateGgufUseMmap(it) }
+                onCheckedChange = { viewModel.updateGgufUseMmap(it) },
+                enabled = !loadingLocked
             )
 
             SwitchField(
                 label = "Use Memory Lock (mlock)",
                 checked = ggufConfig.loadingParams.useMlock,
-                onCheckedChange = { viewModel.updateGgufUseMlock(it) }
+                onCheckedChange = { viewModel.updateGgufUseMlock(it) },
+                enabled = !loadingLocked
             )
         }
 
@@ -620,9 +657,14 @@ private fun IntField(
     onValueChange: (Int) -> Unit,
     range: IntRange,
     step: Int = 1,
-    description: String? = null
+    description: String? = null,
+    enabled: Boolean = true
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val alpha = if (enabled) 1f else 0.5f
+    Column(
+        modifier = Modifier.alpha(alpha),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -660,7 +702,8 @@ private fun IntField(
             value = value.toFloat(),
             onValueChange = { onValueChange(it.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first) / step - 1
+            steps = (range.last - range.first) / step - 1,
+            enabled = enabled
         )
     }
 }
@@ -722,10 +765,14 @@ private fun SwitchField(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    description: String? = null
+    description: String? = null,
+    enabled: Boolean = true
 ) {
+    val alpha = if (enabled) 1f else 0.5f
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .alpha(alpha),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -746,7 +793,7 @@ private fun SwitchField(
 
         CuteSwitch(
             checked = checked,
-            onCheckedChange = onCheckedChange
+            onCheckedChange = { if (enabled) onCheckedChange(it) }
         )
     }
 }
@@ -788,7 +835,7 @@ private fun EmptyModelsState() {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
-                imageVector = TnIcons.BrainCircuit,
+                imageVector = TnIcons.Sparkles,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)

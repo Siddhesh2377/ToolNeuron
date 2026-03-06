@@ -92,6 +92,9 @@ fun SettingsScreen(
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
     val codeHighlightEnabled by viewModel.codeHighlightEnabled.collectAsStateWithLifecycle()
     val aiMemoryEnabled by viewModel.aiMemoryEnabled.collectAsStateWithLifecycle()
+    val hardwareTuningEnabled by viewModel.hardwareTuningEnabled.collectAsStateWithLifecycle()
+    val hardwareProfile by viewModel.hardwareProfile.collectAsStateWithLifecycle()
+    val performanceMode by viewModel.performanceMode.collectAsStateWithLifecycle()
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -337,6 +340,93 @@ fun SettingsScreen(
                 }
             }
 
+            // ==================== Hardware Tuning ====================
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Hardware Tuning") }
+
+            item {
+                SwitchRow(
+                    title = "Hardware-Based Tuning",
+                    description = "Automatically optimize model parameters based on your device's hardware. Disable to set parameters manually.",
+                    checked = hardwareTuningEnabled,
+                    onCheckedChange = { viewModel.setHardwareTuningEnabled(it) }
+                )
+            }
+
+            // ── Performance Mode ──
+            item {
+                Column(modifier = Modifier.padding(horizontal = Standards.SpacingLg)) {
+                    Text(
+                        text = "Performance Mode",
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                    Spacer(Modifier.height(Standards.SpacingSm))
+                    ActionToggleGroup(
+                        items = com.dark.tool_neuron.global.PerformanceMode.entries.toList(),
+                        selectedItem = performanceMode,
+                        onItemSelected = { viewModel.setPerformanceMode(it) },
+                        itemLabel = { mode ->
+                            when (mode) {
+                                com.dark.tool_neuron.global.PerformanceMode.PERFORMANCE -> "Performance"
+                                com.dark.tool_neuron.global.PerformanceMode.BALANCED -> "Balanced"
+                                com.dark.tool_neuron.global.PerformanceMode.POWER_SAVING -> "Power Saver"
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(Standards.SpacingXs))
+                    Text(
+                        text = when (performanceMode) {
+                            com.dark.tool_neuron.global.PerformanceMode.PERFORMANCE -> "Uses all fast cores. Best speed, higher battery use."
+                            com.dark.tool_neuron.global.PerformanceMode.BALANCED -> "Uses performance cores only. Good speed and battery balance."
+                            com.dark.tool_neuron.global.PerformanceMode.POWER_SAVING -> "Minimal threads and memory. Best battery life."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            hardwareProfile?.let { profile ->
+                item {
+                    val topo = profile.cpuTopology
+                    val coreInfo = if (topo.scanSucceeded) {
+                        buildString {
+                            if (topo.primeCoreCount > 0) append("${topo.primeCoreCount}P")
+                            if (topo.performanceCoreCount > 0) {
+                                if (isNotEmpty()) append("+")
+                                append("${topo.performanceCoreCount}P")
+                            }
+                            if (topo.efficiencyCoreCount > 0) {
+                                if (isNotEmpty()) append("+")
+                                append("${topo.efficiencyCoreCount}E")
+                            }
+                            append(" cores")
+                        }
+                    } else {
+                        "${profile.cpuCores} cores"
+                    }
+
+                    StandardCard(
+                        title = "${profile.totalRamMB} MB RAM · $coreInfo · ${profile.cpuArch}",
+                        description = profile.deviceModel
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            ActionTextButton(
+                                onClickListener = { viewModel.rescanHardware() },
+                                icon = TnIcons.Refresh,
+                                text = "Rescan",
+                                shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
+                            )
+                        }
+                    }
+                }
+            }
+
             // ==================== LLM ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
@@ -381,7 +471,7 @@ fun SettingsScreen(
                 SectionHeader(title = "Model Configuration") {
                     ActionTextButton(
                         onClickListener = onModelEditor,
-                        icon = TnIcons.Brain,
+                        icon = TnIcons.Sparkles,
                         text = "Configure",
                         shape = RoundedCornerShape(Standards.CardSmallCornerRadius)
                     )
@@ -400,7 +490,7 @@ fun SettingsScreen(
                     StandardCard(
                         title = model.modelName,
                         description = model.providerType.name,
-                        icon = TnIcons.Brain,
+                        icon = TnIcons.Sparkles,
                         onClick = onModelEditor
                     )
                 }

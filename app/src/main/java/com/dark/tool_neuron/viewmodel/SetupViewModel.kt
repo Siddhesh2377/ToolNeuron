@@ -3,24 +3,31 @@ package com.dark.tool_neuron.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.data.SetupDataStore
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.HardwareScanner
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.global.PerformanceMode
 import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.worker.SystemBackupManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 enum class SetupOption {
     TEXT,
-    TEXT_UNCENSORED,
     TEXT_TTS,
     IMAGE_GEN,
     POWER_MODE
@@ -29,8 +36,11 @@ enum class SetupOption {
 class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     private val setupDataStore = SetupDataStore(application)
+    private val appSettingsDataStore = AppSettingsDataStore(application)
     private val modelStoreRepository = ModelStoreRepository(application)
-    private val modelRepository = AppContainer.getModelRepository()
+
+    // ModelRepository is deferred until vault is ready
+    private val modelRepository get() = AppContainer.getModelRepository()
 
     val downloadStates = ModelDownloadService.downloadStates
 
@@ -46,32 +56,25 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
     private val _primaryModelId = MutableStateFlow<String?>(null)
     val primaryModelId: StateFlow<String?> = _primaryModelId
 
+    private val _showPerformancePicker = MutableStateFlow(false)
+    val showPerformancePicker: StateFlow<Boolean> = _showPerformancePicker
+
+    private val _selectedPerformanceMode = MutableStateFlow(PerformanceMode.BALANCED)
+    val selectedPerformanceMode: StateFlow<PerformanceMode> = _selectedPerformanceMode
+
     // ==================== Setup Model Definitions ====================
 
     private val textModel = HuggingFaceModel(
-        id = "ruvltra-claude-code-0.5b",
-        name = "Ruvltra Claude Code 0.5B",
-        description = "Compact text generation model",
-        fileUri = "ruv/ruvltra-claude-code/resolve/main/ruvltra-claude-code-0.5b-q4_k_m.gguf",
-        approximateSize = "400 MB",
+        id = "lfm2-350m",
+        name = "LFM2 350M",
+        description = "Compact text generation model by LiquidAI",
+        fileUri = "LiquidAI/LFM2-350M-GGUF/resolve/main/LFM2-350M-Q4_K_M-hip-optimized.gguf",
+        approximateSize = "200 MB",
         modelType = ModelType.GGUF,
         isZip = false,
         tags = listOf("GGUF", "Q4_K_M"),
         requiresNPU = false,
-        repositoryUrl = "ruv/ruvltra-claude-code"
-    )
-
-    private val textUncensoredModel = HuggingFaceModel(
-        id = "gemma3-emotional-1b",
-        name = "Gemma3 Emotional 1B",
-        description = "Unrestricted text generation model",
-        fileUri = "mradermacher/Gemma3-Emotional-1B-i1-GGUF/resolve/main/Gemma3-Emotional-1B.i1-Q4_K_M.gguf",
-        approximateSize = "700 MB",
-        modelType = ModelType.GGUF,
-        isZip = false,
-        tags = listOf("GGUF", "Q4_K_M"),
-        requiresNPU = false,
-        repositoryUrl = "mradermacher/Gemma3-Emotional-1B-i1-GGUF"
+        repositoryUrl = "LiquidAI/LFM2-350M-GGUF"
     )
 
     private val ttsModel = HuggingFaceModel(
@@ -91,61 +94,59 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun getImageModel(): HuggingFaceModel {
         val isQualcomm = modelStoreRepository.isQualcommDevice()
-        val deviceInfo = modelStoreRepository.getDeviceInfo()
-        val soc = deviceInfo["soc"] ?: ""
-        val suffix = modelStoreRepository.getChipsetSuffix(soc)
+        return HuggingFaceModel(
+            id = "absolutereality-sd",
+            name = "AbsoluteReality",
+            description = "Realistic image generation",
+            fileUri = "xororz/sd-qnn/resolve/main/AbsoluteReality_qnn2.28_min.zip",
+            approximateSize = "1.1 GB",
+            modelType = ModelType.SD,
+            isZip = true,
+            runOnCpu = !isQualcomm,
+            textEmbeddingSize = 768,
+            tags = if (isQualcomm) listOf("NPU", "Realistic") else listOf("CPU", "Realistic"),
+            requiresNPU = false,
+            repositoryUrl = "xororz/sd-qnn"
+        )
+    }
 
-        return if (isQualcomm && suffix != null) {
-            HuggingFaceModel(
-                id = "anythingv5-npu",
-                name = "Anything V5.0",
-                description = "Anime-style image generation optimized for NPU",
-                fileUri = "xororz/sd-qnn/resolve/main/AnythingV5_qnn2.28_${suffix}.zip",
-                approximateSize = "1.1GB",
-                modelType = ModelType.SD,
-                isZip = true,
-                chipsetSuffix = suffix,
-                runOnCpu = false,
-                textEmbeddingSize = 768,
-                tags = listOf("NPU", "Anime", "Art"),
-                requiresNPU = true,
-                repositoryUrl = "xororz/sd-qnn"
-            )
-        } else {
-            HuggingFaceModel(
-                id = "anythingv5-cpu",
-                name = "Anything V5.0",
-                description = "Anime-style image generation for CPU",
-                fileUri = "xororz/sd-mnn/resolve/main/AnythingV5.zip",
-                approximateSize = "1.2GB",
-                modelType = ModelType.SD,
-                isZip = true,
-                runOnCpu = true,
-                textEmbeddingSize = 768,
-                tags = listOf("CPU", "Anime", "Art"),
-                requiresNPU = false,
-                repositoryUrl = "xororz/sd-mnn"
-            )
-        }
+    companion object {
+        private const val TAG = "SetupVM"
+        private const val PROFILE_MAX_AGE_MS = 30L * 24 * 60 * 60 * 1000 // 30 days
     }
 
     // ==================== Initialization ====================
 
     init {
-        // Resume active setup downloads if any
-        resumeActiveDownloads()
+        // Auto-init plaintext vault if not ready
+        if (!VaultManager.isReady.value) {
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    VaultManager.initPlaintext(getApplication())
+                    AppContainer.ensureVaultInitialized()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Auto vault init failed", e)
+                }
+            }
+        }
 
-        // Watch for model installations to detect setup completion
+        // Scan hardware if no profile exists or profile is stale (>30 days)
+        viewModelScope.launch(Dispatchers.IO) {
+            scanHardwareIfNeeded()
+        }
+
+        // Resume active setup downloads if any
+        if (VaultManager.isReady.value) {
+            resumeActiveDownloads()
+            watchModelInstallations()
+        }
+
+        // Watch for vault readiness to start model monitoring
         viewModelScope.launch {
-            modelRepository.getAllModels().collect { models ->
-                if (_selectedOption.value != null && _selectedOption.value != SetupOption.POWER_MODE) {
-                    val hasTextOrImage = models.any {
-                        it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
-                    }
-                    if (hasTextOrImage) {
-                        setupDataStore.completeSetup()
-                        _setupComplete.value = true
-                    }
+            VaultManager.isReady.collect { ready ->
+                if (ready) {
+                    resumeActiveDownloads()
+                    watchModelInstallations()
                 }
             }
         }
@@ -164,6 +165,21 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    private fun watchModelInstallations() {
+        viewModelScope.launch {
+            modelRepository.getAllModels().collect { models ->
+                if (_selectedOption.value != null && _selectedOption.value != SetupOption.POWER_MODE && !_showPerformancePicker.value && !_setupComplete.value) {
+                    val hasTextOrImage = models.any {
+                        it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                    }
+                    if (hasTextOrImage) {
+                        _showPerformancePicker.value = true
+                    }
+                }
+            }
+        }
+    }
+
     private fun resumeActiveDownloads() {
         val currentStates = downloadStates.value
         val imageModelId = getImageModel().id
@@ -176,10 +192,6 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             currentStates.containsKey(textModel.id) -> {
                 _selectedOption.value = SetupOption.TEXT
                 _primaryModelId.value = textModel.id
-            }
-            currentStates.containsKey(textUncensoredModel.id) -> {
-                _selectedOption.value = SetupOption.TEXT_UNCENSORED
-                _primaryModelId.value = textUncensoredModel.id
             }
             currentStates.containsKey(imageModelId) -> {
                 _selectedOption.value = SetupOption.IMAGE_GEN
@@ -201,10 +213,6 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                 _primaryModelId.value = textModel.id
                 downloadModel(textModel)
             }
-            SetupOption.TEXT_UNCENSORED -> {
-                _primaryModelId.value = textUncensoredModel.id
-                downloadModel(textUncensoredModel)
-            }
             SetupOption.TEXT_TTS -> {
                 _primaryModelId.value = textModel.id
                 downloadModel(textModel)
@@ -221,6 +229,18 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
                     _setupComplete.value = true
                 }
             }
+        }
+    }
+
+    fun selectPerformanceMode(mode: PerformanceMode) {
+        _selectedPerformanceMode.value = mode
+    }
+
+    fun confirmPerformanceMode() {
+        viewModelScope.launch {
+            appSettingsDataStore.savePerformanceMode(_selectedPerformanceMode.value)
+            setupDataStore.completeSetup()
+            _setupComplete.value = true
         }
     }
 
@@ -269,4 +289,31 @@ class SetupViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    // ==================== Hardware Scan ====================
+
+    private val lenientJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    private suspend fun scanHardwareIfNeeded() {
+        try {
+            val existingJson = appSettingsDataStore.hardwareProfileJson.firstOrNull()
+            val needsScan = if (existingJson.isNullOrBlank()) {
+                true
+            } else {
+                val profile = lenientJson.decodeFromString<com.dark.tool_neuron.global.HardwareProfile>(existingJson)
+                System.currentTimeMillis() - profile.scanTimestamp > PROFILE_MAX_AGE_MS
+            }
+            if (needsScan) {
+                val profile = HardwareScanner.scan(getApplication())
+                val json = lenientJson.encodeToString(profile)
+                appSettingsDataStore.saveHardwareProfile(json)
+                val topo = profile.cpuTopology
+                val coreInfo = if (topo.scanSucceeded) "${topo.primeCoreCount}P+${topo.performanceCoreCount}P+${topo.efficiencyCoreCount}E" else "${profile.cpuCores}"
+                Log.d(TAG, "Hardware profile scanned: ${profile.totalRamMB}MB RAM, $coreInfo cores")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Hardware scan failed", e)
+        }
+    }
+
 }

@@ -4,9 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.data.VaultManager
+import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
-import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -14,17 +15,25 @@ import jakarta.inject.Inject
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 @HiltViewModel
-class ModelConfigEditorViewModel @Inject constructor(
-    private val repository: ModelRepository
-) : ViewModel() {
+class ModelConfigEditorViewModel @Inject constructor() : ViewModel() {
 
-    val models: Flow<List<Model>> = repository.getAllModels()
+    // Deferred until vault is ready
+    private val repository get() = AppContainer.getModelRepository()
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val models: Flow<List<Model>> = VaultManager.isReady
+        .flatMapLatest { ready ->
+            if (ready) repository.getAllModels()
+            else flowOf(emptyList())
+        }
 
     private val _selectedModel = MutableStateFlow<Model?>(null)
     val selectedModel: StateFlow<Model?> = _selectedModel.asStateFlow()
@@ -69,7 +78,7 @@ class ModelConfigEditorViewModel @Inject constructor(
 
                     ProviderType.DIFFUSION -> {
                         _diffusionConfig.value = if (config != null) {
-                            parseDiffusionConfig(config.modelLoadingParams)
+                            DiffusionConfig.fromJson(config.modelLoadingParams)
                         } else {
                             DiffusionConfig()
                         }
@@ -93,25 +102,6 @@ class ModelConfigEditorViewModel @Inject constructor(
         }
     }
 
-    private fun parseDiffusionConfig(jsonString: String?): DiffusionConfig {
-        if (jsonString == null) return DiffusionConfig()
-
-        return try {
-            val json = org.json.JSONObject(jsonString)
-            DiffusionConfig(
-                textEmbeddingSize = json.optInt("text_embedding_size", 768),
-                runOnCpu = json.optBoolean("run_on_cpu", false),
-                useCpuClip = json.optBoolean("use_cpu_clip", true),
-                isPony = json.optBoolean("is_pony", false),
-                httpPort = json.optInt("http_port", 8081),
-                safetyMode = json.optBoolean("safety_mode", false),
-                width = json.optInt("width", 512),
-                height = json.optInt("height", 512)
-            )
-        } catch (_: Exception) {
-            DiffusionConfig()
-        }
-    }
 
     fun saveConfiguration() {
         val model = _selectedModel.value ?: return
