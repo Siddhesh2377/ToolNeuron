@@ -75,6 +75,11 @@ import kotlin.math.roundToInt
 import com.dark.tool_neuron.ui.components.PasswordTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 
+// ── Constants ──
+
+private val DEFAULT_VOICES = listOf("F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5")
+private val SUPPORTED_LANGUAGES = listOf("en" to "EN", "ko" to "KO", "es" to "ES", "pt" to "PT", "fr" to "FR")
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SettingsScreen(
@@ -120,11 +125,7 @@ fun SettingsScreen(
         }
     }
 
-    val voices = ttsVoices.ifEmpty {
-        listOf("F1", "F2", "F3", "F4", "F5", "M1", "M2", "M3", "M4", "M5")
-    }
-
-    val languages = listOf("en" to "EN", "ko" to "KO", "es" to "ES", "pt" to "PT", "fr" to "FR")
+    val voices = ttsVoices.ifEmpty { DEFAULT_VOICES }
 
     Scaffold(
         topBar = {
@@ -171,87 +172,15 @@ fun SettingsScreen(
                 )
             }
 
-            // Download recommended tool calling model card — only visible when no GGUF model is installed
+            // Download recommended tool calling model card
             if (!hasToolCallingModel) {
                 item {
-                    StandardCard(title = "Recommended Tool Calling Model") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateContentSize(Motion.content()),
-                            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
-                        ) {
-                            CaptionText(text = "Ruvltra Claude Code 0.5B · ~400 MB")
-                            CaptionText(text = "Compact model optimized for tool calling")
-
-                            when (toolCallingDownloadState) {
-                                is ModelDownloadService.DownloadState.Downloading -> {
-                                    val progress = toolCallingDownloadState.progress
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        LinearProgressIndicator(
-                                            progress = { progress },
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(6.dp)
-                                                .clip(RoundedCornerShape(3.dp)),
-                                            color = MaterialTheme.colorScheme.tertiary,
-                                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Text(
-                                            "${(progress * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontWeight = FontWeight.SemiBold
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                is ModelDownloadService.DownloadState.Extracting,
-                                is ModelDownloadService.DownloadState.Processing -> {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp)),
-                                        color = MaterialTheme.colorScheme.tertiary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                                    )
-                                }
-
-                                is ModelDownloadService.DownloadState.Success -> {
-                                    CaptionText(text = "Downloaded successfully")
-                                }
-
-                                is ModelDownloadService.DownloadState.Error -> {
-                                    Text(
-                                        text = toolCallingDownloadState.message,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                    FilledTonalButton(onClick = { viewModel.downloadToolCallingModel() }) {
-                                        Text("Retry")
-                                    }
-                                }
-
-                                else -> {
-                                    FilledTonalButton(onClick = { viewModel.downloadToolCallingModel() }) {
-                                        Icon(
-                                            TnIcons.Download,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("Download")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    ModelDownloadCard(
+                        title = "Recommended Tool Calling Model",
+                        description = "Ruvltra Claude Code 0.5B · ~400 MB\nCompact model optimized for tool calling",
+                        downloadState = toolCallingDownloadState,
+                        onDownload = { viewModel.downloadToolCallingModel() }
+                    )
                 }
             }
 
@@ -261,7 +190,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(Standards.CardCornerRadius),
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f),
-                    border = androidx.compose.foundation.BorderStroke(
+                    border = BorderStroke(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.error.copy(alpha = 0.5f)
                     )
@@ -305,40 +234,50 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== AI Memory ====================
+            // ==================== LLM ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
-            item { SectionHeader(title = "AI Memory") }
+            item { SectionHeader(title = "LLM") }
 
             item {
                 SwitchRow(
-                    title = "AI Memory",
-                    description = "Remember facts about you across conversations",
-                    checked = aiMemoryEnabled,
-                    onCheckedChange = { viewModel.setAiMemoryEnabled(it) }
+                    title = "Streaming Response",
+                    description = "Stream tokens as they generate in real-time",
+                    checked = streamingEnabled,
+                    onCheckedChange = { viewModel.setStreamingEnabled(it) }
                 )
             }
 
             item {
-                Surface(
-                    onClick = onAiMemoryClick,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            "View Memories",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium
-                        )
-                        Text(
-                            "See, search, and manage what the AI remembers about you",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                SwitchRow(
+                    title = "Chat Memory",
+                    description = "Remember previous messages in conversation (faster without)",
+                    checked = chatMemoryEnabled,
+                    onCheckedChange = { viewModel.setChatMemoryEnabled(it) }
+                )
+            }
+
+            item {
+                SwitchRow(
+                    title = "Ask to Reload Model",
+                    description = "Show dialog on startup to reload last model. When off, auto-loads silently.",
+                    checked = askModelReloadDialog,
+                    onCheckedChange = { viewModel.setAskModelReloadDialog(it) }
+                )
+            }
+
+            // ==================== Chat ====================
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Chat") }
+
+            item {
+                SwitchRow(
+                    title = "Code Syntax Highlighting",
+                    description = "Colorize code blocks based on language (disable for faster scrolling)",
+                    checked = codeHighlightEnabled,
+                    onCheckedChange = { viewModel.setCodeHighlightEnabled(it) }
+                )
             }
 
             // ==================== Hardware Tuning ====================
@@ -428,52 +367,6 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== LLM ====================
-            item { Spacer(Modifier.height(Standards.SpacingSm)) }
-            item { SectionDivider() }
-            item { SectionHeader(title = "LLM") }
-
-            item {
-                SwitchRow(
-                    title = "Streaming Response",
-                    description = "Stream tokens as they generate in real-time",
-                    checked = streamingEnabled,
-                    onCheckedChange = { viewModel.setStreamingEnabled(it) }
-                )
-            }
-
-            item {
-                SwitchRow(
-                    title = "Chat Memory",
-                    description = "Remember previous messages in conversation (faster without)",
-                    checked = chatMemoryEnabled,
-                    onCheckedChange = { viewModel.setChatMemoryEnabled(it) }
-                )
-            }
-
-            item {
-                SwitchRow(
-                    title = "Ask to Reload Model",
-                    description = "Show dialog on startup to reload last model. When off, auto-loads silently.",
-                    checked = askModelReloadDialog,
-                    onCheckedChange = { viewModel.setAskModelReloadDialog(it) }
-                )
-            }
-
-            // ==================== Chat ====================
-            item { Spacer(Modifier.height(Standards.SpacingSm)) }
-            item { SectionDivider() }
-            item { SectionHeader(title = "Chat") }
-
-            item {
-                SwitchRow(
-                    title = "Code Syntax Highlighting",
-                    description = "Colorize code blocks based on language (disable for faster scrolling)",
-                    checked = codeHighlightEnabled,
-                    onCheckedChange = { viewModel.setCodeHighlightEnabled(it) }
-                )
-            }
-
             // ==================== Model Configuration ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
@@ -506,6 +399,42 @@ fun SettingsScreen(
                 }
             }
 
+            // ==================== AI Memory ====================
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "AI Memory") }
+
+            item {
+                SwitchRow(
+                    title = "AI Memory",
+                    description = "Remember facts about you across conversations",
+                    checked = aiMemoryEnabled,
+                    onCheckedChange = { viewModel.setAiMemoryEnabled(it) }
+                )
+            }
+
+            item {
+                Surface(
+                    onClick = onAiMemoryClick,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            "View Memories",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            "See, search, and manage what the AI remembers about you",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
             // ==================== TTS ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
@@ -514,83 +443,13 @@ fun SettingsScreen(
             // Download TTS card — only visible when no TTS model is installed
             if (!hasTtsModel) {
                 item {
-                    StandardCard(title = "Download TTS") {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .animateContentSize(Motion.content()),
-                            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
-                        ) {
-                            CaptionText(text = "Supertonic v2 · ~263 MB")
-
-                            when (ttsDownloadState) {
-                                is ModelDownloadService.DownloadState.Downloading -> {
-                                    val progress = ttsDownloadState.progress
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        LinearProgressIndicator(
-                                            progress = { progress },
-                                            modifier = Modifier
-                                                .weight(1f)
-                                                .height(6.dp)
-                                                .clip(RoundedCornerShape(3.dp)),
-                                            color = MaterialTheme.colorScheme.primary,
-                                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                                        )
-                                        Spacer(Modifier.width(12.dp))
-                                        Text(
-                                            "${(progress * 100).toInt()}%",
-                                            style = MaterialTheme.typography.labelMedium.copy(
-                                                fontWeight = FontWeight.SemiBold
-                                            ),
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-
-                                is ModelDownloadService.DownloadState.Extracting,
-                                is ModelDownloadService.DownloadState.Processing -> {
-                                    LinearProgressIndicator(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(6.dp)
-                                            .clip(RoundedCornerShape(3.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
-                                    )
-                                }
-
-                                is ModelDownloadService.DownloadState.Success -> {
-                                    CaptionText(text = "Downloaded — loading model...")
-                                }
-
-                                is ModelDownloadService.DownloadState.Error -> {
-                                    Text(
-                                        text = ttsDownloadState.message,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.error
-                                    )
-                                    FilledTonalButton(onClick = { viewModel.downloadTts() }) {
-                                        Text("Retry")
-                                    }
-                                }
-
-                                else -> {
-                                    FilledTonalButton(onClick = { viewModel.downloadTts() }) {
-                                        Icon(
-                                            TnIcons.Download,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                        Text("Download")
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    ModelDownloadCard(
+                        title = "Download TTS",
+                        description = "Supertonic v2 · ~263 MB",
+                        downloadState = ttsDownloadState,
+                        onDownload = { viewModel.downloadTts() },
+                        successText = "Downloaded — loading model..."
+                    )
                 }
             }
 
@@ -638,10 +497,10 @@ fun SettingsScreen(
             item {
                 StandardCard(title = "Language") {
                     ActionToggleGroup(
-                        items = languages.map { it.first },
+                        items = SUPPORTED_LANGUAGES.map { it.first },
                         selectedItem = ttsSettings.language,
                         onItemSelected = { viewModel.updateLanguage(it) },
-                        itemLabel = { code -> languages.first { it.first == code }.second },
+                        itemLabel = { code -> SUPPORTED_LANGUAGES.first { it.first == code }.second },
                         enabled = ttsModelLoaded
                     )
                 }
@@ -659,7 +518,7 @@ fun SettingsScreen(
                             CaptionText(text = "Playback speed")
                             Surface(
                                 color = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "${"%.2f".format(ttsSettings.speed)}x",
@@ -706,7 +565,7 @@ fun SettingsScreen(
                             CaptionText(text = "Higher = better quality, slower")
                             Surface(
                                 color = MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f),
-                                shape = androidx.compose.foundation.shape.RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(4.dp)
                             ) {
                                 Text(
                                     text = "${ttsSettings.steps}",
@@ -769,6 +628,15 @@ fun SettingsScreen(
                 )
             }
 
+            // ==================== Data Management ====================
+            item { Spacer(Modifier.height(Standards.SpacingSm)) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Data Management") }
+
+            item {
+                DataManagementSection(viewModel = viewModel)
+            }
+
             // ==================== About ====================
             item { Spacer(Modifier.height(Standards.SpacingSm)) }
             item { SectionDivider() }
@@ -786,16 +654,98 @@ fun SettingsScreen(
                 }
             }
 
-            // ==================== Data Management ====================
-            item { Spacer(Modifier.height(Standards.SpacingSm)) }
-            item { SectionDivider() }
-            item { SectionHeader(title = "Data Management") }
+            item { Spacer(Modifier.height(Standards.SpacingXl)) }
+        }
+    }
+}
 
-            item {
-                DataManagementSection(viewModel = viewModel)
+// ==================== Reusable Download Card ====================
+
+@Composable
+private fun ModelDownloadCard(
+    title: String,
+    description: String,
+    downloadState: ModelDownloadService.DownloadState?,
+    onDownload: () -> Unit,
+    successText: String = "Downloaded"
+) {
+    StandardCard(title = title) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .animateContentSize(Motion.content()),
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
+        ) {
+            description.split("\n").forEach { line ->
+                CaptionText(text = line)
             }
 
-            item { Spacer(Modifier.height(Standards.SpacingXl)) }
+            when (downloadState) {
+                is ModelDownloadService.DownloadState.Downloading -> {
+                    val progress = downloadState.progress
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        LinearProgressIndicator(
+                            progress = { progress },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(6.dp)
+                                .clip(RoundedCornerShape(3.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            "${(progress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelMedium.copy(
+                                fontWeight = FontWeight.SemiBold
+                            ),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                is ModelDownloadService.DownloadState.Extracting,
+                is ModelDownloadService.DownloadState.Processing -> {
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceContainerHighest
+                    )
+                }
+
+                is ModelDownloadService.DownloadState.Success -> {
+                    CaptionText(text = successText)
+                }
+
+                is ModelDownloadService.DownloadState.Error -> {
+                    Text(
+                        text = downloadState.message,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                    FilledTonalButton(onClick = onDownload) {
+                        Text("Retry")
+                    }
+                }
+
+                else -> {
+                    FilledTonalButton(onClick = onDownload) {
+                        Icon(
+                            TnIcons.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("Download")
+                    }
+                }
+            }
         }
     }
 }
@@ -848,7 +798,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 val activity = context as? Activity
                 activity?.let {
                     val intent = it.packageManager.getLaunchIntentForPackage(it.packageName)
-                        ?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                     it.finishAffinity()
                     if (intent != null) it.startActivity(intent)
                     Runtime.getRuntime().exit(0)
@@ -1032,239 +982,277 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
 
     // ==================== Dialogs ====================
 
-    // Backup Dialog
     if (showBackupDialog) {
-        // Estimate size on dialog open
-        LaunchedEffect(showBackupDialog) {
-            viewModel.estimateBackupSize()
-        }
-
-        AlertDialog(
-            onDismissRequest = {
+        BackupDialog(
+            backupPassword = backupPassword,
+            onPasswordChange = { backupPassword = it },
+            backupPasswordConfirm = backupPasswordConfirm,
+            onPasswordConfirmChange = { backupPasswordConfirm = it },
+            backupOptions = backupOptions,
+            onOptionsChange = { viewModel.updateBackupOptions(it) },
+            backupSizeEstimate = backupSizeEstimate,
+            onEstimateSize = { viewModel.estimateBackupSize() },
+            onConfirm = {
+                showBackupDialog = false
+                val timestamp = formatBackupTimestamp()
+                backupLauncher.launch("toolneuron_backup_$timestamp.tnbackup")
+            },
+            onDismiss = {
                 showBackupDialog = false
                 backupPassword = ""
                 backupPasswordConfirm = ""
-            },
-            icon = { Icon(TnIcons.CloudUpload, null, tint = MaterialTheme.colorScheme.tertiary) },
-            title = {
-                Text("Create Backup", fontWeight = FontWeight.SemiBold)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
-                    Text(
-                        "Set a password to encrypt your backup. You'll need this password to restore.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    PasswordTextField(
-                        value = backupPassword,
-                        onValueChange = { backupPassword = it },
-                        label = "Password",
-                        modifier = Modifier.fillMaxWidth(),
-                        showToggle = false
-                    )
-                    PasswordTextField(
-                        value = backupPasswordConfirm,
-                        onValueChange = { backupPasswordConfirm = it },
-                        label = "Confirm Password",
-                        modifier = Modifier.fillMaxWidth(),
-                        showToggle = false,
-                        isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // Include RAG files checkbox
-                    SwitchRow(
-                        title = "Include RAG files",
-                        checked = backupOptions.includeRagFiles,
-                        onCheckedChange = { checked ->
-                            viewModel.updateBackupOptions(backupOptions.copy(includeRagFiles = checked))
-                        }
-                    )
-
-                    // Include AI Models checkbox
-                    SwitchRow(
-                        title = "Include AI Models",
-                        checked = backupOptions.includeModelFiles,
-                        onCheckedChange = { checked ->
-                            viewModel.updateBackupOptions(backupOptions.copy(includeModelFiles = checked))
-                        }
-                    )
-
-                    // Model list when models are included
-                    if (backupOptions.includeModelFiles && backupSizeEstimate != null) {
-                        val models = backupSizeEstimate!!.modelBreakdown
-                        if (models.isNotEmpty()) {
-                            Column(
-                                modifier = Modifier.padding(start = 8.dp),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                models.forEach { model ->
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            model.modelName,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (model.canBackup)
-                                                MaterialTheme.colorScheme.onSurface
-                                            else
-                                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        Text(
-                                            if (model.canBackup) formatBytes(model.sizeBytes)
-                                            else model.reason,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = if (model.canBackup)
-                                                MaterialTheme.colorScheme.onSurfaceVariant
-                                            else
-                                                MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // Size estimate
-                    backupSizeEstimate?.let { estimate ->
-                        Text(
-                            "Estimated size: ${formatBytes(estimate.totalSize)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showBackupDialog = false
-                        val timestamp = formatBackupTimestamp()
-                        backupLauncher.launch("toolneuron_backup_$timestamp.tnbackup")
-                    },
-                    enabled = backupPassword.length >= 4 && backupPassword == backupPasswordConfirm
-                ) {
-                    Text("Create Backup", color = MaterialTheme.colorScheme.tertiary)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showBackupDialog = false
-                    backupPassword = ""
-                    backupPasswordConfirm = ""
-                }) { Text("Cancel") }
-            },
-            shape = RoundedCornerShape(16.dp)
+            }
         )
     }
 
-    // Restore Dialog
     if (showRestoreDialog) {
-        AlertDialog(
-            onDismissRequest = {
+        RestoreDialog(
+            restorePassword = restorePassword,
+            onPasswordChange = { restorePassword = it },
+            onConfirm = {
+                restoreLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+            },
+            onDismiss = {
                 showRestoreDialog = false
                 restorePassword = ""
-            },
-            icon = { Icon(TnIcons.CloudDownload, null, tint = MaterialTheme.colorScheme.primary) },
-            title = {
-                Text("Restore from Backup", fontWeight = FontWeight.SemiBold)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
-                    Text(
-                        "This will replace all current data with the backup. The app will restart after restore.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    PasswordTextField(
-                        value = restorePassword,
-                        onValueChange = { restorePassword = it },
-                        label = "Backup Password",
-                        modifier = Modifier.fillMaxWidth(),
-                        showToggle = false
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        restoreLauncher.launch(arrayOf("application/octet-stream", "*/*"))
-                    },
-                    enabled = restorePassword.length >= 4
-                ) {
-                    Text("Select Backup File")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showRestoreDialog = false
-                    restorePassword = ""
-                }) { Text("Cancel") }
-            },
-            shape = RoundedCornerShape(16.dp)
+            }
         )
     }
 
-    // Delete All Dialog
     if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = {
+        DeleteAllDataDialog(
+            deleteConfirmText = deleteConfirmText,
+            onConfirmTextChange = { deleteConfirmText = it },
+            onConfirm = {
                 showDeleteDialog = false
                 deleteConfirmText = ""
+                viewModel.deleteAllData()
             },
-            icon = { Icon(TnIcons.TrashX, null, tint = MaterialTheme.colorScheme.error) },
-            title = {
-                Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
-                    Text(
-                        "This will permanently delete all chats, memories, personas, RAG data, and settings. This cannot be undone.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        "Type DELETE to confirm",
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    OutlinedTextField(
-                        value = deleteConfirmText,
-                        onValueChange = { deleteConfirmText = it },
-                        label = { Text("Type DELETE") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                        isError = deleteConfirmText.isNotEmpty() && deleteConfirmText != "DELETE"
-                    )
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteDialog = false
-                        deleteConfirmText = ""
-                        viewModel.deleteAllData()
-                    },
-                    enabled = deleteConfirmText == "DELETE"
-                ) {
-                    Text("Delete Everything", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDeleteDialog = false
-                    deleteConfirmText = ""
-                }) { Text("Cancel") }
-            },
-            shape = RoundedCornerShape(16.dp)
+            onDismiss = {
+                showDeleteDialog = false
+                deleteConfirmText = ""
+            }
         )
     }
 }
 
+// ==================== Extracted Dialogs ====================
+
+@Composable
+private fun BackupDialog(
+    backupPassword: String,
+    onPasswordChange: (String) -> Unit,
+    backupPasswordConfirm: String,
+    onPasswordConfirmChange: (String) -> Unit,
+    backupOptions: SystemBackupManager.BackupOptions,
+    onOptionsChange: (SystemBackupManager.BackupOptions) -> Unit,
+    backupSizeEstimate: SystemBackupManager.BackupSizeEstimate?,
+    onEstimateSize: () -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    LaunchedEffect(Unit) { onEstimateSize() }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(TnIcons.CloudUpload, null, tint = MaterialTheme.colorScheme.tertiary) },
+        title = {
+            Text("Create Backup", fontWeight = FontWeight.SemiBold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
+                Text(
+                    "Set a password to encrypt your backup. You'll need this password to restore.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                PasswordTextField(
+                    value = backupPassword,
+                    onValueChange = onPasswordChange,
+                    label = "Password",
+                    modifier = Modifier.fillMaxWidth(),
+                    showToggle = false
+                )
+                PasswordTextField(
+                    value = backupPasswordConfirm,
+                    onValueChange = onPasswordConfirmChange,
+                    label = "Confirm Password",
+                    modifier = Modifier.fillMaxWidth(),
+                    showToggle = false,
+                    isError = backupPasswordConfirm.isNotEmpty() && backupPassword != backupPasswordConfirm
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                SwitchRow(
+                    title = "Include RAG files",
+                    checked = backupOptions.includeRagFiles,
+                    onCheckedChange = { checked ->
+                        onOptionsChange(backupOptions.copy(includeRagFiles = checked))
+                    }
+                )
+
+                SwitchRow(
+                    title = "Include AI Models",
+                    checked = backupOptions.includeModelFiles,
+                    onCheckedChange = { checked ->
+                        onOptionsChange(backupOptions.copy(includeModelFiles = checked))
+                    }
+                )
+
+                if (backupOptions.includeModelFiles && backupSizeEstimate != null) {
+                    val models = backupSizeEstimate.modelBreakdown
+                    if (models.isNotEmpty()) {
+                        Column(
+                            modifier = Modifier.padding(start = 8.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            models.forEach { model ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        model.modelName,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (model.canBackup)
+                                            MaterialTheme.colorScheme.onSurface
+                                        else
+                                            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Text(
+                                        if (model.canBackup) formatBytes(model.sizeBytes)
+                                        else model.reason,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (model.canBackup)
+                                            MaterialTheme.colorScheme.onSurfaceVariant
+                                        else
+                                            MaterialTheme.colorScheme.error.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                backupSizeEstimate?.let { estimate ->
+                    Text(
+                        "Estimated size: ${formatBytes(estimate.totalSize)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = backupPassword.length >= 4 && backupPassword == backupPasswordConfirm
+            ) {
+                Text("Create Backup", color = MaterialTheme.colorScheme.tertiary)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+private fun RestoreDialog(
+    restorePassword: String,
+    onPasswordChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(TnIcons.CloudDownload, null, tint = MaterialTheme.colorScheme.primary) },
+        title = {
+            Text("Restore from Backup", fontWeight = FontWeight.SemiBold)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
+                Text(
+                    "This will replace all current data with the backup. The app will restart after restore.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error
+                )
+                PasswordTextField(
+                    value = restorePassword,
+                    onValueChange = onPasswordChange,
+                    label = "Backup Password",
+                    modifier = Modifier.fillMaxWidth(),
+                    showToggle = false
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = restorePassword.length >= 4
+            ) {
+                Text("Select Backup File")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
+}
+
+@Composable
+private fun DeleteAllDataDialog(
+    deleteConfirmText: String,
+    onConfirmTextChange: (String) -> Unit,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(TnIcons.TrashX, null, tint = MaterialTheme.colorScheme.error) },
+        title = {
+            Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)) {
+                Text(
+                    "This will permanently delete all chats, memories, personas, RAG data, and settings. This cannot be undone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "Type DELETE to confirm",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error
+                )
+                OutlinedTextField(
+                    value = deleteConfirmText,
+                    onValueChange = onConfirmTextChange,
+                    label = { Text("Type DELETE") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    isError = deleteConfirmText.isNotEmpty() && deleteConfirmText != "DELETE"
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = deleteConfirmText == "DELETE"
+            ) {
+                Text("Delete Everything", color = MaterialTheme.colorScheme.error)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+        shape = RoundedCornerShape(16.dp)
+    )
+}
