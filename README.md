@@ -4,7 +4,7 @@
 
 [![Platform](https://img.shields.io/badge/Platform-Android_12%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
 [![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Release](https://img.shields.io/badge/Release-2.0.0-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
+[![Release](https://img.shields.io/badge/Release-2.1.0-blue)](https://github.com/Siddhesh2377/ToolNeuron/releases)
 [![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
 
 <p align="left">
@@ -15,7 +15,7 @@
   </a>
 </p>
 
-ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, AI character cards (TavernAI v2 compatible), persistent AI memory, and sophisticated memory management. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
+ToolNeuron is the most advanced offline-first AI assistant for Android, featuring complete on-device processing with enterprise-grade encryption, intelligent document understanding through RAG (Retrieval-Augmented Generation), text-to-speech, an extensible plugin system, AI character cards (TavernAI v2 compatible), persistent AI memory, image generation & image tools (upscaling, segmentation, depth estimation, style transfer), hardware-adaptive tuning, knowledge graphs, and full system backup/restore. Your data never leaves your device. No cloud dependencies. No subscriptions. True digital sovereignty.
 
 [Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) ·
 [Join Discord](https://discord.gg/mVPwHDhrAP) ·
@@ -41,6 +41,14 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 
 **Plugin System**: 7 built-in plugins — web search, file manager, calculator, clipboard, date/time, device info, and developer utilities — extensible with custom plugins.
 
+**Image Tools**: Upscale images, estimate depth, transfer styles, and segment objects — all processed on-device.
+
+**Hardware-Adaptive Tuning**: Automatic CPU topology scanning (P-core/E-core detection), performance mode selection (Performance / Balanced / Power Saver), and per-model parameter optimization.
+
+**Knowledge Graph**: Named entity and relationship extraction from conversations, building a structured knowledge base that enriches AI context.
+
+**System Backup/Restore**: Encrypted `.tnbackup` format (PBKDF2 + AES-256-GCM) covering chats, models, RAGs, personas, memories, knowledge graphs, and settings.
+
 **Advanced Features**: Function calling, multi-modal generation, customizable inference parameters, and concurrent model downloads.
 
 ---
@@ -50,12 +58,16 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 - [Features Overview](#features-overview)
 - [Text Generation](#text-generation)
 - [Image Generation](#image-generation)
+- [Image Tools](#image-tools)
 - [Text-to-Speech (TTS)](#text-to-speech-tts)
 - [AI Personas & Character Cards](#ai-personas--character-cards)
 - [AI Memory System](#ai-memory-system)
+- [Knowledge Graph](#knowledge-graph)
 - [Plugin System](#plugin-system)
 - [RAG System (Document Intelligence)](#rag-system-document-intelligence)
 - [Memory Vault (Secure Storage)](#memory-vault-secure-storage)
+- [Hardware Tuning](#hardware-tuning)
+- [System Backup & Restore](#system-backup--restore)
 - [Document Processing](#document-processing)
 - [Model Management](#model-management)
 - [Privacy & Security](#privacy--security)
@@ -77,12 +89,16 @@ ToolNeuron is the most advanced offline-first AI assistant for Android, featurin
 |---------|-------------|
 | **Text Generation** | Run any GGUF model locally (Llama, Mistral, Gemma, Phi, Qwen, etc.) with streaming output |
 | **Image Generation** | Stable Diffusion 1.5 with censored & uncensored variants, inpainting support |
+| **Image Tools** | On-device upscaling, depth estimation, style transfer, and segmentation |
 | **Text-to-Speech** | On-device TTS with 10 voices, 5 languages, adjustable speed and denoising steps |
 | **AI Character Cards** | TavernAI v2 compatible personas with import/export, avatar images, template vars, post-history reinforcement |
 | **AI Memory** | Persistent memory across conversations — automatic fact extraction, deduplication, forgetting curve |
+| **Knowledge Graph** | Named entity & relationship extraction from conversations — structured knowledge that enriches AI context |
 | **Plugin System** | 7 plugins (web search, file manager, calculator, clipboard, date/time, device info, dev utils) with tool calling |
 | **RAG System** | Document injection with hybrid search (BM25 + vector + RRF + MMR), encrypted knowledge bases |
 | **Memory Vault** | Hardware-backed AES-256-GCM encryption, WAL crash recovery, LZ4 compression |
+| **Hardware Tuning** | CPU topology scanning (P-core/E-core), three performance modes, per-model parameter optimization |
+| **System Backup** | Encrypted .tnbackup format (PBKDF2+AES-256-GCM) — chats, models, RAGs, personas, memories, knowledge graphs |
 | **Document Processing** | Parse PDF, Word (.doc/.docx), Excel (.xls/.xlsx), EPUB, and plain text |
 | **Model Store** | Browse and download models from HuggingFace — General, Coding, Medical, Uncensored categories |
 | **Function Calling** | Grammar-constrained tool calling with multi-turn agent execution (up to 5 rounds) |
@@ -209,6 +225,25 @@ onMetrics(metrics: Metrics)      // Performance metrics
 
 ---
 
+## Image Tools
+
+On-device image processing powered by the DiffusionEngine. All operations run locally — no cloud APIs.
+
+### Capabilities
+- **Upscaling**: Increase image resolution using on-device upscaler models
+- **Depth Estimation**: Generate depth maps from images
+- **Style Transfer**: Apply artistic styles to images
+- **Segmentation**: Segment objects within images
+
+### How It Works
+1. Navigate to Image Tools from the drawer menu
+2. Select an image from your gallery
+3. Choose a tool (upscale, depth, style, segment)
+4. Processing happens entirely on-device
+5. Save or share the result
+
+---
+
 ## Text-to-Speech (TTS)
 
 On-device speech synthesis powered by Supertonic TTS. All processing happens locally — no cloud APIs, no data leaves your device.
@@ -233,6 +268,23 @@ All TTS preferences are persisted and configurable from the Settings screen:
 - Auto-speak toggle
 - NNAPI hardware acceleration toggle
 - Load on app start toggle
+
+---
+
+## Knowledge Graph
+
+Structured knowledge extraction from conversations, building a graph of named entities and their relationships.
+
+### Architecture
+- **KnowledgeEntity**: Named entities extracted from conversations (people, places, concepts, etc.)
+- **KnowledgeRelation**: Relationships between entities with typed connections and persona awareness
+- **Persona-Aware**: Knowledge is scoped per persona — each character card maintains its own knowledge graph
+
+### Features
+- **Automatic Extraction**: Entities and relations extracted during conversation
+- **Structured Storage**: Room database tables (`KnowledgeEntity`, `KnowledgeRelation`)
+- **Context Enrichment**: Knowledge graph data enriches AI context for more informed responses
+- **Backup/Restore**: Knowledge graph triples included in system backup exports
 
 ---
 
@@ -473,6 +525,61 @@ Monitor storage health:
 - **Metadata Editor**: Edit categories, tags, search text
 - **User Management**: Manage vault access credentials (admin, read-only)
 - **Logger Screen**: Debug logs with operation timing and encryption metrics
+
+---
+
+## Hardware Tuning
+
+Automatic device-aware optimization for model loading and inference.
+
+### CPU Topology Scanning
+- **HardwareScanner**: Detects CPU architecture, core types (Prime, Performance, Efficiency), clock speeds
+- **Big.LITTLE Awareness**: Identifies P-cores and E-cores on ARM SoCs
+- **RAM Detection**: Total and available memory for model sizing
+
+### Performance Modes
+| Mode | Description |
+|------|-------------|
+| **Performance** | Uses all fast cores. Best speed, higher battery use |
+| **Balanced** | Uses performance cores only. Good speed and battery balance |
+| **Power Saver** | Minimal threads and memory. Best battery life |
+
+### DeviceTuner
+- Automatically recommends optimal thread count, context size, and cache types per model
+- Retunes all GGUF configs when performance mode changes
+- Triggers model reload after retuning for immediate effect
+
+### Settings
+- Toggle hardware-based tuning on/off (manual override when disabled)
+- Performance mode selector
+- Hardware profile display with rescan button
+
+---
+
+## System Backup & Restore
+
+Full system backup with encryption, supporting all app data.
+
+### Backup Format
+- **File Extension**: `.tnbackup`
+- **Encryption**: PBKDF2 key derivation + AES-256-GCM
+- **Password**: User-set password (minimum 4 characters)
+
+### What's Backed Up
+- Chat history (encrypted vault)
+- AI models and configurations (optional, can be large)
+- RAG knowledge bases and files (optional)
+- Personas and character cards with avatars
+- AI memories (per-persona)
+- Knowledge graph entities and relations
+- App settings and preferences
+
+### Features
+- **Size Estimation**: Shows estimated backup size before creation
+- **Selective Backup**: Choose whether to include RAG files and AI models
+- **Model Breakdown**: Per-model size display with backup eligibility
+- **Restore with Restart**: App automatically restarts after restore to refresh Hilt singletons
+- **Delete All Data**: Nuclear option with "type DELETE" confirmation
 
 ---
 
@@ -808,13 +915,15 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 - SHA-256 content deduplication
 - Full-text and semantic search indices
 
-**Database Schema** (Room v6, 5 entities):
+**Database Schema** (Room v12, 7 entities):
 - Models table (GGUF/SD metadata)
 - ModelConfig table (loading + inference params)
 - InstalledRAGs table (RAG metadata with status)
-- Personas table (character cards with TavernAI v2 fields)
-- AiMemories table (extracted user facts with categories, embeddings, forgetting curve)
-- DataStore (preferences — settings, active persona, TTS config)
+- Personas table (character cards with TavernAI v2 fields, sampling profiles, control vectors)
+- AiMemories table (extracted user facts with categories, embeddings, forgetting curve, persona-scoped)
+- KnowledgeEntity table (named entities extracted from conversations)
+- KnowledgeRelation table (relationships between entities, persona-scoped)
+- DataStore (preferences — settings, active persona, TTS config, hardware profile)
 
 ### Performance Benchmarks
 
@@ -878,10 +987,11 @@ Download from [GitHub Releases](https://github.com/Siddhesh2377/ToolNeuron/relea
 ## Building from Source
 
 ### Prerequisites
-- Android Studio Ladybug (2024.2.1) or newer
+- Android Studio Meerkat (2025.1.1) or newer
 - JDK 17
 - Android SDK 36+
 - Android NDK 26.x
+- AGP 9.1.0+
 - Git
 
 ### Steps
@@ -926,7 +1036,51 @@ cd ToolNeuron
 
 ## Roadmap
 
-### Version 2.0.0 (Current - February 2026)
+### Version 2.1.0 (Current - March 2026)
+
+**Image Tools**:
+- ✅ On-device image upscaling with DiffusionEngine
+- ✅ Depth estimation, style transfer, segmentation
+- ✅ Full ImageToolsScreen UI with state machine
+
+**Hardware-Adaptive Tuning**:
+- ✅ CPU topology scanning (P-core / E-core / Prime detection)
+- ✅ Three performance modes (Performance / Balanced / Power Saver)
+- ✅ Per-model automatic parameter optimization via DeviceTuner
+- ✅ Hardware profile display with rescan
+
+**Knowledge Graph**:
+- ✅ Named entity extraction from conversations (KnowledgeEntity table)
+- ✅ Relationship extraction (KnowledgeRelation table)
+- ✅ Persona-scoped knowledge graphs
+- ✅ Included in system backup/restore
+
+**System Backup v2**:
+- ✅ Encrypted .tnbackup format (PBKDF2 + AES-256-GCM)
+- ✅ Selective backup (choose RAG files, AI models)
+- ✅ Per-model size estimation with backup eligibility
+- ✅ Knowledge graph triple export
+- ✅ Auto-restart after restore
+
+**Model Loading Safety**:
+- ✅ OOM catch around JNI model loading with cleanup
+- ✅ Continuation double-resume guards (AtomicBoolean) for all IPC callbacks
+- ✅ ParcelFileDescriptor leak fix for SAF-loaded models
+- ✅ DeadObjectException handling in generation flow
+- ✅ "Ask to reload model on startup" setting (auto-load or show dialog)
+
+**Settings Streamline**:
+- ✅ Reusable ModelDownloadCard composable (deduplicates TTS + tool calling cards)
+- ✅ Extracted dialog composables (BackupDialog, RestoreDialog, DeleteAllDataDialog)
+- ✅ Reordered sections: General → LLM → Chat → Hardware → Models → AI Memory → TTS → Image → Data → About
+
+**Stability & Infrastructure**:
+- ✅ Room database v12 (7 entities)
+- ✅ AGP 9.1.0, Hilt 2.59.2, Coil 3.4.0
+- ✅ Thread-safe patterns: ConcurrentHashMap, MutableStateFlow, synchronized guards
+- ✅ Null service logging for observability
+
+### Version 2.0.0 (February 2026)
 
 **AI Personas & Character Cards**:
 - ✅ TavernAI v2 compatible character card system
@@ -959,20 +1113,8 @@ cd ToolNeuron
 - ✅ RAG enable/disable toggle per chat session
 - ✅ Improved RAG management UX
 
-**Model Store Updates**:
-- ✅ Uncensored model category with curated repos
-- ✅ LiquidAI LFM2-350M added
-- ✅ Qwen3 8B added
+### Version 1.2.0 (January 2026)
 
-**Stability & Fixes**:
-- ✅ UTF-8 stream decoding fix (smart quotes, accented characters)
-- ✅ Surrogate pair handling for emoji above U+FFFF
-- ✅ Database migration v4 → v5 → v6
-- ✅ Improved UI across all screens (Model Store, RAG Creation, Settings, Home)
-
-### Previous Releases
-
-**Version 1.2.0 (January 2026)**:
 - Text generation with any GGUF model
 - Image generation with SD 1.5
 - HuggingFace repository integration
@@ -990,19 +1132,18 @@ cd ToolNeuron
 
 ### Upcoming
 
-**Version 2.1 (Q2 2026)**:
+**Version 2.2 (Q2 2026)**:
 - 🚧 Speech-to-Text (STT) support
 - 📋 Multi-modal support (vision models like LLaVA, BakLLaVA)
 - 📋 Code execution plugin with sandboxing
 - 📋 Advanced memory clustering and insights
 - 📋 Conversation summarization
 
-**Version 2.2 (Q3 2026)**:
+**Version 2.3 (Q3 2026)**:
 - Additional model formats (ONNX, TFLite, CoreML)
 - Desktop companion app (Windows, macOS, Linux)
 - Cloud sync with end-to-end encryption (optional)
 - Plugin marketplace
-- Advanced RAG features (graph-based reasoning)
 
 ---
 
@@ -1012,11 +1153,15 @@ cd ToolNeuron
 |---------|------------|---------------|---------------------|
 | **Text Generation** | Any GGUF model | Cloud only | Limited models |
 | **Image Generation** | SD 1.5 offline | Cloud only | Rare |
+| **Image Tools** | Upscale, depth, style, segment | Cloud only | None |
 | **Text-to-Speech** | On-device, 10 voices | Cloud-based | Rare |
 | **Character Cards** | TavernAI v2 compatible | N/A | SillyTavern only |
 | **AI Memory** | Persistent cross-session | Some cloud apps | None |
+| **Knowledge Graph** | Entity/relation extraction | None | None |
 | **Plugin System** | 7 built-in plugins | Cloud-based | None |
 | **RAG System** | Hybrid BM25+Vector+RRF | Cloud-based | Basic or none |
+| **Hardware Tuning** | Auto P/E-core detection | N/A | Manual only |
+| **System Backup** | Encrypted .tnbackup | Cloud sync | Rare |
 | **Document Processing** | PDF/Word/Excel/EPUB | Cloud upload | Limited |
 | **Privacy** | Complete offline | Server logging | Varies |
 | **Encryption** | AES-256-GCM + WAL | N/A | Rare |
@@ -1265,6 +1410,6 @@ We take security seriously and will respond promptly.
 
 ---
 
-**License**: Apache 2.0 · **Version**: 2.0.0 · **Platform**: Android 12+
+**License**: Apache 2.0 · **Version**: 2.1.0 · **Platform**: Android 12+
 
 </div>
