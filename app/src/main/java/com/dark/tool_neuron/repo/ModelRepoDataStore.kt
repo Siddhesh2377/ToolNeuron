@@ -25,17 +25,25 @@ class ModelRepositoryDataStore(private val context: Context) {
         val DEFAULT_REPOSITORIES = listOf(
             // === GENERAL ===
             HFModelRepository(
-                id = "qwen2_5_0_5b_instruct",
-                name = "Qwen 2.5 Instruct (0.5B)",
-                repoPath = "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+                id = "unsloth-qwen3_5-0_8b",
+                name = "Qwen3.5 (0.8B)",
+                repoPath = "unsloth/Qwen3.5-0.8B-GGUF",
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.GENERAL
             ),
             HFModelRepository(
-                id = "unsloth-qwen3",
-                name = "Qwen3 8B",
-                repoPath = "unsloth/Qwen3-8B-GGUF",
+                id = "unsloth-qwen3_5-4b",
+                name = "Qwen3.5 (4B)",
+                repoPath = "unsloth/Qwen3.5-4B-GGUF",
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            ),
+            HFModelRepository(
+                id = "unsloth-qwen3_5-9b",
+                name = "Qwen3.5 (9B)",
+                repoPath = "unsloth/Qwen3.5-9B-GGUF",
                 modelType = ModelType.GGUF,
                 isEnabled = true,
                 category = ModelCategory.GENERAL

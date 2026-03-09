@@ -36,7 +36,7 @@
 
 | | Minimum | Recommended |
 |---|---------|-------------|
-| **Android** | 12 (API 31) | 13+ |
+| **Android** | 10 (API 29) | 12+ |
 | **RAM** | 6 GB | 8–12 GB |
 | **Storage** | 4 GB free | 10 GB free |
 | **CPU** | ARM64 or x86_64 | Snapdragon 8 Gen 1+ |
@@ -68,9 +68,9 @@ Select your model, wait for it to load, start typing. Responses stream in real-t
 
 | Use case | Model | Size |
 |----------|-------|------|
-| Quick test | TinyLlama 1.1B Q4_K_M | ~670 MB |
-| General use | Llama 3 8B Q4_K_M | ~4.5 GB |
-| Coding | DeepSeek Coder 6.7B Q4 | ~4 GB |
+| Quick test | Qwen3.5 0.8B Q4_K_M | ~600 MB |
+| General use | Qwen3.5 4B Q4_K_M | ~2.8 GB |
+| Power users | Qwen3.5 9B Q4_K_M | ~5.5 GB |
 
 > Pick Q4_K_M for a good balance between quality and size. Use Q6_K if your device has the RAM for it.
 

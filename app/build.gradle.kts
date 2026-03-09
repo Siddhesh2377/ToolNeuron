@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         applicationId = "com.dark.tool_neuron"
-        minSdk = 31
+        minSdk = 29
         targetSdk = 36
         versionCode = 26
         versionName = "2.0.1"
