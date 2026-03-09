@@ -1079,7 +1079,7 @@ class ChatViewModel @Inject constructor(
                 }
             }
 
-            if (count >= minRepeats) {
+            if (count >= minRepeats && patternLen * count >= 120) {
                 // Keep content up to end of first occurrence of the pattern
                 val repeatStartInWindow = window.length - patternLen * count
                 return startOffset + repeatStartInWindow + patternLen
@@ -1108,6 +1108,7 @@ class ChatViewModel @Inject constructor(
     ): GenerationResult {
         val jsonArray = JSONArray(messages)
         val resultBuilder = StringBuilder()
+        val utf8Buffer = Utf8TokenBuffer()
         val nativeToolCalls = mutableListOf<Pair<String, String>>()
         currentMetrics = null
         var lastEmitTime = 0L
@@ -1119,14 +1120,17 @@ class ChatViewModel @Inject constructor(
         ).collect { event ->
             when (event) {
                 is GenerationEvent.Token -> {
-                    resultBuilder.append(event.text)
+                    val validText = utf8Buffer.append(event.text)
+                    if (validText.isNotEmpty()) {
+                        resultBuilder.append(validText)
+                    }
                     val now = System.currentTimeMillis()
                     if (now - lastEmitTime >= STREAMING_THROTTLE_MS) {
                         _streamingAssistantMessage.value = resultBuilder.toString()
                         lastEmitTime = now
                     }
 
-                    // Periodically check for repetition loops (every ~80 new chars)
+                    // Periodically check for repetition loops
                     if (repetitionTrimIndex < 0 && resultBuilder.length - lastRepCheckLen >= REPETITION_CHECK_INTERVAL) {
                         lastRepCheckLen = resultBuilder.length
                         val trimIdx = detectRepetitionTrimIndex(resultBuilder.toString())
@@ -1138,7 +1142,9 @@ class ChatViewModel @Inject constructor(
                     }
                 }
                 is GenerationEvent.Done -> {
-                    // Final emit to ensure UI has complete text
+                    // Flush any remaining buffered bytes
+                    val remaining = utf8Buffer.flush()
+                    if (remaining.isNotEmpty()) resultBuilder.append(remaining)
                     _streamingAssistantMessage.value = resultBuilder.toString()
                 }
                 is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
@@ -2050,14 +2056,78 @@ class ChatViewModel @Inject constructor(
         generationJob = null
     }
 
+    // ── UTF-8 Token Buffer ──
+
+    /**
+     * Buffers incomplete UTF-8 byte sequences from streaming tokens.
+     * Some models emit tokens that split multi-byte characters (e.g. Turkish ş, emoji)
+     * across multiple callbacks. This buffer holds trailing incomplete bytes until
+     * the next token completes the character.
+     */
+    private class Utf8TokenBuffer {
+        private val pending = ByteArray(4) // Max UTF-8 char is 4 bytes
+        private var pendingLen = 0
+
+        fun append(token: String): String {
+            if (token.isEmpty()) return ""
+            val bytes = token.toByteArray(Charsets.UTF_8)
+
+            // Prepend any pending bytes from last call
+            val combined = if (pendingLen > 0) {
+                ByteArray(pendingLen + bytes.size).also {
+                    pending.copyInto(it, 0, 0, pendingLen)
+                    bytes.copyInto(it, pendingLen)
+                }
+            } else bytes
+
+            // Find last complete UTF-8 character boundary
+            val completeLen = findCompleteUtf8Length(combined)
+            pendingLen = combined.size - completeLen
+            if (pendingLen > 0) {
+                combined.copyInto(pending, 0, completeLen, combined.size)
+            }
+
+            return if (completeLen > 0) String(combined, 0, completeLen, Charsets.UTF_8) else ""
+        }
+
+        fun flush(): String {
+            if (pendingLen == 0) return ""
+            // Force-decode whatever is left (replacement chars for truly invalid bytes)
+            val result = String(pending, 0, pendingLen, Charsets.UTF_8)
+            pendingLen = 0
+            return result
+        }
+
+        private fun findCompleteUtf8Length(bytes: ByteArray): Int {
+            if (bytes.isEmpty()) return 0
+            // Walk backwards from end to find if the last char is incomplete
+            var i = bytes.size - 1
+            // Skip continuation bytes (10xxxxxx)
+            while (i >= 0 && bytes[i].toInt() and 0xC0 == 0x80) i--
+            if (i < 0) return 0 // All continuation bytes — all incomplete
+
+            val leadByte = bytes[i].toInt() and 0xFF
+            val expectedLen = when {
+                leadByte and 0x80 == 0 -> 1    // 0xxxxxxx
+                leadByte and 0xE0 == 0xC0 -> 2 // 110xxxxx
+                leadByte and 0xF0 == 0xE0 -> 3 // 1110xxxx
+                leadByte and 0xF8 == 0xF0 -> 4 // 11110xxx
+                else -> 1 // Invalid lead byte, treat as single
+            }
+
+            val actualLen = bytes.size - i
+            return if (actualLen >= expectedLen) bytes.size else i
+        }
+    }
+
     companion object {
         private const val TAG = "ChatViewModel"
         private const val PLAN_MAX_TOKENS = 150
         private const val SUMMARY_MAX_TOKENS = 512
         private const val STREAMING_THROTTLE_MS = 50L
-        private const val REPETITION_CHECK_INTERVAL = 80
-        private const val REPETITION_MIN_PATTERN_LEN = 20
-        private const val REPETITION_MIN_REPEATS = 3
-        private const val REPETITION_MAX_CHECK_LEN = 600
+        private const val REPETITION_CHECK_INTERVAL = 200
+        private const val REPETITION_MIN_PATTERN_LEN = 30
+        private const val REPETITION_MIN_REPEATS = 4
+        private const val REPETITION_MAX_CHECK_LEN = 800
     }
 }

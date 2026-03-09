@@ -30,9 +30,11 @@ import com.dark.tool_neuron.viewmodel.ChatConfigState
 
 // ── Pre-compiled regex (avoid allocation in composition) ──
 
-internal val THINK_TAG_REGEX = Regex("<think>(.*?)</think>", RegexOption.DOT_MATCHES_ALL)
-internal val THINK_OPEN_TAG = "<think>"
-internal val THINK_CLOSE_TAG = "</think>"
+internal val THINK_TAG_REGEX = Regex(
+    "<think>(.*?)</think>|\\[THINK](.*?)\\[/THINK]",
+    RegexOption.DOT_MATCHES_ALL
+)
+private val THINK_OPEN_TAGS = listOf("<think>", "[THINK]")
 
 data class ParsedMessage(
     val thinkingContent: String?,
@@ -42,14 +44,14 @@ data class ParsedMessage(
 
 fun parseThinkingTags(content: String): ParsedMessage {
     // Fast path: no think tags at all
-    if (!content.contains(THINK_OPEN_TAG)) {
-        return ParsedMessage(null, content.trim())
-    }
+    val openTag = THINK_OPEN_TAGS.firstOrNull { content.contains(it, ignoreCase = true) }
+        ?: return ParsedMessage(null, content.trim())
 
-    // Completed thinking: <think>...</think> present
+    // Completed thinking: matched pair present
     val thinkingMatch = THINK_TAG_REGEX.find(content)
     if (thinkingMatch != null) {
-        val thinkingContent = thinkingMatch.groupValues[1].trim()
+        // Group 1 = XML-style, Group 2 = bracket-style
+        val thinkingContent = (thinkingMatch.groupValues[1].ifEmpty { thinkingMatch.groupValues[2] }).trim()
         val actualContent = content.replace(THINK_TAG_REGEX, "").trim()
         return ParsedMessage(
             thinkingContent = thinkingContent.ifEmpty { null },
@@ -57,9 +59,9 @@ fun parseThinkingTags(content: String): ParsedMessage {
         )
     }
 
-    // In-progress thinking: <think> opened but no </think> yet (streaming)
-    val openIdx = content.indexOf(THINK_OPEN_TAG)
-    val thinkingContent = content.substring(openIdx + THINK_OPEN_TAG.length).trim()
+    // In-progress thinking: open tag without close tag (streaming)
+    val openIdx = content.indexOf(openTag, ignoreCase = true)
+    val thinkingContent = content.substring(openIdx + openTag.length).trim()
     val beforeThink = content.substring(0, openIdx).trim()
     return ParsedMessage(
         thinkingContent = thinkingContent.ifEmpty { null },
@@ -153,7 +155,7 @@ fun BodyContent(
                                 // Markdown content — each element is a lazy item
                                 if (message.content.contentType == ContentType.Text) {
                                     val raw = message.content.content
-                                    val parsedText = if (raw.contains("<think>")) {
+                                    val parsedText = if (THINK_TAG_REGEX.containsMatchIn(raw)) {
                                         raw.replace(THINK_TAG_REGEX, "").trim()
                                     } else raw
                                     if (parsedText.isNotEmpty()) {

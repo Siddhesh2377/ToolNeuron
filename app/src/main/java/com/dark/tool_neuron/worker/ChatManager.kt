@@ -13,19 +13,29 @@ import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class ChatManager {
 
-    private val chatRepo get() = VaultManager.chatRepo ?: error("VaultManager not initialized")
+    private val chatRepo get() = VaultManager.chatRepo
+        ?: throw IllegalStateException("Storage not ready. Please restart the app.")
 
     private suspend fun <T> withUmsReady(block: suspend () -> T): Result<T> {
         return try {
             if (!VaultManager.isReady.value) {
+                // First attempt
                 com.dark.tool_neuron.di.AppContainer.ensureVaultInitialized()
+
+                // Wait up to 3 seconds for vault to become ready
                 if (!VaultManager.isReady.value) {
-                    return Result.failure(IllegalStateException("UMS storage not initialized"))
+                    kotlinx.coroutines.withTimeoutOrNull(3000L) {
+                        VaultManager.isReady.first { it }
+                    } ?: return Result.failure(
+                        IllegalStateException("Storage is initializing. Please try again in a moment.")
+                    )
                 }
             }
             Result.success(block())

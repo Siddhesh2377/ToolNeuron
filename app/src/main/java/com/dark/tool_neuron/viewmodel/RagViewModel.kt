@@ -255,14 +255,14 @@ class RagViewModel @Inject constructor(
 
                     if (!modelFile.exists()) {
                         checkEmbeddingDownloadStatus()
-                        val errorMsg = if (_isEmbeddingModelDownloading.value) {
-                            "Embedding model is currently downloading. Please wait for download to complete."
-                        } else {
-                            "Embedding model not found. The model will be downloaded in the background."
+                        if (!_isEmbeddingModelDownloading.value) {
+                            // Auto-start download if not already downloading
+                            Log.d("RagViewModel", "Embedding model missing, auto-starting download")
+                            startEmbeddingDownload()
                         }
-                        _error.value = errorMsg
+                        _error.value = "Embedding model is downloading. RAG will be available once complete."
                         _isLoading.value = false
-                        ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
+                        ragRepository.updateRagStatus(ragId, RagStatus.INSTALLED)
                         return@launch
                     }
 
