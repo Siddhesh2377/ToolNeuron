@@ -126,7 +126,8 @@ fun BodyContent(
                     currentToolChainRound = agent.currentRound,
                     agentPhase = agent.phase,
                     agentPlan = agent.plan,
-                    agentSummary = agent.summary
+                    agentSummary = agent.summary,
+                    thinkingEnabled = chatState.thinkingEnabled
                 )
             } else {
                 val deduped = remember(messages.size) { messages.distinctBy { it.msgId } }

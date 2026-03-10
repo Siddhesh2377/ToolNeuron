@@ -44,8 +44,9 @@ object TTSManager {
 
     fun init(appContext: Context, autoLoad: Boolean = true) {
         context = appContext.applicationContext
-        tts = SupertonicTTS(appContext)
-        Log.d(TAG, "TTSManager initialized")
+        // Defer native TTS engine creation off main thread — SupertonicTTS()
+        // loads native libs via JNI which can block for 100-500ms
+        Log.d(TAG, "TTSManager initialized (engine deferred)")
 
         if (autoLoad) {
             // Auto-load model if it exists in the models directory
@@ -57,8 +58,18 @@ object TTSManager {
         }
     }
 
+    /** Lazily create the TTS engine on first use (off main thread). */
+    private fun ensureEngine(): SupertonicTTS? {
+        if (tts == null) {
+            val ctx = context ?: return null
+            tts = SupertonicTTS(ctx)
+            Log.d(TAG, "SupertonicTTS engine created (lazy)")
+        }
+        return tts
+    }
+
     fun loadModel(modelDir: String, useNNAPI: Boolean = false): Boolean {
-        val engine = tts ?: return false
+        val engine = ensureEngine() ?: return false
         return try {
             val success = engine.loadModel(modelDir, useNNAPI)
             _isModelLoaded.value = success
@@ -79,7 +90,7 @@ object TTSManager {
     fun isLoaded(): Boolean = _isModelLoaded.value
 
     suspend fun speak(text: String, settings: TTSSettings = TTSSettings(), msgId: String? = null) {
-        val engine = tts ?: return
+        val engine = ensureEngine() ?: return
         if (!_isModelLoaded.value) {
             Log.w(TAG, "TTS model not loaded, cannot speak")
             return
@@ -139,7 +150,7 @@ object TTSManager {
     }
 
     fun stopPlayback() {
-        tts?.stopPlayback()
+        ensureEngine()?.stopPlayback()
         _isPlaying.value = false
         _currentPlayingMsgId.value = null
         _isSynthesizing.value = false

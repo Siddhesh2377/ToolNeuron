@@ -48,6 +48,8 @@ import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
 import jakarta.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -90,13 +92,13 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        val termsDataStore = TermsDataStore(context)
-                        val setupDataStore = SetupDataStore(context)
-                        val appSettings = AppSettingsDataStore(context)
-
-                        val termsAccepted = termsDataStore.hasAcceptedTerms.first()
-                        val setupDone = setupDataStore.isSetupDone.first()
-                        val guideSeen = appSettings.guideSeen.first()
+                        // Parallelize DataStore reads — each opens a separate file
+                        val (termsAccepted, setupDone, guideSeen) = coroutineScope {
+                            val t = async { TermsDataStore(context).hasAcceptedTerms.first() }
+                            val s = async { SetupDataStore(context).isSetupDone.first() }
+                            val g = async { AppSettingsDataStore(context).guideSeen.first() }
+                            Triple(t.await(), s.await(), g.await())
+                        }
 
                         // Auto-init vault for returning users (exists on disk but not yet opened)
                         if (!VaultManager.isReady.value && VaultManager.exists(context)) {

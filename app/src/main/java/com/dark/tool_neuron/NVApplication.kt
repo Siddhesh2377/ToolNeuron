@@ -21,6 +21,7 @@ import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -54,8 +55,9 @@ class NVApplication : Application() {
         TTSManager.init(applicationContext, autoLoad = false)
         Log.d(TAG, "TTSManager initialized")
 
-        // Run data integrity check after UMS is ready
+        // Run data integrity check after UMS is ready (deferred to let UI render first)
         appScope.launch {
+            delay(2000) // Let Activity.onCreate + first frame complete before scanning
             try {
                 if (!VaultManager.isReady.value) {
                     Log.w(TAG, "UMS not ready, skipping integrity check")

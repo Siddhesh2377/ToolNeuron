@@ -136,7 +136,12 @@ class ChatViewModel @Inject constructor(
     private val userMessageAdded = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // Current model ID for per-message attribution
-    private val currentModelId: String? get() = LlmModelWorker.currentGgufModelId.value
+    private val currentModelId: String?
+        get() = LlmModelWorker.currentGgufModelId.value
+
+    /** True when a text generation model is loaded. */
+    private val isAnyTextModelLoaded: Boolean
+        get() = LlmModelWorker.isGgufModelLoaded.value
 
     // UI state
     private val _showDynamicWindow = MutableStateFlow(false)
@@ -373,7 +378,7 @@ class ChatViewModel @Inject constructor(
     // ==================== Unified Text Generation Entry Point ====================
 
     fun sendChat(prompt: String) {
-        if (!LlmModelWorker.isGgufModelLoaded.value) {
+        if (!isAnyTextModelLoaded) {
             reportError("Please load a text generation model first")
             return
         }
@@ -396,6 +401,9 @@ class ChatViewModel @Inject constructor(
 
         generationJob = viewModelScope.launch {
             try {
+                // Let Compose render the StreamingView before native engine saturates CPU
+                kotlinx.coroutines.yield()
+
                 // Read maxTokens from the current model's config
                 val maxTokens = getCurrentModelMaxTokens()
 
@@ -471,6 +479,9 @@ class ChatViewModel @Inject constructor(
 
         generationJob = viewModelScope.launch {
             try {
+                // Let Compose render the StreamingView before native engine saturates CPU
+                kotlinx.coroutines.yield()
+
                 val maxTokens = getCurrentModelMaxTokens()
                 val isNewChat = isNewConversation
 
@@ -1115,9 +1126,9 @@ class ChatViewModel @Inject constructor(
         var lastRepCheckLen = 0
         var repetitionTrimIndex = -1
 
-        LlmModelWorker.ggufGenerateMultiTurnStreaming(
-            jsonArray.toString(), maxTokens
-        ).collect { event ->
+        val generationFlow = LlmModelWorker.ggufGenerateMultiTurnStreaming(jsonArray.toString(), maxTokens)
+
+        generationFlow.collect { event ->
             when (event) {
                 is GenerationEvent.Token -> {
                     val validText = utf8Buffer.append(event.text)
@@ -1885,7 +1896,9 @@ class ChatViewModel @Inject constructor(
 
         // 2. Stop native generation (synchronous signal to engine)
         when (_currentGenerationType.value) {
-            ModelType.TEXT_GENERATION -> LlmModelWorker.ggufStopGeneration()
+            ModelType.TEXT_GENERATION -> {
+                LlmModelWorker.ggufStopGeneration()
+            }
             ModelType.IMAGE_GENERATION -> LlmModelWorker.stopDiffusionGeneration()
             ModelType.AUDIO_GENERATION -> stopTTS()
         }
@@ -2124,7 +2137,7 @@ class ChatViewModel @Inject constructor(
         private const val TAG = "ChatViewModel"
         private const val PLAN_MAX_TOKENS = 150
         private const val SUMMARY_MAX_TOKENS = 512
-        private const val STREAMING_THROTTLE_MS = 50L
+        private const val STREAMING_THROTTLE_MS = 100L
         private const val REPETITION_CHECK_INTERVAL = 200
         private const val REPETITION_MIN_PATTERN_LEN = 30
         private const val REPETITION_MIN_REPEATS = 4

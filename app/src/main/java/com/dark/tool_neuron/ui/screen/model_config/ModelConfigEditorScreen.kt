@@ -702,7 +702,7 @@ private fun IntField(
             value = value.toFloat(),
             onValueChange = { onValueChange(it.toInt()) },
             valueRange = range.first.toFloat()..range.last.toFloat(),
-            steps = (range.last - range.first) / step - 1,
+            steps = (range.last - range.first) / step,
             enabled = enabled
         )
     }

@@ -38,7 +38,8 @@ internal fun StreamingView(
     currentToolChainRound: Int = 0,
     agentPhase: AgentPhase = AgentPhase.Idle,
     agentPlan: String? = null,
-    agentSummary: String? = null
+    agentSummary: String? = null,
+    thinkingEnabled: Boolean = false
 ) {
     val scrollState = rememberScrollState()
 
@@ -131,7 +132,7 @@ internal fun StreamingView(
             // Show streaming text when in simple flow or during plan/summary generation
             agentPhase == AgentPhase.Idle || agentPhase == AgentPhase.Complete -> {
                 if (assistantMessage.isNotEmpty()) {
-                    AssistantStreamingBubble(text = assistantMessage)
+                    AssistantStreamingBubble(text = assistantMessage, thinkingEnabled = thinkingEnabled)
                 }
             }
         }

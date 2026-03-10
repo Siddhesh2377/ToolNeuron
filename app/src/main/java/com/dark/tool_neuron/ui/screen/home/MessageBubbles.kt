@@ -26,6 +26,7 @@ import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.components.MarkdownText
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.Motion
+import kotlinx.coroutines.delay
 import java.util.Base64
 import com.dark.tool_neuron.global.Standards
 
@@ -61,8 +62,38 @@ internal fun UserMessageBubble(message: Messages) {
 // ── AssistantStreamingBubble ──
 
 @Composable
-internal fun AssistantStreamingBubble(text: String) {
-    val parsedMessage = remember(text) { parseThinkingTags(text) }
+internal fun AssistantStreamingBubble(text: String, thinkingEnabled: Boolean = false) {
+    // ── Typewriter effect ──
+    // Smoothly reveals text 2-4 chars per tick instead of chunky batch updates
+    var revealedLen by remember { mutableIntStateOf(0) }
+    val latestText by rememberUpdatedState(text)
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            val target = latestText.length
+            if (revealedLen < target) {
+                val behind = target - revealedLen
+                val step = when {
+                    behind > 20 -> 4   // far behind: catch up faster
+                    behind > 8 -> 3
+                    else -> 2          // normal: gentle reveal
+                }
+                revealedLen = minOf(revealedLen + step, target)
+                delay(33) // ~30 FPS — actively revealing
+            } else {
+                delay(100) // idle — waiting for tokens, check less often
+            }
+        }
+    }
+
+    val displayed = if (revealedLen < text.length) text.substring(0, revealedLen) else text
+
+    // Only parse thinking tags when thinking mode is enabled — skip regex overhead otherwise
+    val parsedMessage = if (thinkingEnabled) {
+        remember(displayed) { parseThinkingTags(displayed) }
+    } else {
+        ParsedMessage(thinkingContent = null, actualContent = displayed)
+    }
 
     Column(
         modifier = Modifier
