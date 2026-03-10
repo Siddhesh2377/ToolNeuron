@@ -24,6 +24,7 @@ import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.Messages
 import com.dark.tool_neuron.ui.components.ExpandCollapseIcon
 import com.dark.tool_neuron.ui.components.MarkdownText
+import com.dark.tool_neuron.ui.components.StreamingMarkdownText
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.Motion
 import java.util.Base64
@@ -88,10 +89,8 @@ internal fun AssistantStreamingBubble(text: String) {
                         .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
                 )
 
-                Text(
+                StreamingMarkdownText(
                     text = parsedMessage.actualContent.ifEmpty { "..." },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
             }

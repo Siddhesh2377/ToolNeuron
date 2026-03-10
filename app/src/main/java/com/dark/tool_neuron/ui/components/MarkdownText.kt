@@ -96,6 +96,28 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
+ * Streaming-optimised markdown renderer.
+ * Re-parses on every text change (bypasses the completed-message cache).
+ * Used in [AssistantStreamingBubble] so the user sees formatted text while
+ * tokens are still being generated.
+ */
+@Composable
+fun StreamingMarkdownText(text: String, modifier: Modifier = Modifier) {
+    val parsedContent = remember(text) { parseMarkdown(text) }
+    val colors = InlineColors(
+        codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+        highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
+        mathColor = MaterialTheme.colorScheme.primary
+    )
+    Column(
+        modifier = modifier.padding(horizontal = Standards.SpacingXs),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
+    ) {
+        parsedContent.forEach { element -> MarkdownElementView(element, colors) }
+    }
+}
+
+/**
  * Lazy version — each markdown element is a separate LazyList item.
  * Only visible items are composed. Use inside a LazyColumn.
  * Element-aware spacing: headings get more top padding, blocks get breathing room.
@@ -490,6 +512,20 @@ internal fun buildInlineFormatted(text: String, colors: InlineColors): Annotated
                     val rendered = renderMathToUnicode(text.substring(i + 1, end))
                     withStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor)) { append(rendered) }
                     i = end + 1
+                } else { append(chars[i]); i++ }
+            }
+            // Markdown link [text](url)
+            chars[i] == '[' -> {
+                val closeBracket = text.indexOf(']', i + 1)
+                if (closeBracket != -1 && closeBracket + 1 < chars.size && chars[closeBracket + 1] == '(') {
+                    val closeParen = text.indexOf(')', closeBracket + 2)
+                    if (closeParen != -1) {
+                        val linkText = text.substring(i + 1, closeBracket)
+                        withStyle(SpanStyle(color = colors.mathColor, textDecoration = TextDecoration.Underline)) {
+                            append(buildInlineFormatted(linkText, colors))
+                        }
+                        i = closeParen + 1
+                    } else { append(chars[i]); i++ }
                 } else { append(chars[i]); i++ }
             }
             // Default — handle surrogates
