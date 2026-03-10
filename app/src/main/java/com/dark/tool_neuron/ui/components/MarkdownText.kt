@@ -96,7 +96,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
 }
 
 /**
- * Streaming-optimised markdown renderer.
+ * Streaming-optimized markdown renderer.
  * Re-parses on every text change (bypasses the completed-message cache).
  * Used in [AssistantStreamingBubble] so the user sees formatted text while
  * tokens are still being generated.
@@ -522,7 +522,7 @@ internal fun buildInlineFormatted(text: String, colors: InlineColors): Annotated
                     if (closeParen != -1) {
                         val linkText = text.substring(i + 1, closeBracket)
                         withStyle(SpanStyle(color = colors.mathColor, textDecoration = TextDecoration.Underline)) {
-                            append(buildInlineFormatted(linkText, colors))
+                            append(linkText)
                         }
                         i = closeParen + 1
                     } else { append(chars[i]); i++ }
