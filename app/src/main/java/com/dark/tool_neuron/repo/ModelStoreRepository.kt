@@ -23,7 +23,7 @@ data class ModelStoreCache(
 ) {
     companion object {
         // Bump this when filtering logic changes to auto-invalidate stale caches
-        const val CURRENT_VERSION = 2
+        const val CURRENT_VERSION = 3
     }
 }
 
@@ -31,7 +31,7 @@ class ModelStoreRepository(private val context: Context) {
 
     companion object {
         private val GGUF_SUFFIX_REGEX = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
-        private val QUANTIZATION_SEGMENT_REGEX = Regex("^Q\\d.*")
+        private val QUANTIZATION_SEGMENT_REGEX = Regex("^Q\\d.*", RegexOption.IGNORE_CASE)
 
         internal fun isSupportedGgufFile(path: String): Boolean {
             return path.endsWith(".gguf", ignoreCase = true) &&

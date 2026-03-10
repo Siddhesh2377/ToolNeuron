@@ -36,6 +36,7 @@ class ModelStoreRepositoryTest {
     @Test
     fun extractQuantTypeStripsSuffixBeforeReadingLastSegment() {
         assertEquals("Q5_K_M", ModelStoreRepository.extractQuantType("Whisper-EN-Small.Q5_K_M.GGUF"))
+        assertEquals("Q5_K_M", ModelStoreRepository.extractQuantType("whisper-en-small.q5_k_m.gguf"))
         assertEquals("MODEL", ModelStoreRepository.extractQuantType("model.GGUF"))
     }
 }
