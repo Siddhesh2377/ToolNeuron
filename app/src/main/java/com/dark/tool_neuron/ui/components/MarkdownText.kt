@@ -522,7 +522,7 @@ internal fun buildInlineFormatted(text: String, colors: InlineColors): Annotated
                     if (closeParen != -1) {
                         val linkText = text.substring(i + 1, closeBracket)
                         withStyle(SpanStyle(color = colors.mathColor, textDecoration = TextDecoration.Underline)) {
-                            append(linkText)
+                            append(buildInlineFormatted(linkText, colors))
                         }
                         i = closeParen + 1
                     } else { append(chars[i]); i++ }
