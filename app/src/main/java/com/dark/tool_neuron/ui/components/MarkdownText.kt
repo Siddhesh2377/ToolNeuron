@@ -69,6 +69,9 @@ import com.dark.tool_neuron.global.Standards
 
 val LocalCodeHighlightEnabled = compositionLocalOf { true }
 
+/** Debounce window (ms) for streaming markdown re-parsing. */
+private const val STREAMING_PARSE_DEBOUNCE_MS = 80L
+
 /**
  * Colors extracted once from MaterialTheme — passed to non-composable formatters
  * to avoid reading theme state inside every Text().
@@ -104,7 +107,7 @@ fun StreamingMarkdownText(text: String, modifier: Modifier = Modifier) {
 
     LaunchedEffect(Unit) {
         snapshotFlow { text }
-            .debounce(80)
+            .debounce(STREAMING_PARSE_DEBOUNCE_MS)
             .collect { latest ->
                 val result = withContext(Dispatchers.Default) { parseMarkdown(latest) }
                 parsedContent = result
