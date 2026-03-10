@@ -78,22 +78,20 @@ internal fun AssistantStreamingBubble(text: String) {
             )
         }
 
-        if (parsedMessage.actualContent.isNotEmpty()) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
-                verticalAlignment = Alignment.Top
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
-                )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
+            verticalAlignment = Alignment.Top
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(8.dp)
+                    .background(MaterialTheme.colorScheme.primary, shape = CircleShape)
+            )
 
-                StreamingMarkdownText(
-                    text = parsedMessage.actualContent.ifEmpty { "..." },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            StreamingMarkdownText(
+                text = parsedMessage.actualContent.ifEmpty { "..." },
+                modifier = Modifier.weight(1f)
+            )
         }
     }
 }
