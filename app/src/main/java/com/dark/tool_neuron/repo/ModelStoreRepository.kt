@@ -31,6 +31,7 @@ class ModelStoreRepository(private val context: Context) {
 
     companion object {
         private val GGUF_SUFFIX_REGEX = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
+        private val QUANTIZATION_SEGMENT_REGEX = Regex("^Q\\d.*")
 
         internal fun isSupportedGgufFile(path: String): Boolean {
             return path.endsWith(".gguf", ignoreCase = true) &&
@@ -41,6 +42,16 @@ class ModelStoreRepository(private val context: Context) {
 
         internal fun stripGgufSuffix(fileName: String): String {
             return fileName.replace(GGUF_SUFFIX_REGEX, "")
+        }
+
+        internal fun extractQuantType(fileName: String): String {
+            val baseName = stripGgufSuffix(fileName)
+            val dotSegment = baseName.substringAfterLast(".", "")
+            if (dotSegment.isNotEmpty() && QUANTIZATION_SEGMENT_REGEX.matches(dotSegment)) {
+                return dotSegment.uppercase()
+            }
+
+            return baseName.substringAfterLast("-", baseName).uppercase()
         }
     }
 
@@ -344,8 +355,7 @@ class ModelStoreRepository(private val context: Context) {
                             val sizeStr = formatDecimalBytes(file.size ?: 0)
 
                             // Extract quantization type from filename
-                            val quantType =
-                                stripGgufSuffix(fileName.substringAfterLast("-")).uppercase()
+                            val quantType = extractQuantType(fileName)
 
                             val baseTags = mutableListOf("GGUF", quantType, repo.name)
                             if (supportsToolCalling) {

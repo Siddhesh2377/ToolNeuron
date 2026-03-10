@@ -13,6 +13,12 @@ class ModelStoreRepositoryTest {
     }
 
     @Test
+    fun supportedGgufFileAcceptsMixedCaseExtension() {
+        assertTrue(ModelStoreRepository.isSupportedGgufFile("models/Whisper-EN-Small.Q5_K_M.GgUf"))
+        assertTrue(ModelStoreRepository.isSupportedGgufFile("models/whisper-en-small.q5_k_m.gguf"))
+    }
+
+    @Test
     fun supportedGgufFileRejectsProjectionArtifacts() {
         assertFalse(ModelStoreRepository.isSupportedGgufFile("models/whisper-mmproj.Q4_K_M.GGUF"))
         assertFalse(ModelStoreRepository.isSupportedGgufFile("models/whisper-vision-adapter.gguf"))
@@ -25,5 +31,11 @@ class ModelStoreRepositoryTest {
             "Whisper-EN-Small.Q5_K_M",
             ModelStoreRepository.stripGgufSuffix("Whisper-EN-Small.Q5_K_M.GGUF")
         )
+    }
+
+    @Test
+    fun extractQuantTypeStripsSuffixBeforeReadingLastSegment() {
+        assertEquals("Q5_K_M", ModelStoreRepository.extractQuantType("Whisper-EN-Small.Q5_K_M.GGUF"))
+        assertEquals("MODEL", ModelStoreRepository.extractQuantType("model.GGUF"))
     }
 }
