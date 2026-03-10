@@ -24,11 +24,17 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,6 +69,9 @@ import com.dark.tool_neuron.global.Standards
 
 val LocalCodeHighlightEnabled = compositionLocalOf { true }
 
+/** Debounce window (ms) for streaming markdown re-parsing. */
+private const val STREAMING_PARSE_DEBOUNCE_MS = 80L
+
 /**
  * Colors extracted once from MaterialTheme — passed to non-composable formatters
  * to avoid reading theme state inside every Text().
@@ -77,11 +86,40 @@ data class InlineColors(
 /**
  * Full markdown renderer for completed (non-streaming) messages.
  * Parses text into elements and renders each with appropriate styling.
- * Result is cached by [text] — stable for completed messages.
+ * Result is cached by [text] via the shared LRU parse cache.
  */
 @Composable
 fun MarkdownText(text: String, modifier: Modifier = Modifier) {
-    val parsedContent = remember(text) { parseMarkdown(text) }
+    val parsedContent = remember(text) { parseMarkdownCached(text) }
+    MarkdownContent(parsedContent, modifier)
+}
+
+/**
+ * Streaming-optimized markdown renderer.
+ * Debounces and parses off the main thread to avoid jank during rapid token
+ * updates (~50 ms cadence). Bypasses the completed-message LRU cache so that
+ * stale partial-text entries aren't retained after generation completes.
+ */
+@OptIn(FlowPreview::class)
+@Composable
+fun StreamingMarkdownText(text: String, modifier: Modifier = Modifier) {
+    var parsedContent by remember { mutableStateOf(parseMarkdown(text)) }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { text }
+            .debounce(STREAMING_PARSE_DEBOUNCE_MS)
+            .collect { latest ->
+                val result = withContext(Dispatchers.Default) { parseMarkdown(latest) }
+                parsedContent = result
+            }
+    }
+
+    MarkdownContent(parsedContent, modifier)
+}
+
+/** Shared rendering core used by both [MarkdownText] and [StreamingMarkdownText]. */
+@Composable
+private fun MarkdownContent(elements: List<MarkdownElement>, modifier: Modifier = Modifier) {
     val colors = InlineColors(
         codeBg = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
         highlightBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f),
@@ -91,7 +129,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
         modifier = modifier.padding(horizontal = Standards.SpacingXs),
         verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
     ) {
-        parsedContent.forEach { element -> MarkdownElementView(element, colors) }
+        elements.forEach { element -> MarkdownElementView(element, colors) }
     }
 }
 
@@ -490,6 +528,20 @@ internal fun buildInlineFormatted(text: String, colors: InlineColors): Annotated
                     val rendered = renderMathToUnicode(text.substring(i + 1, end))
                     withStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor)) { append(rendered) }
                     i = end + 1
+                } else { append(chars[i]); i++ }
+            }
+            // Markdown link [text](url)
+            chars[i] == '[' -> {
+                val closeBracket = text.indexOf(']', i + 1)
+                if (closeBracket != -1 && closeBracket + 1 < chars.size && chars[closeBracket + 1] == '(') {
+                    val closeParen = text.indexOf(')', closeBracket + 2)
+                    if (closeParen != -1) {
+                        val linkText = text.substring(i + 1, closeBracket)
+                        withStyle(SpanStyle(color = colors.mathColor, textDecoration = TextDecoration.Underline)) {
+                            append(buildInlineFormatted(linkText, colors))
+                        }
+                        i = closeParen + 1
+                    } else { append(chars[i]); i++ }
                 } else { append(chars[i]); i++ }
             }
             // Default — handle surrogates
