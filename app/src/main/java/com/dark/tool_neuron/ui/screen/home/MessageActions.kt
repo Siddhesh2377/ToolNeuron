@@ -64,7 +64,7 @@ internal fun AssistantMessageHeader(message: Messages, imageBlurEnabled: Boolean
             else -> {
                 // Thinking block (markdown body is handled by lazyMarkdownItems)
                 val parsed = remember(message.content.content) {
-                    if (message.content.content.contains("<think>")) {
+                    if (THINK_TAG_REGEX.containsMatchIn(message.content.content)) {
                         parseThinkingTags(message.content.content)
                     } else null
                 }
@@ -124,7 +124,7 @@ internal fun AssistantMessageFooter(
         if (isTextContent && message.content.content.isNotEmpty()) {
             // Strip thinking tags for the text content passed to action row
             val textContent = remember(message.content.content) {
-                if (message.content.content.contains("<think>")) {
+                if (THINK_TAG_REGEX.containsMatchIn(message.content.content)) {
                     message.content.content.replace(THINK_TAG_REGEX, "").trim()
                 } else message.content.content
             }

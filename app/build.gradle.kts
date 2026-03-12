@@ -17,10 +17,10 @@ android {
 
     defaultConfig {
         applicationId = "com.dark.tool_neuron"
-        minSdk = 29
+        minSdk = 30
         targetSdk = 36
-        versionCode = 28
-        versionName = "2.0.2"
+        versionCode = 29
+        versionName = "2.0.2-model-loading-fix"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }

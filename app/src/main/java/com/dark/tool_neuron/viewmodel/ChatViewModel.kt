@@ -36,7 +36,7 @@ import com.dark.gguf_lib.toolcalling.ToolCall
 import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -185,6 +185,11 @@ class ChatViewModel @Inject constructor(
 
     private val _currentRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val currentRagResults: StateFlow<List<RagQueryDisplayResult>> = _currentRagResults
+
+    // ── Context Usage ──
+
+    private val _contextUsagePercent = MutableStateFlow(0f)
+    val contextUsagePercent: StateFlow<Float> = _contextUsagePercent.asStateFlow()
 
     // ── Grouped State Flows (for optimized recomposition) ──
 
@@ -563,6 +568,10 @@ class ChatViewModel @Inject constructor(
      * Regenerate the last assistant response.
      * Removes the last assistant message and re-sends the last user prompt.
      */
+    // Snapshot of old assistant message during regeneration — restored if stop() is
+    // called before new content arrives (fixes issue #77: message disappears on cancel)
+    private var regenerationSnapshot: Messages? = null
+
     fun regenerateLastMessage() {
         if (!LlmModelWorker.isGgufModelLoaded.value) {
             _error.value = "Please load a text generation model first"
@@ -579,8 +588,9 @@ class ChatViewModel @Inject constructor(
             return
         }
 
-        // Remove the last assistant message from in-memory list immediately
+        // Snapshot the old assistant message — remove from UI but keep for rollback
         val lastAssistantMsg = _messages.lastOrNull { it.role == Role.Assistant }
+        regenerationSnapshot = lastAssistantMsg
         if (lastAssistantMsg != null) {
             _messages.remove(lastAssistantMsg)
         }
@@ -591,16 +601,13 @@ class ChatViewModel @Inject constructor(
         _isGenerating.value = true
         _streamingUserMessage.value = prompt
         _streamingAssistantMessage.value = ""
+        currentUserMessage = lastUserMsg // needed for stop() rollback
         userMessageAdded.set(true) // already added — skip re-adding user message
         currentMetrics = null
         _error.value = null
 
         generationJob = viewModelScope.launch {
             try {
-                // Await vault deletion before starting generation (prevents race condition)
-                if (lastAssistantMsg != null) {
-                    chatManager.deleteMessage(lastAssistantMsg.msgId)
-                }
                 val maxTokens = getCurrentModelMaxTokens()
                 val hasTools = PluginManager.hasEnabledTools()
                         && PluginManager.isToolCallingModelLoaded.value
@@ -612,15 +619,29 @@ class ChatViewModel @Inject constructor(
                 } else {
                     simpleFlow(prompt, ragContext, maxTokens, isNewChat = false, isRegeneration = true)
                 }
+
+                // Generation completed successfully — now delete old message from DB
+                if (lastAssistantMsg != null) {
+                    chatManager.deleteMessage(lastAssistantMsg.msgId)
+                }
+                regenerationSnapshot = null
             } catch (e: kotlinx.coroutines.CancellationException) {
+                // stop() handles rollback via regenerationSnapshot
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Error in regenerateLastMessage", e)
+                restoreRegenerationSnapshot()
                 reportError(e.message)
             } finally {
                 resetStreamingState()
             }
         }
+    }
+
+    private fun restoreRegenerationSnapshot() {
+        val snapshot = regenerationSnapshot ?: return
+        regenerationSnapshot = null
+        _messages.add(snapshot)
     }
 
     private suspend fun getCurrentModelMaxTokens(): Int =
@@ -1157,6 +1178,8 @@ class ChatViewModel @Inject constructor(
                     val remaining = utf8Buffer.flush()
                     if (remaining.isNotEmpty()) resultBuilder.append(remaining)
                     _streamingAssistantMessage.value = resultBuilder.toString()
+                    // Update context usage after generation completes
+                    _contextUsagePercent.value = LlmModelWorker.getContextUsageGguf()
                 }
                 is GenerationEvent.Metrics -> { currentMetrics = event.metrics }
                 is GenerationEvent.Progress -> { /* progress tracked elsewhere */ }
@@ -1322,7 +1345,8 @@ class ChatViewModel @Inject constructor(
         if (systemPrompt.isNotEmpty()) {
             result.add(JSONObject().put("role", "system").put("content", systemPrompt))
         }
-        if (chatMemoryEnabled.value) {
+        // Always include history for regeneration (model needs context), otherwise respect setting
+        if (chatMemoryEnabled.value || isRegeneration) {
             val excludeMsgId = if (isRegeneration) {
                 _messages.lastOrNull { it.role == Role.User }?.msgId
             } else null
@@ -1939,8 +1963,16 @@ class ChatViewModel @Inject constructor(
                 decodingMetrics = metrics
             )
             _messages.add(assistantMessage)
-            // Persist to DB async
+            // New content was produced — safe to delete old message from DB
+            regenerationSnapshot?.let { old ->
+                regenerationSnapshot = null
+                viewModelScope.launch { chatManager.deleteMessage(old.msgId) }
+            }
+            // Persist new message to DB async
             viewModelScope.launch { chatManager.addMessage(chatId, assistantMessage) }
+        } else if (regenerationSnapshot != null) {
+            // Regeneration cancelled with no content — restore old message
+            restoreRegenerationSnapshot()
         } else if (userMsg != null && !wasUserAdded) {
             _messages.add(userMsg)
         }
