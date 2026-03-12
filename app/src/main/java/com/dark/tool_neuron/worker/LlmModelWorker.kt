@@ -317,6 +317,7 @@ object LlmModelWorker {
         if (svc == null) { Log.w(TAG, "unloadGgufModel: service not bound"); return }
         svc.unloadModelGguf()
         _isGgufModelLoaded.value = false
+        _isVlmLoaded.value = false
         Log.i(TAG, "GGUF model unloaded")
     }
 

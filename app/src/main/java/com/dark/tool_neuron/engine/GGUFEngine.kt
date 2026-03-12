@@ -359,7 +359,7 @@ class GGUFEngine {
         try { engine.releaseVlmProjector() } catch (_: Exception) { }
     }
 
-    val isVlmLoaded: Boolean get() = engine.isVlmLoaded
+    val isVlmLoaded: Boolean get() = engine.isVlmLoaded()
 
     fun getVlmDefaultMarker(): String = engine.getVlmDefaultMarker()
 

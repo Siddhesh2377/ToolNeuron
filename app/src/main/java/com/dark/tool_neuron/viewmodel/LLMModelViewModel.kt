@@ -204,6 +204,7 @@ class LLMModelViewModel @Inject constructor(
                 // TODO: re-enable once native engine position tracking is fixed
                 LlmModelWorker.setSpeculativeDecodingGguf(false)
                 LlmModelWorker.warmUpGguf()
+                maybeLoadProjectorSidecar(model)
             } catch (e: Exception) {
                 android.util.Log.w("LLMModelVM", "Optimization wiring failed: ${e.message}")
             }
@@ -214,6 +215,19 @@ class LLMModelViewModel @Inject constructor(
             com.dark.tool_neuron.plugins.PluginManager.syncToolsWithLLM()
         } else {
             AppStateManager.setError("Failed to load GGUF model")
+        }
+    }
+
+    private fun maybeLoadProjectorSidecar(model: Model) {
+        val projectorFile = AppPaths.modelProjectorFile(getApplication(), model.id)
+        if (!projectorFile.exists()) {
+            LlmModelWorker.releaseVlmProjector()
+            return
+        }
+
+        val loaded = LlmModelWorker.loadVlmProjector(projectorFile.absolutePath)
+        if (!loaded) {
+            AppStateManager.setError("Loaded ${model.modelName}, but failed to load its projector sidecar")
         }
     }
 

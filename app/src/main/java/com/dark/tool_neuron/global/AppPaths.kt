@@ -37,6 +37,14 @@ object AppPaths {
     fun modelFile(context: Context, modelId: String): File =
         File(models(context), "$modelId.gguf")
 
+    /** Hidden multimodal/audio projector sidecars paired to GGUF models */
+    fun modelProjectors(context: Context): File =
+        File(models(context), "projectors")
+
+    /** Specific GGUF projector sidecar */
+    fun modelProjectorFile(context: Context, modelId: String): File =
+        File(modelProjectors(context), "$modelId.gguf")
+
     /** TTS model directory */
     fun ttsModel(context: Context): File =
         File(models(context), "supertonic-2")

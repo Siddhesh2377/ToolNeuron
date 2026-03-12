@@ -1,6 +1,8 @@
 package com.dark.tool_neuron.ui.screen.home
 
 import android.content.Intent
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -109,6 +111,18 @@ internal fun BottomBar(
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
+
+    // Current audio UX is file-picker based. A future mic flow can keep the same audio mode and
+    // route its recorded output into ChatViewModel.sendChatWithAudio(...) instead of this launcher.
+    val audioLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            val audioPrompt = value.ifBlank { "Transcribe this audio." }
+            chatViewModel.sendChatWithAudio(audioPrompt, context, uri)
+            value = ""
+        }
+    }
 
     // More Options overlay state
     var showMoreOptions by remember { mutableStateOf(false) }
@@ -238,7 +252,7 @@ internal fun BottomBar(
                                 text = when (chatState.generationType) {
                                     ModelType.TEXT_GENERATION -> "Say Anything…"
                                     ModelType.IMAGE_GENERATION -> "Describe the image you want…"
-                                    ModelType.AUDIO_GENERATION -> "Say Anything…"
+                                    ModelType.AUDIO_GENERATION -> "Transcribe audio or add an instruction…"
                                 }
                             )
                         },
@@ -309,6 +323,19 @@ internal fun BottomBar(
                         modifier = Modifier.padding(start = Standards.SpacingMd)
                     )
 
+                    ActionToggleButton(
+                        onCheckedChange = {
+                            if (chatState.generationType == ModelType.AUDIO_GENERATION) {
+                                chatViewModel.switchToTextGeneration()
+                            } else {
+                                chatViewModel.switchToAudioGeneration()
+                            }
+                        },
+                        checked = chatState.generationType == ModelType.AUDIO_GENERATION,
+                        enabled = isTextModelLoaded,
+                        icon = TnIcons.Volume
+                    )
+
                     // 2. More Options
                     ActionToggleButton(
                         onCheckedChange = { showMoreOptions = !showMoreOptions },
@@ -367,7 +394,7 @@ internal fun BottomBar(
                         false -> {
                             ActionButton(
                                 onClickListener = {
-                                    if (value.isNotBlank()) {
+                                    if (value.isNotBlank() || chatState.generationType == ModelType.AUDIO_GENERATION) {
                                         // Close overlays on send
                                         showMoreOptions = false
                                         when (chatState.generationType) {
@@ -396,7 +423,9 @@ internal fun BottomBar(
                                                 chatViewModel.sendImageRequest(value)
                                                 value = ""
                                             }
-                                            ModelType.AUDIO_GENERATION -> {}
+                                            ModelType.AUDIO_GENERATION -> {
+                                                audioLauncher.launch("audio/*")
+                                            }
                                         }
                                     }
                                 },
