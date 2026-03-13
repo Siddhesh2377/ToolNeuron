@@ -72,6 +72,7 @@ fun ActionButton(
     icon: Int,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = MaterialShapes.Square.toShape(),
     colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
@@ -80,6 +81,7 @@ fun ActionButton(
 ) {
     FilledIconButton(
         onClick = { onClickListener() },
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(Standards.ActionIconSize)
@@ -143,6 +145,7 @@ fun ActionButton(
     icon: ImageVector,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
     shape: Shape = MaterialShapes.Square.toShape(),
     colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
@@ -151,6 +154,7 @@ fun ActionButton(
 ) {
     FilledIconButton(
         onClick = { onClickListener() },
+        enabled = enabled,
         colors = colors,
         shape = shape,
         modifier = modifier.size(Standards.ActionIconSize)

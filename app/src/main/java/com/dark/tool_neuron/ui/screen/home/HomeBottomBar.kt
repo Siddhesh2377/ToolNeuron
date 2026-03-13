@@ -1,6 +1,9 @@
 package com.dark.tool_neuron.ui.screen.home
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.SystemClock
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -30,7 +33,9 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -41,9 +46,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.activity.RagActivity
+import com.dark.tool_neuron.audio.ChatAudioRecorder
+import com.dark.tool_neuron.audio.RecordedAudioClip
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.ModelType
 import com.dark.tool_neuron.ui.components.ActionButton
@@ -61,6 +69,9 @@ import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.viewmodel.MemoryViewModel
 import com.dark.tool_neuron.viewmodel.PluginViewModel
 import com.dark.tool_neuron.viewmodel.RagViewModel
+import java.io.IOException
+import java.util.Locale
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 // ── BottomBar ───────────────────────────────────────────────────────────────────
@@ -111,17 +122,121 @@ internal fun BottomBar(
 
     // Coroutine scope for RAG queries
     val scope = rememberCoroutineScope()
+    val audioRecorder = remember(context.applicationContext) {
+        ChatAudioRecorder(context.applicationContext)
+    }
+    var stagedRecording by remember { mutableStateOf<RecordedAudioClip?>(null) }
+    var isMicRecording by remember { mutableStateOf(false) }
+    var recordingStartedAtMs by remember { mutableStateOf<Long?>(null) }
+    var recordingElapsedMs by remember { mutableStateOf(0L) }
+    var micErrorMessage by remember { mutableStateOf<String?>(null) }
 
-    // Current audio UX is file-picker based. A future mic flow can keep the same audio mode and
-    // route its recorded output into ChatViewModel.sendChatWithAudio(...) instead of this launcher.
+    val discardStagedRecording = {
+        stagedRecording?.let { audioRecorder.deleteClip(it.file) }
+        stagedRecording = null
+    }
+    val clearAudioCaptureState = {
+        if (isMicRecording) {
+            audioRecorder.cancelRecording()
+        }
+        isMicRecording = false
+        recordingStartedAtMs = null
+        recordingElapsedMs = 0L
+        discardStagedRecording()
+        micErrorMessage = null
+    }
+    val startMicrophoneRecording = {
+        discardStagedRecording()
+        micErrorMessage = null
+        try {
+            audioRecorder.startRecording()
+            isMicRecording = true
+            recordingStartedAtMs = SystemClock.elapsedRealtime()
+            recordingElapsedMs = 0L
+        } catch (e: IOException) {
+            micErrorMessage = e.message ?: "Unable to start microphone recording"
+        } catch (e: IllegalStateException) {
+            micErrorMessage = e.message ?: "Unable to start microphone recording"
+        } catch (e: SecurityException) {
+            micErrorMessage = e.message ?: "Microphone permission denied"
+        }
+    }
+    val stopMicrophoneRecording = {
+        try {
+            val clip = audioRecorder.stopRecording()
+            discardStagedRecording()
+            stagedRecording = clip
+            isMicRecording = false
+            recordingStartedAtMs = null
+            recordingElapsedMs = clip.durationMillis
+            micErrorMessage = null
+        } catch (e: IllegalStateException) {
+            isMicRecording = false
+            recordingStartedAtMs = null
+            recordingElapsedMs = 0L
+            micErrorMessage = e.message ?: "Unable to finalize microphone recording"
+        }
+    }
+
+    val microphonePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            startMicrophoneRecording()
+        } else {
+            micErrorMessage = "Microphone permission is required to record audio."
+        }
+    }
+
+    // File imports remain the fallback path, while mic capture stages a temporary clip for review
+    // before both routes converge on ChatViewModel.sendChatWithAudio(...).
     val audioLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
+            discardStagedRecording()
+            micErrorMessage = null
             val audioPrompt = value.ifBlank { "Transcribe this audio." }
             chatViewModel.sendChatWithAudio(audioPrompt, context, uri)
             value = ""
         }
+    }
+
+    DisposableEffect(audioRecorder) {
+        onDispose {
+            audioRecorder.release()
+            stagedRecording?.let { audioRecorder.deleteClip(it.file) }
+        }
+    }
+
+    LaunchedEffect(isMicRecording, recordingStartedAtMs) {
+        if (!isMicRecording || recordingStartedAtMs == null) {
+            return@LaunchedEffect
+        }
+
+        while (isMicRecording) {
+            val startedAt = recordingStartedAtMs ?: break
+            recordingElapsedMs = SystemClock.elapsedRealtime() - startedAt
+            delay(250L)
+        }
+    }
+
+    LaunchedEffect(chatState.generationType) {
+        if (chatState.generationType != ModelType.AUDIO_GENERATION) {
+            clearAudioCaptureState()
+        }
+    }
+
+    val audioStatusMessage = when {
+        micErrorMessage != null -> micErrorMessage
+        isMicRecording -> "Recording microphone - ${formatAudioDuration(recordingElapsedMs)}"
+        stagedRecording != null -> "Recorded clip ready to send - ${formatAudioDuration(stagedRecording!!.durationMillis)}"
+        else -> null
+    }
+    val canSendCurrentInput = when (chatState.generationType) {
+        ModelType.TEXT_GENERATION -> value.isNotBlank()
+        ModelType.IMAGE_GENERATION -> value.isNotBlank()
+        ModelType.AUDIO_GENERATION -> stagedRecording != null && !isMicRecording
     }
 
     // More Options overlay state
@@ -280,6 +395,28 @@ internal fun BottomBar(
                     onWebSearchChipClick = { pluginViewModel.toggleWebSearch(false) }
                 )
 
+                AnimatedVisibility(
+                    visible = chatState.generationType == ModelType.AUDIO_GENERATION &&
+                        audioStatusMessage != null
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = Standards.SpacingXs, start = Standards.SpacingMd),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = audioStatusMessage.orEmpty(),
+                            color = if (micErrorMessage != null) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
                 // More Options overlay (above action row, like model list)
                 MoreOptionsOverlay(
                     show = showMoreOptions,
@@ -376,6 +513,58 @@ internal fun BottomBar(
 
                     Spacer(Modifier.weight(1f))
 
+                    if (chatState.generationType == ModelType.AUDIO_GENERATION) {
+                        ActionButton(
+                            onClickListener = {
+                                micErrorMessage = null
+                                audioLauncher.launch("audio/*")
+                            },
+                            enabled = !chatState.isGenerating && !isMicRecording,
+                            icon = TnIcons.FileUpload,
+                            modifier = Modifier.padding(end = Standards.SpacingXs)
+                        )
+
+                        ActionButton(
+                            onClickListener = {
+                                if (isMicRecording) {
+                                    stopMicrophoneRecording()
+                                } else if (
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                ) {
+                                    startMicrophoneRecording()
+                                } else {
+                                    microphonePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            },
+                            enabled = !chatState.isGenerating,
+                            icon = if (isMicRecording) TnIcons.PlayerStop else TnIcons.Microphone,
+                            modifier = Modifier.padding(end = Standards.SpacingXs),
+                            colors = if (isMicRecording) {
+                                IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.error.copy(0.18f),
+                                    contentColor = MaterialTheme.colorScheme.error
+                                )
+                            } else {
+                                IconButtonDefaults.filledIconButtonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
+                                    contentColor = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        )
+
+                        if (isMicRecording || stagedRecording != null) {
+                            ActionButton(
+                                onClickListener = { clearAudioCaptureState() },
+                                enabled = !chatState.isGenerating,
+                                icon = TnIcons.X,
+                                modifier = Modifier.padding(end = Standards.SpacingXs)
+                            )
+                        }
+                    }
+
                     // 6. Send/Stop
                     when (chatState.isGenerating) {
                         true -> {
@@ -394,41 +583,54 @@ internal fun BottomBar(
                         false -> {
                             ActionButton(
                                 onClickListener = {
-                                    if (value.isNotBlank() || chatState.generationType == ModelType.AUDIO_GENERATION) {
-                                        // Close overlays on send
-                                        showMoreOptions = false
-                                        when (chatState.generationType) {
-                                            ModelType.TEXT_GENERATION -> {
-                                                val hasRags = loadedRags.isNotEmpty() && isRagEnabledForChat
+                                    // Close overlays on send
+                                    showMoreOptions = false
+                                    when (chatState.generationType) {
+                                        ModelType.TEXT_GENERATION -> {
+                                            val hasRags = loadedRags.isNotEmpty() && isRagEnabledForChat
 
-                                                if (hasRags) {
-                                                    val userQuery = value
-                                                    value = ""
-                                                    scope.launch {
-                                                        val ragContext = ragViewModel.queryAndStoreResults(userQuery)
-                                                        chatViewModel.setRagContext(
-                                                            ragContext.ifBlank { null },
-                                                            ragViewModel.lastRagResults.value
-                                                        )
-                                                        chatViewModel.sendTextMessage(userQuery)
-                                                    }
-                                                } else {
-                                                    chatViewModel.clearRagContext()
-                                                    chatViewModel.sendTextMessage(value)
-                                                    value = ""
+                                            if (hasRags) {
+                                                val userQuery = value
+                                                value = ""
+                                                scope.launch {
+                                                    val ragContext = ragViewModel.queryAndStoreResults(userQuery)
+                                                    chatViewModel.setRagContext(
+                                                        ragContext.ifBlank { null },
+                                                        ragViewModel.lastRagResults.value
+                                                    )
+                                                    chatViewModel.sendTextMessage(userQuery)
                                                 }
-                                            }
-
-                                            ModelType.IMAGE_GENERATION -> {
-                                                chatViewModel.sendImageRequest(value)
+                                            } else {
+                                                chatViewModel.clearRagContext()
+                                                chatViewModel.sendTextMessage(value)
                                                 value = ""
                                             }
-                                            ModelType.AUDIO_GENERATION -> {
-                                                audioLauncher.launch("audio/*")
+                                        }
+
+                                        ModelType.IMAGE_GENERATION -> {
+                                            chatViewModel.sendImageRequest(value)
+                                            value = ""
+                                        }
+
+                                        ModelType.AUDIO_GENERATION -> {
+                                            val clip = stagedRecording ?: return@ActionButton
+                                            val readinessError = chatViewModel.getAudioGenerationReadinessError()
+                                            if (readinessError != null) {
+                                                micErrorMessage = readinessError
+                                                return@ActionButton
                                             }
+
+                                            val audioPrompt = value.ifBlank { "Transcribe this audio." }
+                                            chatViewModel.sendChatWithAudio(audioPrompt, clip.file)
+                                            stagedRecording = null
+                                            recordingStartedAtMs = null
+                                            recordingElapsedMs = 0L
+                                            micErrorMessage = null
+                                            value = ""
                                         }
                                     }
                                 },
+                                enabled = canSendCurrentInput,
                                 icon = TnIcons.Send,
                                 shape = MaterialShapes.Ghostish.toShape(),
                                 modifier = Modifier.padding(end = Standards.SpacingMd),
@@ -443,4 +645,11 @@ internal fun BottomBar(
             }
         }
     }
+}
+
+private fun formatAudioDuration(durationMillis: Long): String {
+    val totalSeconds = (durationMillis / 1000L).toInt()
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return String.format(Locale.US, "%02d:%02d", minutes, seconds)
 }

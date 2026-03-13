@@ -38,6 +38,8 @@ import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import jakarta.inject.Inject
+import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -468,45 +470,76 @@ class ChatViewModel @Inject constructor(
         sendChatWithMedia(prompt, imageData)
     }
 
+    fun getAudioGenerationReadinessError(): String? = getMediaGenerationReadinessError()
+
     fun sendChatWithAudio(prompt: String, context: Context, audioUri: Uri) {
-        if (_isGenerating.value) return
+        sendChatWithLoadedAudio(
+            prompt = prompt,
+            sourceLabel = "selected audio input"
+        ) {
+            context.contentResolver.openInputStream(audioUri)?.use { input ->
+                input.readBytes()
+            } ?: throw IllegalStateException("Failed to read the selected audio file")
+        }
+    }
 
-        viewModelScope.launch {
-            try {
-                // File-based audio is the current MVP. Future microphone capture can feed the
-                // same byte-array entrypoint below after encoding captured audio into a supported
-                // container/format for the loaded projector.
-                val audioBytes = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(audioUri)?.use { input ->
-                        input.readBytes()
-                    }
-                } ?: throw IllegalStateException("Failed to read the selected audio file")
-
-                sendChatWithAudio(prompt, audioBytes)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load audio input", e)
-                reportError(e.message)
+    fun sendChatWithAudio(prompt: String, audioFile: File) {
+        sendChatWithLoadedAudio(
+            prompt = prompt,
+            sourceLabel = "recorded audio input",
+            cleanup = {
+                if (audioFile.exists() && !audioFile.delete()) {
+                    Log.w(TAG, "Failed to delete temporary recorded audio: ${audioFile.absolutePath}")
+                }
             }
+        ) {
+            if (!audioFile.exists()) {
+                throw IllegalStateException("Recorded audio file is missing")
+            }
+            audioFile.readBytes()
         }
     }
 
     fun sendChatWithAudio(prompt: String, audioData: ByteArray) {
-        // Keep all non-file audio ingestion funneled through this method so a future mic-recording
-        // flow only has to produce audio bytes and does not need separate chat/generation logic.
+        // Keep every audio source funneled through the same byte-array path so file import, mic
+        // recording, and any future capture UX reuse the exact same chat/generation logic.
         val effectivePrompt = prompt.ifBlank { "Transcribe this audio." }
         sendChatWithMedia(effectivePrompt, listOf(audioData))
     }
 
-    private fun sendChatWithMedia(prompt: String, mediaData: List<ByteArray>) {
-        if (!LlmModelWorker.isGgufModelLoaded.value) {
-            reportError("Please load a text generation model first")
-            return
-        }
-        if (!LlmModelWorker.isVlmLoaded.value) {
-            reportError("Please load a compatible projector (mmproj) first")
-            return
-        }
+    private fun sendChatWithLoadedAudio(
+        prompt: String,
+        sourceLabel: String,
+        cleanup: suspend () -> Unit = {},
+        loadAudio: suspend () -> ByteArray
+    ) {
         if (_isGenerating.value) return
+
+        viewModelScope.launch {
+            try {
+                val audioBytes = withContext(Dispatchers.IO) { loadAudio() }
+                sendChatWithAudio(prompt, audioBytes)
+            } catch (e: IOException) {
+                Log.e(TAG, "Failed to load $sourceLabel", e)
+                reportError(e.message)
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Permission denied while loading $sourceLabel", e)
+                reportError(e.message)
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "Failed to load $sourceLabel", e)
+                reportError(e.message)
+            } finally {
+                withContext(Dispatchers.IO) { cleanup() }
+            }
+        }
+    }
+
+    private fun sendChatWithMedia(prompt: String, mediaData: List<ByteArray>) {
+        val readinessError = getMediaGenerationReadinessError()
+        if (readinessError != null) {
+            reportError(readinessError)
+            return
+        }
 
         _isGenerating.value = true
         _streamingUserMessage.value = prompt
@@ -603,6 +636,19 @@ class ChatViewModel @Inject constructor(
                 resetStreamingState()
             }
         }
+    }
+
+    private fun getMediaGenerationReadinessError(): String? {
+        if (!LlmModelWorker.isGgufModelLoaded.value) {
+            return "Please load a text generation model first"
+        }
+        if (!LlmModelWorker.isVlmLoaded.value) {
+            return "Please load a compatible projector (mmproj) first"
+        }
+        if (_isGenerating.value) {
+            return "Please wait for the current generation to finish"
+        }
+        return null
     }
 
     /**

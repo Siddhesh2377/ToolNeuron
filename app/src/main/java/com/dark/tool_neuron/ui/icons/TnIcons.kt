@@ -145,6 +145,7 @@ object TnIcons {
     val Prompt by lazy { tabler("M8 9h8", "M8 13h6", "M9 18h-3a3 3 0 0 1 -3 -3v-8a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v8a3 3 0 0 1 -3 3h-3l-3 3l-3 -3") }
 
     // ── Audio ──
+    val Microphone by lazy { tabler("M9 5a3 3 0 0 1 6 0v5a3 3 0 0 1 -6 0z", "M5 10a7 7 0 0 0 14 0", "M8 21h8", "M12 17v4") }
     val Volume by lazy { tabler("M15 8a5 5 0 0 1 0 8", "M17.7 5a9 9 0 0 1 0 14", "M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5") }
 
     // ── Misc ──
