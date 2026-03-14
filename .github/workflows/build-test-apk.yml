@@ -1,0 +1,154 @@
+name: Build and publish test APK
+
+on:
+  push:
+    branches:
+      - Fix-whisper-initial-download-issue
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: test-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APK_NAME: ToolNeuron-gguf-audio-mic-debug.apk
+  APK_ARTIFACT_NAME: toolneuron-gguf-audio-mic-debug-apk
+  RELEASE_TAG: toolneuron-fix-whisper-test-apk
+
+jobs:
+  build-test-apk:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        run: |
+          yes | sdkmanager --licenses > /dev/null
+          sdkmanager \
+            "platform-tools" \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "cmake;3.22.1" \
+            "ndk;28.2.13676358"
+
+      - name: Create local.properties
+        run: |
+          SDK_ROOT="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          cat > local.properties <<EOF
+          sdk.dir=$SDK_ROOT
+          cmake.dir=$SDK_ROOT/cmake/3.22.1
+          ALIAS="sample_val"
+          EOF
+
+      - name: Relocate heavy native build directories
+        run: |
+          BUILD_ROOT="${RUNNER_TEMP}/toolneuron-build"
+          mkdir -p \
+            "$BUILD_ROOT/app/build" \
+            "$BUILD_ROOT/file_ops/.cxx" \
+            "$BUILD_ROOT/file_ops/build" \
+            "$BUILD_ROOT/neuron-packet/.cxx" \
+            "$BUILD_ROOT/neuron-packet/build" \
+            "$BUILD_ROOT/system_encryptor/.cxx" \
+            "$BUILD_ROOT/system_encryptor/build" \
+            "$BUILD_ROOT/ums/.cxx" \
+            "$BUILD_ROOT/ums/build"
+
+          rm -rf \
+            app/build \
+            file_ops/.cxx \
+            file_ops/build \
+            neuron-packet/.cxx \
+            neuron-packet/build \
+            system_encryptor/.cxx \
+            system_encryptor/build \
+            ums/.cxx \
+            ums/build
+
+          ln -sfn "$BUILD_ROOT/app/build" app/build
+          ln -sfn "$BUILD_ROOT/file_ops/.cxx" file_ops/.cxx
+          ln -sfn "$BUILD_ROOT/file_ops/build" file_ops/build
+          ln -sfn "$BUILD_ROOT/neuron-packet/.cxx" neuron-packet/.cxx
+          ln -sfn "$BUILD_ROOT/neuron-packet/build" neuron-packet/build
+          ln -sfn "$BUILD_ROOT/system_encryptor/.cxx" system_encryptor/.cxx
+          ln -sfn "$BUILD_ROOT/system_encryptor/build" system_encryptor/build
+          ln -sfn "$BUILD_ROOT/ums/.cxx" ums/.cxx
+          ln -sfn "$BUILD_ROOT/ums/build" ums/build
+
+      - name: Validate and build debug APK
+        run: |
+          chmod +x ./gradlew
+          ./gradlew \
+            --no-daemon \
+            --no-configuration-cache \
+            --max-workers=1 \
+            -Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8' \
+            -Pksp.incremental=false \
+            :app:testDebugUnitTest \
+            --tests com.dark.tool_neuron.repo.ModelStoreRepositoryTest
+          ./gradlew \
+            --no-daemon \
+            --no-configuration-cache \
+            --max-workers=1 \
+            -Dorg.gradle.jvmargs='-Xmx2g -XX:MaxMetaspaceSize=512m -Dfile.encoding=UTF-8' \
+            -Pksp.incremental=false \
+            :app:assembleDebug
+
+      - name: Prepare APK asset
+        run: |
+          mkdir -p dist
+          cp app/build/outputs/apk/debug/app-debug.apk "dist/${APK_NAME}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APK_ARTIFACT_NAME }}
+          path: dist/${{ env.APK_NAME }}
+          if-no-files-found: error
+
+      - name: Publish public release asset
+        id: release
+        uses: ncipollo/release-action@v1
+        with:
+          allowUpdates: true
+          artifactErrorsFailBuild: true
+          artifacts: dist/${{ env.APK_NAME }}
+          commit: ${{ github.sha }}
+          name: ToolNeuron test APK
+          prerelease: true
+          replacesArtifacts: true
+          tag: ${{ env.RELEASE_TAG }}
+          body: |
+            Public test APK for the `Fix-whisper-initial-download-issue` branch.
+
+            Includes:
+            - GGUF audio model support
+            - Projector-backed audio transcription flow
+            - In-app microphone transcription staging UX
+
+            Built from commit `${{ github.sha }}`.
+
+      - name: Write download links
+        run: |
+          ASSET_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${APK_NAME}"
+          {
+            echo "## Download links"
+            echo
+            echo "- Release: ${{ steps.release.outputs.html_url }}"
+            echo "- APK: ${ASSET_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
