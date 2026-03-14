@@ -16,6 +16,7 @@ add_link_options(
     -Wl,--gc-sections
     -Wl,--icf=safe
     -Wl,--exclude-libs,ALL
+    -Wl,-z,max-page-size=16384
 )
 add_link_options($<$<NOT:$<CONFIG:Debug>>:-flto>)
 

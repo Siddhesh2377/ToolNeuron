@@ -42,6 +42,18 @@ interface ILLMService {
     void setThinkingEnabledGguf(boolean enabled);
     float getContextUsageGguf();
 
+    // Context window tracking
+    String getContextInfoGguf(String prompt);
+
+    // Character engine
+    boolean setPersonalityGguf(String personalityJson);
+    boolean setMoodGguf(int mood);
+    boolean setCustomMoodGguf(float tempMod, float topPMod, float repPenaltyMod);
+    String getCharacterContextGguf();
+    String buildPromptGguf(String userPrompt);
+    boolean setUncensoredGguf(boolean enabled);
+    boolean isUncensoredGguf();
+
     // Upscaler
     void loadUpscaler(String modelPath, IModelLoadCallback callback);
     void releaseUpscaler();

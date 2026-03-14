@@ -339,6 +339,108 @@ class GGUFEngine {
         } catch (_: Exception) { 0f }
     }
 
+    // ── Context Window Tracking ──
+
+    fun getContextInfo(prompt: String? = null): com.dark.gguf_lib.ContextInfo {
+        if (!engine.isLoaded) return com.dark.gguf_lib.ContextInfo(0, 0, 0, -1, -1)
+        return try {
+            engine.getContextInfo(prompt)
+        } catch (_: Exception) { com.dark.gguf_lib.ContextInfo(0, 0, 0, -1, -1) }
+    }
+
+    // ── Character Engine ──
+
+    private val characterEngine by lazy { com.dark.gguf_lib.CharacterEngine(engine) }
+
+    fun setPersonality(personalityJson: String): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            val j = org.json.JSONObject(personalityJson)
+            characterEngine.setPersonality(com.dark.gguf_lib.Personality(
+                name = j.optString("name", ""),
+                persona = j.optString("persona", ""),
+                temperature = j.optDouble("temperature", 0.7).toFloat(),
+                topP = j.optDouble("topP", 0.9).toFloat(),
+                repetitionPenalty = j.optDouble("repetitionPenalty", 1.1).toFloat(),
+                creativity = j.optDouble("creativity", 0.5).toFloat(),
+                verbosity = j.optDouble("verbosity", 0.5).toFloat(),
+                formality = j.optDouble("formality", 0.5).toFloat(),
+                topK = j.optInt("topK", -1),
+                minP = j.optDouble("minP", -1.0).toFloat(),
+            ))
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun setMood(mood: Int): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setMood(com.dark.gguf_lib.Mood.entries[mood])
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun setCustomMood(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setCustomMood(tempMod, topPMod, repPenaltyMod)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun getCharacterContext(): String {
+        if (!engine.isLoaded) return ""
+        return try {
+            characterEngine.getContext()
+        } catch (_: Exception) { "" }
+    }
+
+    fun buildPrompt(userPrompt: String): String {
+        if (!engine.isLoaded) return userPrompt
+        return try {
+            characterEngine.buildPrompt(userPrompt)
+        } catch (_: Exception) { userPrompt }
+    }
+
+    fun setUncensored(enabled: Boolean): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setUncensored(enabled)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun isUncensored(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.isUncensored
+        } catch (_: Exception) { false }
+    }
+
+    // ── Activation Steering ──
+
+    fun calcVectors(prompt: String, onProgress: ((Float) -> Unit)? = null): FloatArray? {
+        if (!engine.isLoaded) return null
+        return try {
+            characterEngine.calcVectors(prompt, onProgress)
+        } catch (_: Exception) { null }
+    }
+
+    fun applyVectors(data: FloatArray, strength: Float = 1.0f, ilStart: Int = -1, ilEnd: Int = -1): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.applyVectors(data, strength, ilStart, ilEnd)
+        } catch (_: Exception) { false }
+    }
+
+    fun clearVectors(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.clearVectors()
+            true
+        } catch (_: Exception) { false }
+    }
+
     // ── VLM (Vision Language Model) ──
 
     fun loadVlmProjector(path: String, threads: Int = 0): Boolean {

@@ -47,7 +47,10 @@ class SystemBackupManager(private val context: Context) {
         private const val IV_LENGTH = 12
         private const val GCM_TAG_LENGTH = 128
         private const val DB_NAME = "llm_models_database"
-        private const val MAX_MODEL_FILE_SIZE = 2L * 1024 * 1024 * 1024 // 2GB
+        // Cap per-file size for in-memory backup. GGUF model files are typically
+        // 1-10 GB and cannot be safely held in the Java heap. Diffusion config
+        // files and small adapters (< 256 MB) are fine.
+        private const val MAX_MODEL_FILE_SIZE = 256L * 1024 * 1024 // 256MB
     }
 
     sealed class BackupProgress {
@@ -196,7 +199,7 @@ class SystemBackupManager(private val context: Context) {
                         sizeBytes = if (modelFile.isDirectory) dirSize(modelFile) else modelFile.length()
                         if (sizeBytes > MAX_MODEL_FILE_SIZE) {
                             canBackup = false
-                            reason = "File too large (>${MAX_MODEL_FILE_SIZE / (1024 * 1024 * 1024)}GB)"
+                            reason = "File too large (>${MAX_MODEL_FILE_SIZE / (1024 * 1024)}MB)"
                         } else {
                             canBackup = true
                             reason = ""
@@ -774,11 +777,15 @@ class SystemBackupManager(private val context: Context) {
             }
 
             if (modelFile.isDirectory) {
-                // Diffusion/TTS: walk directory
+                // Diffusion/TTS: walk directory — only small config/adapter files
                 modelFile.walkTopDown().filter { it.isFile }.forEach { file ->
                     if (file.length() <= MAX_MODEL_FILE_SIZE) {
-                        val relativePath = file.relativeTo(modelsDir).path
-                        results.add(relativePath to file.readBytes())
+                        try {
+                            val relativePath = file.relativeTo(modelsDir).path
+                            results.add(relativePath to file.readBytes())
+                        } catch (e: OutOfMemoryError) {
+                            Log.e(TAG, "OOM reading model file: ${file.name} (${file.length()} bytes), skipping")
+                        }
                     } else {
                         Log.w(TAG, "Skipping oversized model file: ${file.name} (${file.length()} bytes)")
                     }
@@ -786,8 +793,12 @@ class SystemBackupManager(private val context: Context) {
             } else {
                 // GGUF: single file
                 if (modelFile.length() <= MAX_MODEL_FILE_SIZE) {
-                    val relativePath = modelFile.relativeTo(modelsDir).path
-                    results.add(relativePath to modelFile.readBytes())
+                    try {
+                        val relativePath = modelFile.relativeTo(modelsDir).path
+                        results.add(relativePath to modelFile.readBytes())
+                    } catch (e: OutOfMemoryError) {
+                        Log.e(TAG, "OOM reading model file: ${modelFile.name} (${modelFile.length()} bytes), skipping")
+                    }
                 } else {
                     Log.w(TAG, "Skipping oversized model file: ${modelFile.name} (${modelFile.length()} bytes)")
                 }
