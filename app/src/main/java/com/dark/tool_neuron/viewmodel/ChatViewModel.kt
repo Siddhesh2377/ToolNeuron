@@ -2,7 +2,6 @@ package com.dark.tool_neuron.viewmodel
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.net.Uri
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.runtime.mutableStateListOf
@@ -381,18 +380,6 @@ class ChatViewModel @Inject constructor(
         _currentGenerationType.value = ModelType.IMAGE_GENERATION
     }
 
-    fun switchToAudioGeneration() {
-        if (!LlmModelWorker.isGgufModelLoaded.value) {
-            _error.value = "Text generation model not loaded"
-            return
-        }
-        if (!LlmModelWorker.isVlmLoaded.value) {
-            _error.value = "Compatible projector not loaded"
-            return
-        }
-        _currentGenerationType.value = ModelType.AUDIO_GENERATION
-    }
-
     // ==================== Unified Text Generation Entry Point ====================
 
     fun sendChat(prompt: String) {
@@ -470,45 +457,12 @@ class ChatViewModel @Inject constructor(
      * @param imageData List of raw image file bytes (JPEG/PNG)
      */
     fun sendChatWithImages(prompt: String, imageData: List<ByteArray>) {
-        sendChatWithMedia(prompt, imageData)
-    }
-
-    fun sendChatWithAudio(prompt: String, context: Context, audioUri: Uri) {
-        if (_isGenerating.value) return
-
-        viewModelScope.launch {
-            try {
-                // File-based audio is the current MVP. Future microphone capture can feed the
-                // same byte-array entrypoint below after encoding captured audio into a supported
-                // container/format for the loaded projector.
-                val audioBytes = withContext(Dispatchers.IO) {
-                    context.contentResolver.openInputStream(audioUri)?.use { input ->
-                        input.readBytes()
-                    }
-                } ?: throw IllegalStateException("Failed to read the selected audio file")
-
-                sendChatWithAudio(prompt, audioBytes)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to load audio input", e)
-                reportError(e.message)
-            }
-        }
-    }
-
-    fun sendChatWithAudio(prompt: String, audioData: ByteArray) {
-        // Keep all non-file audio ingestion funneled through this method so a future mic-recording
-        // flow only has to produce audio bytes and does not need separate chat/generation logic.
-        val effectivePrompt = prompt.ifBlank { "Transcribe this audio." }
-        sendChatWithMedia(effectivePrompt, listOf(audioData))
-    }
-
-    private fun sendChatWithMedia(prompt: String, mediaData: List<ByteArray>) {
         if (!LlmModelWorker.isGgufModelLoaded.value) {
             reportError("Please load a text generation model first")
             return
         }
         if (!LlmModelWorker.isVlmLoaded.value) {
-            reportError("Please load a compatible projector (mmproj) first")
+            reportError("Please load a vision projector (mmproj) first")
             return
         }
         if (_isGenerating.value) return
@@ -539,7 +493,7 @@ class ChatViewModel @Inject constructor(
                 // Insert image marker into prompt for VLM
                 val marker = LlmModelWorker.getVlmDefaultMarker()
                 val vlmPrompt = if (prompt.contains(marker)) prompt
-                    else marker.repeat(mediaData.size) + "\n" + prompt
+                    else marker.repeat(imageData.size) + "\n" + prompt
 
                 val conversationMessages = buildConversationMessages(vlmPrompt)
                 val jsonArray = JSONArray(conversationMessages)
@@ -550,7 +504,7 @@ class ChatViewModel @Inject constructor(
                 var lastEmitTime = 0L
 
                 LlmModelWorker.vlmGenerateStreaming(
-                    jsonArray.toString(), mediaData, maxTokens
+                    jsonArray.toString(), imageData, maxTokens
                 ).collect { event ->
                     when (event) {
                         is GenerationEvent.Token -> {
@@ -602,7 +556,7 @@ class ChatViewModel @Inject constructor(
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.e(TAG, "Error in sendChatWithMedia", e)
+                Log.e(TAG, "Error in sendChatWithImages", e)
                 reportError(e.message)
             } finally {
                 resetStreamingState()
@@ -1966,11 +1920,11 @@ class ChatViewModel @Inject constructor(
 
         // 2. Stop native generation (synchronous signal to engine)
         when (_currentGenerationType.value) {
-            ModelType.TEXT_GENERATION,
-            ModelType.AUDIO_GENERATION -> {
+            ModelType.TEXT_GENERATION -> {
                 LlmModelWorker.ggufStopGeneration()
             }
             ModelType.IMAGE_GENERATION -> LlmModelWorker.stopDiffusionGeneration()
+            ModelType.AUDIO_GENERATION -> stopTTS()
         }
 
         // 3. Cancel the coroutine job (triggers finally → resetStreamingState)
@@ -1979,13 +1933,13 @@ class ChatViewModel @Inject constructor(
 
         // 4. Persist partial results using snapshots taken before cancellation
         when (_currentGenerationType.value) {
-            ModelType.TEXT_GENERATION,
-            ModelType.AUDIO_GENERATION -> handleTextStop(
+            ModelType.TEXT_GENERATION -> handleTextStop(
                 snapshotChatId, snapshotUserMsg, snapshotContent, snapshotMetrics, snapshotUserAdded
             )
             ModelType.IMAGE_GENERATION -> handleImageStop(
                 snapshotChatId, snapshotUserMsg, snapshotImage, snapshotImageMetrics, snapshotUserAdded
             )
+            else -> resetStreamingState()
         }
 
         AppStateManager.setGenerationComplete()

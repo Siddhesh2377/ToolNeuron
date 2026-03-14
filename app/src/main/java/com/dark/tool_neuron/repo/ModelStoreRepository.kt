@@ -23,49 +23,11 @@ data class ModelStoreCache(
 ) {
     companion object {
         // Bump this when filtering logic changes to auto-invalidate stale caches
-        const val CURRENT_VERSION = 3
+        const val CURRENT_VERSION = 2
     }
 }
 
 class ModelStoreRepository(private val context: Context) {
-
-    companion object {
-        private val GGUF_SUFFIX_REGEX = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
-        private val QUANTIZATION_MATCH_REGEX = Regex("""(?:^|[.-])((?:I?Q)\d+(?:_[A-Z0-9]+)*)""")
-        private val TRAILING_QUANTIZATION_REGEX = Regex("""([.-])(?:I?Q)\d+(?:_[A-Z0-9]+)*(?:-[A-Z0-9]+)*$""")
-        private val PROJECTOR_MARKERS = listOf("mmproj", "vision-adapter", "projector")
-
-        internal fun isProjectorGgufFile(path: String): Boolean {
-            return path.endsWith(".gguf", ignoreCase = true) &&
-                    PROJECTOR_MARKERS.any { marker ->
-                        path.contains(marker, ignoreCase = true)
-                    }
-        }
-
-        internal fun isSupportedGgufFile(path: String): Boolean {
-            return path.endsWith(".gguf", ignoreCase = true) &&
-                    !isProjectorGgufFile(path)
-        }
-
-        internal fun stripGgufSuffix(fileName: String): String {
-            return fileName.replace(GGUF_SUFFIX_REGEX, "")
-        }
-
-        internal fun extractModelFamilyKey(fileName: String): String {
-            val baseName = stripGgufSuffix(fileName).uppercase()
-            return baseName.replace(TRAILING_QUANTIZATION_REGEX, "").lowercase()
-        }
-
-        internal fun extractQuantType(fileName: String): String {
-            val baseName = stripGgufSuffix(fileName).uppercase()
-            val quantMatch = QUANTIZATION_MATCH_REGEX.find(baseName)
-            if (quantMatch != null) {
-                return quantMatch.groupValues[1]
-            }
-
-            return baseName.substringAfterLast("-", baseName).uppercase()
-        }
-    }
 
     private val json = Json { ignoreUnknownKeys = true; prettyPrint = false }
     private val cacheDir = File(context.filesDir, "cache").apply { mkdirs() }
@@ -361,13 +323,18 @@ class ModelStoreRepository(private val context: Context) {
                             repo.name.contains("qwen", ignoreCase = true)
 
                     files.filter { file ->
-                        isSupportedGgufFile(file.path)
+                        file.path.endsWith(".gguf") &&
+                                // Filter out mmproj/vision projection files - these are not standalone models
+                                !file.path.contains("mmproj", ignoreCase = true) &&
+                                !file.path.contains("vision-adapter", ignoreCase = true) &&
+                                !file.path.contains("projector", ignoreCase = true)
                     }.forEach { file ->
                             val fileName = file.path.substringAfterLast("/")
                             val sizeStr = formatDecimalBytes(file.size ?: 0)
 
                             // Extract quantization type from filename
-                            val quantType = extractQuantType(fileName)
+                            val quantType =
+                                fileName.substringAfterLast("-").removeSuffix(".gguf").uppercase()
 
                             val baseTags = mutableListOf("GGUF", quantType, repo.name)
                             if (supportsToolCalling) {
@@ -376,7 +343,7 @@ class ModelStoreRepository(private val context: Context) {
 
                             models.add(
                                 HuggingFaceModel(
-                                    id = "${repo.id}-${stripGgufSuffix(fileName)}",
+                                    id = "${repo.id}-${fileName.removeSuffix(".gguf")}",
                                     name = "${repo.name} - $quantType",
                                     description = "${repo.name} model with $quantType quantization",
                                     fileUri = "${repo.repoPath}/resolve/main/${file.path}",

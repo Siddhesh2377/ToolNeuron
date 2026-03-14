@@ -474,14 +474,6 @@ class ModelStoreViewModel @Inject constructor(
                     }
                 }
 
-                if (model.providerType == com.dark.tool_neuron.models.enums.ProviderType.GGUF) {
-                    val projectorFile = AppPaths.modelProjectorFile(getApplication(), model.id)
-                    if (projectorFile.exists()) {
-                        val deleted = projectorFile.delete()
-                        Log.d("ModelStoreViewModel", "Projector sidecar deleted: $deleted - ${projectorFile.absolutePath}")
-                    }
-                }
-
                 // Delete config from database
                 val config = systemRepo.getConfigByModelId(model.id)
                 if (config != null) {
