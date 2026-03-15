@@ -323,6 +323,14 @@
     native <methods>;
 }
 
+# -- Prevent R8 repackaging of JNI-accessed classes (AGP 9.1.0+ default) --
+# Native code uses FindClass() with full package paths — repackaging breaks these lookups
+-keeppackagenames com.dark.gguf_lib.**
+-keeppackagenames com.dark.ai_sd.**
+-keeppackagenames com.dark.ums.**
+-keeppackagenames com.dark.system_encryptor.**
+-keeppackagenames com.mp.ai_supertonic_tts.**
+
 # -- Keep Line Numbers for Debugging --
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

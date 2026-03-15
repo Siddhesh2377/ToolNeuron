@@ -31,10 +31,10 @@ import com.dark.tool_neuron.viewmodel.ChatConfigState
 // ── Pre-compiled regex (avoid allocation in composition) ──
 
 internal val THINK_TAG_REGEX = Regex(
-    "<think>(.*?)</think>|\\[THINK](.*?)\\[/THINK]",
+    "<think>(.*?)</think>|\\[THINK](.*?)\\[/THINK]|<reasoning>(.*?)</reasoning>",
     RegexOption.DOT_MATCHES_ALL
 )
-private val THINK_OPEN_TAGS = listOf("<think>", "[THINK]")
+private val THINK_OPEN_TAGS = listOf("<think>", "[THINK]", "<reasoning>")
 
 data class ParsedMessage(
     val thinkingContent: String?,
@@ -50,8 +50,8 @@ fun parseThinkingTags(content: String): ParsedMessage {
     // Completed thinking: matched pair present
     val thinkingMatch = THINK_TAG_REGEX.find(content)
     if (thinkingMatch != null) {
-        // Group 1 = XML-style, Group 2 = bracket-style
-        val thinkingContent = (thinkingMatch.groupValues[1].ifEmpty { thinkingMatch.groupValues[2] }).trim()
+        // Group 1 = <think>, Group 2 = [THINK], Group 3 = <reasoning>
+        val thinkingContent = thinkingMatch.groupValues.drop(1).firstOrNull { it.isNotEmpty() }?.trim() ?: ""
         val actualContent = content.replace(THINK_TAG_REGEX, "").trim()
         return ParsedMessage(
             thinkingContent = thinkingContent.ifEmpty { null },

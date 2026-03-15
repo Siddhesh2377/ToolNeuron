@@ -22,6 +22,7 @@ import java.io.InputStream
  */
 object DocumentParser {
     private const val TAG = "DocumentParser"
+    @Volatile private var pdfBoxInitialized = false
 
     /**
      * Supported document MIME types
@@ -96,8 +97,15 @@ object DocumentParser {
      */
     private fun parsePdf(inputStream: InputStream, context: Context): String {
         return try {
-            // Initialize PDFBox-Android with context (required for Android)
-            PDFBoxResourceLoader.init(context)
+            // Initialize PDFBox-Android once (thread-safe via volatile flag)
+            if (!pdfBoxInitialized) {
+                synchronized(this) {
+                    if (!pdfBoxInitialized) {
+                        PDFBoxResourceLoader.init(context.applicationContext)
+                        pdfBoxInitialized = true
+                    }
+                }
+            }
 
             PDDocument.load(inputStream).use { document ->
                 val stripper = PDFTextStripper()

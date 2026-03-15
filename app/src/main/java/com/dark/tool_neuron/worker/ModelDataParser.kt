@@ -114,8 +114,8 @@ class ModelDataParser {
                 return@withContext ModelLoadResult.Error("Model directory not found: ${model.modelPath}")
             }
 
-            // Check for required files — clip filename depends on useCpuClip flag
-            val clipFilename = if (diffusionConfig.useCpuClip) "clip.mnn" else "clip.bin"
+            // Check for required files — clip uses .mnn if runOnCpu OR useCpuClip (matches DiffusionManager)
+            val clipFilename = if (diffusionConfig.runOnCpu || diffusionConfig.useCpuClip) "clip.mnn" else "clip.bin"
             val requiredFiles = if (diffusionConfig.runOnCpu) {
                 listOf("clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json")
             } else {
@@ -131,6 +131,8 @@ class ModelDataParser {
             val success = LlmModelWorker.loadDiffusionModel(
                 name = model.modelName,
                 modelDir = model.modelPath,
+                height = diffusionConfig.height,
+                width = diffusionConfig.width,
                 textEmbeddingSize = diffusionConfig.textEmbeddingSize,
                 runOnCpu = diffusionConfig.runOnCpu,
                 useCpuClip = diffusionConfig.useCpuClip,

@@ -17,7 +17,10 @@ data class DecodingMetrics(
     val modelSizeMB: Float = 0f,
     val contextSizeMB: Float = 0f,
     val peakMemoryMB: Float = 0f,
-    val memoryUsagePercent: Float = 0f
+    val memoryUsagePercent: Float = 0f,
+    val contextTokensUsed: Int = 0,
+    val contextTokensMax: Int = 0,
+    val contextUsagePercent: Float = 0f,
 )
 
 /** Convert library DecodingMetrics to local serializable version */

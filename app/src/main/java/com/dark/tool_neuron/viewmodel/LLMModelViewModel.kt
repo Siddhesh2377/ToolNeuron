@@ -17,7 +17,7 @@ import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -264,6 +264,7 @@ class LLMModelViewModel @Inject constructor(
             when (_currentModelType.value) {
                 ProviderType.GGUF -> {
                     LlmModelWorker.unloadGgufModel()
+                    LlmModelWorker.releaseVlmProjector()
                     LlmModelWorker.setCurrentGgufModelId(null)
                 }
                 ProviderType.DIFFUSION -> {
@@ -288,6 +289,7 @@ class LLMModelViewModel @Inject constructor(
                 when (_currentModelType.value) {
                     ProviderType.GGUF -> {
                         LlmModelWorker.unloadGgufModel()
+                        LlmModelWorker.releaseVlmProjector()
                         LlmModelWorker.setCurrentGgufModelId(null)
                     }
                     ProviderType.DIFFUSION -> {

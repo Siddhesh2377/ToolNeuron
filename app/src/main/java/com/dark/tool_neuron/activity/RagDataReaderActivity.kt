@@ -732,6 +732,8 @@ fun PasswordInputDialog(
     )
 }
 
+private const val MAX_RAG_FILE_SIZE = 512L * 1024 * 1024 // 512 MB
+
 suspend fun loadRagFile(
     filePath: String,
     password: String?,
@@ -741,6 +743,12 @@ suspend fun loadRagFile(
     try {
         val file = File(filePath)
         if (!file.exists()) {
+            return@withContext null
+        }
+
+        // Guard against OOM — RAG files are loaded entirely into memory
+        if (file.length() > MAX_RAG_FILE_SIZE) {
+            android.util.Log.e("RagDataReader", "RAG file too large: ${file.length()} bytes (max $MAX_RAG_FILE_SIZE)")
             return@withContext null
         }
 
@@ -767,6 +775,9 @@ suspend fun loadRagFile(
         }
 
         graph
+    } catch (e: OutOfMemoryError) {
+        android.util.Log.e("RagDataReader", "OOM loading RAG file (${File(filePath).length()} bytes)", e)
+        null
     } catch (e: Exception) {
         android.util.Log.e("RagDataReader", "Failed to load RAG: ${e.message}", e)
         null

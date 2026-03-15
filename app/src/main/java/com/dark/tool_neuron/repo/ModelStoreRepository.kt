@@ -37,14 +37,11 @@ class ModelStoreRepository(private val context: Context) {
 
         internal fun isProjectorGgufFile(path: String): Boolean {
             return path.endsWith(".gguf", ignoreCase = true) &&
-                    PROJECTOR_MARKERS.any { marker ->
-                        path.contains(marker, ignoreCase = true)
-                    }
+                PROJECTOR_MARKERS.any { marker -> path.contains(marker, ignoreCase = true) }
         }
 
         internal fun isSupportedGgufFile(path: String): Boolean {
-            return path.endsWith(".gguf", ignoreCase = true) &&
-                    !isProjectorGgufFile(path)
+            return path.endsWith(".gguf", ignoreCase = true) && !isProjectorGgufFile(path)
         }
 
         internal fun stripGgufSuffix(fileName: String): String {

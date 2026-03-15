@@ -22,7 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel

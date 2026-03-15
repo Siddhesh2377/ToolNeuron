@@ -256,6 +256,42 @@ class LLMService : Service() {
 
         override fun getContextUsageGguf(): Float = ggufEngine.getContextUsage()
 
+        // ── Context Window Tracking ──
+
+        override fun getContextInfoGguf(prompt: String?): String {
+            val info = ggufEngine.getContextInfo(prompt)
+            return org.json.JSONObject().apply {
+                put("total", info.total)
+                put("used", info.used)
+                put("remaining", info.remaining)
+                put("promptEstimate", info.promptEstimate)
+                put("afterPrompt", info.afterPrompt)
+            }.toString()
+        }
+
+        // ── Character Engine ──
+
+        override fun setPersonalityGguf(personalityJson: String): Boolean =
+            ggufEngine.setPersonality(personalityJson)
+
+        override fun setMoodGguf(mood: Int): Boolean =
+            ggufEngine.setMood(mood)
+
+        override fun setCustomMoodGguf(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean =
+            ggufEngine.setCustomMood(tempMod, topPMod, repPenaltyMod)
+
+        override fun getCharacterContextGguf(): String =
+            ggufEngine.getCharacterContext()
+
+        override fun buildPromptGguf(userPrompt: String): String =
+            ggufEngine.buildPrompt(userPrompt)
+
+        override fun setUncensoredGguf(enabled: Boolean): Boolean =
+            ggufEngine.setUncensored(enabled)
+
+        override fun isUncensoredGguf(): Boolean =
+            ggufEngine.isUncensored()
+
         // ── Upscaler ──
 
         override fun loadUpscaler(modelPath: String, callback: IModelLoadCallback) {
@@ -439,13 +475,23 @@ class LLMService : Service() {
         instance = this
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
 
+        // Tell llama.cpp where to find CPU backend variant .so files
+        // (libggml-cpu-android_armv8.*.so) for runtime arch-level dispatch.
         try {
-            scope.launch(Dispatchers.IO) {
+            val engineClass = Class.forName("com.dark.gguf_lib.GGMLEngine")
+            val initMethod = engineClass.getMethod("initBackendDir", android.content.Context::class.java)
+            initMethod.invoke(null, applicationContext)
+        } catch (_: Throwable) {
+            // Old AAR without initBackendDir — dladdr() fallback handles it
+        }
+
+        scope.launch(Dispatchers.IO) {
+            try {
                 diffusionEngine.init(applicationContext, safetyCheckerEnabled = true)
-                Log.i(TAG, "LLMService created successfully")
+                Log.i(TAG, "DiffusionEngine initialized in LLMService")
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to initialize diffusion engine", e)
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to initialize diffusion engine", e)
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

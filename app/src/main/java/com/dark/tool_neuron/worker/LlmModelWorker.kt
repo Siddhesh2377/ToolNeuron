@@ -317,7 +317,6 @@ object LlmModelWorker {
         if (svc == null) { Log.w(TAG, "unloadGgufModel: service not bound"); return }
         svc.unloadModelGguf()
         _isGgufModelLoaded.value = false
-        _isVlmLoaded.value = false
         Log.i(TAG, "GGUF model unloaded")
     }
 
@@ -504,6 +503,114 @@ object LlmModelWorker {
         }
     }
 
+    // ==================== Context Window Tracking ====================
+
+    fun getContextInfoGguf(prompt: String? = null): String? {
+        return try {
+            _serviceFlow.value?.getContextInfoGguf(prompt)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get context info: ${e.message}")
+            null
+        }
+    }
+
+    // ==================== Character Engine ====================
+
+    fun setPersonalityGguf(personalityJson: String): Boolean {
+        return try {
+            _serviceFlow.value?.setPersonalityGguf(personalityJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set personality: ${e.message}")
+            false
+        }
+    }
+
+    fun setMoodGguf(mood: Int): Boolean {
+        return try {
+            _serviceFlow.value?.setMoodGguf(mood) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set mood: ${e.message}")
+            false
+        }
+    }
+
+    fun setCustomMoodGguf(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean {
+        return try {
+            _serviceFlow.value?.setCustomMoodGguf(tempMod, topPMod, repPenaltyMod) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set custom mood: ${e.message}")
+            false
+        }
+    }
+
+    fun getCharacterContextGguf(): String? {
+        return try {
+            _serviceFlow.value?.getCharacterContextGguf()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get character context: ${e.message}")
+            null
+        }
+    }
+
+    fun buildPromptGguf(userPrompt: String): String {
+        return try {
+            _serviceFlow.value?.buildPromptGguf(userPrompt) ?: userPrompt
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to build prompt: ${e.message}")
+            userPrompt
+        }
+    }
+
+    fun setUncensoredGguf(enabled: Boolean): Boolean {
+        return try {
+            _serviceFlow.value?.setUncensoredGguf(enabled) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set uncensored: ${e.message}")
+            false
+        }
+    }
+
+    fun isUncensoredGguf(): Boolean {
+        return try {
+            _serviceFlow.value?.isUncensoredGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get uncensored state: ${e.message}")
+            false
+        }
+    }
+
+    // ── Activation Steering (direct path — FloatArray can't cross AIDL) ──
+
+    fun calcVectorsDirect(prompt: String, onProgress: ((Float) -> Unit)? = null): FloatArray? {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return null
+            engine.calcVectors(prompt, onProgress)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to calc vectors: ${e.message}")
+            null
+        }
+    }
+
+    fun applyVectorsDirect(data: FloatArray, strength: Float = 1.0f, ilStart: Int = -1, ilEnd: Int = -1): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.applyVectors(data, strength, ilStart, ilEnd)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply vectors: ${e.message}")
+            false
+        }
+    }
+
+    fun clearVectorsDirect(): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.clearVectors()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear vectors: ${e.message}")
+            false
+        }
+    }
+
     // ==================== Upscaler ====================
 
     suspend fun loadUpscaler(modelPath: String): Boolean {
@@ -617,8 +724,8 @@ object LlmModelWorker {
     suspend fun loadDiffusionModel(
         name: String,
         modelDir: String,
-        height: Int = 212,
-        width: Int = 212,
+        height: Int = 512,
+        width: Int = 512,
         textEmbeddingSize: Int = 768,
         runOnCpu: Boolean = false,
         useCpuClip: Boolean = false,

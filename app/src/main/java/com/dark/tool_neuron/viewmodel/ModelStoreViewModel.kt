@@ -11,6 +11,7 @@ import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
+import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.repo.HuggingFaceExplorerRepo
@@ -24,7 +25,7 @@ import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -474,7 +475,7 @@ class ModelStoreViewModel @Inject constructor(
                     }
                 }
 
-                if (model.providerType == com.dark.tool_neuron.models.enums.ProviderType.GGUF) {
+                if (model.providerType == ProviderType.GGUF) {
                     val projectorFile = AppPaths.modelProjectorFile(getApplication(), model.id)
                     if (projectorFile.exists()) {
                         val deleted = projectorFile.delete()

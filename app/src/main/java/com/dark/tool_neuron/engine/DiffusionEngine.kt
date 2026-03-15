@@ -15,6 +15,7 @@ import com.dark.ai_sd.StyleState
 import com.dark.ai_sd.UpscaleState
 import com.dark.ai_sd.generationParams
 import com.dark.ai_sd.modelConfig
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.Base64
 
@@ -30,11 +32,13 @@ class DiffusionEngine {
 
     companion object {
         private const val TAG = "DiffusionEngine"
+        private const val INIT_TIMEOUT_MS = 60_000L
     }
 
     private var sdManager: StableDiffusionManager? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var observeJob: Job? = null
+    private val initDeferred = CompletableDeferred<Boolean>()
 
     // Expose state flows
     val backendState: StateFlow<DiffusionBackendState>
@@ -58,14 +62,16 @@ class DiffusionEngine {
                     safetyCheckerAssetPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
                 )
             )
+            initDeferred.complete(true)
             Log.i(TAG, "DiffusionEngine initialized successfully")
         } catch (e: Exception) {
+            initDeferred.complete(false)
             Log.e(TAG, "Init failed: ${e.message}", e)
             throw e
         }
     }
 
-    fun loadModel(
+    suspend fun loadModel(
         name: String,
         modelDir: String,
         textEmbeddingSize: Int = 768,
@@ -77,6 +83,11 @@ class DiffusionEngine {
         height: Int = 512,
         safetyMode: Boolean
     ): Result<String> {
+        // Wait for init() to complete before proceeding (fixes race with LLMService.onCreate)
+        val initSuccess = withTimeoutOrNull(INIT_TIMEOUT_MS) { initDeferred.await() }
+        if (initSuccess != true) {
+            return Result.failure(IllegalStateException("DiffusionEngine initialization timed out or failed"))
+        }
         val mgr = sdManager ?: return Result.failure(IllegalStateException("DiffusionEngine not initialized"))
         return try {
             val model = modelConfig {

@@ -17,7 +17,7 @@ import com.dark.tool_neuron.engine.DiffusionEngine
 import com.dark.tool_neuron.global.AppPaths
 import com.dark.tool_neuron.service.ModelDownloadService
 import dagger.hilt.android.lifecycle.HiltViewModel
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

@@ -287,6 +287,33 @@ internal fun GeneratingTextContent(state: AppState.GeneratingText, chatViewModel
                 )
             }
         }
+        // ── Context usage bar ──
+        val contextUsage by chatViewModel.contextUsagePercent.collectAsStateWithLifecycle()
+        if (contextUsage > 0f) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                LinearProgressIndicator(
+                    progress = { contextUsage },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(3.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = if (contextUsage > 0.85f) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.tertiary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                )
+                Text(
+                    text = "${(contextUsage * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (contextUsage > 0.85f) MaterialTheme.colorScheme.error
+                            else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
         LinearProgressIndicator(
             modifier = Modifier
                 .fillMaxWidth()

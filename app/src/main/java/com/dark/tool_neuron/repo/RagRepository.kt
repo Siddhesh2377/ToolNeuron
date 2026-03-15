@@ -350,7 +350,7 @@ class RagRepository(
 
             // For encrypted RAGs, try to use cached password first
             var effectivePassword = password
-            if (rag.sourceType == RagSourceType.NEURON_PACKET) {
+            if (rag.sourceType == RagSourceType.NEURON_PACKET && rag.isEncrypted) {
                 if (password == null) {
                     // Check cache
                     effectivePassword = passwordCache[ragId]

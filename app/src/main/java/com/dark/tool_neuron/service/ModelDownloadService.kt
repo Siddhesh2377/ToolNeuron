@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import com.dark.tool_neuron.data.AppSettingsDataStore
@@ -18,16 +17,15 @@ import com.dark.tool_neuron.global.HardwareScanner
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
-import com.dark.tool_neuron.models.table_schema.Model
-import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.network.HuggingFaceClient
 import com.dark.tool_neuron.network.HuggingFaceFileResponse
 import com.dark.tool_neuron.repo.ModelStoreRepository
+import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.models.table_schema.ModelConfig
 import com.dark.tool_neuron.worker.DiffusionConfig
 import com.dark.tool_neuron.worker.DiffusionInferenceParams
 import com.dark.tool_neuron.worker.ModelDataParser
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -46,11 +44,6 @@ import java.util.concurrent.TimeUnit
 import java.util.zip.ZipInputStream
 
 class ModelDownloadService : Service() {
-
-    private data class HuggingFaceResolvedFile(
-        val repoPath: String,
-        val filePath: String
-    )
 
     private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val downloadJobs = ConcurrentHashMap<String, Job>()
@@ -376,6 +369,11 @@ class ModelDownloadService : Service() {
         downloadJobs[modelId] = job
     }
 
+    private data class HuggingFaceResolvedFile(
+        val repoPath: String,
+        val filePath: String
+    )
+
     private fun parseHuggingFaceResolvedFile(url: String): HuggingFaceResolvedFile? {
         val prefix = "https://huggingface.co/"
         val marker = "/resolve/main/"
@@ -434,7 +432,10 @@ class ModelDownloadService : Service() {
         val resolved = parseHuggingFaceResolvedFile(fileUrl) ?: return
         val response = HuggingFaceClient.api.getRepoFiles(resolved.repoPath)
         if (!response.isSuccessful) {
-            Log.w("ModelDownloadService", "Failed to inspect repo files for projector sidecar: ${resolved.repoPath}")
+            android.util.Log.w(
+                "ModelDownloadService",
+                "Failed to inspect repo files for projector sidecar: ${resolved.repoPath}"
+            )
             return
         }
 
@@ -451,11 +452,14 @@ class ModelDownloadService : Service() {
         try {
             downloadFile(projectorUrl, tempFile, modelId, "$modelName projector", notificationId)
             tempFile.copyTo(targetFile, overwrite = true)
-            Log.i("ModelDownloadService", "Downloaded projector sidecar ${projectorFile.path} for $modelId")
-        } catch (e: CancellationException) {
+            android.util.Log.i(
+                "ModelDownloadService",
+                "Downloaded projector sidecar ${projectorFile.path} for $modelId"
+            )
+        } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.w(
+            android.util.Log.w(
                 "ModelDownloadService",
                 "Projector sidecar download failed for $modelId from ${projectorFile.path}: ${e.message}"
             )

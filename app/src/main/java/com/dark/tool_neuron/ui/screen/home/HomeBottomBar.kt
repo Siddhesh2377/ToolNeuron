@@ -47,7 +47,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.activity.RagActivity
 import com.dark.tool_neuron.audio.ChatAudioRecorder
@@ -238,7 +238,6 @@ internal fun BottomBar(
         ModelType.IMAGE_GENERATION -> value.isNotBlank()
         ModelType.AUDIO_GENERATION -> stagedRecording != null && !isMicRecording
     }
-
     // More Options overlay state
     var showMoreOptions by remember { mutableStateOf(false) }
 
@@ -367,7 +366,7 @@ internal fun BottomBar(
                                 text = when (chatState.generationType) {
                                     ModelType.TEXT_GENERATION -> "Say Anything…"
                                     ModelType.IMAGE_GENERATION -> "Describe the image you want…"
-                                    ModelType.AUDIO_GENERATION -> "Transcribe audio or add an instruction…"
+                                    ModelType.AUDIO_GENERATION -> "Say Anything…"
                                 }
                             )
                         },
@@ -458,19 +457,6 @@ internal fun BottomBar(
                         textModelLoaded = isTextModelLoaded,
                         imageModelLoaded = isImageModelLoaded,
                         modifier = Modifier.padding(start = Standards.SpacingMd)
-                    )
-
-                    ActionToggleButton(
-                        onCheckedChange = {
-                            if (chatState.generationType == ModelType.AUDIO_GENERATION) {
-                                chatViewModel.switchToTextGeneration()
-                            } else {
-                                chatViewModel.switchToAudioGeneration()
-                            }
-                        },
-                        checked = chatState.generationType == ModelType.AUDIO_GENERATION,
-                        enabled = isTextModelLoaded,
-                        icon = TnIcons.Volume
                     )
 
                     // 2. More Options

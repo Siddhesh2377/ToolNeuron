@@ -71,7 +71,8 @@ class EmbeddingEngine {
 
                 val testResult = embed("test")
                 if (testResult == null || testResult.isEmpty()) {
-                    Log.e(TAG, "Test embedding returned null/empty")
+                    Log.e(TAG, "Test embedding returned null/empty — releasing native handle")
+                    libEngine.close()
                     return@withContext Result.failure(Exception("Test embedding generation failed or returned empty"))
                 }
                 dimension = testResult.size
@@ -86,8 +87,13 @@ class EmbeddingEngine {
         }
     }
 
-    suspend fun embed(text: String): FloatArray? =
-        libEngine.embed(text, config?.normalize ?: true)
+    suspend fun embed(text: String): FloatArray? {
+        if (!isInitialized()) {
+            Log.w(TAG, "embed() called before initialization")
+            return null
+        }
+        return libEngine.embed(text, config?.normalize ?: true)
+    }
 
     suspend fun embedBatch(texts: List<String>): List<FloatArray?> =
         libEngine.embedBatch(texts, config?.normalize ?: true)
