@@ -413,7 +413,7 @@ class ModelDownloadService : Service() {
                 if (modelFamilyKey.isNotBlank() && lowerPath.contains(modelFamilyKey)) {
                     score += 3
                 }
-                if (lowerPath.contains("mmproj")) {
+                if (lowerPath.contains("mmproj") || lowerPath.contains("mmjproj")) {
                     score += 1
                 }
                 file to score

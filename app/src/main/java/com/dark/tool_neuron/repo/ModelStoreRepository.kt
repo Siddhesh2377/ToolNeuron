@@ -33,7 +33,7 @@ class ModelStoreRepository(private val context: Context) {
         private val GGUF_SUFFIX_REGEX = Regex("\\.gguf$", RegexOption.IGNORE_CASE)
         private val QUANTIZATION_MATCH_REGEX = Regex("""(?:^|[.-])((?:I?Q)\d+(?:_[A-Z0-9]+)*)""")
         private val TRAILING_QUANTIZATION_REGEX = Regex("""([.-])(?:I?Q)\d+(?:_[A-Z0-9]+)*(?:-[A-Z0-9]+)*$""")
-        private val PROJECTOR_MARKERS = listOf("mmproj", "vision-adapter", "projector")
+        private val PROJECTOR_MARKERS = listOf("mmproj", "mmjproj", "vision-adapter", "projector")
 
         internal fun isProjectorGgufFile(path: String): Boolean {
             return path.endsWith(".gguf", ignoreCase = true) &&

@@ -455,7 +455,7 @@ class ChatViewModel @Inject constructor(
     fun sendTextMessage(prompt: String) = sendChat(prompt)
 
     /**
-     * Send a message with images (VLM). Requires a VLM projector to be loaded.
+     * Send a message with projector-backed media. Requires a compatible projector to be loaded.
      * @param prompt User's text prompt
      * @param imageData List of raw image file bytes (JPEG/PNG)
      */
@@ -557,7 +557,7 @@ class ChatViewModel @Inject constructor(
                 val maxTokens = getCurrentModelMaxTokens()
                 val isNewChat = isNewConversation
 
-                // Insert image marker into prompt for VLM
+                // Insert the default media marker into the prompt for projector-backed generation.
                 val marker = LlmModelWorker.getVlmDefaultMarker()
                 val vlmPrompt = if (prompt.contains(marker)) prompt
                     else marker.repeat(mediaData.size) + "\n" + prompt
@@ -636,7 +636,7 @@ class ChatViewModel @Inject constructor(
             return "Please load a text generation model first"
         }
         if (!LlmModelWorker.isVlmLoaded.value) {
-            return "Please load a compatible projector (mmproj) first"
+            return "Please load a compatible projector sidecar (mmproj/mmjproj) first"
         }
         if (_isGenerating.value) {
             return "Please wait for the current generation to finish"
