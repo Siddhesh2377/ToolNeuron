@@ -11,6 +11,8 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 
@@ -61,6 +63,13 @@ fun ToolNeuronTheme(
     content: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+    val screenWidth = LocalConfiguration.current.screenWidthDp
+
+    val dimens = when {
+        screenWidth < 600  -> CompactDimens
+        screenWidth < 840  -> MediumDimens
+        else               -> ExpandedDimens
+    }
 
     val colorScheme = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
         try {
@@ -72,10 +81,12 @@ fun ToolNeuronTheme(
         if (darkTheme) DarkColorScheme else LightColorScheme
     }
 
-    MaterialExpressiveTheme(
-        colorScheme  = colorScheme,
-        typography   = FigtreeTypography,
-        motionScheme = MotionScheme.expressive(),
-        content      = content
-    )
+    CompositionLocalProvider(LocalDimens provides dimens) {
+        MaterialExpressiveTheme(
+            colorScheme  = colorScheme,
+            typography   = FigtreeTypography,
+            motionScheme = MotionScheme.expressive(),
+            content      = content
+        )
+    }
 }

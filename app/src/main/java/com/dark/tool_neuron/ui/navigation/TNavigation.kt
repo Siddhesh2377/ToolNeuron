@@ -21,7 +21,7 @@ fun TNavigation(
     val transitions = rememberNavTransitions()
 
     LaunchedEffect(Unit) {
-        delay(2000)
+        delay(3000)
         navController.navigate(NavScreens.HomeScreen.route) {
             popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
         }

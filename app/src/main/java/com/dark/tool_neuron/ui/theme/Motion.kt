@@ -46,6 +46,10 @@ object Motion {
     fun <T> exit(): FiniteAnimationSpec<T> = tween(
         durationMillis = 200, easing = iosEasing
     )
+
+    fun <T> steep(): FiniteAnimationSpec<T> = tween(
+        durationMillis = 3000, easing = iosEasing
+    )
 }
 
 // Returned by rememberVisibilityTransitions() for use in AnimatedVisibility.
