@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.ui.screens
+package com.dark.tool_neuron.ui.screens.intro_screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column

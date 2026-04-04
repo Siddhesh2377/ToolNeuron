@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.ui.theme
 
 import androidx.compose.animation.AnimatedContentTransitionScope
-import androidx.compose.animation.AnimatedContentTransitionScope.SlideDirection
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.CubicBezierEasing
@@ -11,6 +10,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme.LocalMaterialTheme
 import androidx.compose.runtime.Composable
@@ -65,9 +66,6 @@ data class NavTransitions(
  * Scheme-aware fade transitions for AnimatedVisibility.
  * Fade-only keeps it generic — callers can combine with their own
  * slide/expand if needed (e.g. enter + expandVertically(...)).
- *
- * fastEffectsSpec  — snappy alpha change, matches expressive scheme rhythm
- * defaultEffectsSpec — slightly slower fade for less urgent content
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -76,16 +74,15 @@ fun rememberVisibilityTransitions(): VisibilityTransitions {
     return remember(scheme) {
         VisibilityTransitions(
             enter = fadeIn(scheme.fastEffectsSpec()),
-            exit = fadeOut(scheme.fastEffectsSpec()),
+            exit  = fadeOut(scheme.fastEffectsSpec()),
         )
     }
 }
 
 /*
- * Scheme-aware slide + fade transitions for NavHost.
- *
- * defaultSpatialSpec — spring-based slide (position changes)
- * fastEffectsSpec   — spring-based fade (alpha changes)
+ * Scheme-aware fade + scale transitions for NavHost.
+ * Scale (0.95 ↔ 1.0) gives a Z-axis depth feel without implying
+ * left-right hierarchy — correct for non-hierarchical navigation.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -94,28 +91,20 @@ fun rememberNavTransitions(): NavTransitions {
     return remember(scheme) {
         NavTransitions(
             enter = {
-                slideIntoContainer(
-                    SlideDirection.Left,
-                    scheme.defaultSpatialSpec()
-                ) + fadeIn(scheme.fastEffectsSpec())
+                scaleIn(scheme.defaultSpatialSpec(), initialScale = 0.95f) +
+                        fadeIn(scheme.fastEffectsSpec())
             },
             exit = {
-                slideOutOfContainer(
-                    SlideDirection.Left,
-                    scheme.defaultSpatialSpec()
-                ) + fadeOut(scheme.fastEffectsSpec())
+                scaleOut(scheme.defaultSpatialSpec(), targetScale = 0.95f) +
+                        fadeOut(scheme.fastEffectsSpec())
             },
             popEnter = {
-                slideIntoContainer(
-                    SlideDirection.Right,
-                    scheme.defaultSpatialSpec()
-                ) + fadeIn(scheme.fastEffectsSpec())
+                scaleIn(scheme.defaultSpatialSpec(), initialScale = 0.95f) +
+                        fadeIn(scheme.fastEffectsSpec())
             },
             popExit = {
-                slideOutOfContainer(
-                    SlideDirection.Right,
-                    scheme.defaultSpatialSpec()
-                ) + fadeOut(scheme.fastEffectsSpec())
+                scaleOut(scheme.defaultSpatialSpec(), targetScale = 0.95f) +
+                        fadeOut(scheme.fastEffectsSpec())
             },
         )
     }

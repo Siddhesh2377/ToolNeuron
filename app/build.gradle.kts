@@ -69,6 +69,10 @@ dependencies {
     implementation(libs.androidx.compose.navigation)
     implementation(libs.androidx.material3)
 
+    // Adaptive layouts — NavigationSuiteScaffold, WindowSizeClass
+    implementation(libs.androidx.adaptive.navigation)
+    implementation(libs.androidx.window)
+
     // Unit tests
     testImplementation(libs.junit)
 

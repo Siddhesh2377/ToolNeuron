@@ -2,21 +2,30 @@ package com.dark.tool_neuron.ui.navigation
 
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import androidx.navigation.compose.rememberNavController
 import com.dark.tool_neuron.model.NavScreens
-import com.dark.tool_neuron.ui.screens.HomeScreen
-import com.dark.tool_neuron.ui.screens.IntroScreen
+import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
+import kotlinx.coroutines.delay
 
 @Composable
 fun TNavigation(
+    navController: NavHostController,
     innerPadding: PaddingValues,
-    startDestination: String = ""
+    startDestination: String,
 ) {
-    val navController = rememberNavController()
     val transitions = rememberNavTransitions()
+
+    LaunchedEffect(Unit) {
+        delay(2000)
+        navController.navigate(NavScreens.HomeScreen.route) {
+            popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
+        }
+    }
 
     NavHost(
         navController = navController,
