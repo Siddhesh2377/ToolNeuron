@@ -14,8 +14,11 @@ fun AppScaffold() {
     val currentEntry by navController.currentBackStackEntryAsState()
     val currentRoute = currentEntry?.destination?.route
 
+    val isFullscreen = currentRoute == NavScreens.IntroScreen.route
+
     Scaffold(
-        topBar = { AppTopBar(currentRoute) },
+        topBar = { if (!isFullscreen) AppTopBar(currentRoute) },
+        bottomBar = { if (!isFullscreen) AppBottomBar(currentRoute, navController) },
     ) { innerPadding ->
         TNavigation(
             navController = navController,
