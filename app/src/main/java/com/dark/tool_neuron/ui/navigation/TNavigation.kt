@@ -17,6 +17,8 @@ fun TNavigation(
     navController: NavHostController,
     innerPadding: PaddingValues,
     startDestination: String,
+    actionWindowExpanded: Boolean,
+    onActionWindowDismiss: () -> Unit,
 ) {
     val transitions = rememberNavTransitions()
 
@@ -39,7 +41,11 @@ fun TNavigation(
             IntroScreen(innerPadding)
         }
         composable(NavScreens.HomeScreen.route) {
-            HomeScreen(innerPadding)
+            HomeScreen(
+                innerPadding = innerPadding,
+                actionWindowExpanded = actionWindowExpanded,
+                onActionWindowDismiss = onActionWindowDismiss
+            )
         }
     }
 }

@@ -16,6 +16,7 @@ activityCompose = "1.13.0"
 composeBom = "2026.03.01"
 m3-expressive = "1.5.0-alpha16"
 a-c-nav = "2.9.7"
+dagger-hilt-nav = "1.3.0"
 
 # Testing
 junit = "4.13.2"
@@ -28,6 +29,7 @@ espressoCore = "3.7.0"
 # AndroidX core
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
+androidx-lifecycle-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
 # Compose
@@ -43,6 +45,7 @@ androidx-material3 = { group = "androidx.compose.material3", name = "material3",
 capsule = { module = "io.github.kyant0:capsule", version.ref = "capsule" }
 hilt-android = { group = "com.google.dagger", name = "hilt-android", version.ref = "dagger-hilt" }
 hilt-android-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", version.ref = "dagger-hilt" }
+hilt-navigation-compose = { group = "androidx.hilt", name = "hilt-navigation-compose", version.ref = "dagger-hilt-nav" }
 
 # Testing
 junit = { group = "junit", name = "junit", version.ref = "junit" }

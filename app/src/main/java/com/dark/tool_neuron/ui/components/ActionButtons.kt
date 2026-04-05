@@ -92,6 +92,35 @@ fun ActionButton(
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @SuppressLint("ModifierParameter")
 @Composable
+fun ActionButtonNormalSize(
+    onClickListener: () -> Unit,
+    icon: ImageVector,
+    contentDescription: String = "Description",
+    modifier: Modifier = Modifier,
+    shape: Shape = DefaultTnShapes.actionIcon,
+    colors: IconButtonColors = IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
+        contentColor = MaterialTheme.colorScheme.primary
+    )
+) {
+    val dimens = LocalDimens.current
+    FilledIconButton(
+        onClick = onClickListener,
+        colors = colors,
+        shape = shape,
+        modifier = modifier
+    ) {
+        Icon(
+            icon,
+            contentDescription = contentDescription,
+            modifier = Modifier.padding(dimens.actionIconPadding)
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@SuppressLint("ModifierParameter")
+@Composable
 fun ActionButton(
     onClickListener: () -> Unit,
     icon: ImageVector,
@@ -164,7 +193,7 @@ fun ActionProgressButton(
 fun MultiActionButton(
     actions: List<ActionItem>,
     modifier: Modifier = Modifier,
-    shape: Shape = DefaultTnShapes.full,
+    shape: Shape = DefaultTnShapes.actionIcon,
     containerColor: Color = MaterialTheme.colorScheme.primary.copy(0.08f),
     contentColor: Color = MaterialTheme.colorScheme.primary,
     dividerColor: Color = MaterialTheme.colorScheme.outline.copy(0.25f)
@@ -238,7 +267,7 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = DefaultTnShapes.full
+    shape: Shape = DefaultTnShapes.actionIcon
 ) {
     val dimens = LocalDimens.current
     FilledTonalButton(
@@ -269,7 +298,7 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.08f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = DefaultTnShapes.full
+    shape: Shape = DefaultTnShapes.actionIcon
 ) {
     val dimens = LocalDimens.current
     FilledTonalButton(
@@ -391,7 +420,7 @@ fun <T> ActionToggleGroup(
             .height(dimens.actionIconSize)
             .onSizeChanged { containerWidthPx.intValue = it.width },
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        shape = tnShapes.full
+        shape = tnShapes.actionIcon
     ) {
         Box {
             if (itemWidth > 0.dp) {
@@ -401,7 +430,7 @@ fun <T> ActionToggleGroup(
                         .padding(vertical = 2.dp)
                         .width(itemWidth - 4.dp)
                         .height(dimens.actionIconSize - 4.dp)
-                        .background(MaterialTheme.colorScheme.primary, tnShapes.full)
+                        .background(MaterialTheme.colorScheme.primary, tnShapes.actionIcon)
                 )
             }
 
@@ -427,7 +456,7 @@ fun <T> ActionToggleGroup(
                         modifier = Modifier
                             .weight(1f)
                             .height(dimens.actionIconSize)
-                            .clip(tnShapes.full)
+                            .clip(tnShapes.actionIcon)
                             .clickable(
                                 enabled = enabled,
                                 interactionSource = remember { MutableInteractionSource() },
