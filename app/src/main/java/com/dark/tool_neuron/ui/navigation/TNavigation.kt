@@ -105,7 +105,11 @@ fun TNavigation(
         composable(NavScreens.ModelStore.route) {
             val activity = LocalContext.current as ComponentActivity
             val viewModel: ModelStoreViewModel = hiltViewModel(activity)
-            ModelStoreScreen(innerPadding = innerPadding, viewModel = viewModel)
+            ModelStoreScreen(
+                innerPadding = innerPadding,
+                viewModel = viewModel,
+                onNavigateBack = { navController.popBackStack() }
+            )
         }
         composable(NavScreens.PasswordScreen.route) {
             val viewModel: PasswordViewModel = hiltViewModel()

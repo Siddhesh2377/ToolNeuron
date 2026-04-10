@@ -21,13 +21,8 @@ class ModelCatalog @Inject constructor(
     private val cacheFile = File(context.filesDir, "cache/model_catalog.json")
     private var memoryCache: List<HuggingFaceModel>? = null
 
-    val defaultRepos = listOf(
-        HFRepository("lfm25-350m", "LFM 2.5 350M", "LiquidAI/LFM2.5-350M-GGUF"),
-        HFRepository("qwen3-0.6b", "Qwen3 0.6B", "Qwen/Qwen3-0.6B-GGUF"),
-    )
-
     suspend fun getModels(
-        repos: List<HFRepository> = defaultRepos,
+        repos: List<HFRepository>,
         forceRefresh: Boolean = false
     ): List<HuggingFaceModel> {
         if (!forceRefresh) {

@@ -120,6 +120,14 @@ object TnIcons {
     val Info by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01") }
     val Sparkles by lazy { icon("M12 3l1.912 5.813a2 2 0 0 0 1.275 1.275L21 12l-5.813 1.912a2 2 0 0 0-1.275 1.275L12 21l-1.912-5.813a2 2 0 0 1-1.275-1.275L3 12l5.813-1.912a2 2 0 0 1 1.275-1.275L12 3z") }
     val Check by lazy { icon("M20 6L9 17l-5-5") }
+    val Plus by lazy { icon("M12 5v14", "M5 12h14") }
+    val Edit by lazy { icon("M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z", "m15 5 4 4") }
+    val Database by lazy { icon("M12 2C6.48 2 2 4.02 2 6.5v11C2 19.98 6.48 22 12 22s10-2.02 10-4.5v-11C22 4.02 17.52 2 12 2z", "M2 6.5C2 8.98 6.48 11 12 11s10-2.02 10-4.5", "M2 12c0 2.48 4.48 4.5 10 4.5s10-2.02 10-4.5") }
+    val ArrowRight by lazy { icon("M5 12h14", "M12 5l7 7-7 7") }
+    val CircleCheck by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M9 12l2 2 4-4") }
+    val SearchOff by lazy { icon("M5.5 5.5L18.5 18.5", "M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16z") }
+    val Prompt by lazy { icon("M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0-4h18") }
+    val InfoCircle by lazy { icon("M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z", "M12 16v-4", "M12 8h.01") }
     val OAuth by lazy {
         icon(
             "M2 12a10 10 0 1 0 20 0a10 10 0 1 0 -20 0",

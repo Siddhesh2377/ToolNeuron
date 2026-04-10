@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.ui.screens.model_store
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -10,30 +11,31 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.download_manager.HxdState
 import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.HuggingFaceModel
-import com.dark.tool_neuron.model.ui.ActionIcon
-import com.dark.tool_neuron.model.ui.ActionItem
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
+import com.dark.tool_neuron.ui.theme.Motion
+import com.dark.tool_neuron.util.formatBytes
 
 @Composable
 fun CatalogModelCard(
@@ -50,60 +52,129 @@ fun CatalogModelCard(
     val isFailed = downloadState != null && downloadState.status == HxdStatus.FAILED
 
     Surface(
-        shape = shapes.card,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = shapes.cardSmall,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(dimens.spacingMd)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    TnIcons.Sparkles, null,
-                    Modifier.size(18.dp),
-                    MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(dimens.spacingSm))
-                Column(modifier = Modifier.weight(1f)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "LLM",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                RoundedCornerShape(dimens.spacingXs)
+                            )
+                            .padding(horizontal = 6.dp, vertical = dimens.spacingXxs)
+                    )
                     Text(
                         text = model.name,
                         style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Text(
-                        text = model.fileName,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = FontWeight.SemiBold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.width(dimens.spacingSm))
-                DownloadAction(
-                    isInstalled = isInstalled,
-                    isDownloading = isActive,
-                    isFailed = isFailed,
-                    onDownload = onDownload,
-                    onCancel = onCancel,
-                )
+
+                when {
+                    isInstalled -> {
+                        Icon(
+                            TnIcons.CircleCheck, "Installed",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    isActive -> {
+                        ActionProgressButton(
+                            onClickListener = onCancel,
+                            contentDescription = "Cancel"
+                        )
+                    }
+                    isFailed -> {
+                        ActionButton(
+                            onClickListener = onDownload,
+                            icon = TnIcons.Refresh,
+                            contentDescription = "Retry"
+                        )
+                    }
+                    else -> {
+                        ActionButton(
+                            onClickListener = onDownload,
+                            icon = TnIcons.Download,
+                            contentDescription = "Download"
+                        )
+                    }
+                }
             }
 
-            Spacer(Modifier.height(dimens.spacingSm))
+            Spacer(Modifier.height(dimens.spacingXs))
 
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                InfoChip(model.approximateSize, MaterialTheme.colorScheme.primaryContainer)
+                Text(
+                    text = model.approximateSize,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .background(
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                            RoundedCornerShape(dimens.spacingXs)
+                        )
+                        .padding(horizontal = 6.dp, vertical = dimens.spacingXxs)
+                )
+
                 if (model.quantization.isNotBlank()) {
-                    InfoChip(model.quantization, MaterialTheme.colorScheme.tertiaryContainer)
+                    Text(
+                        text = model.quantization,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                RoundedCornerShape(dimens.spacingXs)
+                            )
+                            .padding(horizontal = 6.dp, vertical = dimens.spacingXxs)
+                    )
                 }
-                model.tags.forEach { tag ->
-                    InfoChip(tag, MaterialTheme.colorScheme.surfaceContainerHigh)
+
+                model.tags.take(2).forEach { tag ->
+                    Text(
+                        text = tag,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier
+                            .background(
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+                                RoundedCornerShape(dimens.spacingXs)
+                            )
+                            .padding(horizontal = 5.dp, vertical = dimens.spacingXxs)
+                    )
                 }
             }
 
-            AnimatedVisibility(visible = isActive) {
+            AnimatedVisibility(
+                visible = isActive,
+                enter = Motion.Enter,
+                exit = Motion.Exit
+            ) {
                 if (downloadState != null) {
                     DownloadProgress(downloadState)
                 }
@@ -122,45 +193,6 @@ fun CatalogModelCard(
 }
 
 @Composable
-private fun DownloadAction(
-    isInstalled: Boolean,
-    isDownloading: Boolean,
-    isFailed: Boolean,
-    onDownload: () -> Unit,
-    onCancel: () -> Unit,
-) {
-    when {
-        isInstalled -> {
-            ActionButton(
-                onClickListener = {},
-                icon = TnIcons.Check,
-                contentDescription = "Installed"
-            )
-        }
-        isDownloading -> {
-            ActionProgressButton(
-                onClickListener = onCancel,
-                contentDescription = "Cancel"
-            )
-        }
-        isFailed -> {
-            ActionButton(
-                onClickListener = onDownload,
-                icon = TnIcons.Refresh,
-                contentDescription = "Retry"
-            )
-        }
-        else -> {
-            ActionButton(
-                onClickListener = onDownload,
-                icon = TnIcons.Download,
-                contentDescription = "Download"
-            )
-        }
-    }
-}
-
-@Composable
 private fun DownloadProgress(state: HxdState) {
     val dimens = LocalDimens.current
     Column(modifier = Modifier.padding(top = dimens.spacingSm)) {
@@ -168,10 +200,18 @@ private fun DownloadProgress(state: HxdState) {
         if (progress >= 0f) {
             LinearProgressIndicator(
                 progress = { progress },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
             )
         } else {
-            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            LinearProgressIndicator(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+            )
         }
         Spacer(Modifier.height(4.dp))
         Row(
@@ -188,27 +228,10 @@ private fun DownloadProgress(state: HxdState) {
                 }
                 else -> ""
             }
-            Text(statusText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(statusText, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
             if (state.speedFormatted.isNotBlank()) {
                 Text(state.speedFormatted, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
-}
-
-@Composable
-fun InfoChip(text: String, color: Color) {
-    Surface(shape = LocalTnShapes.current.chip, color = color) {
-        Text(
-            text,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-}
-
-private fun formatBytes(bytes: Long): String = when {
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-    else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
 }

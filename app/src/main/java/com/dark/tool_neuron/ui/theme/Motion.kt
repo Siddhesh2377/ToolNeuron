@@ -3,11 +3,14 @@ package com.dark.tool_neuron.ui.theme
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.Alignment
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -50,6 +53,12 @@ object Motion {
     fun <T> steep(): FiniteAnimationSpec<T> = tween(
         durationMillis = 3000, easing = iosEasing
     )
+
+    val Enter: EnterTransition = fadeIn(tween(300)) +
+        expandVertically(tween(300), expandFrom = Alignment.Top)
+
+    val Exit: ExitTransition = fadeOut(tween(200)) +
+        shrinkVertically(tween(200), shrinkTowards = Alignment.Top)
 }
 
 // Returned by rememberVisibilityTransitions() for use in AnimatedVisibility.

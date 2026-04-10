@@ -385,6 +385,25 @@ fun ActionToggleButton(
 
 @SuppressLint("ModifierParameter")
 @Composable
+fun ActionSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    CuteSwitch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        modifier = modifier,
+        enabled = enabled,
+        width = 52.dp,
+        height = 30.dp,
+        thumbSize = 22.dp,
+    )
+}
+
+@SuppressLint("ModifierParameter")
+@Composable
 fun <T> ActionToggleGroup(
     items: List<T>,
     selectedItem: T,

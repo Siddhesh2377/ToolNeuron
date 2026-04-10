@@ -82,3 +82,5 @@ val MapleMonoFontFamily = FontFamily(
         variationSettings = FontVariation.Settings(FontVariation.weight(600))
     ),
 )
+
+val maple = MapleMonoFontFamily

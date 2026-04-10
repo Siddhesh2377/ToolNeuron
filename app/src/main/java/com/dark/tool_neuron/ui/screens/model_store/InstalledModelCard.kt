@@ -1,124 +1,316 @@
 package com.dark.tool_neuron.ui.screens.model_store
 
-import androidx.compose.foundation.clickable
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
+import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.model.ui.ActionIcon
 import com.dark.tool_neuron.model.ui.ActionItem
-import com.dark.tool_neuron.ui.components.ActionButton
+import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.MultiActionButton
+import com.dark.tool_neuron.ui.components.StatusBadge
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
+import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.util.formatBytes
+import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 
 @Composable
-fun InstalledModelCard(
+internal fun InstalledModelsTab(
+    models: List<ModelInfo>,
+    deleteInProgress: String?,
+    onDelete: (ModelInfo) -> Unit,
+    onLoad: (ModelInfo) -> Unit,
+    onUnload: () -> Unit,
+    viewModel: ModelStoreViewModel
+) {
+    val dimens = LocalDimens.current
+    val context = LocalContext.current
+
+    var selectedModel by remember { mutableStateOf<ModelInfo?>(null) }
+    var showDeleteDialog by remember { mutableStateOf<ModelInfo?>(null) }
+
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            context.contentResolver.takePersistableUriPermission(
+                uri, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            var name = "model.gguf"
+            var size = 0L
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val nameIdx = it.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
+                    val sizeIdx = it.getColumnIndex(android.provider.OpenableColumns.SIZE)
+                    if (nameIdx >= 0) name = it.getString(nameIdx)
+                    if (sizeIdx >= 0) size = it.getLong(sizeIdx)
+                }
+            }
+            viewModel.importLocalModel(uri, name, size)
+        }
+    }
+
+    if (models.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+            ) {
+                Icon(TnIcons.Database, null, Modifier.size(64.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("No installed models", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+        ) {
+            item(key = "import") {
+                ImportLocalCard {
+                    filePicker.launch(arrayOf("application/octet-stream", "*/*"))
+                }
+            }
+
+            items(models, key = { it.id }) { model ->
+                InstalledModelCard(
+                    model = model,
+                    isDeleting = deleteInProgress == model.id,
+                    onShowDetails = { selectedModel = model },
+                    onDelete = { showDeleteDialog = model },
+                    onLoad = { onLoad(model) },
+                    onUnload = onUnload,
+                )
+            }
+        }
+    }
+
+    selectedModel?.let { model ->
+        ModelDetailsDialog(model, viewModel) { selectedModel = null }
+    }
+
+    showDeleteDialog?.let { model ->
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = null },
+            title = { Text("Delete Model") },
+            text = { Text("Are you sure you want to delete ${model.name}? This action cannot be undone.") },
+            confirmButton = {
+                Button(onClick = { onDelete(model); showDeleteDialog = null }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = null }) { Text("Cancel") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun ImportLocalCard(onClick: () -> Unit) {
+    val dimens = LocalDimens.current
+    Surface(
+        onClick = onClick,
+        shape = LocalTnShapes.current.card,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(dimens.spacingMd),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+        ) {
+            Icon(TnIcons.Download, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
+            Column {
+                Text("Import local GGUF", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text("Pick a .gguf file from storage", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+}
+
+@Composable
+internal fun InstalledModelCard(
     model: ModelInfo,
+    isDeleting: Boolean,
+    onShowDetails: () -> Unit,
+    onDelete: () -> Unit,
     onLoad: () -> Unit,
     onUnload: () -> Unit,
-    onDelete: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val shapes = LocalTnShapes.current
 
     Surface(
-        shape = shapes.card,
-        color = if (model.isActive) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f)
-        else MaterialTheme.colorScheme.surfaceContainerLow,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = shapes.cardSmall
     ) {
         Row(
-            modifier = Modifier
-                .clickable(onClick = if (model.isActive) onUnload else onLoad)
-                .padding(dimens.spacingMd),
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
         ) {
             Icon(
-                imageVector = TnIcons.Sparkles,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
+                TnIcons.Sparkles, null,
+                Modifier.size(dimens.iconMd),
                 tint = if (model.isActive) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant
+                       else MaterialTheme.colorScheme.onSurfaceVariant
             )
-
-            Spacer(Modifier.width(dimens.spacingSm))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = model.name,
+                    model.name,
                     style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = formatModelSize(model.fileSize),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = if (model.pathType == PathType.CONTENT_URI) "Local" else "Downloaded",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-
-            if (model.isActive) {
-                Surface(shape = shapes.full, color = MaterialTheme.colorScheme.primary) {
-                    Text(
-                        "Active",
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                Spacer(Modifier.width(dimens.spacingSm))
-            }
-
-            MultiActionButton(
-                actions = buildList {
-                    if (!model.isActive) {
-                        add(ActionItem(
-                            icon = ActionIcon.Vector(TnIcons.Leaf),
-                            onClick = onLoad,
-                            contentDescription = "Load"
-                        ))
+                val sizeText by produceState("Calculating...", model.path) {
+                    value = withContext(Dispatchers.IO) {
+                        if (model.fileSize > 0) {
+                            val typeLabel = model.providerType.name
+                            val sourceLabel = if (model.pathType == PathType.CONTENT_URI) "Local" else "Downloaded"
+                            "$typeLabel  \u00B7  $sourceLabel  \u00B7  ${formatBytes(model.fileSize)}"
+                        } else {
+                            val f = File(model.path)
+                            if (f.exists()) {
+                                "${model.providerType.name}  \u00B7  ${formatBytes(f.length())}"
+                            } else model.providerType.name
+                        }
                     }
-                    add(ActionItem(
-                        icon = ActionIcon.Vector(TnIcons.Trash),
-                        onClick = onDelete,
-                        contentDescription = "Delete"
-                    ))
                 }
+                CaptionText(text = sizeText)
+            }
+
+            StatusBadge(
+                text = if (model.isActive) "Active" else "",
+                isActive = model.isActive
             )
+
+            if (isDeleting) {
+                Box(Modifier.size(dimens.actionIconSize), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(Modifier.size(dimens.iconMd), strokeWidth = 2.dp)
+                }
+            } else {
+                MultiActionButton(
+                    actions = buildList {
+                        if (model.isActive) {
+                            add(ActionItem(ActionIcon.Vector(TnIcons.PlayerStop), onUnload, "Unload"))
+                        } else {
+                            add(ActionItem(ActionIcon.Vector(TnIcons.Leaf), onLoad, "Load"))
+                        }
+                        add(ActionItem(ActionIcon.Vector(TnIcons.InfoCircle), onShowDetails, "Details"))
+                        add(ActionItem(ActionIcon.Vector(TnIcons.Trash), onDelete, "Delete"))
+                    }
+                )
+            }
         }
     }
 }
 
-private fun formatModelSize(bytes: Long): String = when {
-    bytes <= 0 -> "Unknown"
-    bytes < 1024 * 1024 -> "${bytes / 1024} KB"
-    bytes < 1024L * 1024 * 1024 -> "%.1f MB".format(bytes / (1024.0 * 1024.0))
-    else -> "%.2f GB".format(bytes / (1024.0 * 1024.0 * 1024.0))
+@Composable
+internal fun ModelDetailsDialog(
+    model: ModelInfo,
+    viewModel: ModelStoreViewModel,
+    onDismiss: () -> Unit
+) {
+    var config by remember { mutableStateOf<ModelConfig?>(null) }
+    var configLoaded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(model.id) {
+        config = viewModel.getModelConfig(model.id)
+        configLoaded = true
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(model.name, style = MaterialTheme.typography.titleLarge) },
+        text = {
+            val dimens = LocalDimens.current
+            Column(
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+                modifier = Modifier.verticalScroll(rememberScrollState())
+            ) {
+                DetailRow("Type", when (model.providerType) {
+                    ProviderType.GGUF -> "GGUF (LLM)"
+                })
+                DetailRow("Status", if (model.isActive) "Active" else "Inactive")
+
+                val sizeText by produceState("Calculating...", model.path) {
+                    value = withContext(Dispatchers.IO) {
+                        if (model.fileSize > 0) formatBytes(model.fileSize)
+                        else {
+                            val f = File(model.path)
+                            if (f.exists()) formatBytes(f.length()) else "Not found"
+                        }
+                    }
+                }
+                DetailRow("Size", sizeText)
+                DetailRow("Path", model.path)
+
+                if (configLoaded && config != null) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = dimens.spacingXs),
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                    Text("Loading Config", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    DetailRow("Loading Params", config!!.loadingParamsJson)
+                    Spacer(Modifier.height(dimens.spacingXs))
+                    Text("Inference Config", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+                    DetailRow("Inference Params", config!!.inferenceParamsJson)
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+@Composable
+internal fun DetailRow(label: String, value: String) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodyMedium, fontFamily = if (label == "Path") maple else null)
+    }
 }
