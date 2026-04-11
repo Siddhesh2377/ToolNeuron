@@ -1,4 +1,5 @@
 #include "crypto_engine.h"
+#include "memory_guard.h"
 #include "argon2.h"
 
 #include <openssl/evp.h>
@@ -65,6 +66,7 @@ static EncryptResult do_encrypt_aead(
 
     EVP_AEAD_CTX ctx;
     if (!EVP_AEAD_CTX_init(&ctx, aead, key, key_len, tag_size, nullptr)) {
+        hxs::secure_zero(nonce, sizeof(nonce));
         return result;
     }
 
@@ -79,6 +81,7 @@ static EncryptResult do_encrypt_aead(
     );
 
     EVP_AEAD_CTX_cleanup(&ctx);
+    hxs::secure_zero(nonce, sizeof(nonce));
 
     if (!ok) {
         result.sealed_data.clear();
@@ -200,6 +203,7 @@ EncryptResult CryptoEngine::encrypt_aes_gcm(
     EVP_AEAD_CTX ctx;
     if (!EVP_AEAD_CTX_init(&ctx, EVP_aead_aes_256_gcm(), key, key_len,
                            GCM_TAG_SIZE, nullptr)) {
+        secure_zero(nonce, sizeof(nonce));
         return result;
     }
 
@@ -214,6 +218,7 @@ EncryptResult CryptoEngine::encrypt_aes_gcm(
     );
 
     EVP_AEAD_CTX_cleanup(&ctx);
+    secure_zero(nonce, sizeof(nonce));
 
     if (!ok) {
         result.sealed_data.clear();
@@ -254,6 +259,7 @@ EncryptResult CryptoEngine::encrypt_chacha20(
     EVP_AEAD_CTX ctx;
     if (!EVP_AEAD_CTX_init(&ctx, EVP_aead_chacha20_poly1305(), key, key_len,
                            CHACHA_TAG_SIZE, nullptr)) {
+        secure_zero(nonce, sizeof(nonce));
         return result;
     }
 
@@ -268,6 +274,7 @@ EncryptResult CryptoEngine::encrypt_chacha20(
     );
 
     EVP_AEAD_CTX_cleanup(&ctx);
+    secure_zero(nonce, sizeof(nonce));
 
     if (!ok) {
         result.sealed_data.clear();
