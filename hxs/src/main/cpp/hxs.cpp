@@ -189,6 +189,8 @@ Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
     g_base_dir = jstring_to_string(env, basePath);
 
     // Set up crypto callbacks via HxsEncryptor
+    if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
+    if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
     if (encryptor) {
         g_encryptor_ref = env->NewGlobalRef(encryptor);
         jclass cls = env->GetObjectClass(encryptor);
@@ -206,6 +208,8 @@ Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
 
     g_manifest = std::make_unique<hxs::Manifest>(g_base_dir + "/manifest.hxs");
     if (!g_manifest->create(ak.data(), ak.size(), uk.data(), uk.size(), g_crypto)) {
+        if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
+        if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
         return JNI_FALSE;
     }
 
@@ -221,6 +225,8 @@ Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
     std::lock_guard lock(g_mtx);
     g_base_dir = jstring_to_string(env, basePath);
 
+    if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
+    if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
     if (encryptor) {
         g_encryptor_ref = env->NewGlobalRef(encryptor);
         jclass cls = env->GetObjectClass(encryptor);
@@ -237,6 +243,8 @@ Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
 
     g_manifest = std::make_unique<hxs::Manifest>(g_base_dir + "/manifest.hxs");
     if (!g_manifest->open(ak.data(), ak.size(), uk.data(), uk.size(), g_crypto)) {
+        if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
+        if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
         return JNI_FALSE;
     }
 
@@ -404,8 +412,9 @@ Java_com_dark_hxs_HexStorage_nativeGetAll(
 
     for (size_t i = 0; i < records.size(); i++) {
         auto encoded = records[i].encode();
-        env->SetObjectArrayElement(result, static_cast<jint>(i),
-            to_jbyteArray(env, encoded.data(), encoded.size()));
+        jbyteArray arr = to_jbyteArray(env, encoded.data(), encoded.size());
+        env->SetObjectArrayElement(result, static_cast<jint>(i), arr);
+        env->DeleteLocalRef(arr);
     }
     return result;
 }
@@ -452,8 +461,9 @@ Java_com_dark_hxs_HexStorage_nativeQueryString(
     jobjectArray out = env->NewObjectArray(static_cast<jint>(results.size()), byteArrayClass, nullptr);
     for (size_t i = 0; i < results.size(); i++) {
         auto enc = results[i].encode();
-        env->SetObjectArrayElement(out, static_cast<jint>(i),
-            to_jbyteArray(env, enc.data(), enc.size()));
+        jbyteArray arr = to_jbyteArray(env, enc.data(), enc.size());
+        env->SetObjectArrayElement(out, static_cast<jint>(i), arr);
+        env->DeleteLocalRef(arr);
     }
     return out;
 }
@@ -475,8 +485,9 @@ Java_com_dark_hxs_HexStorage_nativeQueryInt(
     jobjectArray out = env->NewObjectArray(static_cast<jint>(results.size()), byteArrayClass, nullptr);
     for (size_t i = 0; i < results.size(); i++) {
         auto enc = results[i].encode();
-        env->SetObjectArrayElement(out, static_cast<jint>(i),
-            to_jbyteArray(env, enc.data(), enc.size()));
+        jbyteArray arr = to_jbyteArray(env, enc.data(), enc.size());
+        env->SetObjectArrayElement(out, static_cast<jint>(i), arr);
+        env->DeleteLocalRef(arr);
     }
     return out;
 }
@@ -499,8 +510,9 @@ Java_com_dark_hxs_HexStorage_nativeQueryRange(
     jobjectArray out = env->NewObjectArray(static_cast<jint>(results.size()), byteArrayClass, nullptr);
     for (size_t i = 0; i < results.size(); i++) {
         auto enc = results[i].encode();
-        env->SetObjectArrayElement(out, static_cast<jint>(i),
-            to_jbyteArray(env, enc.data(), enc.size()));
+        jbyteArray arr = to_jbyteArray(env, enc.data(), enc.size());
+        env->SetObjectArrayElement(out, static_cast<jint>(i), arr);
+        env->DeleteLocalRef(arr);
     }
     return out;
 }
