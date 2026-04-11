@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -70,6 +72,7 @@ fun SearchAppBar(
 @Composable
 fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     val dimens = LocalDimens.current
+    val selectedModelType by viewModel.selectedModelType.collectAsStateWithLifecycle()
     val selectedCategory by viewModel.selectedCategory.collectAsStateWithLifecycle()
     val selectedParameters by viewModel.selectedParameters.collectAsStateWithLifecycle()
     val selectedQuantizations by viewModel.selectedQuantizations.collectAsStateWithLifecycle()
@@ -82,6 +85,7 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     var showAdvancedFilters by remember { mutableStateOf(false) }
 
     val activeFilterCount = listOf(
+        selectedModelType != null,
         selectedCategory != null,
         selectedParameters.isNotEmpty(),
         selectedQuantizations.isNotEmpty(),
@@ -94,8 +98,42 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .heightIn(max = 360.dp)
+            .verticalScroll(rememberScrollState())
             .padding(vertical = dimens.spacingSm)
     ) {
+        // Model type chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = dimens.spacingLg),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+        ) {
+            FilterChip(
+                selected = selectedModelType == null,
+                onClick = { viewModel.filterByModelType(null) },
+                label = { Text("All") }
+            )
+            listOf("Text (GGUF)" to "gguf", "TTS" to "tts", "STT" to "stt").forEach { (label, type) ->
+                FilterChip(
+                    selected = selectedModelType == type,
+                    onClick = { viewModel.filterByModelType(if (selectedModelType == type) null else type) },
+                    label = { Text(label) }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+
+        Text(
+            "Category",
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = dimens.spacingLg)
+        )
+        Spacer(Modifier.height(dimens.spacingXs))
+
         // Category chips
         Row(
             modifier = Modifier
@@ -119,28 +157,6 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
         }
 
         Spacer(Modifier.height(6.dp))
-
-        // Tag chips
-        val models by viewModel.models.collectAsStateWithLifecycle()
-        val availableTags = remember(models) { viewModel.getAvailableTags() }
-        if (availableTags.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = dimens.spacingLg),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
-            ) {
-                availableTags.forEach { tag ->
-                    FilterChip(
-                        selected = tag in selectedTags,
-                        onClick = { viewModel.toggleTagFilter(tag) },
-                        label = { Text(tag) }
-                    )
-                }
-            }
-            Spacer(Modifier.height(6.dp))
-        }
 
         // Advanced filters toggle
         Row(
@@ -234,6 +250,27 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                                 onClick = { viewModel.filterBySizeCategory(if (selectedSizeCategory == size) null else size) },
                                 label = { Text(size.displayName) }
                             )
+                        }
+                    }
+                }
+
+                // Tags
+                val models by viewModel.models.collectAsStateWithLifecycle()
+                val availableTags = remember(models) { viewModel.getAvailableTags() }
+                if (availableTags.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("Tags", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                        ) {
+                            availableTags.forEach { tag ->
+                                FilterChip(
+                                    selected = tag in selectedTags,
+                                    onClick = { viewModel.toggleTagFilter(tag) },
+                                    label = { Text(tag) }
+                                )
+                            }
                         }
                     }
                 }
