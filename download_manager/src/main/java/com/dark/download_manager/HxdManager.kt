@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.ConcurrentHashMap
 
 // ── Public data types ─────────────────────────────────────────────────────────
 
@@ -80,6 +81,7 @@ object HxdManager {
     val tasks: Flow<List<HxdState>> = _tasks.asStateFlow().map { it.values.toList() }
 
     private val idCounter = AtomicInteger(1)
+    private val lastProgressUpdate = ConcurrentHashMap<Int, Long>()
 
     // Queue + registry — protected by [lock]
     internal val lock         = Any()
@@ -159,6 +161,16 @@ object HxdManager {
         val prog    = HxdNative.nativeGetProgress(id)  // [downloaded, total, speed, state]
         val current = _tasks.value[id] ?: return
         val status  = HxdStatus.entries.getOrNull(prog[3].toInt()) ?: current.status
+
+        if (status == HxdStatus.DOWNLOADING) {
+            val now = System.currentTimeMillis()
+            val last = lastProgressUpdate[id] ?: 0L
+            if (now - last < 200L) return
+            lastProgressUpdate[id] = now
+        } else {
+            lastProgressUpdate.remove(id)
+        }
+
         _tasks.value = _tasks.value + (id to current.copy(
             downloadedBytes = prog[0],
             totalBytes      = prog[1],
