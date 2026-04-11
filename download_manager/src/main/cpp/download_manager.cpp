@@ -124,6 +124,8 @@ Java_com_dark_download_1manager_HxdNative_nativeSaveQueue(
         t.dest_path = dest;
         env->ReleaseStringUTFChars(url_j,  url);
         env->ReleaseStringUTFChars(dest_j, dest);
+        env->DeleteLocalRef(url_j);
+        env->DeleteLocalRef(dest_j);
         tasks.push_back(std::move(t));
     }
 
@@ -152,13 +154,26 @@ Java_com_dark_download_1manager_HxdNative_nativeLoadQueue(
     for (jsize i = 0; i < (jsize)tasks.size(); ++i) {
         const auto& t = tasks[i];
         jobjectArray row = env->NewObjectArray(6, strClass, nullptr);
-        env->SetObjectArrayElement(row, 0, env->NewStringUTF(std::to_string(t.id).c_str()));
-        env->SetObjectArrayElement(row, 1, env->NewStringUTF(std::to_string((int)t.state).c_str()));
-        env->SetObjectArrayElement(row, 2, env->NewStringUTF(std::to_string(t.downloaded_bytes).c_str()));
-        env->SetObjectArrayElement(row, 3, env->NewStringUTF(std::to_string(t.total_bytes).c_str()));
-        env->SetObjectArrayElement(row, 4, env->NewStringUTF(t.url.c_str()));
-        env->SetObjectArrayElement(row, 5, env->NewStringUTF(t.dest_path.c_str()));
+        jstring s0 = env->NewStringUTF(std::to_string(t.id).c_str());
+        jstring s1 = env->NewStringUTF(std::to_string((int)t.state).c_str());
+        jstring s2 = env->NewStringUTF(std::to_string(t.downloaded_bytes).c_str());
+        jstring s3 = env->NewStringUTF(std::to_string(t.total_bytes).c_str());
+        jstring s4 = env->NewStringUTF(t.url.c_str());
+        jstring s5 = env->NewStringUTF(t.dest_path.c_str());
+        env->SetObjectArrayElement(row, 0, s0);
+        env->SetObjectArrayElement(row, 1, s1);
+        env->SetObjectArrayElement(row, 2, s2);
+        env->SetObjectArrayElement(row, 3, s3);
+        env->SetObjectArrayElement(row, 4, s4);
+        env->SetObjectArrayElement(row, 5, s5);
         env->SetObjectArrayElement(result, i, row);
+        env->DeleteLocalRef(s0);
+        env->DeleteLocalRef(s1);
+        env->DeleteLocalRef(s2);
+        env->DeleteLocalRef(s3);
+        env->DeleteLocalRef(s4);
+        env->DeleteLocalRef(s5);
+        env->DeleteLocalRef(row);
     }
 
     return result;
