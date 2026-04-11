@@ -6,8 +6,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -22,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -49,7 +52,7 @@ fun ModelStoreScreen(
     var showSearch by remember { mutableStateOf(false) }
 
     Scaffold(
-        modifier = Modifier.padding(innerPadding),
+        modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
         topBar = {
             if (showSearch) {
                 SearchAppBar(
@@ -81,6 +84,7 @@ fun ModelStoreScreen(
                                 icon = TnIcons.Refresh,
                                 contentDescription = "Refresh"
                             )
+                            Spacer(Modifier.width(4.dp))
                             ActionButton(
                                 onClickListener = { showSearch = true },
                                 icon = TnIcons.Search,

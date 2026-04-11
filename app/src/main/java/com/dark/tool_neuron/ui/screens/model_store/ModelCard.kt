@@ -67,14 +67,24 @@ fun CatalogModelCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val typeLabel = when (model.modelType) {
+                        "tts" -> "TTS"
+                        "stt" -> "STT"
+                        else -> "LLM"
+                    }
+                    val typeColor = when (model.modelType) {
+                        "tts" -> MaterialTheme.colorScheme.secondary
+                        "stt" -> MaterialTheme.colorScheme.tertiary
+                        else -> MaterialTheme.colorScheme.primary
+                    }
                     Text(
-                        text = "LLM",
+                        text = typeLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = typeColor,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                typeColor.copy(alpha = 0.12f),
                                 RoundedCornerShape(dimens.spacingXs)
                             )
                             .padding(horizontal = 6.dp, vertical = dimens.spacingXxs)
