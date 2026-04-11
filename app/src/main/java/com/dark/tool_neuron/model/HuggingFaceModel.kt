@@ -10,6 +10,7 @@ data class HuggingFaceModel(
     val repoId: String = "",
     val quantization: String = "",
     val tags: List<String> = emptyList(),
+    val modelType: String = "gguf",
 )
 
 data class HFRepository(
