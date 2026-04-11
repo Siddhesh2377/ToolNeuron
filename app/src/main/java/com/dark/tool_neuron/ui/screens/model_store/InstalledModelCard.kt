@@ -275,6 +275,9 @@ internal fun ModelDetailsDialog(
             ) {
                 DetailRow("Type", when (model.providerType) {
                     ProviderType.GGUF -> "GGUF (LLM)"
+                    ProviderType.TTS -> "Text-to-Speech"
+                    ProviderType.STT -> "Speech-to-Text"
+                    ProviderType.SD -> "Stable Diffusion"
                 })
                 DetailRow("Status", if (model.isActive) "Active" else "Inactive")
 
