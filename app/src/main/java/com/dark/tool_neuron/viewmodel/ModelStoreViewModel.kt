@@ -231,6 +231,10 @@ class ModelStoreViewModel @Inject constructor(
             filtered = filtered.filter { "NSFW" !in it.tags }
         }
 
+        _selectedModelType.value?.let { type ->
+            filtered = filtered.filter { it.modelType == type }
+        }
+
         _executionTarget.value?.let { target ->
             filtered = filtered.filter { target in it.tags }
         }
@@ -318,10 +322,16 @@ class ModelStoreViewModel @Inject constructor(
 
                 when (state.status) {
                     HxdStatus.COMPLETED -> {
+                        val provider = when (model.modelType) {
+                            "tts" -> ProviderType.TTS
+                            "stt" -> ProviderType.STT
+                            "sd" -> ProviderType.SD
+                            else -> ProviderType.GGUF
+                        }
                         modelRepo.insert(ModelInfo(
                             id = model.id, name = model.name,
                             path = destFile.absolutePath, pathType = PathType.FILE,
-                            providerType = ProviderType.GGUF,
+                            providerType = provider,
                             fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
                         ))
                         _downloadIds.value = _downloadIds.value - model.id
@@ -454,7 +464,7 @@ class ModelStoreViewModel @Inject constructor(
 
     private fun buildConfigJson(config: ModelConfig?): String {
         if (config == null) return "{}"
-        val sb = StringBuffer(256).append('{')
+        val sb = StringBuilder(256).append('{')
         val loading = config.loadingParamsJson
         val inference = config.inferenceParamsJson
         if (loading != "{}" && loading.isNotBlank()) {
