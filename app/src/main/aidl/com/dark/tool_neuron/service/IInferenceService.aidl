@@ -53,4 +53,27 @@ interface IInferenceService {
     boolean isVlmLoaded();
     String getVlmInfo();
     void generateVlm(String messagesJson, int maxTokens, IGenerationCallback callback);
+
+    // TTS
+    boolean loadTtsModel(String configJson);
+    void unloadTtsModel();
+    boolean isTtsLoaded();
+    float[] synthesize(String text, int speakerId, float speed);
+    int getTtsSampleRate();
+
+    // STT
+    boolean loadSttModel(String configJson);
+    void unloadSttModel();
+    boolean isSttLoaded();
+    String recognize(in float[] samples, int sampleRate);
+
+    // SD (Stable Diffusion)
+    boolean initSdRuntime(String configJson);
+    boolean loadSdModel(String configJson);
+    void generateSdImage(String paramsJson, IGenerationCallback callback);
+    void stopSdGeneration();
+    void unloadSdModel();
+    boolean isSdModelLoaded();
+    String getSdModelInfo();
+    String getSocInfo();
 }
