@@ -65,6 +65,7 @@ std::vector<PersistedTask> load_queue(const char* path) {
     if (!r_u32(f, magic)   || magic   != MAGIC)   { fclose(f); return tasks; }
     if (!r_u32(f, version) || version != VERSION)  { fclose(f); return tasks; }
     if (!r_u32(f, count))                          { fclose(f); return tasks; }
+    if (count > 10000)                             { fclose(f); return tasks; }
 
     tasks.reserve(count);
     for (uint32_t i = 0; i < count; ++i) {
