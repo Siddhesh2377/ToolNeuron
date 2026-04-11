@@ -126,6 +126,7 @@ Java_com_dark_hxs_1encryptor_HxsEncryptor_nativeArgon2id(
     JniBytes s(env, salt_arr);
 
     if (!pw.ptr || !s.ptr) return nullptr;
+    if (m_cost > 262144) m_cost = 262144;
 
     size_t out_len = std::min(static_cast<size_t>(hash_len), static_cast<size_t>(64));
     uint8_t output[64];
