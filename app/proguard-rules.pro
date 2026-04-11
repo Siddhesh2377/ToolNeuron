@@ -17,3 +17,6 @@
 -keepclasseswithmembers class * {
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
+
+# ai_sd — keep public API and JNI
+-keep class com.dark.ai_sd.** { *; }

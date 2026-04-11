@@ -71,6 +71,9 @@ dependencies {
     // AI inference AARs
     implementation(files("../libs/gguf_lib-release.aar"))
     implementation(files("../libs/ai_sherpa-release.aar"))
+    implementation(files("../libs/ai_sd-release.aar"))
+    implementation("org.apache.commons:commons-compress:1.27.1")
+    implementation("org.tukaani:xz:1.10")
     implementation(libs.kotlinx.coroutines.android)
 
     // DI

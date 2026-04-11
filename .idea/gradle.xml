@@ -13,6 +13,7 @@
             <option value="$PROJECT_DIR$/download_manager" />
             <option value="$PROJECT_DIR$/hxs" />
             <option value="$PROJECT_DIR$/hxs_encryptor" />
+            <option value="$PROJECT_DIR$/rag-doc-lib" />
           </set>
         </option>
       </GradleProjectSettings>
