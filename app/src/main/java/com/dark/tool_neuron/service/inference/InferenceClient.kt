@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.coroutines.resume
 
@@ -55,20 +56,35 @@ object InferenceClient {
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: StateFlow<Boolean> = _isModelLoaded.asStateFlow()
 
+    private val _isTtsLoaded = MutableStateFlow(false)
+    val isTtsLoaded: StateFlow<Boolean> = _isTtsLoaded.asStateFlow()
+
+    private val _isSttLoaded = MutableStateFlow(false)
+    val isSttLoaded: StateFlow<Boolean> = _isSttLoaded.asStateFlow()
+
+    private val _isSdModelLoaded = MutableStateFlow(false)
+    val isSdModelLoaded: StateFlow<Boolean> = _isSdModelLoaded.asStateFlow()
+
     private var appContext: Context? = null
     @Volatile private var isBinding = false
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            _service.value = IInferenceService.Stub.asInterface(binder)
+            val svc = IInferenceService.Stub.asInterface(binder)
+            _service.value = svc
             _state.value = ServiceState.Connected
             isBinding = false
+            try { _isTtsLoaded.value = svc.isTtsLoaded } catch (_: Exception) {}
+            try { _isSttLoaded.value = svc.isSttLoaded } catch (_: Exception) {}
             Log.d(TAG, "Service connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
             _service.value = null
             _isModelLoaded.value = false
+            _isTtsLoaded.value = false
+            _isSttLoaded.value = false
+            _isSdModelLoaded.value = false
             _state.value = ServiceState.Crashed("Service process died")
             isBinding = false
             Log.w(TAG, "Service disconnected — will auto-rebind")
@@ -78,6 +94,9 @@ object InferenceClient {
         override fun onBindingDied(name: ComponentName?) {
             _service.value = null
             _isModelLoaded.value = false
+            _isTtsLoaded.value = false
+            _isSttLoaded.value = false
+            _isSdModelLoaded.value = false
             _state.value = ServiceState.Crashed("Service binding died")
             isBinding = false
             Log.e(TAG, "Binding died — rebinding")
@@ -249,6 +268,109 @@ object InferenceClient {
 
     fun warmUp(): Boolean =
         try { _service.value?.warmUp() ?: false } catch (_: Exception) { false }
+
+    // ── TTS ──
+
+    suspend fun loadTtsModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val result = ensureBound().loadTtsModel(configJson)
+            _isTtsLoaded.value = result
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "loadTtsModel failed", e)
+            false
+        }
+    }
+
+    suspend fun unloadTtsModel() {
+        _isTtsLoaded.value = false
+        try { ensureBound().unloadTtsModel() } catch (_: Exception) {}
+    }
+
+    suspend fun synthesize(text: String, speakerId: Int = 0, speed: Float = 1.0f): FloatArray? =
+        withContext(Dispatchers.IO) {
+            try { ensureBound().synthesize(text, speakerId, speed) } catch (e: Exception) {
+                Log.e(TAG, "synthesize failed", e)
+                null
+            }
+        }
+
+    fun getTtsSampleRate(): Int =
+        try { _service.value?.ttsSampleRate ?: 0 } catch (_: Exception) { 0 }
+
+    // ── STT ──
+
+    suspend fun loadSttModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val result = ensureBound().loadSttModel(configJson)
+            _isSttLoaded.value = result
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "loadSttModel failed", e)
+            false
+        }
+    }
+
+    suspend fun unloadSttModel() {
+        _isSttLoaded.value = false
+        try { ensureBound().unloadSttModel() } catch (_: Exception) {}
+    }
+
+    suspend fun recognize(samples: FloatArray, sampleRate: Int = 16000): String? =
+        withContext(Dispatchers.IO) {
+            try { ensureBound().recognize(samples, sampleRate) } catch (e: Exception) {
+                Log.e(TAG, "recognize failed", e)
+                null
+            }
+        }
+
+    // ── SD ──
+
+    suspend fun initSdRuntime(configJson: String = "{}"): Boolean = withContext(Dispatchers.IO) {
+        try { ensureBound().initSdRuntime(configJson) } catch (e: Exception) {
+            Log.e(TAG, "initSdRuntime failed", e)
+            false
+        }
+    }
+
+    suspend fun loadSdModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val result = ensureBound().loadSdModel(configJson)
+            _isSdModelLoaded.value = result
+            result
+        } catch (e: Exception) {
+            Log.e(TAG, "loadSdModel failed", e)
+            false
+        }
+    }
+
+    fun generateSdImage(paramsJson: String): Flow<InferenceEvent> =
+        callbackFlow {
+            val svc = _service.first { it != null }!!
+            val cb = generationCallback { event -> trySend(event) }
+            try {
+                svc.generateSdImage(paramsJson, cb)
+            } catch (e: Exception) {
+                trySend(InferenceEvent.Error(e.message ?: "SD error"))
+                close()
+            }
+            awaitClose {}
+        }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
+
+    fun stopSdGeneration() {
+        try { _service.value?.stopSdGeneration() } catch (_: Exception) {}
+    }
+
+    suspend fun unloadSdModel() {
+        _isSdModelLoaded.value = false
+        try { ensureBound().unloadSdModel() } catch (_: Exception) {}
+    }
+
+    fun isSdModelLoaded(): Boolean =
+        try { _service.value?.isSdModelLoaded ?: false } catch (_: Exception) { false }
+
+    fun getSocInfo(): String =
+        try { _service.value?.socInfo ?: "{}" } catch (_: Exception) { "{}" }
 
     // ── Internal helpers ──
 
