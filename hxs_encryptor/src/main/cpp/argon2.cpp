@@ -137,7 +137,8 @@ static void b2b_final(B2BState* S, uint8_t* out) {
         tmp[i*8+7] = (uint8_t)(S->h[i] >> 56);
     }
     memcpy(out, tmp, S->outlen);
-    memset(S, 0, sizeof(*S));
+    OPENSSL_cleanse(tmp, sizeof(tmp));
+    OPENSSL_cleanse(S, sizeof(*S));
 }
 
 // ── Argon2 internal types ─────────────────────────────────────────────────────
@@ -214,7 +215,7 @@ static void blake2b_long(uint8_t* out, size_t outlen,
         b2b_final(&S, buf);
         memcpy(out + pos, buf, remaining);
 
-        memset(buf, 0, sizeof(buf));
+        OPENSSL_cleanse(buf, sizeof(buf));
     }
 }
 
