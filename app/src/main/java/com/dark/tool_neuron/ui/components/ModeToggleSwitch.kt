@@ -1,15 +1,15 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -23,7 +23,7 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @Composable
 fun ModeToggleSwitch(
@@ -34,12 +34,12 @@ fun ModeToggleSwitch(
     modifier: Modifier = Modifier
 ) {
     // Calculate total width: 2 icons + spacing between + padding on sides
-    val totalWidth = (Standards.ActionIconSize * 2) + Standards.ActionIconSpace + rDp(4.dp)
-    val totalHeight = Standards.ActionIconSize + rDp(4.dp)
+    val totalWidth = (Standards.ActionIconSize * 2) + Standards.ActionIconSpace + 4.dp
+    val totalHeight = Standards.ActionIconSize + 4.dp
 
     val backgroundColor by animateColorAsState(
         targetValue = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+        animationSpec = Motion.state(),
         label = "background"
     )
 
@@ -47,12 +47,9 @@ fun ModeToggleSwitch(
         targetValue = if (isImageMode) {
             Standards.ActionIconSize + Standards.ActionIconSpace
         } else {
-            rDp(0.dp)
+            0.dp
         },
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = Motion.content(),
         label = "thumbOffset"
     )
 
@@ -69,11 +66,11 @@ fun ModeToggleSwitch(
             // Thumb (sliding indicator)
             Box(
                 modifier = Modifier
-                    .offset(x = thumbOffset + rDp(2.dp))
+                    .offset(x = thumbOffset + 2.dp)
                     .align(Alignment.CenterStart)
                     .size(Standards.ActionIconSize)
-                    .padding(rDp(2.dp))
-                    .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - rDp(2.dp)))
+                    .padding(Standards.SpacingXxs)
+                    .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - 2.dp))
                     .background(MaterialTheme.colorScheme.primary)
             )
 
@@ -81,7 +78,7 @@ fun ModeToggleSwitch(
             Row(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(rDp(2.dp)),
+                    .padding(Standards.SpacingXxs),
                 horizontalArrangement = Arrangement.spacedBy(Standards.ActionIconSpace),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -89,8 +86,8 @@ fun ModeToggleSwitch(
                 IconButton(
                     isSelected = !isImageMode,
                     isEnabled = textModelLoaded,
-                    icon = Icons.Default.TextFields,
-                    contentDescription = "Text mode",
+                    icon = TnIcons.Code,
+                    contentDescription = if (textModelLoaded) "Switch to text chat" else "Load a text model to enable chat",
                     onClick = {
                         if (!isImageMode) return@IconButton
                         onModeChange(false)
@@ -101,8 +98,8 @@ fun ModeToggleSwitch(
                 IconButton(
                     isSelected = isImageMode,
                     isEnabled = imageModelLoaded,
-                    icon = Icons.Default.Image,
-                    contentDescription = "Image mode",
+                    icon = TnIcons.Photo,
+                    contentDescription = if (imageModelLoaded) "Switch to image generation" else "Load an image model to enable",
                     onClick = {
                         if (isImageMode) return@IconButton
                         onModeChange(true)
@@ -127,23 +124,20 @@ private fun IconButton(
             isEnabled -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
             else -> MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f)
         },
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = Motion.state(),
         label = "iconTint"
     )
 
     val scale by animateFloatAsState(
         targetValue = if (isSelected) 1f else 0.85f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = Motion.interactive(),
         label = "iconScale"
     )
 
     Box(
         modifier = Modifier
             .size(Standards.ActionIconSize)
-            .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - rDp(2.dp)))
+            .clip(RoundedCornerShape(Standards.ActionIconRoundedSize - 2.dp))
             .clickable(
                 indication = null,
                 interactionSource = remember { MutableInteractionSource() },
@@ -158,7 +152,7 @@ private fun IconButton(
             contentDescription = contentDescription,
             tint = iconTint,
             modifier = Modifier
-                .padding(rDp(2.dp))
+                .padding(Standards.SpacingXxs)
                 .scale(scale)
         )
     }

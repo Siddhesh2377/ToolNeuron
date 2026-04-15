@@ -11,12 +11,9 @@ import com.dark.tool_neuron.engine.EmbeddingConfig
 import com.dark.tool_neuron.engine.EmbeddingEngine
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagStatus
-import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.neuron_example.GraphSettings
 import com.dark.tool_neuron.neuron_example.NeuronGraph
-import com.dark.tool_neuron.neuron_example.QueryResult
 import com.dark.tool_neuron.neuron_example.RetrievalConfidence
-import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagRepository
 import com.dark.tool_neuron.worker.LlmModelWorker
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,25 +40,15 @@ data class RagQueryDisplayResult(
 class RagViewModel @Inject constructor(
     private val ragRepository: RagRepository,
     private val embeddingEngine: EmbeddingEngine,
-    private val chatRepository: ChatRepository,
     @param:ApplicationContext private val context: Context
 ) : ViewModel() {
 
     // UI State
-    private val _showRagOverlay = MutableStateFlow(false)
-    val showRagOverlay: StateFlow<Boolean> = _showRagOverlay
-
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
-
-    private val _successMessage = MutableStateFlow<String?>(null)
-    val successMessage: StateFlow<String?> = _successMessage
-
-    private val _selectedRag = MutableStateFlow<InstalledRag?>(null)
-    val selectedRag: StateFlow<InstalledRag?> = _selectedRag
 
     private val _embeddingStatus = MutableStateFlow("Not Initialized")
     val embeddingStatus: StateFlow<String> = _embeddingStatus
@@ -78,18 +65,11 @@ class RagViewModel @Inject constructor(
     private val _embeddingDownloadProgress = MutableStateFlow(0f)
     val embeddingDownloadProgress: StateFlow<Float> = _embeddingDownloadProgress
 
-    // Chat list for creating RAG from chats
-    private val _availableChats = MutableStateFlow<List<ChatInfo>>(emptyList())
-    val availableChats: StateFlow<List<ChatInfo>> = _availableChats
-
     // RAG Lists
     val installedRags = ragRepository.getAllRags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val loadedRags = ragRepository.getLoadedRags()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-
-    val enabledRags = ragRepository.getEnabledRags()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     // Counts
@@ -109,10 +89,6 @@ class RagViewModel @Inject constructor(
     // Last RAG query results for display
     private val _lastRagResults = MutableStateFlow<List<RagQueryDisplayResult>>(emptyList())
     val lastRagResults: StateFlow<List<RagQueryDisplayResult>> = _lastRagResults
-
-    // Retrieval confidence from last query
-    private val _retrievalConfidence = MutableStateFlow<RetrievalConfidence?>(null)
-    val retrievalConfidence: StateFlow<RetrievalConfidence?> = _retrievalConfidence
 
     init {
         // Sync database state with in-memory state on startup
@@ -254,24 +230,6 @@ class RagViewModel @Inject constructor(
 
     // ==================== UI Controls ====================
 
-    fun showRagOverlay() {
-        _showRagOverlay.value = true
-        refreshCounts()
-    }
-
-    fun hideRagOverlay() {
-        _showRagOverlay.value = false
-        _selectedRag.value = null
-    }
-
-    fun selectRag(rag: InstalledRag) {
-        _selectedRag.value = rag
-    }
-
-    fun clearSelection() {
-        _selectedRag.value = null
-    }
-
     fun clearError() {
         _error.value = null
     }
@@ -297,14 +255,14 @@ class RagViewModel @Inject constructor(
 
                     if (!modelFile.exists()) {
                         checkEmbeddingDownloadStatus()
-                        val errorMsg = if (_isEmbeddingModelDownloading.value) {
-                            "Embedding model is currently downloading. Please wait for download to complete."
-                        } else {
-                            "Embedding model not found. The model will be downloaded in the background."
+                        if (!_isEmbeddingModelDownloading.value) {
+                            // Auto-start download if not already downloading
+                            Log.d("RagViewModel", "Embedding model missing, auto-starting download")
+                            startEmbeddingDownload()
                         }
-                        _error.value = errorMsg
+                        _error.value = "Embedding model is downloading. RAG will be available once complete."
                         _isLoading.value = false
-                        ragRepository.updateRagStatus(ragId, RagStatus.ERROR)
+                        ragRepository.updateRagStatus(ragId, RagStatus.INSTALLED)
                         return@launch
                     }
 
@@ -354,21 +312,10 @@ class RagViewModel @Inject constructor(
         }
     }
 
-    fun unloadAllRags() {
-        viewModelScope.launch(Dispatchers.IO) {
-            ragRepository.unloadAllRags()
-            _loadedCount.value = 0
-            _isRagEnabledForChat.value = false
-        }
-    }
-
     fun deleteRag(ragId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             ragRepository.deleteRag(ragId)
             refreshCounts()
-            if (_selectedRag.value?.id == ragId) {
-                _selectedRag.value = null
-            }
         }
     }
 
@@ -386,33 +333,6 @@ class RagViewModel @Inject constructor(
 
             _isLoading.value = false
         }
-    }
-
-    // ==================== Query Operations ====================
-
-    suspend fun queryRags(query: String, topK: Int = 5): List<Pair<InstalledRag, List<QueryResult>>> {
-        return ragRepository.queryAllLoadedGraphs(query, topK)
-    }
-
-    suspend fun queryAndFormat(query: String, topK: Int = 3): String {
-        val results = queryRags(query, topK)
-        if (results.isEmpty()) return ""
-
-        val contextBuilder = StringBuilder()
-        contextBuilder.append("### Relevant Context from Knowledge Base:\n\n")
-
-        for ((rag, queryResults) in results) {
-            if (queryResults.isNotEmpty()) {
-                contextBuilder.append("**From ${rag.name}:**\n")
-                for (result in queryResults) {
-                    val score = (result.score * 100).toInt()
-                    contextBuilder.append("- [$score% match] ${result.node.content.take(500)}\n")
-                }
-                contextBuilder.append("\n")
-            }
-        }
-
-        return contextBuilder.toString()
     }
 
     // ==================== Creation Operations ====================
@@ -451,53 +371,6 @@ class RagViewModel @Inject constructor(
 
             val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
             val result = ragRepository.createRagFromText(name, description, text, graph, domain, tags)
-
-            if (result.isFailure) {
-                _error.value = result.exceptionOrNull()?.message ?: "Failed to create RAG"
-            } else {
-                refreshCounts()
-            }
-
-            _isLoading.value = false
-            onComplete(result)
-        }
-    }
-
-    fun createRagFromChat(
-        name: String,
-        description: String,
-        chatId: String,
-        messages: List<com.dark.tool_neuron.models.messages.Messages>,
-        domain: String = "general",
-        tags: List<String> = emptyList(),
-        onComplete: (Result<InstalledRag>) -> Unit
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _isLoading.value = true
-            _error.value = null
-
-            // Auto-initialize embedding engine if needed
-            if (!embeddingEngine.isInitialized()) {
-                val modelFile = EmbeddingEngine.getModelPath(context)
-                if (!modelFile.exists()) {
-                    _error.value = "Embedding model not found"
-                    _isLoading.value = false
-                    onComplete(Result.failure(Exception("Embedding model not found")))
-                    return@launch
-                }
-
-                val config = EmbeddingConfig(modelPath = modelFile.absolutePath)
-                val initResult = embeddingEngine.initialize(config)
-                if (initResult.isFailure) {
-                    _error.value = "Failed to initialize embedding engine"
-                    _isLoading.value = false
-                    onComplete(Result.failure(initResult.exceptionOrNull() ?: Exception("Failed to initialize embedding engine")))
-                    return@launch
-                }
-            }
-
-            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
-            val result = ragRepository.createRagFromChat(name, description, chatId, messages, graph, domain, tags)
 
             if (result.isFailure) {
                 _error.value = result.exceptionOrNull()?.message ?: "Failed to create RAG"
@@ -558,29 +431,6 @@ class RagViewModel @Inject constructor(
 
     // ==================== Embedding Initialization ====================
 
-    fun initializeEmbedding(modelPath: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            _embeddingStatus.value = "Initializing..."
-            _isLoading.value = true
-
-            val config = EmbeddingConfig(
-                modelPath = modelPath
-            )
-
-            val result = embeddingEngine.initialize(config)
-            if (result.isSuccess) {
-                _isEmbeddingInitialized.value = true
-                _embeddingStatus.value = "Ready (dim: ${embeddingEngine.getDimension()})"
-            } else {
-                _isEmbeddingInitialized.value = false
-                _embeddingStatus.value = "Error: ${result.exceptionOrNull()?.message}"
-                _error.value = result.exceptionOrNull()?.message
-            }
-
-            _isLoading.value = false
-        }
-    }
-
     fun initializeEmbeddingFromFiles() {
         viewModelScope.launch(Dispatchers.IO) {
             _embeddingStatus.value = "Checking models..."
@@ -611,21 +461,6 @@ class RagViewModel @Inject constructor(
         }
     }
 
-    // ==================== Chat Operations ====================
-
-    fun loadAvailableChats() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val result = chatRepository.getAllChats()
-            if (result.isSuccess) {
-                _availableChats.value = result.getOrDefault(emptyList())
-            }
-        }
-    }
-
-    suspend fun getChatMessages(chatId: String): List<com.dark.tool_neuron.models.messages.Messages> {
-        return chatRepository.getMessages(chatId).getOrDefault(emptyList())
-    }
-
     // ==================== RAG for Chat Toggle ====================
 
     fun toggleRagForChat(enabled: Boolean) {
@@ -641,12 +476,8 @@ class RagViewModel @Inject constructor(
         if (aggregated.ragResults.isEmpty()) {
             Log.w("RagViewModel", "No RAG results found for query: $query")
             _lastRagResults.value = emptyList()
-            _retrievalConfidence.value = null
             return ""
         }
-
-        // Store confidence for UI
-        _retrievalConfidence.value = aggregated.overallConfidence
 
         // Store results for UI display
         val displayResults = mutableListOf<RagQueryDisplayResult>()
@@ -681,11 +512,6 @@ class RagViewModel @Inject constructor(
 
         Log.d("RagViewModel", "RAG context: ${contextBuilder.length} chars, ${displayResults.size} results, confidence=${aggregated.overallConfidence}")
         return contextBuilder.toString()
-    }
-
-    fun clearRagResults() {
-        _lastRagResults.value = emptyList()
-        _retrievalConfidence.value = null
     }
 
     // ==================== Secure RAG Creation ====================
@@ -802,25 +628,4 @@ class RagViewModel @Inject constructor(
         }
     }
 
-    // ==================== File Content Reading ====================
-
-    suspend fun readFileContent(uri: Uri): String? {
-        return try {
-            context.contentResolver.openInputStream(uri)?.use { inputStream ->
-                inputStream.bufferedReader().readText()
-            }
-        } catch (e: Exception) {
-            _error.value = "Failed to read file: ${e.message}"
-            null
-        }
-    }
-
-    // ==================== Password Cache Management ====================
-
-    /**
-     * Clear all cached passwords (call when app terminates)
-     */
-    fun clearPasswordCache() {
-        ragRepository.clearPasswordCache()
-    }
 }

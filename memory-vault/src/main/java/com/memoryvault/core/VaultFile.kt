@@ -78,9 +78,4 @@ class VaultFile(val file: File) {
     }
 
     fun exists(): Boolean = file.exists()
-
-    suspend fun delete() = withContext(Dispatchers.IO) {
-        close()
-        file.delete()
-    }
 }

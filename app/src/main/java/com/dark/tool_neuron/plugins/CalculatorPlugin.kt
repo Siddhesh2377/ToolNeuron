@@ -16,9 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.api.SuperPlugin
-import com.dark.tool_neuron.ui.theme.rDp
-import com.mp.ai_gguf.toolcalling.ToolCall
-import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
+import com.dark.gguf_lib.toolcalling.ToolCall
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 import org.json.JSONObject
 import kotlin.math.*
 
@@ -52,6 +51,22 @@ class CalculatorPlugin : SuperPlugin {
                     .stringParam("to_unit", "Target unit (e.g. 'mi', 'kg', 'F')", required = true)
             )
         )
+    }
+
+    override fun serializeResult(data: Any): String = when (data) {
+        is CalculatorResponse -> JSONObject().apply {
+            put("expression", data.expression)
+            put("result", data.result)
+            put("formattedResult", data.formattedResult)
+        }.toString()
+        is UnitConversionResponse -> JSONObject().apply {
+            put("value", data.value)
+            put("from_unit", data.fromUnit)
+            put("to_unit", data.toUnit)
+            put("result", data.result)
+            put("formattedResult", data.formattedResult)
+        }.toString()
+        else -> data.toString()
     }
 
     override suspend fun executeTool(toolCall: ToolCall): Result<Any> {
@@ -367,7 +382,7 @@ class CalculatorPlugin : SuperPlugin {
                     text = data.toString(2),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(rDp(8.dp))
+                    modifier = Modifier.padding(8.dp)
                 )
             }
         }
@@ -380,12 +395,12 @@ class CalculatorPlugin : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "Calculator",
@@ -419,12 +434,12 @@ class CalculatorPlugin : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "Unit Conversion",

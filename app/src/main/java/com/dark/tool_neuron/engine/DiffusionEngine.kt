@@ -3,21 +3,28 @@ package com.dark.tool_neuron.engine
 import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
+import com.dark.ai_sd.DepthState
 import com.dark.ai_sd.DiffusionBackendState
 import com.dark.ai_sd.DiffusionGenerationState
 import com.dark.ai_sd.DiffusionModelConfig
 import com.dark.ai_sd.DiffusionRuntimeConfig
+import com.dark.ai_sd.LamaState
+import com.dark.ai_sd.SegmenterState
 import com.dark.ai_sd.StableDiffusionManager
+import com.dark.ai_sd.StyleState
+import com.dark.ai_sd.UpscaleState
 import com.dark.ai_sd.generationParams
 import com.dark.ai_sd.modelConfig
-import com.dark.ai_sd.toBase64Rgb
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.ByteArrayOutputStream
 import java.util.Base64
 
@@ -25,42 +32,46 @@ class DiffusionEngine {
 
     companion object {
         private const val TAG = "DiffusionEngine"
+        private const val INIT_TIMEOUT_MS = 60_000L
     }
 
-    private lateinit var sdManager: StableDiffusionManager
+    private var sdManager: StableDiffusionManager? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var observeJob: Job? = null
+    private val initDeferred = CompletableDeferred<Boolean>()
 
     // Expose state flows
     val backendState: StateFlow<DiffusionBackendState>
-        get() = sdManager.diffusionBackendState
+        get() = sdManager?.diffusionBackendState ?: MutableStateFlow(DiffusionBackendState.Idle)
 
     val generationState: StateFlow<DiffusionGenerationState>
-        get() = sdManager.diffusionGenerationState
-
+        get() = sdManager?.diffusionGenerationState ?: MutableStateFlow(DiffusionGenerationState.Idle)
 
     val isGenerating: StateFlow<Boolean>
-        get() = sdManager.isGenerating
+        get() = sdManager?.isGenerating ?: MutableStateFlow(false)
 
     suspend fun init(context: Context, safetyCheckerEnabled: Boolean = true) {
         try {
-            sdManager = StableDiffusionManager.getInstance(context)
-            sdManager.initialize(
+            val mgr = StableDiffusionManager.getInstance(context)
+            sdManager = mgr
+            mgr.initialize(
                 DiffusionRuntimeConfig(
                     runtimeDir = "runtime_libs/qnnlibs",
                     qnnLibsAssetPath = "qnnlibs",
                     safetyCheckerEnabled = safetyCheckerEnabled,
-                    safetyCheckerPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
+                    safetyCheckerAssetPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
                 )
             )
+            initDeferred.complete(true)
             Log.i(TAG, "DiffusionEngine initialized successfully")
         } catch (e: Exception) {
+            initDeferred.complete(false)
             Log.e(TAG, "Init failed: ${e.message}", e)
             throw e
         }
     }
 
-    fun loadModel(
+    suspend fun loadModel(
         name: String,
         modelDir: String,
         textEmbeddingSize: Int = 768,
@@ -72,6 +83,12 @@ class DiffusionEngine {
         height: Int = 512,
         safetyMode: Boolean
     ): Result<String> {
+        // Wait for init() to complete before proceeding (fixes race with LLMService.onCreate)
+        val initSuccess = withTimeoutOrNull(INIT_TIMEOUT_MS) { initDeferred.await() }
+        if (initSuccess != true) {
+            return Result.failure(IllegalStateException("DiffusionEngine initialization timed out or failed"))
+        }
+        val mgr = sdManager ?: return Result.failure(IllegalStateException("DiffusionEngine not initialized"))
         return try {
             val model = modelConfig {
                 name(name)
@@ -85,7 +102,7 @@ class DiffusionEngine {
 
             Log.i(TAG, "Loading model: $model")
 
-            val success = sdManager.loadModel(model, width = width, height = height)
+            val success = mgr.loadModel(model, width = width, height = height)
 
             if (success) {
                 Log.i(TAG, "Model loaded successfully: $name")
@@ -131,7 +148,8 @@ class DiffusionEngine {
             showProcess(showDiffusionProcess, showDiffusionStride)
         }
 
-        sdManager.generateImage(params)
+        val mgr = sdManager ?: throw IllegalStateException("DiffusionEngine not initialized")
+        mgr.generateImage(params)
         Log.i(TAG, "Generation started: $prompt")
     }
 
@@ -171,24 +189,15 @@ class DiffusionEngine {
         }
     }
 
-    fun observeBackendState(
-        onStateChange: (DiffusionBackendState) -> Unit
-    ) {
-        scope.launch {
-            backendState.collect { state ->
-                onStateChange(state)
-                Log.d(TAG, "Backend state: $state")
-            }
-        }
-    }
-
     fun cancelGeneration() {
-        sdManager.cancelGeneration()
+        val mgr = sdManager ?: return
+        mgr.cancelGeneration()
         Log.i(TAG, "Generation cancelled")
     }
 
     fun restartBackend(): Boolean {
-        val success = sdManager.restartBackend()
+        val mgr = sdManager ?: return false
+        val success = mgr.restartBackend()
         if (success) {
             Log.i(TAG, "Backend restarted successfully")
         } else {
@@ -198,16 +207,13 @@ class DiffusionEngine {
     }
 
     fun stopBackend() {
-        sdManager.stopBackend()
+        val mgr = sdManager ?: return
+        mgr.stopBackend()
         Log.i(TAG, "Backend stopped")
     }
 
     fun getCurrentModel(): DiffusionModelConfig? {
-        return sdManager.getCurrentModel()
-    }
-
-    fun isBackendRunning(): Boolean {
-        return sdManager.isBackendRunning()
+        return sdManager?.getCurrentModel()
     }
 
     fun getBackendStateString(): String {
@@ -219,27 +225,166 @@ class DiffusionEngine {
         }
     }
 
+    // ── Upscaler ──
+
+    val upscaleState: StateFlow<UpscaleState>
+        get() = sdManager?.upscaleState ?: MutableStateFlow(UpscaleState.Idle)
+
+    fun loadUpscaler(modelPath: String): Boolean {
+        val mgr = sdManager ?: return false
+        return try {
+            mgr.loadUpscaler(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load upscaler: ${e.message}")
+            false
+        }
+    }
+
+    fun upscaleImage(bitmap: Bitmap) {
+        val mgr = sdManager ?: return
+        mgr.upscaleImage(bitmap)
+    }
+
+    fun releaseUpscaler() {
+        val mgr = sdManager ?: return
+        try {
+            mgr.releaseUpscaler()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release upscaler: ${e.message}")
+        }
+    }
+
+    // ── Segmenter (MobileSAM) ──
+
+    val segmenterState: StateFlow<SegmenterState>
+        get() = sdManager?.segmenterState ?: MutableStateFlow(SegmenterState.Idle)
+
+    fun loadSegmenter(encoderPath: String, decoderPath: String): Boolean {
+        val mgr = sdManager ?: return false
+        return try {
+            mgr.loadSegmenter(encoderPath, decoderPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load segmenter: ${e.message}")
+            false
+        }
+    }
+
+    fun segmenterEncodeImage(bitmap: Bitmap): Boolean {
+        val mgr = sdManager ?: return false
+        return mgr.segmenterEncodeImage(bitmap)
+    }
+
+    fun segmentAtPoint(x: Float, y: Float) {
+        val mgr = sdManager ?: return
+        mgr.segmentAtPoint(x, y)
+    }
+
+    fun segmentWithBox(x1: Float, y1: Float, x2: Float, y2: Float) {
+        val mgr = sdManager ?: return
+        mgr.segmentWithBox(x1, y1, x2, y2)
+    }
+
+    fun releaseSegmenter() {
+        val mgr = sdManager ?: return
+        try { mgr.releaseSegmenter() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release segmenter: ${e.message}")
+        }
+    }
+
+    // ── LaMa Inpainter ──
+
+    val lamaState: StateFlow<LamaState>
+        get() = sdManager?.lamaState ?: MutableStateFlow(LamaState.Idle)
+
+    fun loadLamaInpainter(modelPath: String): Boolean {
+        val mgr = sdManager ?: return false
+        return try {
+            mgr.loadLamaInpainter(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load LaMa inpainter: ${e.message}")
+            false
+        }
+    }
+
+    fun lamaInpaint(inputBitmap: Bitmap, maskBitmap: Bitmap) {
+        val mgr = sdManager ?: return
+        mgr.lamaInpaint(inputBitmap, maskBitmap)
+    }
+
+    fun releaseLamaInpainter() {
+        val mgr = sdManager ?: return
+        try { mgr.releaseLamaInpainter() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release LaMa inpainter: ${e.message}")
+        }
+    }
+
+    // ── Depth Estimator ──
+
+    val depthState: StateFlow<DepthState>
+        get() = sdManager?.depthState ?: MutableStateFlow(DepthState.Idle)
+
+    fun loadDepthEstimator(modelPath: String): Boolean {
+        val mgr = sdManager ?: return false
+        return try {
+            mgr.loadDepthEstimator(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load depth estimator: ${e.message}")
+            false
+        }
+    }
+
+    fun estimateDepth(inputBitmap: Bitmap) {
+        val mgr = sdManager ?: return
+        mgr.estimateDepth(inputBitmap)
+    }
+
+    fun releaseDepthEstimator() {
+        val mgr = sdManager ?: return
+        try { mgr.releaseDepthEstimator() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release depth estimator: ${e.message}")
+        }
+    }
+
+    // ── Style Transfer ──
+
+    val styleState: StateFlow<StyleState>
+        get() = sdManager?.styleState ?: MutableStateFlow(StyleState.Idle)
+
+    fun loadStyleTransfer(modelPath: String): Boolean {
+        val mgr = sdManager ?: return false
+        return try {
+            mgr.loadStyleTransfer(modelPath)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to load style transfer: ${e.message}")
+            false
+        }
+    }
+
+    fun stylize(contentBitmap: Bitmap, styleBitmap: Bitmap, strength: Float = 1.0f) {
+        val mgr = sdManager ?: return
+        mgr.stylize(contentBitmap, styleBitmap, strength)
+    }
+
+    fun releaseStyleTransfer() {
+        val mgr = sdManager ?: return
+        try { mgr.releaseStyleTransfer() } catch (e: Exception) {
+            Log.e(TAG, "Failed to release style transfer: ${e.message}")
+        }
+    }
+
     fun cleanup() {
         observeJob?.cancel()
         scope.cancel()
-        sdManager.cleanup()
+        sdManager?.cleanup()
         Log.i(TAG, "DiffusionEngine cleaned up")
     }
 
     // Utility functions
-
-    private fun generateModelId(name: String, runOnCpu: Boolean): String {
-        return "${name.lowercase().replace(" ", "-")}-${if (runOnCpu) "cpu" else "npu"}"
-    }
 
     fun bitmapToBase64(bitmap: Bitmap, quality: Int = 95): String {
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
         val bytes = outputStream.toByteArray()
         return Base64.getEncoder().encodeToString(bytes)
-    }
-
-    fun bitmapToRgbBase64(bitmap: Bitmap): String {
-        return bitmap.toBase64Rgb()
     }
 }

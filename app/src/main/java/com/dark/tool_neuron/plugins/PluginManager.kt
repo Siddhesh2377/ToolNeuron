@@ -1,21 +1,20 @@
 package com.dark.tool_neuron.plugins
 
 import android.util.Log
-import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
 import com.dark.tool_neuron.models.plugins.PluginInfo
-import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.dark.tool_neuron.plugins.api.SuperPlugin
 import com.dark.tool_neuron.worker.LlmModelWorker
-import com.mp.ai_gguf.toolcalling.GrammarMode
-import com.mp.ai_gguf.toolcalling.ToolCall
-import com.mp.ai_gguf.toolcalling.ToolCallingConfig
-import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
+import com.dark.gguf_lib.toolcalling.GrammarMode
+import com.dark.gguf_lib.toolcalling.ToolCall
+import com.dark.gguf_lib.toolcalling.ToolCallingConfig
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelType
-import org.json.JSONArray
+import java.util.concurrent.ConcurrentHashMap
 import org.json.JSONObject
 
 object PluginManager {
@@ -39,14 +38,14 @@ object PluginManager {
         repositoryUrl = "ruv/ruvltra-claude-code"
     )
 
-    // Registry of all plugins
-    private val _plugins = mutableMapOf<String, SuperPlugin>()
+    // Registry of all plugins (thread-safe)
+    private val _plugins = ConcurrentHashMap<String, SuperPlugin>()
 
-    // O(1) tool name -> plugin key lookup cache
-    private val _toolNameToPluginKey = mutableMapOf<String, String>()
+    // O(1) tool name -> plugin key lookup cache (thread-safe)
+    private val _toolNameToPluginKey = ConcurrentHashMap<String, String>()
 
-    // Cached enabled tool definitions, invalidated on enable/disable
-    private var _cachedEnabledToolDefs: List<ToolDefinitionBuilder>? = null
+    // Cached enabled tool definitions and JSON, invalidated on enable/disable
+    @Volatile private var _cachedEnabledToolDefs: List<ToolDefinitionBuilder>? = null
 
     // Set of enabled plugin names
     private val _enabledPluginNames = MutableStateFlow<Set<String>>(emptySet())
@@ -78,7 +77,6 @@ object PluginManager {
 
     // Bypass model check for tool calling
     private val _toolCallingBypassEnabled = MutableStateFlow(false)
-    val toolCallingBypassEnabled: StateFlow<Boolean> = _toolCallingBypassEnabled.asStateFlow()
 
     /**
      * Set whether to bypass the tool calling model check.
@@ -111,28 +109,18 @@ object PluginManager {
         }
 
         _cachedEnabledToolDefs = null
+
         updateRegisteredPlugins()
     }
 
     /**
-     * Enable a plugin. Non-WebSearch plugins are single-select:
-     * enabling one disables all other non-WebSearch plugins.
+     * Enable a plugin. Multiple plugins can be active simultaneously.
      */
     fun enablePlugin(pluginName: String) {
         if (!_plugins.containsKey(pluginName)) return
-
-        // Single-select for non-WebSearch plugins
-        if (pluginName != WEB_SEARCH_PLUGIN_NAME) {
-            val toDisable = _enabledPluginNames.value.filter {
-                it != WEB_SEARCH_PLUGIN_NAME && it != pluginName
-            }
-            if (toDisable.isNotEmpty()) {
-                _enabledPluginNames.value = _enabledPluginNames.value - toDisable
-            }
-        }
-
-        _enabledPluginNames.value += pluginName
+        _enabledPluginNames.update { it + pluginName }
         _cachedEnabledToolDefs = null
+
         syncToolsWithLLM()
     }
 
@@ -141,11 +129,12 @@ object PluginManager {
      */
     fun disablePlugin(pluginName: String) {
         if (!_enabledPluginNames.value.contains(pluginName)) return
-        _enabledPluginNames.value -= pluginName
+        _enabledPluginNames.update { it - pluginName }
         if (pluginName == WEB_SEARCH_PLUGIN_NAME) {
             _isWebSearchEnabled.value = false
         }
         _cachedEnabledToolDefs = null
+
         syncToolsWithLLM()
     }
 
@@ -165,18 +154,15 @@ object PluginManager {
      */
     fun enableWebSearch(enabled: Boolean) {
         _isWebSearchEnabled.value = enabled
-        if (enabled) {
-            if (!_enabledPluginNames.value.contains(WEB_SEARCH_PLUGIN_NAME)) {
-                _enabledPluginNames.value += WEB_SEARCH_PLUGIN_NAME
-                _cachedEnabledToolDefs = null
-                syncToolsWithLLM()
+        val changed = _enabledPluginNames.value.contains(WEB_SEARCH_PLUGIN_NAME) != enabled
+        if (changed) {
+            _enabledPluginNames.update { current ->
+                if (enabled) current + WEB_SEARCH_PLUGIN_NAME
+                else current - WEB_SEARCH_PLUGIN_NAME
             }
-        } else {
-            if (_enabledPluginNames.value.contains(WEB_SEARCH_PLUGIN_NAME)) {
-                _enabledPluginNames.value -= WEB_SEARCH_PLUGIN_NAME
-                _cachedEnabledToolDefs = null
-                syncToolsWithLLM()
-            }
+            _cachedEnabledToolDefs = null
+
+            syncToolsWithLLM()
         }
     }
 
@@ -298,49 +284,31 @@ object PluginManager {
     fun syncToolsWithLLM() {
         val toolDefinitions = getEnabledToolDefinitions()
 
-        val modelInfo = LlmModelWorker.getGgufModelInfo()
-        Log.d(TAG, "Current model info: $modelInfo")
-
         if (toolDefinitions.isEmpty()) {
             LlmModelWorker.clearToolsGguf()
             Log.d(TAG, "Cleared all tools from LLM")
         } else {
-            val toolsJson = convertToolsToJson(toolDefinitions)
-            Log.d(TAG, "Tools JSON (${toolsJson.length} chars): $toolsJson")
-
-            val config = _toolCallingConfig.value
             val mode = _grammarMode.value
-
-            val success = LlmModelWorker.enableToolCallingGguf(
-                toolsJson = toolsJson,
-                grammarMode = mode.value,
-                useTypedGrammar = config.useTypedGrammar
+            val config = ToolCallingConfig(
+                grammarMode = mode,
+                useTypedGrammar = _toolCallingConfig.value.useTypedGrammar
             )
 
+            // Use direct same-process path — properly enables grammar constraints
+            val success = LlmModelWorker.enableToolCallingDirect(toolDefinitions, config)
+
             if (success) {
+                // With STRICT grammar, any model can do tool calling — mark as loaded
+                if (mode == GrammarMode.STRICT && !_isToolCallingModelLoaded.value) {
+                    _isToolCallingModelLoaded.value = true
+                    Log.d(TAG, "Tool calling force-enabled via STRICT grammar")
+                }
                 Log.d(TAG, "Synced ${toolDefinitions.size} tools with LLM " +
                         "(grammar=${mode.name}, typed=${config.useTypedGrammar})")
             } else {
                 Log.e(TAG, "Failed to sync tools with LLM")
             }
         }
-    }
-
-    /**
-     * Convert tool definitions to OpenAI-format JSON
-     */
-    private fun convertToolsToJson(toolDefinitions: List<ToolDefinitionBuilder>): String {
-        val toolsArray = JSONArray()
-
-        for (toolDef in toolDefinitions) {
-            val toolJson = JSONObject().apply {
-                put("type", "function")
-                put("function", toolDef.build().toOpenAIFormat())
-            }
-            toolsArray.put(toolJson)
-        }
-
-        return toolsArray.toString()
     }
 
     /**
@@ -351,22 +319,18 @@ object PluginManager {
     }
 
     /**
-     * Check if a plugin is enabled
-     */
-    fun isPluginEnabled(pluginName: String): Boolean {
-        return _enabledPluginNames.value.contains(pluginName)
-    }
-
-    /**
      * Get tool definitions for all enabled plugins (cached)
      */
     fun getEnabledToolDefinitions(): List<ToolDefinitionBuilder> {
         _cachedEnabledToolDefs?.let { return it }
-        val defs = _enabledPluginNames.value.flatMap { pluginName ->
-            _plugins[pluginName]?.getPluginInfo()?.toolDefinitionBuilder ?: emptyList()
+        synchronized(this) {
+            _cachedEnabledToolDefs?.let { return it }
+            val defs = _enabledPluginNames.value.flatMap { pluginName ->
+                _plugins[pluginName]?.getPluginInfo()?.toolDefinitionBuilder ?: emptyList()
+            }
+            _cachedEnabledToolDefs = defs
+            return defs
         }
-        _cachedEnabledToolDefs = defs
-        return defs
     }
 
     /**
@@ -399,7 +363,7 @@ object PluginManager {
 
         val pluginInfo = plugin.getPluginInfo()
 
-        if (!isPluginEnabled(pluginInfo.name)) {
+        if (!_enabledPluginNames.value.contains(pluginInfo.name)) {
             return MultiTurnToolResult(
                 toolName = toolCall.name,
                 resultJson = """{"error": "Plugin not enabled: ${pluginInfo.name}"}""",
@@ -415,7 +379,7 @@ object PluginManager {
 
             if (result.isSuccess) {
                 val data = result.getOrNull()
-                val resultJson = convertDataToJson(data)
+                val resultJson = convertDataToJson(data, pluginKey)
                 MultiTurnToolResult(
                     toolName = toolCall.name,
                     resultJson = resultJson,
@@ -447,110 +411,6 @@ object PluginManager {
     }
 
     /**
-     * Execute a tool call (legacy single-turn API)
-     */
-    suspend fun executeTool(toolCall: ToolCall): PluginExecutionResult {
-        val startTime = System.currentTimeMillis()
-
-        Log.d(TAG, "Tool call received: ${toolCall.name} with args: ${toolCall.arguments}")
-
-        // O(1) lookup via cached tool name -> plugin key map
-        val pluginKey = _toolNameToPluginKey[toolCall.name.lowercase()]
-        val plugin = pluginKey?.let { _plugins[it] }
-
-        if (plugin == null) {
-            Log.e(TAG, "Tool not found: ${toolCall.name}")
-            Log.d(TAG, "Available tools: ${_toolNameToPluginKey.keys}")
-            val metrics = PluginExecutionMetrics(
-                pluginName = "Unknown",
-                toolName = toolCall.name,
-                executionTimeMs = System.currentTimeMillis() - startTime,
-                success = false,
-                errorMessage = "Tool not found: ${toolCall.name}"
-            )
-            return PluginExecutionResult.Failure(metrics, null)
-        }
-
-        val pluginInfo = plugin.getPluginInfo()
-
-        if (!isPluginEnabled(pluginInfo.name)) {
-            val metrics = PluginExecutionMetrics(
-                pluginName = pluginInfo.name,
-                toolName = toolCall.name,
-                executionTimeMs = System.currentTimeMillis() - startTime,
-                success = false,
-                errorMessage = "Plugin is not enabled: ${pluginInfo.name}"
-            )
-            return PluginExecutionResult.Failure(metrics, null)
-        }
-
-        return try {
-            val result = plugin.executeTool(toolCall)
-            val executionTime = System.currentTimeMillis() - startTime
-
-            if (result.isSuccess) {
-                val data = result.getOrNull()
-                val metrics = PluginExecutionMetrics(
-                    pluginName = pluginInfo.name,
-                    toolName = toolCall.name,
-                    executionTimeMs = executionTime,
-                    success = true
-                )
-
-                val resultDataJson = convertDataToJson(data)
-
-                val resultData = PluginResultData(
-                    pluginName = pluginInfo.name,
-                    toolName = toolCall.name,
-                    inputParams = toolCall.arguments.toString(),
-                    resultData = resultDataJson,
-                    success = true
-                )
-
-                PluginExecutionResult.Success(metrics, resultData, data!!)
-            } else {
-                val error = result.exceptionOrNull()
-                val metrics = PluginExecutionMetrics(
-                    pluginName = pluginInfo.name,
-                    toolName = toolCall.name,
-                    executionTimeMs = executionTime,
-                    success = false,
-                    errorMessage = error?.message ?: "Unknown error"
-                )
-
-                val resultData = PluginResultData(
-                    pluginName = pluginInfo.name,
-                    toolName = toolCall.name,
-                    inputParams = toolCall.arguments.toString(),
-                    resultData = error?.message ?: "Unknown error",
-                    success = false
-                )
-
-                PluginExecutionResult.Failure(metrics, resultData)
-            }
-        } catch (e: Exception) {
-            val executionTime = System.currentTimeMillis() - startTime
-            val metrics = PluginExecutionMetrics(
-                pluginName = pluginInfo.name,
-                toolName = toolCall.name,
-                executionTimeMs = executionTime,
-                success = false,
-                errorMessage = e.message ?: "Unknown error"
-            )
-
-            val resultData = PluginResultData(
-                pluginName = pluginInfo.name,
-                toolName = toolCall.name,
-                inputParams = toolCall.arguments.toString(),
-                resultData = e.message ?: "Unknown error",
-                success = false
-            )
-
-            PluginExecutionResult.Failure(metrics, resultData)
-        }
-    }
-
-    /**
      * Update the list of registered plugins
      */
     private fun updateRegisteredPlugins() {
@@ -558,68 +418,14 @@ object PluginManager {
     }
 
     /**
-     * Convert plugin result data to JSON string
+     * Convert plugin result data to JSON string.
+     * Delegates to each plugin's serializeResult() method.
      */
-    private fun convertDataToJson(data: Any?): String {
+    private fun convertDataToJson(data: Any?, pluginKey: String? = null): String {
         if (data == null) return "{}"
-
         return try {
-            when (data) {
-                is com.dark.tool_neuron.models.plugins.DuckDuckGoSearchResponse -> {
-                    JSONObject().apply {
-                        put("query", data.query)
-                        put("totalResults", data.totalResults)
-                        put("searchTime", data.searchTime)
-
-                        val resultsArray = JSONArray()
-                        data.results.forEach { result ->
-                            resultsArray.put(JSONObject().apply {
-                                put("title", result.title)
-                                put("snippet", result.snippet)
-                                put("url", result.url)
-                                put("position", result.position)
-                            })
-                        }
-                        put("results", resultsArray)
-                    }.toString()
-                }
-                is com.dark.tool_neuron.models.plugins.ScrapedContent -> {
-                    JSONObject().apply {
-                        put("url", data.url)
-                        put("title", data.title)
-                        put("content", data.content)
-                        put("contentLength", data.contentLength)
-                        put("fetchTime", data.fetchTime)
-
-                        val metadataObj = JSONObject()
-                        data.metadata.forEach { (key, value) ->
-                            metadataObj.put(key, value)
-                        }
-                        put("metadata", metadataObj)
-                    }.toString()
-                }
-                is DeviceInfoResponse -> {
-                    JSONObject().apply {
-                        put("infoType", data.infoType)
-                        val infoObj = JSONObject()
-                        data.info.forEach { (key, value) -> infoObj.put(key, value) }
-                        put("info", infoObj)
-                    }.toString()
-                }
-                is FileManagerResponse -> {
-                    JSONObject().apply {
-                        put("tool", data.tool)
-                        put("path", data.path)
-                        put("content", data.content)
-                        put("fileCount", data.fileCount)
-                        put("success", data.success)
-                    }.toString()
-                }
-                else -> {
-                    Log.w(TAG, "Unknown data type: ${data::class.simpleName}, using toString()")
-                    data.toString()
-                }
-            }
+            val plugin = pluginKey?.let { _plugins[it] }
+            plugin?.serializeResult(data) ?: data.toString()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to convert data to JSON: ${e.message}")
             data.toString()
@@ -639,18 +445,3 @@ data class MultiTurnToolResult(
     val rawData: Any? = null
 )
 
-/**
- * Result of plugin execution (legacy)
- */
-sealed class PluginExecutionResult {
-    data class Success(
-        val metrics: PluginExecutionMetrics,
-        val resultData: PluginResultData,
-        val data: Any
-    ) : PluginExecutionResult()
-
-    data class Failure(
-        val metrics: PluginExecutionMetrics,
-        val resultData: PluginResultData?
-    ) : PluginExecutionResult()
-}

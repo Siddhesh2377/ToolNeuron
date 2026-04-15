@@ -220,42 +220,6 @@ object SemanticChunker {
         return nodes
     }
 
-    /**
-     * Group messages into conversation windows for better context.
-     */
-    fun chunkChatAsConversations(
-        messages: List<Messages>,
-        chatId: String,
-        chatName: String,
-        windowSize: Int = 4
-    ): List<NeuronNode> {
-        val nodes = mutableListOf<NeuronNode>()
-
-        messages.chunked(windowSize).forEachIndexed { windowIndex, window ->
-            val combinedContent = window.joinToString("\n\n") { msg ->
-                val prefix = if (msg.role == Role.User) "User: " else "Assistant: "
-                prefix + msg.content.content
-            }
-
-            if (combinedContent.isNotBlank()) {
-                nodes.add(
-                    NeuronNode(
-                        content = combinedContent,
-                        sourceType = SourceType.CHAT,
-                        metadata = NodeMetadata(
-                            sourceId = chatId,
-                            sourceName = chatName,
-                            position = windowIndex,
-                            extras = mapOf("windowSize" to windowSize.toString())
-                        )
-                    )
-                )
-            }
-        }
-
-        return nodes
-    }
-
     private fun splitByParagraphs(text: String): List<String> {
         return text.split(Regex("\n\\s*\n"))
             .map { it.trim() }
@@ -369,11 +333,6 @@ object SemanticChunker {
         }
 
         return sentences.takeLast(n).joinToString(" ")
-    }
-
-    private fun getLastNTokens(text: String, n: Int): String {
-        val words = text.split(Regex("\\s+"))
-        return words.takeLast(n).joinToString(" ")
     }
 
     private fun estimateTokens(text: String): Int {
@@ -512,20 +471,14 @@ class NeuronGraph(
     suspend fun addChatMessages(
         messages: List<Messages>,
         chatId: String,
-        chatName: String,
-        asConversationWindows: Boolean = false,
-        windowSize: Int = 4
+        chatName: String
     ): Result<List<NeuronNode>> = withContext(Dispatchers.IO) {
         try {
             if (!embeddingEngine.isInitialized()) {
                 return@withContext Result.failure(Exception("Embedding provider not initialized"))
             }
 
-            val newNodes = if (asConversationWindows) {
-                SemanticChunker.chunkChatAsConversations(messages, chatId, chatName, windowSize)
-            } else {
-                SemanticChunker.chunkChatMessages(messages, chatId, chatName, settings)
-            }
+            val newNodes = SemanticChunker.chunkChatMessages(messages, chatId, chatName, settings)
 
             if (newNodes.isEmpty()) {
                 return@withContext Result.success(emptyList())
@@ -879,39 +832,6 @@ class NeuronGraph(
         }
 
         return result
-    }
-
-    // ========================================================================
-    // Clear / Remove
-    // ========================================================================
-
-    suspend fun clear() = mutex.withLock {
-        nodes.clear()
-        searchIndex?.clear()
-    }
-
-    suspend fun removeNode(nodeId: String) = mutex.withLock {
-        val node = nodes.remove(nodeId) ?: return@withLock
-
-        // Remove edges pointing to this node
-        for (existingNode in nodes.values) {
-            existingNode.edges.removeAll { it.targetId == nodeId }
-        }
-    }
-
-    suspend fun removeSource(sourceId: String) = mutex.withLock {
-        val nodeIds = nodes.values
-            .filter { it.metadata.sourceId == sourceId }
-            .map { it.id }
-
-        for (nodeId in nodeIds) {
-            nodes.remove(nodeId)
-        }
-
-        // Clean up edges
-        for (node in nodes.values) {
-            node.edges.removeAll { it.targetId in nodeIds }
-        }
     }
 
     // ========================================================================

@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.database.dao
 
 import androidx.room.Dao
-import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
@@ -18,9 +17,6 @@ interface RagDao {
     @Update
     suspend fun update(rag: InstalledRag)
 
-    @Delete
-    suspend fun delete(rag: InstalledRag)
-
     @Query("DELETE FROM installed_rags WHERE id = :id")
     suspend fun deleteById(id: String)
 
@@ -32,9 +28,6 @@ interface RagDao {
 
     @Query("SELECT * FROM installed_rags ORDER BY created_at DESC")
     suspend fun getAllRagsOnce(): List<InstalledRag>
-
-    @Query("SELECT * FROM installed_rags WHERE status = :status ORDER BY created_at DESC")
-    fun getRagsByStatus(status: RagStatus): Flow<List<InstalledRag>>
 
     @Query("SELECT * FROM installed_rags WHERE status = 'LOADED' ORDER BY last_loaded_at DESC")
     fun getLoadedRags(): Flow<List<InstalledRag>>
@@ -66,9 +59,4 @@ interface RagDao {
     @Query("SELECT COUNT(*) FROM installed_rags WHERE status = 'LOADED'")
     suspend fun getLoadedRagCount(): Int
 
-    @Query("SELECT * FROM installed_rags WHERE name LIKE '%' || :query || '%' OR description LIKE '%' || :query || '%' OR tags LIKE '%' || :query || '%'")
-    suspend fun searchRags(query: String): List<InstalledRag>
-
-    @Query("SELECT * FROM installed_rags WHERE domain = :domain ORDER BY created_at DESC")
-    fun getRagsByDomain(domain: String): Flow<List<InstalledRag>>
 }

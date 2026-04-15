@@ -18,9 +18,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.api.SuperPlugin
-import com.dark.tool_neuron.ui.theme.rDp
-import com.mp.ai_gguf.toolcalling.ToolCall
-import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
+import com.dark.gguf_lib.toolcalling.ToolCall
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
@@ -119,6 +118,17 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
                     .stringParam("file_type", "Filter by file type: 'pdf', 'text', 'image'", required = false)
             )
         )
+    }
+
+    override fun serializeResult(data: Any): String = when (data) {
+        is FileManagerResponse -> JSONObject().apply {
+            put("tool", data.tool)
+            put("path", data.path)
+            put("content", data.content)
+            put("fileCount", data.fileCount)
+            put("success", data.success)
+        }.toString()
+        else -> data.toString()
     }
 
     override suspend fun executeTool(toolCall: ToolCall): Result<Any> {
@@ -576,7 +586,7 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
                             text = data.toString(2),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(8.dp))
+                            modifier = Modifier.padding(8.dp)
                         )
                     }
                 }
@@ -592,12 +602,12 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "File Listing",
@@ -628,14 +638,14 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
                 if (content.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(rDp(4.dp)),
+                        shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Text(
                             text = content.take(500) + if (content.length > 500) "\n..." else "",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(8.dp)),
+                            modifier = Modifier.padding(8.dp),
                             maxLines = 15,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -661,12 +671,12 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = title,
@@ -685,14 +695,14 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
                 if (content.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(rDp(4.dp)),
+                        shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Text(
                             text = content.take(500) + if (content.length > 500) "..." else "",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(8.dp)),
+                            modifier = Modifier.padding(8.dp),
                             maxLines = 20,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -710,12 +720,12 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "File Search",
@@ -746,14 +756,14 @@ class FileManagerPlugin(private val context: Context) : SuperPlugin {
 
                 if (content.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(rDp(4.dp)),
+                        shape = RoundedCornerShape(4.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Text(
                             text = content.take(500) + if (content.length > 500) "\n..." else "",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(8.dp)),
+                            modifier = Modifier.padding(8.dp),
                             maxLines = 15,
                             overflow = TextOverflow.Ellipsis
                         )

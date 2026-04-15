@@ -9,17 +9,17 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 class BackupManager(private val vaultFile: File) {
-    
+
     suspend fun backup(destination: File, compress: Boolean = true): BackupResult = withContext(Dispatchers.IO) {
         if (!vaultFile.exists()) {
             return@withContext BackupResult(false, 0, "Vault file does not exist")
         }
-        
+
         destination.parentFile?.mkdirs()
-        
+
         val startTime = System.currentTimeMillis()
         val originalSize = vaultFile.length()
-        
+
         if (compress) {
             FileInputStream(vaultFile).use { input ->
                 FileOutputStream(destination).use { output ->
@@ -31,10 +31,10 @@ class BackupManager(private val vaultFile: File) {
         } else {
             vaultFile.copyTo(destination, overwrite = true)
         }
-        
+
         val backupSize = destination.length()
         val duration = System.currentTimeMillis() - startTime
-        
+
         BackupResult(
             success = true,
             durationMs = duration,
@@ -43,15 +43,15 @@ class BackupManager(private val vaultFile: File) {
             backupSize = backupSize
         )
     }
-    
+
     suspend fun restore(backup: File, decompress: Boolean = true): BackupResult = withContext(Dispatchers.IO) {
         if (!backup.exists()) {
             return@withContext BackupResult(false, 0, "Backup file does not exist")
         }
-        
+
         val startTime = System.currentTimeMillis()
         val backupSize = backup.length()
-        
+
         if (decompress) {
             FileInputStream(backup).use { input ->
                 GZIPInputStream(input).use { gzip ->
@@ -63,10 +63,10 @@ class BackupManager(private val vaultFile: File) {
         } else {
             backup.copyTo(vaultFile, overwrite = true)
         }
-        
+
         val restoredSize = vaultFile.length()
         val duration = System.currentTimeMillis() - startTime
-        
+
         BackupResult(
             success = true,
             durationMs = duration,
@@ -74,31 +74,6 @@ class BackupManager(private val vaultFile: File) {
             originalSize = backupSize,
             backupSize = restoredSize
         )
-    }
-    
-    suspend fun autoBackup(backupDir: File, maxBackups: Int = 5): BackupResult = withContext(Dispatchers.IO) {
-        backupDir.mkdirs()
-        
-        val timestamp = System.currentTimeMillis()
-        val backupFile = File(backupDir, "vault_$timestamp.mvlt.gz")
-        
-        val result = backup(backupFile, compress = true)
-        
-        if (result.success) {
-            cleanupOldBackups(backupDir, maxBackups)
-        }
-        
-        result
-    }
-    
-    private fun cleanupOldBackups(backupDir: File, maxBackups: Int) {
-        val backups = backupDir.listFiles { file ->
-            file.name.startsWith("vault_") && file.name.endsWith(".mvlt.gz")
-        }?.sortedByDescending { it.lastModified() } ?: return
-        
-        if (backups.size > maxBackups) {
-            backups.drop(maxBackups).forEach { it.delete() }
-        }
     }
 }
 

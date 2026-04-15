@@ -20,6 +20,14 @@ object AppStateManager {
     private val _isChatRefreshed = MutableStateFlow(false)
     val isChatRefreshed: StateFlow<Boolean> = _isChatRefreshed.asStateFlow()
 
+    // ── Model Reload Signal ──
+
+    private val _reloadModelRequested = MutableStateFlow(false)
+    val reloadModelRequested: StateFlow<Boolean> = _reloadModelRequested.asStateFlow()
+
+    fun requestModelReload() { _reloadModelRequested.value = true }
+    fun clearReloadRequest() { _reloadModelRequested.value = false }
+
     // Model loading progress tracking
     private var loadingStartTime: Long = 0
 
@@ -41,19 +49,6 @@ object AppStateManager {
         }
         currentModelName = modelName
         setStateIfChanged(AppState.LoadingModel(modelName, progress))
-    }
-
-    /**
-     * Update model loading progress (0.0 to 1.0)
-     */
-    fun updateLoadingProgress(progress: Float) {
-        val currentState = _appState.value
-        if (currentState is AppState.LoadingModel) {
-            setStateIfChanged(AppState.LoadingModel(
-                modelName = currentState.modelName,
-                progress = progress.coerceIn(0f, 1f)
-            ))
-        }
     }
 
     /**
@@ -97,15 +92,6 @@ object AppStateManager {
     fun setGeneratingImage() {
         currentModelName?.let {
             setStateIfChanged(AppState.GeneratingImage(it))
-        }
-    }
-
-    /**
-     * Update when audio generation starts
-     */
-    fun setGeneratingAudio() {
-        currentModelName?.let {
-            setStateIfChanged(AppState.GeneratingAudio(it))
         }
     }
 
@@ -170,35 +156,6 @@ object AppStateManager {
     }
 
     /**
-     * Get current state (synchronous)
-     */
-    fun getCurrentState(): AppState = _appState.value
-
-    /**
-     * Check if currently generating
-     */
-    fun isGenerating(): Boolean = _appState.value is AppState.GeneratingText ||
-            _appState.value is AppState.GeneratingImage ||
-            _appState.value is AppState.GeneratingAudio ||
-            _appState.value is AppState.ExecutingPlugin ||
-            _appState.value is AppState.PluginExecutionComplete
-
-    /**
-     * Check if model is loaded
-     */
-    fun isModelLoaded(): Boolean = currentModelName != null
-
-    /**
-     * Check if model is currently loading
-     */
-    fun isLoadingModel(): Boolean = _appState.value is AppState.LoadingModel
-
-    /**
-     * Get current model name
-     */
-    fun getCurrentModelName(): String? = currentModelName
-
-    /**
      * Internal: Determine the correct idle state based on current conditions
      */
     private fun updateIdleState() {
@@ -210,13 +167,4 @@ object AppStateManager {
         })
     }
 
-    /**
-     * Reset to initial state (useful for testing or logout)
-     */
-    fun reset() {
-        currentModelName = null
-        hasMessages = false
-        loadingStartTime = 0
-        _appState.value = AppState.Welcome
-    }
 }

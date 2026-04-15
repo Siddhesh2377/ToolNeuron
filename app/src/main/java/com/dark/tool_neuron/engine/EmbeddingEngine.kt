@@ -2,39 +2,32 @@ package com.dark.tool_neuron.engine
 
 import android.content.Context
 import android.util.Log
-import com.mp.ai_gguf.GGUFNativeLib
-import com.mp.ai_gguf.models.EmbeddingCallback
-import com.mp.ai_gguf.models.EmbeddingResult
+import com.dark.gguf_lib.EmbeddingEngine as LibEmbeddingEngine
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 
 data class EmbeddingConfig(
     val modelPath: String,
     val threads: Int = 0,
-    val contextSize: Int = 512,  // all-MiniLM-L6-v2 has max_position_embeddings=512
+    val contextSize: Int = 512,
     val normalize: Boolean = true
 )
 
 class EmbeddingEngine {
-    private val nativeLib = GGUFNativeLib()
+    private val libEngine = LibEmbeddingEngine()
     private var config: EmbeddingConfig? = null
     private var dimension: Int = 0
     private val initMutex = Mutex()
 
     companion object {
         private const val TAG = "EmbeddingEngine"
-        private const val EMBED_TIMEOUT_MS = 15000L
 
         fun getModelPath(context: Context): File {
-            return File(context.filesDir, "embedding_model/all-MiniLM-L6-v2-Q5_K_M.gguf")
+            return AppPaths.embeddingModel(context)
         }
 
         fun isModelDownloaded(context: Context): Boolean {
@@ -45,7 +38,6 @@ class EmbeddingEngine {
     suspend fun initialize(config: EmbeddingConfig): Result<Unit> = initMutex.withLock {
         withContext(Dispatchers.IO) {
             try {
-                // Already initialized with same config
                 if (isInitialized() && this@EmbeddingEngine.config?.modelPath == config.modelPath) {
                     Log.d(TAG, "Already initialized with same model")
                     return@withContext Result.success(Unit)
@@ -64,14 +56,14 @@ class EmbeddingEngine {
 
                 Log.d(TAG, "Loading embedding model: ${config.modelPath} (${modelFile.length() / 1024}KB)")
 
-                val success = nativeLib.nativeLoadEmbeddingModel(
+                val success = libEngine.load(
                     path = config.modelPath,
                     threads = config.threads,
                     contextSize = config.contextSize
                 )
 
                 if (!success) {
-                    Log.e(TAG, "Native nativeLoadEmbeddingModel returned false")
+                    Log.e(TAG, "Native load returned false")
                     return@withContext Result.failure(Exception("Failed to load embedding model: native library returned false"))
                 }
 
@@ -79,7 +71,8 @@ class EmbeddingEngine {
 
                 val testResult = embed("test")
                 if (testResult == null || testResult.isEmpty()) {
-                    Log.e(TAG, "Test embedding returned null/empty")
+                    Log.e(TAG, "Test embedding returned null/empty — releasing native handle")
+                    libEngine.close()
                     return@withContext Result.failure(Exception("Test embedding generation failed or returned empty"))
                 }
                 dimension = testResult.size
@@ -94,52 +87,16 @@ class EmbeddingEngine {
         }
     }
 
-    suspend fun embed(text: String): FloatArray? = withContext(Dispatchers.IO) {
-        val result = withTimeoutOrNull(EMBED_TIMEOUT_MS) {
-            suspendCancellableCoroutine { continuation ->
-                val resumed = AtomicBoolean(false)
-
-                val callback = object : EmbeddingCallback {
-                    override fun onComplete(result: EmbeddingResult) {
-                        if (resumed.compareAndSet(false, true)) {
-                            continuation.resume(result.embeddings)
-                        } else {
-                            Log.w(TAG, "Callback fired after continuation already resumed")
-                        }
-                    }
-
-                    override fun onError(message: String) {
-                        if (resumed.compareAndSet(false, true)) {
-                            continuation.resumeWithException(Exception(message))
-                        } else {
-                            Log.w(TAG, "Error callback fired after continuation already resumed: $message")
-                        }
-                    }
-                }
-
-                val success = nativeLib.nativeEncodeText(
-                    text = text,
-                    normalize = config?.normalize ?: true,
-                    callback = callback
-                )
-
-                if (!success) {
-                    if (resumed.compareAndSet(false, true)) {
-                        continuation.resumeWithException(Exception("Failed to start encoding - native call returned false"))
-                    }
-                }
-            }
+    suspend fun embed(text: String): FloatArray? {
+        if (!isInitialized()) {
+            Log.w(TAG, "embed() called before initialization")
+            return null
         }
-
-        if (result == null) {
-            Log.e(TAG, "Embedding timed out after ${EMBED_TIMEOUT_MS}ms for text: ${text.take(50)}")
-        }
-        result
+        return libEngine.embed(text, config?.normalize ?: true)
     }
 
-    suspend fun embedBatch(texts: List<String>): List<FloatArray?> = withContext(Dispatchers.IO) {
-        texts.map { embed(it) }
-    }
+    suspend fun embedBatch(texts: List<String>): List<FloatArray?> =
+        libEngine.embedBatch(texts, config?.normalize ?: true)
 
     fun isInitialized(): Boolean = config != null && dimension > 0
 
@@ -148,9 +105,8 @@ class EmbeddingEngine {
     fun getModelName(): String = config?.modelPath?.substringAfterLast("/") ?: "unknown"
 
     fun close() {
-        nativeLib.nativeReleaseEmbeddingModel()
+        libEngine.close()
         config = null
         dimension = 0
     }
-
 }

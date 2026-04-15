@@ -11,14 +11,12 @@ import com.dark.tool_neuron.neuron_example.NeuronNode
 import com.dark.tool_neuron.neuron_example.NodeMetadata
 import com.dark.tool_neuron.neuron_example.SourceType
 import com.dark.tool_neuron.repo.RagRepository
-import com.memoryvault.EmbeddingItem
 import com.memoryvault.FileItem
 import com.memoryvault.MemoryVault
 import com.memoryvault.MessageItem
-import com.memoryvault.VaultItem
-import com.memoryvault.core.BlockType
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
 import java.io.File
 import java.util.UUID
 
@@ -100,7 +98,7 @@ class RagVaultIntegration(
             }
 
             val ragId = UUID.randomUUID().toString()
-            val ragsDir = File(context.filesDir, "rags").also { it.mkdirs() }
+            val ragsDir = AppPaths.rags(context)
             val destFile = File(ragsDir, "$ragId.neuron")
 
             val payload = graph.serialize()
@@ -122,111 +120,6 @@ class RagVaultIntegration(
 
             ragRepository.insertRag(ragInfo)
             Result.success(ragInfo)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun createRagFromVaultCategory(
-        category: String,
-        name: String? = null,
-        description: String = "",
-        domain: String = "memory-vault",
-        ragTags: List<String> = emptyList()
-    ): Result<InstalledRag> = withContext(Dispatchers.IO) {
-        try {
-            val vault = memoryVault ?: return@withContext Result.failure(Exception("Vault not initialized"))
-
-            if (!embeddingEngine.isInitialized()) {
-                return@withContext Result.failure(Exception("Embedding provider not initialized"))
-            }
-
-            val items = vault.getByCategory(category)
-
-            if (items.isEmpty()) {
-                return@withContext Result.failure(Exception("No items found in category: $category"))
-            }
-
-            val graph = NeuronGraph(embeddingEngine, GraphSettings.DEFAULT)
-
-            items.forEachIndexed { index, item ->
-                val content = when (item) {
-                    is MessageItem -> item.content
-                    is FileItem -> String(item.data)
-                    else -> null
-                }
-
-                content?.let {
-                    val node = NeuronNode(
-                        id = item.id,
-                        content = it,
-                        sourceType = when (item) {
-                            is MessageItem -> SourceType.TEXT
-                            is FileItem -> SourceType.TEXT
-                            else -> SourceType.CUSTOM
-                        },
-                        metadata = NodeMetadata(
-                            sourceId = category,
-                            sourceName = name ?: category,
-                            position = index,
-                            timestamp = item.timestamp
-                        )
-                    )
-                    graph.addNode(node)
-                }
-            }
-
-            val ragId = UUID.randomUUID().toString()
-            val ragsDir = File(context.filesDir, "rags").also { it.mkdirs() }
-            val destFile = File(ragsDir, "$ragId.neuron")
-
-            val payload = graph.serialize()
-            destFile.writeBytes(payload)
-
-            val ragInfo = InstalledRag(
-                id = ragId,
-                name = name ?: "Category: $category",
-                description = description,
-                sourceType = RagSourceType.MEMORY_VAULT,
-                filePath = destFile.absolutePath,
-                nodeCount = graph.nodeCount,
-                embeddingDimension = embeddingEngine.getDimension(),
-                embeddingModel = embeddingEngine.getModelName(),
-                domain = domain,
-                tags = ragTags.joinToString(","),
-                sizeBytes = destFile.length()
-            )
-
-            ragRepository.insertRag(ragInfo)
-            Result.success(ragInfo)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun addTextToVaultAsRagSource(
-        text: String,
-        category: String = "rag-source",
-        tags: Set<String> = emptySet()
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val vault = memoryVault ?: return@withContext Result.failure(Exception("Vault not initialized"))
-            val id = vault.addMessage(text, category, tags)
-            Result.success(id)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    suspend fun addEmbeddingToVault(
-        vector: FloatArray,
-        linkedContentId: String,
-        modelName: String = "default"
-    ): Result<String> = withContext(Dispatchers.IO) {
-        try {
-            val vault = memoryVault ?: return@withContext Result.failure(Exception("Vault not initialized"))
-            val id = vault.addEmbedding(vector, linkedContentId, modelName)
-            Result.success(id)
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -283,15 +176,6 @@ class RagVaultIntegration(
         }
     }
 
-    suspend fun getVaultCategories(): List<String> = withContext(Dispatchers.IO) {
-        try {
-            val vault = memoryVault ?: return@withContext emptyList()
-            val allMetadata = vault.getAllMetadata()
-            allMetadata.mapNotNull { it.category }.distinct()
-        } catch (e: Exception) {
-            emptyList()
-        }
-    }
 }
 
 data class ScoredVaultContent(

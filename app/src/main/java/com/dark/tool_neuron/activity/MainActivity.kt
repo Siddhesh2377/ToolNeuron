@@ -17,36 +17,44 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
+import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
-import com.dark.tool_neuron.ui.screen.AiMemoryScreen
-import com.dark.tool_neuron.ui.screen.ModelConfigEditorScreen
-import com.dark.tool_neuron.ui.screen.ModelStoreScreen
-import com.dark.tool_neuron.ui.screen.PersonaEditorScreen
-import com.dark.tool_neuron.ui.screen.PersonaScreen
-import com.dark.tool_neuron.ui.screen.SetupScreen
-import com.dark.tool_neuron.ui.screen.SettingsScreen
-import com.dark.tool_neuron.ui.screen.TermsAndConditionsScreen
-import com.dark.tool_neuron.ui.screen.WelcomeScreen
-import com.dark.tool_neuron.ui.screen.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screen.gate.VaultGateScreen
+import com.dark.tool_neuron.ui.screen.guide.GuideScreen
+import com.dark.tool_neuron.ui.screen.guide.TermsAndConditionsScreen
+import com.dark.tool_neuron.ui.screen.home.HomeScreen
+import com.dark.tool_neuron.ui.screen.memory.AiMemoryScreen
 import com.dark.tool_neuron.ui.screen.memory.VaultDashboard
+import com.dark.tool_neuron.ui.screen.model_config.ModelConfigEditorScreen
+import com.dark.tool_neuron.ui.screen.model_store.ModelStoreScreen
+import com.dark.tool_neuron.ui.screen.settings.SettingsScreen
+import com.dark.tool_neuron.ui.screen.setup.ImageGenSetupScreen
+import com.dark.tool_neuron.ui.screen.setup.SetupScreen
+import com.dark.tool_neuron.viewModel.VaultGateViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.dark.tool_neuron.global.AppPaths
+import java.io.File
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -80,32 +88,64 @@ class MainActivity : ComponentActivity() {
                 // Compute start destination from onboarding state + installed models
                 var startDestination by remember { mutableStateOf<String?>(null) }
                 var hasModelsInstalled by remember { mutableStateOf(false) }
+                var needsMigration by remember { mutableStateOf(false) }
 
                 LaunchedEffect(Unit) {
                     withContext(Dispatchers.IO) {
-                        val termsDataStore = TermsDataStore(context)
-                        val setupDataStore = SetupDataStore(context)
-                        val modelRepository = AppContainer.getModelRepository()
-
-                        val termsAccepted = termsDataStore.hasAcceptedTerms.first()
-                        val setupDone = setupDataStore.isSetupDone.first()
-                        val models = modelRepository.getAllModels().first()
-
-                        val hasModel = models.any {
-                            it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                        // Parallelize DataStore reads — each opens a separate file
+                        val (termsAccepted, setupDone, guideSeen) = coroutineScope {
+                            val t = async { TermsDataStore(context).hasAcceptedTerms.first() }
+                            val s = async { SetupDataStore(context).isSetupDone.first() }
+                            val g = async { AppSettingsDataStore(context).guideSeen.first() }
+                            Triple(t.await(), s.await(), g.await())
                         }
+
+                        // Auto-init vault for returning users (exists on disk but not yet opened)
+                        if (!VaultManager.isReady.value && VaultManager.exists(context)) {
+                            VaultManager.initPlaintext(context)
+                            AppContainer.ensureVaultInitialized()
+                        }
+
+                        val vaultReady = VaultManager.isReady.value
+
+                        // Check for legacy data that needs migration
+                        val roomDb = context.getDatabasePath("llm_models_database").exists()
+                        val vault = AppPaths.vaultFile(context).exists()
+                        needsMigration = roomDb || vault
+
+                        // Only check models if vault is ready
+                        val hasModel = if (vaultReady) {
+                            try {
+                                val modelRepository = AppContainer.getModelRepository()
+                                val models = modelRepository.getAllModels().first()
+                                models.any {
+                                    it.providerType == ProviderType.GGUF || it.providerType == ProviderType.DIFFUSION
+                                }
+                            } catch (_: Exception) { false }
+                        } else false
                         hasModelsInstalled = hasModel
 
                         startDestination = when {
-                            // Terms not accepted: returning user (has models) goes to terms directly, new user gets full onboarding
-                            !termsAccepted && hasModel -> Screen.Terms.route
-                            !termsAccepted -> Screen.Welcome.route
+                            // Returning user: vault ready + terms accepted + (setup done or has model)
+                            vaultReady && termsAccepted && (setupDone || hasModel) -> Screen.Chat.route
 
-                            // Terms accepted but setup not done and no models: go to setup
-                            !setupDone && !hasModel -> Screen.OnboardingSetup.route
+                            // Vault ready but terms not accepted
+                            vaultReady && !termsAccepted -> Screen.Terms.route
 
-                            // Everything done
-                            else -> Screen.Chat.route
+                            // Vault ready but setup not done
+                            vaultReady && !setupDone && !hasModel -> Screen.OnboardingSetup.route
+
+                            // First launch: show intro
+                            !guideSeen -> Screen.Intro.route
+
+                            // Needs migration and vault not ready: go to migration
+                            needsMigration && !vaultReady -> Screen.Migration.route
+
+                            // Guide seen but terms not accepted
+                            !termsAccepted -> Screen.Terms.route
+
+                            // Fallback: go to setup (which handles vault init if needed)
+                            else -> Screen.OnboardingSetup.route
                         }
                     }
                 }
@@ -114,7 +154,8 @@ class MainActivity : ComponentActivity() {
 
                 AppNavigation(
                     startDestination = dest,
-                    hasModelsInstalled = hasModelsInstalled
+                    hasModelsInstalled = hasModelsInstalled,
+                    needsMigration = needsMigration
                 )
             }
         }
@@ -131,7 +172,9 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String) {
     // Onboarding (flat routes so any can be used as startDestination)
-    object Welcome : Screen("welcome")
+    object Intro : Screen("intro")
+    object Guide : Screen("guide")
+    object Migration : Screen("migration")
     object Terms : Screen("terms")
     object OnboardingSetup : Screen("setup")
 
@@ -141,17 +184,15 @@ sealed class Screen(val route: String) {
     object Editor : Screen("editor")
     object Settings : Screen("settings")
     object VaultManager : Screen("vault_manager")
-    object Personas : Screen("personas")
-    object PersonaEditor : Screen("persona_editor/{personaId}") {
-        fun createRoute(personaId: String? = null) = "persona_editor/${personaId ?: "new"}"
-    }
     object AiMemory : Screen("ai_memory")
+    object ImageGenSetup : Screen("image_gen_setup")
 }
 
 @Composable
 fun AppNavigation(
     startDestination: String,
-    hasModelsInstalled: Boolean
+    hasModelsInstalled: Boolean,
+    needsMigration: Boolean
 ) {
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = rememberCoroutineScope()
@@ -191,12 +232,36 @@ fun AppNavigation(
     ) {
 
         // ============ ONBOARDING SCREENS ============
-        composable(Screen.Welcome.route) {
-            WelcomeScreen(
-                onContinue = {
-                    navController.navigate(Screen.Terms.route)
+        composable(Screen.Intro.route) {
+            // IntroScreen was removed — skip straight to Guide or Migration
+            LaunchedEffect(Unit) {
+                val nextRoute = if (needsMigration) Screen.Migration.route else Screen.Guide.route
+                navController.navigate(nextRoute) {
+                    popUpTo(Screen.Intro.route) { inclusive = true }
+                }
+            }
+        }
+
+        composable(Screen.Migration.route) {
+            val vaultGateViewModel: VaultGateViewModel = viewModel()
+            VaultGateScreen(
+                viewModel = vaultGateViewModel,
+                onComplete = {
+                    navController.navigate(Screen.Guide.route) {
+                        popUpTo(Screen.Migration.route) { inclusive = true }
+                    }
                 }
             )
+        }
+
+        composable(Screen.Guide.route) {
+            val appSettings = remember { AppSettingsDataStore(context) }
+            GuideScreen(onContinue = {
+                scope.launch { appSettings.saveGuideSeen(true) }
+                navController.navigate(Screen.Terms.route) {
+                    popUpTo(Screen.Guide.route) { inclusive = true }
+                }
+            })
         }
 
         composable(Screen.Terms.route) {
@@ -213,7 +278,9 @@ fun AppNavigation(
                         }
                     } else {
                         // New user: proceed to setup
-                        navController.navigate(Screen.OnboardingSetup.route)
+                        navController.navigate(Screen.OnboardingSetup.route) {
+                            popUpTo(Screen.Terms.route) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -241,8 +308,8 @@ fun AppNavigation(
                 onVaultManagerClick = {
                     navController.navigate(Screen.VaultManager.route)
                 },
-                onCharacterClick = {
-                    navController.navigate(Screen.Personas.route)
+                onImageGenSetupNeeded = {
+                    navController.navigate(Screen.ImageGenSetup.route)
                 },
                 chatViewModel = chatViewModel,
                 llmModelViewModel = llmModelViewModel
@@ -265,7 +332,6 @@ fun AppNavigation(
             SettingsScreen(
                 onNavigateBack = { navController.popBackStack() },
                 onModelEditor = { navController.navigate(Screen.Editor.route) },
-                onPersonasClick = { navController.navigate(Screen.Personas.route) },
                 onAiMemoryClick = { navController.navigate(Screen.AiMemory.route) }
             )
         }
@@ -274,48 +340,26 @@ fun AppNavigation(
             VaultDashboard(onNavigateBack = { navController.popBackStack() })
         }
 
-        composable(Screen.Personas.route) {
-            val activePersonaId by chatViewModel.activePersona.collectAsState()
-            PersonaScreen(
-                activePersonaId = activePersonaId?.id,
-                onPersonaSelected = { personaId -> chatViewModel.setActivePersona(personaId) },
-                onEditPersona = { personaId ->
-                    navController.navigate(Screen.PersonaEditor.createRoute(personaId))
-                },
-                onCreatePersona = {
-                    navController.navigate(Screen.PersonaEditor.createRoute(null))
-                },
-                onNavigateBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(
-            route = Screen.PersonaEditor.route,
-            arguments = listOf(
-                androidx.navigation.navArgument("personaId") {
-                    type = androidx.navigation.NavType.StringType
-                    defaultValue = "new"
-                }
-            )
-        ) { backStackEntry ->
-            val personaId = backStackEntry.arguments?.getString("personaId")
-                ?.takeIf { it != "new" }
-            PersonaEditorScreen(
-                personaId = personaId,
-                onNavigateBack = { navController.popBackStack() },
-                onDeleted = {
-                    // If deleted persona was active, clear selection
-                    if (personaId != null && chatViewModel.activePersona.value?.id == personaId) {
-                        chatViewModel.setActivePersona(null)
-                    }
-                    navController.popBackStack()
-                }
-            )
-        }
-
         composable(Screen.AiMemory.route) {
             AiMemoryScreen(
                 onNavigateBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Screen.ImageGenSetup.route) {
+            ImageGenSetupScreen(
+                onComplete = {
+                    llmModelViewModel.onQnnSetupComplete()
+                    navController.popBackStack()
+                },
+                onSkip = {
+                    llmModelViewModel.onQnnSetupDismissed()
+                    navController.popBackStack()
+                },
+                onBack = {
+                    llmModelViewModel.onQnnSetupDismissed()
+                    navController.popBackStack()
+                }
             )
         }
     }

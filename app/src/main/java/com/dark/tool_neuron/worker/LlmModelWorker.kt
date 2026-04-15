@@ -22,10 +22,10 @@ import com.dark.tool_neuron.service.IGgufGenerationCallback
 import com.dark.tool_neuron.service.ILLMService
 import com.dark.tool_neuron.service.IModelLoadCallback
 import com.dark.tool_neuron.service.LLMService
-import com.mp.ai_gguf.models.DecodingMetrics
-import kotlinx.coroutines.CompletableDeferred
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ProducerScope
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,10 +33,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
 import java.util.Base64
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -45,10 +47,10 @@ object LlmModelWorker {
 
     private const val TAG = "LlmModelWorker"
 
-    private var service: ILLMService? = null
+    // ── Service Binding ──
+    private val _serviceFlow = MutableStateFlow<ILLMService?>(null)
     private var boundContext: Context? = null
-    private val serviceBound = CompletableDeferred<Unit>()
-    private var isBinding = false
+    @Volatile private var isBinding = false
 
     // GGUF state
     private val _isGgufModelLoaded = MutableStateFlow(false)
@@ -61,51 +63,57 @@ object LlmModelWorker {
     private val _diffusionBackendState = MutableStateFlow("Idle")
     val diffusionBackendState: StateFlow<String> = _diffusionBackendState.asStateFlow()
 
-    val _currentGgufModelId = MutableStateFlow<String?>(null)
+    private val _currentGgufModelId = MutableStateFlow<String?>(null)
     val currentGgufModelId: StateFlow<String?> = _currentGgufModelId.asStateFlow()
 
-    val _currentDiffusionModelId = MutableStateFlow<String?>(null)
+    private val _currentDiffusionModelId = MutableStateFlow<String?>(null)
     val currentDiffusionModelId: StateFlow<String?> = _currentDiffusionModelId.asStateFlow()
+
+    fun setCurrentGgufModelId(id: String?) { _currentGgufModelId.value = id }
+    fun setCurrentDiffusionModelId(id: String?) { _currentDiffusionModelId.value = id }
 
 
     private val connection = object : ServiceConnection {
         override fun onServiceConnected(name: ComponentName?, binder: IBinder?) {
-            service = ILLMService.Stub.asInterface(binder)
+            _serviceFlow.value = ILLMService.Stub.asInterface(binder)
             isBinding = false
-            serviceBound.complete(Unit)
             Log.i(TAG, "Service connected")
         }
 
         override fun onServiceDisconnected(name: ComponentName?) {
-            service = null
+            _serviceFlow.value = null
             isBinding = false
             Log.w(TAG, "Service disconnected unexpectedly")
         }
 
         override fun onBindingDied(name: ComponentName?) {
-            service = null
+            _serviceFlow.value = null
             isBinding = false
             Log.e(TAG, "Service binding died")
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            _serviceFlow.value = null
             isBinding = false
             Log.e(TAG, "Service returned null binding")
         }
     }
 
     fun bindService(context: Context) {
-        if (boundContext != null && service != null) {
-            Log.w(TAG, "Service already bound and connected")
-            return
+        synchronized(this) {
+            if (_serviceFlow.value != null) {
+                Log.w(TAG, "Service already bound and connected")
+                return
+            }
+
+            if (isBinding) {
+                Log.w(TAG, "Service binding already in progress")
+                return
+            }
+
+            isBinding = true
         }
 
-        if (isBinding) {
-            Log.w(TAG, "Service binding already in progress")
-            return
-        }
-
-        isBinding = true
         val appContext = context.applicationContext
         val intent = Intent(appContext, LLMService::class.java)
 
@@ -131,7 +139,7 @@ object LlmModelWorker {
         } catch (e: Exception) {
             Log.e(TAG, "Error unbinding service", e)
         } finally {
-            service = null
+            _serviceFlow.value = null
             boundContext = null
             isBinding = false
             _isGgufModelLoaded.value = false
@@ -140,16 +148,64 @@ object LlmModelWorker {
     }
 
     private suspend fun ensureServiceBound(): ILLMService {
-        // Increased timeout for slow devices
-        return withTimeout(10000) {
-            serviceBound.await()
-            service ?: throw IllegalStateException("Service not available")
+        return withTimeout(10_000) {
+            _serviceFlow.first { it != null }!!
         }
     }
 
     /** Wait for the LLM service to be bound (no return value). */
     suspend fun ensureServiceReady() {
-        withTimeout(10000) { serviceBound.await() }
+        withTimeout(10_000) { _serviceFlow.first { it != null } }
+    }
+
+    // ── Shared GGUF Callback Factory ──
+
+    private fun createGgufCallback(
+        scope: ProducerScope<GenerationEvent>
+    ): IGgufGenerationCallback.Stub = object : IGgufGenerationCallback.Stub() {
+        override fun onToken(token: String) {
+            scope.trySend(GenerationEvent.Token(token))
+        }
+
+        override fun onToolCall(name: String, args: String) {
+            scope.trySend(GenerationEvent.ToolCall(name, args))
+        }
+
+        override fun onMetrics(
+            tps: Float, ttftMs: Float, totalMs: Float,
+            tokensEvaluated: Int, tokensPredicted: Int,
+            modelMB: Float, ctxMB: Float, peakMB: Float, memPct: Float
+        ) {
+            scope.trySend(
+                GenerationEvent.Metrics(
+                    DecodingMetrics(
+                        tokensPerSecond = tps,
+                        timeToFirstTokenMs = ttftMs,
+                        totalTimeMs = totalMs,
+                        tokensEvaluated = tokensEvaluated,
+                        tokensPredicted = tokensPredicted,
+                        modelSizeMB = modelMB,
+                        contextSizeMB = ctxMB,
+                        peakMemoryMB = peakMB,
+                        memoryUsagePercent = memPct
+                    )
+                )
+            )
+        }
+
+        override fun onProgress(progress: Float) {
+            scope.trySend(GenerationEvent.Progress(progress))
+        }
+
+        override fun onDone() {
+            scope.trySend(GenerationEvent.Done)
+            scope.close()
+        }
+
+        override fun onError(message: String) {
+            scope.trySend(GenerationEvent.Error(message))
+            scope.close()
+        }
     }
 
     // ==================== GGUF Methods ====================
@@ -158,14 +214,17 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isGgufModelLoaded.value = true
                     Log.i(TAG, "GGUF model loaded successfully")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isGgufModelLoaded.value = false
                     Log.e(TAG, "Failed to load GGUF model: $message")
                     continuation.resume(false)
@@ -181,6 +240,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading GGUF model", e)
                 continuation.resumeWithException(e)
             }
@@ -204,14 +264,24 @@ object LlmModelWorker {
             ?: throw IllegalArgumentException("Cannot open file descriptor for URI: $uri")
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
+
+            continuation.invokeOnCancellation {
+                try { pfd.close() } catch (_: Exception) {}
+            }
+
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
+                    try { pfd.close() } catch (_: Exception) {}
                     _isGgufModelLoaded.value = true
                     Log.i(TAG, "GGUF model loaded successfully from URI")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
+                    try { pfd.close() } catch (_: Exception) {}
                     _isGgufModelLoaded.value = false
                     Log.e(TAG, "Failed to load GGUF model from URI: $message")
                     continuation.resume(false)
@@ -227,6 +297,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading GGUF model from URI", e)
                 pfd.close()
                 continuation.resumeWithException(e)
@@ -234,101 +305,26 @@ object LlmModelWorker {
         }
     }
 
-    fun ggufGenerateStreaming(prompt: String, maxToken: Int): Flow<GenerationEvent> = callbackFlow {
-        serviceBound.await()
-
-        val svc = service
-        if (svc == null) {
-            trySend(GenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
-
-        val callback = object : IGgufGenerationCallback.Stub() {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
-
-            override fun onToolCall(name: String, args: String) {
-                trySend(GenerationEvent.ToolCall(name, args))
-            }
-
-            override fun onMetrics(
-                totalTokens: Int,
-                promptTokens: Int,
-                generatedTokens: Int,
-                tokensPerSecond: Float,
-                timeToFirstToken: Long,
-                totalTimeMs: Long
-            ) {
-                trySend(
-                    GenerationEvent.Metrics(
-                        DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
-                        )
-                    )
-                )
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-        }
-
-        try {
-            svc.generateGguf(prompt, maxToken, callback)
-        } catch (e: Exception) {
-            trySend(GenerationEvent.Error(e.message ?: "Failed to start generation"))
-            close()
-        }
-
-        awaitClose {
-            // Optional: stop generation if flow is cancelled
-        }
-    }.buffer(Channel.UNLIMITED)
-        .flowOn(Dispatchers.IO)
-
     fun ggufStopGeneration() {
-        service?.stopGenerationGguf()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "ggufStopGeneration: service not bound"); return }
+        svc.stopGenerationGguf()
         Log.i(TAG, "GGUF generation stopped")
     }
 
     fun unloadGgufModel() {
-        service?.unloadModelGguf()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "unloadGgufModel: service not bound"); return }
+        svc.unloadModelGguf()
         _isGgufModelLoaded.value = false
         Log.i(TAG, "GGUF model unloaded")
     }
 
     fun getGgufModelInfo(): String? {
-        return service?.modelInfoGguf
+        return _serviceFlow.value?.modelInfoGguf
     }
 
     // ==================== Tool Calling Methods ====================
-
-    /**
-     * Set tools for tool calling (backward-compatible)
-     * @param toolsJson JSON string containing tool definitions in OpenAI format
-     * @return true if tools were set successfully
-     */
-    fun setToolsGguf(toolsJson: String): Boolean {
-        return try {
-            service?.setToolsJsonGguf(toolsJson) ?: false
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to set tools: ${e.message}")
-            false
-        }
-    }
 
     /**
      * Enable tool calling with grammar configuration.
@@ -345,9 +341,25 @@ object LlmModelWorker {
         useTypedGrammar: Boolean = true
     ): Boolean {
         return try {
-            service?.enableToolCallingGguf(toolsJson, grammarMode, useTypedGrammar) ?: false
+            _serviceFlow.value?.enableToolCallingGguf(toolsJson, grammarMode, useTypedGrammar) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to enable tool calling: ${e.message}")
+            false
+        }
+    }
+
+    /**
+     * Direct same-process tool calling setup — bypasses AIDL, properly configures grammar.
+     */
+    fun enableToolCallingDirect(
+        toolDefs: List<com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder>,
+        config: com.dark.gguf_lib.toolcalling.ToolCallingConfig
+    ): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.enableToolCallingDirect(toolDefs, config)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable tool calling (direct): ${e.message}")
             false
         }
     }
@@ -357,7 +369,7 @@ object LlmModelWorker {
      */
     fun clearToolsGguf() {
         try {
-            service?.clearToolsGguf()
+            _serviceFlow.value?.clearToolsGguf()
             Log.i(TAG, "Tools cleared")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear tools: ${e.message}")
@@ -370,7 +382,7 @@ object LlmModelWorker {
      */
     fun isToolCallingSupportedGguf(): Boolean {
         return try {
-            service?.isToolCallingSupportedGguf() ?: false
+            _serviceFlow.value?.isToolCallingSupportedGguf() ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to check tool calling support: ${e.message}")
             false
@@ -383,7 +395,7 @@ object LlmModelWorker {
      */
     fun setGrammarModeGguf(mode: Int) {
         try {
-            service?.setGrammarModeGguf(mode)
+            _serviceFlow.value?.setGrammarModeGguf(mode)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set grammar mode: ${e.message}")
         }
@@ -394,7 +406,7 @@ object LlmModelWorker {
      */
     fun setTypedGrammarGguf(enabled: Boolean) {
         try {
-            service?.setTypedGrammarGguf(enabled)
+            _serviceFlow.value?.setTypedGrammarGguf(enabled)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set typed grammar: ${e.message}")
         }
@@ -404,7 +416,7 @@ object LlmModelWorker {
 
     fun updateSamplerParamsGguf(paramsJson: String): Boolean {
         return try {
-            service?.updateSamplerParamsGguf(paramsJson) ?: false
+            _serviceFlow.value?.updateSamplerParamsGguf(paramsJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update sampler params: ${e.message}")
             false
@@ -413,7 +425,7 @@ object LlmModelWorker {
 
     fun setLogitBiasGguf(biasJson: String): Boolean {
         return try {
-            service?.setLogitBiasGguf(biasJson) ?: false
+            _serviceFlow.value?.setLogitBiasGguf(biasJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to set logit bias: ${e.message}")
             false
@@ -422,7 +434,7 @@ object LlmModelWorker {
 
     fun loadControlVectorsGguf(vectorsJson: String): Boolean {
         return try {
-            service?.loadControlVectorsGguf(vectorsJson) ?: false
+            _serviceFlow.value?.loadControlVectorsGguf(vectorsJson) ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to load control vectors: ${e.message}")
             false
@@ -431,57 +443,205 @@ object LlmModelWorker {
 
     fun clearControlVectorGguf(): Boolean {
         return try {
-            service?.clearControlVectorGguf() ?: false
+            _serviceFlow.value?.clearControlVectorGguf() ?: false
         } catch (e: Exception) {
             Log.e(TAG, "Failed to clear control vector: ${e.message}")
             false
         }
     }
 
-    // ==================== KV Cache State Persistence ====================
+    // ==================== New Optimizations ====================
 
-    /**
-     * Get the size of the current KV cache state in bytes.
-     * Returns 0 if no model is loaded or no context exists.
-     */
-    fun getStateSizeGguf(): Long {
-        return try {
-            service?.getStateSizeGguf() ?: 0
+    fun setSpeculativeDecodingGguf(enabled: Boolean, nDraft: Int = 4, ngramSize: Int = 4) {
+        try {
+            _serviceFlow.value?.setSpeculativeDecodingGguf(enabled, nDraft, ngramSize)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to get state size: ${e.message}")
-            0
+            Log.e(TAG, "Failed to set speculative decoding: ${e.message}")
         }
     }
 
-    /**
-     * Save the current KV cache state to a file.
-     * The file includes model compatibility checks and prompt tokens.
-     *
-     * @param path Absolute path to write the state file
-     * @return true if saved successfully
-     */
-    fun stateSaveToFileGguf(path: String): Boolean {
-        return try {
-            service?.stateSaveToFileGguf(path) ?: false
+    fun setPromptCacheDirGguf(path: String) {
+        try {
+            _serviceFlow.value?.setPromptCacheDirGguf(path)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to save KV state: ${e.message}")
+            Log.e(TAG, "Failed to set prompt cache dir: ${e.message}")
+        }
+    }
+
+    fun warmUpGguf(): Boolean {
+        return try {
+            _serviceFlow.value?.warmUpGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to warm up: ${e.message}")
             false
         }
     }
 
-    /**
-     * Load a previously saved KV cache state from a file.
-     * Must be the same model architecture that created the file.
-     *
-     * @param path Absolute path to the state file
-     * @return true if loaded successfully
-     */
-    fun stateLoadFromFileGguf(path: String): Boolean {
+    fun supportsThinkingGguf(): Boolean {
         return try {
-            service?.stateLoadFromFileGguf(path) ?: false
+            _serviceFlow.value?.supportsThinkingGguf() ?: false
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to load KV state: ${e.message}")
+            Log.e(TAG, "Failed to check thinking support: ${e.message}")
             false
+        }
+    }
+
+    fun setThinkingEnabledGguf(enabled: Boolean) {
+        try {
+            _serviceFlow.value?.setThinkingEnabledGguf(enabled)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set thinking enabled: ${e.message}")
+        }
+    }
+
+    fun getContextUsageGguf(): Float {
+        return try {
+            _serviceFlow.value?.contextUsageGguf ?: 0f
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get context usage: ${e.message}")
+            0f
+        }
+    }
+
+    // ==================== Context Window Tracking ====================
+
+    fun getContextInfoGguf(prompt: String? = null): String? {
+        return try {
+            _serviceFlow.value?.getContextInfoGguf(prompt)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get context info: ${e.message}")
+            null
+        }
+    }
+
+    // ==================== Character Engine ====================
+
+    fun setPersonalityGguf(personalityJson: String): Boolean {
+        return try {
+            _serviceFlow.value?.setPersonalityGguf(personalityJson) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set personality: ${e.message}")
+            false
+        }
+    }
+
+    fun setMoodGguf(mood: Int): Boolean {
+        return try {
+            _serviceFlow.value?.setMoodGguf(mood) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set mood: ${e.message}")
+            false
+        }
+    }
+
+    fun setCustomMoodGguf(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean {
+        return try {
+            _serviceFlow.value?.setCustomMoodGguf(tempMod, topPMod, repPenaltyMod) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set custom mood: ${e.message}")
+            false
+        }
+    }
+
+    fun getCharacterContextGguf(): String? {
+        return try {
+            _serviceFlow.value?.getCharacterContextGguf()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get character context: ${e.message}")
+            null
+        }
+    }
+
+    fun buildPromptGguf(userPrompt: String): String {
+        return try {
+            _serviceFlow.value?.buildPromptGguf(userPrompt) ?: userPrompt
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to build prompt: ${e.message}")
+            userPrompt
+        }
+    }
+
+    fun setUncensoredGguf(enabled: Boolean): Boolean {
+        return try {
+            _serviceFlow.value?.setUncensoredGguf(enabled) ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to set uncensored: ${e.message}")
+            false
+        }
+    }
+
+    fun isUncensoredGguf(): Boolean {
+        return try {
+            _serviceFlow.value?.isUncensoredGguf() ?: false
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get uncensored state: ${e.message}")
+            false
+        }
+    }
+
+    // ── Activation Steering (direct path — FloatArray can't cross AIDL) ──
+
+    fun calcVectorsDirect(prompt: String, onProgress: ((Float) -> Unit)? = null): FloatArray? {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return null
+            engine.calcVectors(prompt, onProgress)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to calc vectors: ${e.message}")
+            null
+        }
+    }
+
+    fun applyVectorsDirect(data: FloatArray, strength: Float = 1.0f, ilStart: Int = -1, ilEnd: Int = -1): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.applyVectors(data, strength, ilStart, ilEnd)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to apply vectors: ${e.message}")
+            false
+        }
+    }
+
+    fun clearVectorsDirect(): Boolean {
+        return try {
+            val engine = LLMService.instance?.ggufEngine ?: return false
+            engine.clearVectors()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to clear vectors: ${e.message}")
+            false
+        }
+    }
+
+    // ==================== Upscaler ====================
+
+    suspend fun loadUpscaler(modelPath: String): Boolean {
+        val svc = ensureServiceBound()
+        return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
+            val callback = object : IModelLoadCallback.Stub() {
+                override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
+                    continuation.resume(true)
+                }
+                override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
+                    Log.e(TAG, "Failed to load upscaler: $message")
+                    continuation.resume(false)
+                }
+            }
+            try {
+                svc.loadUpscaler(modelPath, callback)
+            } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
+                continuation.resumeWithException(e)
+            }
+        }
+    }
+
+    fun releaseUpscaler() {
+        try {
+            _serviceFlow.value?.releaseUpscaler()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to release upscaler: ${e.message}")
         }
     }
 
@@ -499,56 +659,9 @@ object LlmModelWorker {
         messagesJson: String,
         maxTokens: Int
     ): Flow<GenerationEvent> = callbackFlow {
-        serviceBound.await()
+        val svc = _serviceFlow.first { it != null }!!
 
-        val svc = service
-        if (svc == null) {
-            trySend(GenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
-
-        val callback = object : IGgufGenerationCallback.Stub() {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
-
-            override fun onToolCall(name: String, args: String) {
-                trySend(GenerationEvent.ToolCall(name, args))
-            }
-
-            override fun onMetrics(
-                totalTokens: Int,
-                promptTokens: Int,
-                generatedTokens: Int,
-                tokensPerSecond: Float,
-                timeToFirstToken: Long,
-                totalTimeMs: Long
-            ) {
-                trySend(
-                    GenerationEvent.Metrics(
-                        DecodingMetrics(
-                            totalTokens,
-                            promptTokens,
-                            generatedTokens,
-                            tokensPerSecond,
-                            timeToFirstToken,
-                            totalTimeMs
-                        )
-                    )
-                )
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-        }
+        val callback = createGgufCallback(this)
 
         try {
             svc.generateGgufMultiTurn(messagesJson, maxTokens, callback)
@@ -561,6 +674,48 @@ object LlmModelWorker {
     }.buffer(Channel.UNLIMITED)
         .flowOn(Dispatchers.IO)
 
+    // ==================== VLM (Vision Language Model) Methods ====================
+
+    private val _isVlmLoaded = MutableStateFlow(false)
+    val isVlmLoaded: StateFlow<Boolean> = _isVlmLoaded.asStateFlow()
+
+    fun loadVlmProjector(path: String, threads: Int = 0): Boolean {
+        val engine = LLMService.instance?.ggufEngine ?: return false
+        val success = engine.loadVlmProjector(path, threads)
+        _isVlmLoaded.value = success
+        if (success) Log.i(TAG, "VLM projector loaded: $path")
+        else Log.e(TAG, "VLM projector failed to load: $path")
+        return success
+    }
+
+    fun loadVlmProjectorFromFd(fd: Int, threads: Int = 0): Boolean {
+        val engine = LLMService.instance?.ggufEngine ?: return false
+        val success = engine.loadVlmProjectorFromFd(fd, threads)
+        _isVlmLoaded.value = success
+        return success
+    }
+
+    fun releaseVlmProjector() {
+        LLMService.instance?.ggufEngine?.releaseVlmProjector()
+        _isVlmLoaded.value = false
+        Log.i(TAG, "VLM projector released")
+    }
+
+    fun getVlmDefaultMarker(): String {
+        return LLMService.instance?.ggufEngine?.getVlmDefaultMarker() ?: "<__image__>"
+    }
+
+    fun vlmGenerateStreaming(
+        messagesJson: String,
+        imageData: List<ByteArray>,
+        maxTokens: Int
+    ): Flow<GenerationEvent> {
+        val engine = LLMService.instance?.ggufEngine
+            ?: return kotlinx.coroutines.flow.flowOf(GenerationEvent.Error("LLM service not available"))
+        return engine.generateVlmFlow(messagesJson, imageData, maxTokens)
+            .flowOn(Dispatchers.IO)
+    }
+
     // ==================== Diffusion Methods ====================
 
     /**
@@ -569,8 +724,8 @@ object LlmModelWorker {
     suspend fun loadDiffusionModel(
         name: String,
         modelDir: String,
-        height: Int = 212,
-        width: Int = 212,
+        height: Int = 512,
+        width: Int = 512,
         textEmbeddingSize: Int = 768,
         runOnCpu: Boolean = false,
         useCpuClip: Boolean = false,
@@ -581,8 +736,10 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isDiffusionModelLoaded.value = true
                     _diffusionBackendState.value = "Running"
                     Log.i(TAG, "Diffusion model loaded successfully: $name")
@@ -590,6 +747,7 @@ object LlmModelWorker {
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _isDiffusionModelLoaded.value = false
                     _diffusionBackendState.value = "Error: $message"
                     Log.e(TAG, "Failed to load diffusion model: $message")
@@ -612,6 +770,7 @@ object LlmModelWorker {
                     callback
                 )
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception loading diffusion model", e)
                 continuation.resumeWithException(e)
             }
@@ -658,14 +817,7 @@ object LlmModelWorker {
         showDiffusionProcess: Boolean = false,
         showDiffusionStride: Int = 1
     ): Flow<DiffusionGenerationEvent> = callbackFlow {
-        serviceBound.await()
-
-        val svc = service
-        if (svc == null) {
-            trySend(DiffusionGenerationEvent.Error("Service not bound"))
-            close()
-            return@callbackFlow
-        }
+        val svc = _serviceFlow.first { it != null }!!
 
         val callback = object : IDiffusionGenerationCallback.Stub() {
             override fun onProgress(
@@ -725,8 +877,8 @@ object LlmModelWorker {
                 steps,
                 cfgScale,
                 seed,
-                512,
-                512,
+                width,
+                height,
                 scheduler,
                 useOpenCL,
                 inputImage,
@@ -752,7 +904,9 @@ object LlmModelWorker {
      * Stop diffusion image generation
      */
     fun stopDiffusionGeneration() {
-        service?.stopGenerationDiffusion()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "stopDiffusionGeneration: service not bound"); return }
+        svc.stopGenerationDiffusion()
         Log.i(TAG, "Diffusion generation stopped")
     }
 
@@ -763,14 +917,17 @@ object LlmModelWorker {
         val svc = ensureServiceBound()
 
         return suspendCancellableCoroutine { continuation ->
+            val resumed = AtomicBoolean(false)
             val callback = object : IModelLoadCallback.Stub() {
                 override fun onSuccess() {
+                    if (!resumed.compareAndSet(false, true)) return
                     _diffusionBackendState.value = "Running"
                     Log.i(TAG, "Diffusion backend restarted")
                     continuation.resume(true)
                 }
 
                 override fun onError(message: String) {
+                    if (!resumed.compareAndSet(false, true)) return
                     _diffusionBackendState.value = "Error: $message"
                     Log.e(TAG, "Failed to restart diffusion backend: $message")
                     continuation.resume(false)
@@ -780,6 +937,7 @@ object LlmModelWorker {
             try {
                 svc.restartDiffusionBackend(callback)
             } catch (e: Exception) {
+                if (!resumed.compareAndSet(false, true)) return@suspendCancellableCoroutine
                 Log.e(TAG, "Exception restarting diffusion backend", e)
                 continuation.resumeWithException(e)
             }
@@ -790,7 +948,9 @@ object LlmModelWorker {
      * Stop diffusion backend
      */
     fun stopDiffusionBackend() {
-        service?.stopDiffusionBackend()
+        val svc = _serviceFlow.value
+        if (svc == null) { Log.w(TAG, "stopDiffusionBackend: service not bound"); return }
+        svc.stopDiffusionBackend()
         _isDiffusionModelLoaded.value = false
         _diffusionBackendState.value = "Idle"
         Log.i(TAG, "Diffusion backend stopped")
@@ -831,25 +991,6 @@ object LlmModelWorker {
         bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
         val bytes = outputStream.toByteArray()
         return Base64.getEncoder().encodeToString(bytes)
-    }
-
-    /**
-     * Convert Bitmap to RGB base64 (for img2img with raw RGB data)
-     */
-    fun bitmapToRgbBase64(bitmap: Bitmap): String {
-        val pixels = IntArray(bitmap.width * bitmap.height)
-        bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
-
-        val rgbBytes = ByteArray(bitmap.width * bitmap.height * 3)
-        for (i in pixels.indices) {
-            val pixel = pixels[i]
-            val index = i * 3
-            rgbBytes[index] = ((pixel shr 16) and 0xFF).toByte()     // R
-            rgbBytes[index + 1] = ((pixel shr 8) and 0xFF).toByte()  // G
-            rgbBytes[index + 2] = (pixel and 0xFF).toByte()          // B
-        }
-
-        return Base64.getEncoder().encodeToString(rgbBytes)
     }
 
     // ==================== Embedding Model Download ====================

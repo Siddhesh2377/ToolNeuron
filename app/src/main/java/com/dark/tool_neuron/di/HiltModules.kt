@@ -4,10 +4,8 @@
     import com.dark.tool_neuron.database.AppDatabase
     import com.dark.tool_neuron.engine.EmbeddingEngine
     import com.dark.tool_neuron.repo.ChatRepository
-    import com.dark.tool_neuron.repo.ModelRepository
     import com.dark.tool_neuron.repo.RagRepository
     import com.dark.tool_neuron.worker.ChatManager
-    import com.dark.tool_neuron.worker.GenerationManager
     import com.dark.tool_neuron.worker.RagVaultIntegration
     import dagger.Module
     import dagger.Provides
@@ -38,15 +36,6 @@
     @Module
     @InstallIn(SingletonComponent::class)
     object RepositoryModule {
-
-        @Provides
-        @Singleton
-        fun provideModelRepository(database: AppDatabase): ModelRepository {
-            return ModelRepository(
-                modelDao = database.modelDao(),
-                configDao = database.modelConfigDao()
-            )
-        }
 
         @Provides
         @Singleton
@@ -86,12 +75,6 @@
         @Singleton
         fun provideChatManager(): ChatManager {
             return ChatManager()
-        }
-
-        @Provides
-        @Singleton
-        fun provideGenerationManager(): GenerationManager {
-            return GenerationManager()
         }
 
         @Provides

@@ -45,21 +45,4 @@ class TermsDataStore(private val context: Context) {
         }
     }
 
-    /**
-     * Reset terms acceptance (for testing or if user wants to review again)
-     */
-    suspend fun resetTermsAcceptance() {
-        context.dataStore.edit { preferences ->
-            preferences.remove(TERMS_ACCEPTED_KEY)
-            preferences.remove(TERMS_ACCEPTED_TIMESTAMP)
-            preferences.remove(TERMS_VERSION_KEY)
-        }
-    }
-
-    /**
-     * Get timestamp when terms were accepted
-     */
-    val termsAcceptedTimestamp: Flow<Long?> = context.dataStore.data.map { preferences ->
-        preferences[TERMS_ACCEPTED_TIMESTAMP]
-    }
 }

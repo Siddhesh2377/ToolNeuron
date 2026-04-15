@@ -5,7 +5,6 @@ import android.content.Context
 import android.util.Log
 import com.mp.ai_supertonic_tts.SupertonicTTS
 import com.mp.ai_supertonic_tts.callback.TTSCallback
-import com.mp.ai_supertonic_tts.models.AudioFormat
 import com.mp.ai_supertonic_tts.models.Language
 import com.mp.ai_supertonic_tts.models.SynthesisResult
 import com.mp.ai_supertonic_tts.models.TTSConfig
@@ -14,7 +13,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import java.io.File
+import com.dark.tool_neuron.global.AppPaths
 
 @SuppressLint("StaticFieldLeak")
 object TTSManager {
@@ -45,12 +44,13 @@ object TTSManager {
 
     fun init(appContext: Context, autoLoad: Boolean = true) {
         context = appContext.applicationContext
-        tts = SupertonicTTS(appContext)
-        Log.d(TAG, "TTSManager initialized")
+        // Defer native TTS engine creation off main thread — SupertonicTTS()
+        // loads native libs via JNI which can block for 100-500ms
+        Log.d(TAG, "TTSManager initialized (engine deferred)")
 
         if (autoLoad) {
             // Auto-load model if it exists in the models directory
-            val modelsDir = File(appContext.filesDir, "models/$TTS_MODEL_DIR_NAME")
+            val modelsDir = AppPaths.ttsModel(appContext)
             if (modelsDir.exists() && modelsDir.isDirectory) {
                 val success = loadModel(modelsDir.absolutePath)
                 Log.d(TAG, "Auto-loaded TTS model: $success")
@@ -58,8 +58,18 @@ object TTSManager {
         }
     }
 
+    /** Lazily create the TTS engine on first use (off main thread). */
+    private fun ensureEngine(): SupertonicTTS? {
+        if (tts == null) {
+            val ctx = context ?: return null
+            tts = SupertonicTTS(ctx)
+            Log.d(TAG, "SupertonicTTS engine created (lazy)")
+        }
+        return tts
+    }
+
     fun loadModel(modelDir: String, useNNAPI: Boolean = false): Boolean {
-        val engine = tts ?: return false
+        val engine = ensureEngine() ?: return false
         return try {
             val success = engine.loadModel(modelDir, useNNAPI)
             _isModelLoaded.value = success
@@ -79,10 +89,8 @@ object TTSManager {
 
     fun isLoaded(): Boolean = _isModelLoaded.value
 
-    fun getAvailableVoices(): List<String> = _availableVoices.value
-
     suspend fun speak(text: String, settings: TTSSettings = TTSSettings(), msgId: String? = null) {
-        val engine = tts ?: return
+        val engine = ensureEngine() ?: return
         if (!_isModelLoaded.value) {
             Log.w(TAG, "TTS model not loaded, cannot speak")
             return
@@ -141,59 +149,17 @@ object TTSManager {
         }
     }
 
-    suspend fun synthesize(text: String, settings: TTSSettings = TTSSettings()): SynthesisResult? {
-        val engine = tts ?: return null
-        if (!_isModelLoaded.value) return null
-
-        return withContext(Dispatchers.IO) {
-            try {
-                val config = TTSConfig(
-                    speed = settings.speed,
-                    steps = settings.steps,
-                    language = parseLanguage(settings.language),
-                    voice = settings.voice,
-                    useNNAPI = settings.useNNAPI
-                )
-                engine.synthesize(text, config)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error during TTS synthesis", e)
-                null
-            }
-        }
-    }
-
     fun stopPlayback() {
-        tts?.stopPlayback()
+        ensureEngine()?.stopPlayback()
         _isPlaying.value = false
         _currentPlayingMsgId.value = null
         _isSynthesizing.value = false
         _synthProgress.value = 0f
     }
 
-    fun pausePlayback() {
-        tts?.pausePlayback()
-    }
-
-    fun resumePlayback() {
-        tts?.resumePlayback()
-    }
-
-    fun setVolume(volume: Float) {
-        tts?.setVolume(volume.coerceIn(0f, 1f))
-    }
-
-    fun release() {
-        stopPlayback()
-        tts?.release()
-        tts = null
-        _isModelLoaded.value = false
-        _availableVoices.value = emptyList()
-        Log.d(TAG, "TTSManager released")
-    }
-
     fun getModelDirectory(): String? {
         val ctx = context ?: return null
-        val dir = File(ctx.filesDir, "models/$TTS_MODEL_DIR_NAME")
+        val dir = AppPaths.ttsModel(ctx)
         return if (dir.exists()) dir.absolutePath else null
     }
 

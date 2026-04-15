@@ -1,10 +1,7 @@
 package com.dark.tool_neuron.ui.screen.memory
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -26,13 +23,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.outlined.FilterAlt
-import androidx.compose.material.icons.outlined.Pause
-import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -65,13 +55,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.dark.tool_neuron.ui.theme.ManropeFontFamily
-import com.dark.tool_neuron.ui.theme.rDp
-import com.dark.tool_neuron.ui.theme.rSp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.dark.tool_neuron.global.formatTimeOnly
+import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,10 +70,11 @@ fun TerminalLoggerScreen() {
     var showFilters by remember { mutableStateOf(false) }
     var isPaused by remember { mutableStateOf(false) }
 
+    val allLogs by VaultLogger.logs.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
 
-    val filteredLogs = remember(searchQuery, filterLevel, VaultLogger.logs) {
-        var logs = VaultLogger.logs
+    val filteredLogs = remember(searchQuery, filterLevel, allLogs) {
+        var logs = allLogs
 
         if (filterLevel != null) {
             logs = logs.filter { it.level == filterLevel }
@@ -101,8 +90,8 @@ fun TerminalLoggerScreen() {
         logs
     }
 
-    LaunchedEffect(VaultLogger.logs.size, autoScroll) {
-        if (autoScroll && VaultLogger.logs.isNotEmpty() && !isPaused) {
+    LaunchedEffect(allLogs.size, autoScroll) {
+        if (autoScroll && allLogs.isNotEmpty() && !isPaused) {
             delay(100)
             listState.animateScrollToItem(0)
         }
@@ -130,8 +119,8 @@ fun TerminalLoggerScreen() {
             // Filters
             AnimatedVisibility(
                 visible = showFilters,
-                enter = expandVertically() + fadeIn(),
-                exit = shrinkVertically() + fadeOut()
+                enter = Motion.Enter,
+                exit = Motion.Exit
             ) {
                 MinimalFilters(
                     currentFilter = filterLevel,
@@ -143,7 +132,7 @@ fun TerminalLoggerScreen() {
 
             // Status line
             StatusLine(
-                logCount = VaultLogger.logs.size,
+                logCount = allLogs.size,
                 filteredCount = filteredLogs.size,
                 isActive = !isPaused
             )
@@ -163,10 +152,10 @@ fun TerminalLoggerScreen() {
                             .fillMaxSize()
                             .background(MaterialTheme.colorScheme.surface),
                         contentPadding = PaddingValues(
-                            horizontal = rDp(20.dp),
-                            vertical = rDp(16.dp)
+                            horizontal = 20.dp,
+                            vertical = 16.dp
                         ),
-                        verticalArrangement = Arrangement.spacedBy(rDp(0.dp)),
+                        verticalArrangement = Arrangement.spacedBy(0.dp),
                         reverseLayout = true
                     ) {
                         itemsIndexed(filteredLogs.asReversed()) { index, log ->
@@ -180,18 +169,18 @@ fun TerminalLoggerScreen() {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomEnd)
-                            .padding(rDp(20.dp))
+                            .padding(20.dp)
                     ) {
                         FloatingActionButton(
                             onClick = { autoScroll = true },
                             containerColor = MaterialTheme.colorScheme.surfaceVariant,
                             contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(rDp(40.dp))
+                            modifier = Modifier.size(40.dp)
                         ) {
                             Icon(
-                                Icons.Default.KeyboardArrowDown,
+                                TnIcons.ChevronDown,
                                 contentDescription = null,
-                                modifier = Modifier.size(rDp(18.dp))
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -216,11 +205,11 @@ fun MinimalTopBar(
         title = {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
                     "logger",
-                    fontSize = rSp(16.sp),
+                    fontSize = 16.sp,
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Normal,
                     color = MaterialTheme.colorScheme.onSurface,
@@ -229,7 +218,7 @@ fun MinimalTopBar(
 
                 Box(
                     modifier = Modifier
-                        .size(rDp(6.dp))
+                        .size(6.dp)
                         .clip(CircleShape)
                         .background(
                             if (!isPaused) Color(0xFF00C853)
@@ -241,12 +230,12 @@ fun MinimalTopBar(
         actions = {
             IconButton(
                 onClick = onFilterToggle,
-                modifier = Modifier.size(rDp(36.dp))
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    Icons.Outlined.FilterAlt,
+                    TnIcons.Filter,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = if (showFilters) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -254,12 +243,12 @@ fun MinimalTopBar(
 
             IconButton(
                 onClick = onAutoScrollToggle,
-                modifier = Modifier.size(rDp(36.dp))
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    Icons.Default.KeyboardArrowDown,
+                    TnIcons.ChevronDown,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = if (autoScroll) MaterialTheme.colorScheme.primary
                     else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -267,24 +256,24 @@ fun MinimalTopBar(
 
             IconButton(
                 onClick = onPauseToggle,
-                modifier = Modifier.size(rDp(36.dp))
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    if (isPaused) Icons.Outlined.PlayArrow else Icons.Outlined.Pause,
+                    if (isPaused) TnIcons.PlayerPlay else TnIcons.PlayerPause,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             IconButton(
                 onClick = onClear,
-                modifier = Modifier.size(rDp(36.dp))
+                modifier = Modifier.size(36.dp)
             ) {
                 Icon(
-                    Icons.Default.Delete,
+                    TnIcons.Trash,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(18.dp)),
+                    modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -306,7 +295,7 @@ fun StatusLine(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-            .padding(horizontal = rDp(20.dp), vertical = rDp(8.dp)),
+            .padding(horizontal = 20.dp, vertical = Standards.SpacingSm),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -329,13 +318,13 @@ fun StatusLine(
                     append(" / $logCount")
                 }
             },
-            fontSize = rSp(11.sp),
+            fontSize = 11.sp,
             fontFamily = FontFamily.Monospace
         )
 
         Text(
             "max: ${VaultLogger.maxLogSize}",
-            fontSize = rSp(11.sp),
+            fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
         )
@@ -353,8 +342,8 @@ fun MinimalFilters(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f))
-            .padding(rDp(16.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            .padding(Standards.SpacingLg),
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingMd)
     ) {
         // Minimal search
         OutlinedTextField(
@@ -364,7 +353,7 @@ fun MinimalFilters(
             placeholder = {
                 Text(
                     "search",
-                    fontSize = rSp(13.sp),
+                    fontSize = 13.sp,
                     fontFamily = FontFamily.Monospace,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
                 )
@@ -373,18 +362,18 @@ fun MinimalFilters(
                 if (searchQuery.isNotEmpty()) {
                     IconButton(
                         onClick = { onSearchChange("") },
-                        modifier = Modifier.size(rDp(32.dp))
+                        modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
-                            Icons.Default.Clear,
+                            TnIcons.XCircle,
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(16.dp))
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(rDp(4.dp)),
+            shape = RoundedCornerShape(Standards.SpacingXs),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = MaterialTheme.colorScheme.outline,
                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
@@ -392,14 +381,14 @@ fun MinimalFilters(
                 unfocusedContainerColor = Color.Transparent
             ),
             textStyle = LocalTextStyle.current.copy(
-                fontSize = rSp(13.sp),
+                fontSize = 13.sp,
                 fontFamily = FontFamily.Monospace
             )
         )
 
         // Level filters - minimal chips
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             item {
                 MinimalChip(
@@ -431,14 +420,14 @@ fun MinimalChip(
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(rDp(4.dp)),
+        shape = RoundedCornerShape(Standards.SpacingXs),
         color = if (selected) {
             color?.copy(alpha = 0.15f) ?: MaterialTheme.colorScheme.primaryContainer
         } else {
             Color.Transparent
         },
         border = androidx.compose.foundation.BorderStroke(
-            width = rDp(1.dp),
+            width = 1.dp,
             color = if (selected) {
                 color ?: MaterialTheme.colorScheme.primary
             } else {
@@ -448,7 +437,7 @@ fun MinimalChip(
     ) {
         Text(
             label,
-            fontSize = rSp(11.sp),
+            fontSize = 11.sp,
             fontFamily = FontFamily.Monospace,
             fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
             color = if (selected) {
@@ -456,7 +445,7 @@ fun MinimalChip(
             } else {
                 MaterialTheme.colorScheme.onSurfaceVariant
             },
-            modifier = Modifier.padding(horizontal = rDp(10.dp), vertical = rDp(6.dp))
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
         )
     }
 }
@@ -469,7 +458,7 @@ fun RawLogLine(entry: LogEntry) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(6.dp))
+            .padding(vertical = 6.dp)
     ) {
         // Single line log format: [timestamp] level tag: message
         Text(
@@ -479,7 +468,7 @@ fun RawLogLine(entry: LogEntry) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
                     fontFamily = FontFamily.Monospace
                 )) {
-                    append("[${formatCleanTimestamp(entry.timestamp)}] ")
+                    append("[${formatTimeOnly(entry.timestamp)}] ")
                 }
 
                 // Level
@@ -507,19 +496,19 @@ fun RawLogLine(entry: LogEntry) {
                     append(entry.message)
                 }
             },
-            fontSize = rSp(12.sp),
-            lineHeight = rSp(18.sp)
+            fontSize = 12.sp,
+            lineHeight = 18.sp
         )
 
         // Stack trace if exists - indented
         entry.stackTrace?.let { trace ->
             Text(
                 "  │ $trace",
-                fontSize = rSp(11.sp),
+                fontSize = 11.sp,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.error.copy(alpha = 0.7f),
-                lineHeight = rSp(16.sp),
-                modifier = Modifier.padding(start = rDp(4.dp), top = rDp(2.dp)),
+                lineHeight = 16.sp,
+                modifier = Modifier.padding(start = Standards.SpacingXs, top = Standards.SpacingXxs),
                 maxLines = 3,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
             )
@@ -537,11 +526,11 @@ fun EmptyTerminal(isPaused: Boolean) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(8.dp))
+            verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
         ) {
             Text(
                 if (isPaused) "│ paused" else "│ waiting",
-                fontSize = rSp(13.sp),
+                fontSize = 13.sp,
                 fontFamily = FontFamily.Monospace,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
             )
@@ -576,11 +565,3 @@ fun getLevelColor(level: LogLevel): Color {
     return getCleanLevelColor(level)
 }
 
-private fun formatCleanTimestamp(timestamp: Long): String {
-    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
-
-private fun loggerFormatTimestamp(timestamp: Long): String {
-    return formatCleanTimestamp(timestamp)
-}

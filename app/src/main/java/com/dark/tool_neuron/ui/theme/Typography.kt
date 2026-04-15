@@ -18,7 +18,7 @@ val ManropeFontFamily = FontFamily(
 )
 
 @OptIn(ExperimentalTextApi::class)
-val maple = FontFamily(
+val MapleMonoFontFamily = FontFamily(
     Font(
         resId = R.font.maple_mono,
         variationSettings = FontVariation.Settings(
@@ -26,3 +26,6 @@ val maple = FontFamily(
         )
     )
 )
+
+// Legacy alias — used throughout the codebase
+val maple = MapleMonoFontFamily

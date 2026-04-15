@@ -2,7 +2,7 @@ package com.dark.tool_neuron.plugins.api
 
 import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.models.plugins.PluginInfo
-import com.mp.ai_gguf.toolcalling.ToolCall
+import com.dark.gguf_lib.toolcalling.ToolCall
 import org.json.JSONObject
 
 interface SuperPlugin {
@@ -12,6 +12,9 @@ interface SuperPlugin {
 
     //This Function is to execute the called Tool
     suspend fun executeTool(toolCall: ToolCall): Result<Any>
+
+    // Each plugin serializes its own result types to JSON
+    fun serializeResult(data: Any): String
 
     //This is a function that will use internal ViewModel For the Tool, and update the UI
     @Composable

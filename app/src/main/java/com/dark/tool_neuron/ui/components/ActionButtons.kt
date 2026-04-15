@@ -2,10 +2,9 @@ package com.dark.tool_neuron.ui.components
 
 import android.annotation.SuppressLint
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -22,12 +21,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledIconToggleButton
 import androidx.compose.material3.FilledTonalButton
@@ -64,7 +62,7 @@ import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.ui.ActionIcon
 import com.dark.tool_neuron.models.ui.ActionItem
-import com.dark.tool_neuron.ui.theme.rDp
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @SuppressLint("ModifierParameter")
@@ -84,12 +82,12 @@ fun ActionButton(
         onClick = { onClickListener() },
         colors = colors,
         shape = shape,
-        modifier = modifier.size(rDp(Standards.ActionIconSize))
+        modifier = modifier.size(Standards.ActionIconSize)
     ) {
         Icon(
             painterResource(icon),
             contentDescription = contentDescription,
-            Modifier.padding(rDp(Standards.ActionIconPadding))
+            Modifier.padding(Standards.ActionIconPadding)
         )
     }
 }
@@ -99,7 +97,7 @@ fun ActionButton(
 @Composable
 fun ActionProgressButton(
     onClickListener: () -> Unit,
-    icon: ImageVector = Icons.Default.Stop,
+    icon: ImageVector = TnIcons.PlayerStop,
     contentDescription: String = "Description",
     modifier: Modifier = Modifier,
     shape: Shape = MaterialShapes.Circle.toShape(),
@@ -114,9 +112,9 @@ fun ActionProgressButton(
     ) {
         // Background circular progress indicator
         CircularProgressIndicator(
-            modifier = Modifier.size(rDp(Standards.ActionIconSize)),
+            modifier = Modifier.size(Standards.ActionIconSize),
             color = MaterialTheme.colorScheme.primary,
-            strokeWidth = rDp(2.dp),
+            strokeWidth = 2.dp,
             trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
         )
 
@@ -125,12 +123,12 @@ fun ActionProgressButton(
             onClick = { onClickListener() },
             colors = colors,
             shape = shape,
-            modifier = Modifier.size(rDp(Standards.ActionIconSize - 8.dp))
+            modifier = Modifier.size(Standards.ActionIconSize - 8.dp)
         ) {
             Icon(
                 icon,
                 contentDescription = contentDescription,
-                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                modifier = Modifier.padding(Standards.ActionIconPadding)
             )
         }
     }
@@ -155,12 +153,12 @@ fun ActionButton(
         onClick = { onClickListener() },
         colors = colors,
         shape = shape,
-        modifier = modifier.size(rDp(Standards.ActionIconSize))
+        modifier = modifier.size(Standards.ActionIconSize)
     ) {
         Icon(
             icon,
             contentDescription = contentDescription,
-            Modifier.padding(rDp(Standards.ActionIconPadding))
+            Modifier.padding(Standards.ActionIconPadding)
         )
     }
 }
@@ -172,7 +170,7 @@ fun ActionButton(
 fun MultiActionButton(
     actions: List<ActionItem>,
     modifier: Modifier = Modifier,
-    shape: Shape = RoundedCornerShape(rDp(6.dp)),
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm),
     containerColor: Color = MaterialTheme.colorScheme.primary.copy(0.06f),
     contentColor: Color = MaterialTheme.colorScheme.primary,
     dividerColor: Color = MaterialTheme.colorScheme.outline.copy(0.3f)
@@ -180,7 +178,7 @@ fun MultiActionButton(
     Surface(
         shape = shape,
         color = containerColor,
-        modifier = modifier.height(rDp(Standards.ActionIconSize))
+        modifier = modifier.height(Standards.ActionIconSize)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically
@@ -190,18 +188,16 @@ fun MultiActionButton(
                 Box(
                     contentAlignment = Alignment.Center,
                     modifier = Modifier
-                        .size(rDp(Standards.ActionIconSize))
+                        .size(Standards.ActionIconSize)
                         .then(
                             if (action.enabled) Modifier.clickable { action.onClick() }
                             else Modifier
                         )
                 ) {
                     if (action.isLoading) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(rDp(Standards.ActionIconSize - 12.dp)),
-                            color = tint,
-                            strokeWidth = rDp(2.dp),
-                            trackColor = tint.copy(alpha = 0.1f)
+                        LoadingIndicator(
+                            modifier = Modifier.size(Standards.ActionIconSize - 12.dp),
+                            color = tint
                         )
                     } else {
                         when (action.icon) {
@@ -209,13 +205,13 @@ fun MultiActionButton(
                                 imageVector = action.icon.imageVector,
                                 contentDescription = action.contentDescription,
                                 tint = tint,
-                                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                                modifier = Modifier.padding(Standards.ActionIconPadding)
                             )
                             is ActionIcon.Resource -> Icon(
                                 painter = painterResource(action.icon.resId),
                                 contentDescription = action.contentDescription,
                                 tint = tint,
-                                modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+                                modifier = Modifier.padding(Standards.ActionIconPadding)
                             )
                         }
                     }
@@ -225,8 +221,8 @@ fun MultiActionButton(
                 if (index < actions.lastIndex) {
                     VerticalDivider(
                         modifier = Modifier
-                            .height(rDp(Standards.ActionIconSize - 16.dp)),
-                        thickness = rDp(1.dp),
+                            .height(Standards.ActionIconSize - 16.dp),
+                        thickness = 1.dp,
                         color = dividerColor
                     )
                 }
@@ -250,17 +246,17 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = RoundedCornerShape(rDp(6.dp))
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm)
 ) {
     FilledTonalButton(
         onClick = onClickListener,
         shape = shape,
         colors = colors,
-        modifier = modifier.height(rDp(Standards.ActionIconSize)),
-        contentPadding = PaddingValues(horizontal = rDp(12.dp))
+        modifier = modifier.height(Standards.ActionIconSize),
+        contentPadding = PaddingValues(horizontal = 12.dp)
     ) {
         Icon(painterResource(icon), contentDescription)
-        Spacer(Modifier.width(rDp(6.dp)))
+        Spacer(Modifier.width(6.dp))
         Text(text)
     }
 }
@@ -278,17 +274,19 @@ fun ActionTextButton(
         containerColor = MaterialTheme.colorScheme.primary.copy(0.06f),
         contentColor = MaterialTheme.colorScheme.primary
     ),
-    shape: Shape = RoundedCornerShape(rDp(6.dp))
+    shape: Shape = RoundedCornerShape(Standards.RadiusSm),
+    enabled: Boolean = true
 ) {
     FilledTonalButton(
         onClick = onClickListener,
         shape = shape,
         colors = colors,
-        modifier = modifier.height(rDp(Standards.ActionIconSize)),
-        contentPadding = PaddingValues(end = rDp(12.dp))
+        modifier = modifier.height(Standards.ActionIconSize),
+        contentPadding = PaddingValues(end = 12.dp),
+        enabled = enabled
     ) {
         Icon(icon, contentDescription)
-        Spacer(Modifier.width(rDp(6.dp)))
+        Spacer(Modifier.width(6.dp))
         Text(text)
     }
 }
@@ -316,12 +314,12 @@ fun ActionToggleButton(
         enabled = enabled,
         colors = colors,
         shape = shape,
-        modifier = modifier.size(rDp(Standards.ActionIconSize))
+        modifier = modifier.size(Standards.ActionIconSize)
     ) {
         Icon(
             painter = painterResource(icon),
             contentDescription = contentDescription,
-            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+            modifier = Modifier.padding(Standards.ActionIconPadding)
         )
     }
 }
@@ -348,12 +346,12 @@ fun ActionToggleButton(
         enabled = enabled,
         colors = colors,
         shape = shape,
-        modifier = modifier.size(rDp(Standards.ActionIconSize))
+        modifier = modifier.size(Standards.ActionIconSize)
     ) {
         Icon(
             imageVector = icon,
             contentDescription = contentDescription,
-            modifier = Modifier.padding(rDp(Standards.ActionIconPadding))
+            modifier = Modifier.padding(Standards.ActionIconPadding)
         )
     }
 }
@@ -372,10 +370,10 @@ fun ActionSwitch(
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    width: Dp = rDp(52.dp),
-    height: Dp = rDp(Standards.ActionIconSize),
-    thumbSize: Dp = rDp(22.dp),
-    shape: Shape = RoundedCornerShape(rDp(8.dp))
+    width: Dp = 52.dp,
+    height: Dp = Standards.ActionIconSize,
+    thumbSize: Dp = 22.dp,
+    shape: Shape = RoundedCornerShape(Standards.RadiusMd)
 ) {
     val interactionSource = remember { MutableInteractionSource() }
 
@@ -385,7 +383,7 @@ fun ActionSwitch(
             checked -> MaterialTheme.colorScheme.primary
             else -> MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "actionSwitchTrack"
     )
 
@@ -395,22 +393,19 @@ fun ActionSwitch(
             checked -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.outline
         },
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = Motion.state(),
         label = "actionSwitchThumb"
     )
 
     val thumbOffset by animateDpAsState(
-        targetValue = if (checked) width - thumbSize - rDp(4.dp) else rDp(4.dp),
-        animationSpec = spring(
-            dampingRatio = 0.65f,
-            stiffness = 350f
-        ),
+        targetValue = if (checked) width - thumbSize - 4.dp else 4.dp,
+        animationSpec = Motion.interactive(),
         label = "actionSwitchOffset"
     )
 
     val thumbScale by animateFloatAsState(
         targetValue = if (enabled) 1f else 0.9f,
-        animationSpec = spring(dampingRatio = 0.5f, stiffness = 300f),
+        animationSpec = Motion.interactive(),
         label = "actionSwitchScale"
     )
 
@@ -434,8 +429,8 @@ fun ActionSwitch(
                 .offset(x = thumbOffset)
                 .size(thumbSize)
                 .scale(thumbScale)
-                .background(thumbColor, RoundedCornerShape(rDp(6.dp)))
-                .border(rDp(1.dp), trackColor.copy(alpha = 0.15f), RoundedCornerShape(rDp(6.dp)))
+                .background(thumbColor, RoundedCornerShape(Standards.RadiusSm))
+                .border(1.dp, trackColor.copy(alpha = 0.15f), RoundedCornerShape(Standards.RadiusSm))
         )
     }
 }
@@ -465,38 +460,35 @@ fun <T> ActionToggleGroup(
     val itemWidth = if (containerWidth.intValue > 0 && items.isNotEmpty()) {
         with(density) { (containerWidth.intValue / items.size).toDp() }
     } else {
-        rDp(0.dp)
+        0.dp
     }
 
     val indicatorOffset by animateDpAsState(
         targetValue = itemWidth * selectedIndex,
-        animationSpec = spring(
-            dampingRatio = 0.7f,
-            stiffness = 350f
-        ),
+        animationSpec = Motion.interactive(),
         label = "toggleIndicatorOffset"
     )
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(rDp(Standards.ActionIconSize))
+            .height(Standards.ActionIconSize)
             .onSizeChanged { containerWidth.intValue = it.width },
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
-        shape = RoundedCornerShape(rDp(6.dp))
+        shape = RoundedCornerShape(Standards.RadiusSm)
     ) {
         Box {
             // Sliding indicator
-            if (itemWidth > rDp(0.dp)) {
+            if (itemWidth > 0.dp) {
                 Box(
                     modifier = Modifier
-                        .offset(x = indicatorOffset + rDp(2.dp))
-                        .padding(vertical = rDp(2.dp))
-                        .width(itemWidth - rDp(4.dp))
-                        .height(rDp(Standards.ActionIconSize - 4.dp))
+                        .offset(x = indicatorOffset + 2.dp)
+                        .padding(vertical = 2.dp)
+                        .width(itemWidth - 4.dp)
+                        .height(Standards.ActionIconSize - 4.dp)
                         .background(
                             MaterialTheme.colorScheme.primary,
-                            RoundedCornerShape(rDp(4.dp))
+                            RoundedCornerShape(Standards.SpacingXs)
                         )
                 )
             }
@@ -505,7 +497,7 @@ fun <T> ActionToggleGroup(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(rDp(Standards.ActionIconSize)),
+                    .height(Standards.ActionIconSize),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEachIndexed { index, item ->
@@ -517,15 +509,15 @@ fun <T> ActionToggleGroup(
                             isSelected -> MaterialTheme.colorScheme.onPrimary
                             else -> MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                        animationSpec = Motion.state(),
                         label = "toggleItemColor$index"
                     )
 
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(rDp(Standards.ActionIconSize))
-                            .clip(RoundedCornerShape(rDp(4.dp)))
+                            .height(Standards.ActionIconSize)
+                            .clip(RoundedCornerShape(Standards.SpacingXs))
                             .clickable(
                                 enabled = enabled,
                                 interactionSource = remember { MutableInteractionSource() },

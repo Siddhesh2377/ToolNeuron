@@ -2,16 +2,12 @@ package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -21,10 +17,10 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.messages.ToolChainStepData
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.AgentPhase
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 /**
  * Unified agent execution view for both streaming and persisted messages.
@@ -39,38 +35,48 @@ fun AgentExecutionView(
     currentStep: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    var isExpanded by remember { mutableStateOf(true) }
+    var isExpanded by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+
+    if (showDetailDialog) {
+        AgentDetailDialog(
+            plan = plan,
+            steps = steps,
+            summary = summary,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp)),
-        verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            .padding(horizontal = Standards.SpacingMd),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         // Header
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f),
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = Standards.SpacingSm),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        painter = painterResource(R.drawable.tool),
+                        imageVector = TnIcons.Wrench,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                     Text(
@@ -110,33 +116,19 @@ fun AgentExecutionView(
                     }
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
         // Content
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Column(
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                modifier = Modifier.clickable { showDetailDialog = true },
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 // Phase 1: Plan
                 if (plan != null) {
@@ -174,21 +166,21 @@ private fun PlanSection(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)
     ) {
         Column(
-            modifier = Modifier.padding(rDp(10.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.thinking),
+                    imageVector = TnIcons.BulbFilled,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(14.dp)),
+                    modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.primary
                 )
                 Text(
@@ -220,7 +212,7 @@ private fun ExecutionSection(
     currentStep: Int
 ) {
     Column(
-        verticalArrangement = Arrangement.spacedBy(rDp(2.dp))
+        verticalArrangement = Arrangement.spacedBy(Standards.SpacingXxs)
     ) {
         steps.forEachIndexed { index, step ->
             ExecutionStepRow(
@@ -248,20 +240,20 @@ private fun ExecutionStepRow(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(10.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.Top
         ) {
             // Status icon
             Box(
                 modifier = Modifier
-                    .size(rDp(24.dp))
+                    .size(24.dp)
                     .background(
                         color = if (step.success) {
                             MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f)
@@ -274,16 +266,16 @@ private fun ExecutionStepRow(
             ) {
                 if (step.success) {
                     Icon(
-                        imageVector = Icons.Default.CheckCircle,
+                        imageVector = TnIcons.CircleCheck,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.tertiary
                     )
                 } else {
                     Icon(
-                        imageVector = Icons.Default.Error,
+                        imageVector = TnIcons.AlertTriangle,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = MaterialTheme.colorScheme.error
                     )
                 }
@@ -291,7 +283,7 @@ private fun ExecutionStepRow(
 
             Column(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(rDp(4.dp))
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -324,14 +316,14 @@ private fun ExecutionStepRow(
                 // Result preview
                 if (step.result.isNotBlank()) {
                     Surface(
-                        shape = RoundedCornerShape(rDp(4.dp)),
+                        shape = RoundedCornerShape(Standards.SpacingXs),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                     ) {
                         Text(
                             text = step.result.take(150) + if (step.result.length > 150) "..." else "",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(rDp(6.dp)),
+                            modifier = Modifier.padding(6.dp),
                             maxLines = 3,
                             overflow = TextOverflow.Ellipsis
                         )
@@ -346,9 +338,9 @@ private fun ExecutionStepRow(
 private fun StepConnector(isAnimated: Boolean = false) {
     Box(
         modifier = Modifier
-            .padding(start = rDp(23.dp))
-            .width(rDp(2.dp))
-            .height(rDp(12.dp))
+            .padding(start = 23.dp)
+            .width(2.dp)
+            .height(12.dp)
             .background(
                 color = if (isAnimated) {
                     MaterialTheme.colorScheme.tertiary.copy(alpha = 0.5f)
@@ -374,21 +366,21 @@ private fun ExecutingLoadingRow() {
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.2f)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(10.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                .padding(10.dp),
+            horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                painter = painterResource(R.drawable.tool),
+                imageVector = TnIcons.Wrench,
                 contentDescription = null,
                 modifier = Modifier
-                    .size(rDp(20.dp))
+                    .size(20.dp)
                     .rotate(rotation),
                 tint = MaterialTheme.colorScheme.tertiary
             )
@@ -409,21 +401,21 @@ private fun SummarySection(
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(rDp(8.dp)),
+        shape = RoundedCornerShape(Standards.RadiusMd),
         color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)
     ) {
         Column(
-            modifier = Modifier.padding(rDp(10.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Row(
-                horizontalArrangement = Arrangement.spacedBy(rDp(6.dp)),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    painter = painterResource(R.drawable.tool),
+                    imageVector = TnIcons.Wrench,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(14.dp)),
+                    modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.secondary
                 )
                 Text(
@@ -448,11 +440,52 @@ private fun SummarySection(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun PhaseSpinner() {
-    CircularProgressIndicator(
-        modifier = Modifier.size(rDp(12.dp)),
-        strokeWidth = rDp(2.dp),
+    LoadingIndicator(
+        modifier = Modifier.size(12.dp),
         color = MaterialTheme.colorScheme.tertiary
     )
+}
+
+@Composable
+private fun AgentDetailDialog(
+    plan: String?,
+    steps: List<ToolChainStepData>,
+    summary: String?,
+    onDismiss: () -> Unit
+) {
+    ToolDetailDialog(
+        title = "Agent Execution",
+        onDismiss = onDismiss
+    ) {
+        if (plan != null) {
+            DetailSection(label = "Plan", content = plan)
+        }
+
+        steps.forEachIndexed { index, step ->
+            DetailSection(
+                label = "${index + 1}. ${step.toolName} (${step.pluginName})",
+                content = buildString {
+                    appendLine("Status: ${if (step.success) "Success" else "Failed"}")
+                    appendLine("Time: ${step.executionTimeMs}ms")
+                    if (step.args.isNotBlank()) {
+                        appendLine()
+                        appendLine("Arguments:")
+                        appendLine(step.args)
+                    }
+                    if (step.result.isNotBlank()) {
+                        appendLine()
+                        appendLine("Result:")
+                        appendLine(step.result)
+                    }
+                }
+            )
+        }
+
+        if (summary != null) {
+            DetailSection(label = "Summary", content = summary)
+        }
+    }
 }

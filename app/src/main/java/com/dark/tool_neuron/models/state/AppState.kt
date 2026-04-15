@@ -3,8 +3,9 @@ package com.dark.tool_neuron.models.state
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import com.dark.tool_neuron.R
+import androidx.compose.ui.graphics.vector.ImageVector
 import com.dark.tool_neuron.plugins.PluginManager
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 sealed class AppState {
     // Idle states
@@ -50,17 +51,17 @@ fun AppState.getDisplayText(): String = when (this) {
     is AppState.Error -> "Error: $message"
 }
 
-fun AppState.getIcon(): Int = when (this) {
-    is AppState.Welcome -> R.drawable.user
-    is AppState.NoModelLoaded -> R.drawable.vl_models
-    is AppState.ModelLoaded -> R.drawable.smart_temp_message
-    is AppState.LoadingModel -> R.drawable.settings
+fun AppState.getIcon(): ImageVector = when (this) {
+    is AppState.Welcome -> TnIcons.User
+    is AppState.NoModelLoaded -> TnIcons.Photo
+    is AppState.ModelLoaded -> TnIcons.Sparkles
+    is AppState.LoadingModel -> TnIcons.Settings
     is AppState.GeneratingText,
     is AppState.GeneratingImage,
     is AppState.GeneratingAudio,
     is AppState.ExecutingPlugin,
-    is AppState.PluginExecutionComplete -> R.drawable.tool
-    is AppState.Error -> R.drawable.error
+    is AppState.PluginExecutionComplete -> TnIcons.Wrench
+    is AppState.Error -> TnIcons.AlertTriangle
 }
 
 @Composable

@@ -4,12 +4,14 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
 import com.dark.tool_neuron.engine.GGUFEngine
+import com.dark.tool_neuron.global.formatNumber
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import android.os.ParcelFileDescriptor
 import java.io.File
 import java.io.InputStream
 import java.security.MessageDigest
@@ -45,10 +47,18 @@ class ModelDataParser {
             val pfd = context.contentResolver.openFileDescriptor(uri, "r")
                 ?: return@withContext ModelLoadResult.Error("Cannot open file descriptor for URI")
 
-            val fd = pfd.detachFd()  // Detach so engine owns it
-            val success = engine.loadFromFd(fd, config)
+            val fd = pfd.detachFd()  // Detach so engine owns the fd
+            pfd.close()              // Close the PFD wrapper (no-op after detach, but tidy)
+
+            val success = try {
+                engine.loadFromFd(fd, config)
+            } catch (e: Exception) {
+                closeFdSafely(fd)
+                throw e
+            }
 
             if (success) {
+                // Engine now owns fd — do not close it
                 val infoJson = engine.getModelInfo()
                 if (infoJson != null) {
                     val modelInfo = parseGGUFInfo(infoJson)
@@ -57,6 +67,7 @@ class ModelDataParser {
                     ModelLoadResult.Error("Failed to retrieve model information")
                 }
             } else {
+                closeFdSafely(fd)
                 ModelLoadResult.Error("Failed to load GGUF model from URI")
             }
         } catch (e: Exception) {
@@ -94,7 +105,7 @@ class ModelDataParser {
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         try {
             // Parse diffusion config from ModelConfig
-            val diffusionConfig = parseDiffusionConfig(config?.modelLoadingParams)
+            val diffusionConfig = DiffusionConfig.fromJson(config?.modelLoadingParams)
             val inferenceParams = parseDiffusionInferenceParams(config?.modelInferenceParams)
 
             // Validate model directory exists
@@ -103,8 +114,8 @@ class ModelDataParser {
                 return@withContext ModelLoadResult.Error("Model directory not found: ${model.modelPath}")
             }
 
-            // Check for required files — clip filename depends on useCpuClip flag
-            val clipFilename = if (diffusionConfig.useCpuClip) "clip.mnn" else "clip.bin"
+            // Check for required files — clip uses .mnn if runOnCpu OR useCpuClip (matches DiffusionManager)
+            val clipFilename = if (diffusionConfig.runOnCpu || diffusionConfig.useCpuClip) "clip.mnn" else "clip.bin"
             val requiredFiles = if (diffusionConfig.runOnCpu) {
                 listOf("clip.mnn", "unet.mnn", "vae_decoder.mnn", "tokenizer.json")
             } else {
@@ -120,6 +131,8 @@ class ModelDataParser {
             val success = LlmModelWorker.loadDiffusionModel(
                 name = model.modelName,
                 modelDir = model.modelPath,
+                height = diffusionConfig.height,
+                width = diffusionConfig.width,
                 textEmbeddingSize = diffusionConfig.textEmbeddingSize,
                 runOnCpu = diffusionConfig.runOnCpu,
                 useCpuClip = diffusionConfig.useCpuClip,
@@ -151,27 +164,6 @@ class ModelDataParser {
         }
     }
 
-    private fun parseDiffusionConfig(jsonString: String?): DiffusionConfig {
-        if (jsonString == null) {
-            return DiffusionConfig() // Return defaults
-        }
-
-        return try {
-            val json = JSONObject(jsonString)
-            DiffusionConfig(
-                textEmbeddingSize = json.optInt("text_embedding_size", 768),
-                runOnCpu = json.optBoolean("run_on_cpu", false),
-                useCpuClip = json.optBoolean("use_cpu_clip", true),
-                isPony = json.optBoolean("is_pony", false),
-                httpPort = json.optInt("http_port", 8081),
-                safetyMode = json.optBoolean("safety_mode", false),
-                width = json.optInt("width", 512),
-                height = json.optInt("height", 512)
-            )
-        } catch (e: Exception) {
-            DiffusionConfig() // Return defaults on error
-        }
-    }
 
     private fun parseDiffusionInferenceParams(jsonString: String?): DiffusionInferenceParams {
         return DiffusionInferenceParams.fromJson(jsonString)
@@ -297,15 +289,6 @@ class ModelDataParser {
         }
     }
 
-    @SuppressLint("DefaultLocale")
-    private fun formatNumber(num: Int): String {
-        return when {
-            num >= 1_000_000_000 -> String.format("%.2fB", num / 1_000_000_000.0)
-            num >= 1_000_000 -> String.format("%.2fM", num / 1_000_000.0)
-            num >= 1_000 -> String.format("%.2fK", num / 1_000.0)
-            else -> num.toString()
-        }
-    }
 
     suspend fun unloadModel(engine: Any?) = withContext(Dispatchers.IO) {
         when (engine) {
@@ -326,28 +309,51 @@ class ModelDataParser {
             return checksumDirectory(file)
         }
 
-        // For files (GGUF models), use file content
+        // Fast partial hash: first 4 MB + file metadata
         val digest = MessageDigest.getInstance("SHA-256")
+        digest.update(file.name.toByteArray())
+        digest.update(file.length().toString().toByteArray())
+
+        val limit = 4L * 1024 * 1024
         file.inputStream().use { input ->
             val buffer = ByteArray(8 * 1024)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
+            var remaining = limit
+            while (remaining > 0) {
+                val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                val len = input.read(buffer, 0, toRead)
+                if (len <= 0) break
+                digest.update(buffer, 0, len)
+                remaining -= len
             }
         }
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
     /**
-     * Calculate SHA-256 checksum from content:// URI using content resolver
+     * Fast partial SHA-256: hashes first 4 MB + file size + display name.
+     * Reading the entire multi-GB file caused OOM-kills on Oppo/Redmi devices
+     * whose OEM memory managers terminate long-running I/O.
      */
     fun checksumSHA256FromUri(context: Context, uri: Uri): String {
         val digest = MessageDigest.getInstance("SHA-256")
+        val fileSize = getFileSizeFromUri(context, uri)
+        val fileName = getFileNameFromUri(context, uri)
+
+        // Mix in metadata so identical-prefix files still differ
+        digest.update(fileName.toByteArray())
+        digest.update(fileSize.toString().toByteArray())
+
+        // Hash only the first 4 MB
+        val limit = 4L * 1024 * 1024
         context.contentResolver.openInputStream(uri)?.use { input ->
             val buffer = ByteArray(8 * 1024)
-            var bytesRead: Int
-            while (input.read(buffer).also { bytesRead = it } != -1) {
-                digest.update(buffer, 0, bytesRead)
+            var remaining = limit
+            while (remaining > 0) {
+                val toRead = minOf(buffer.size.toLong(), remaining).toInt()
+                val len = input.read(buffer, 0, toRead)
+                if (len <= 0) break
+                digest.update(buffer, 0, len)
+                remaining -= len
             }
         } ?: throw IllegalArgumentException("Cannot open input stream for URI: $uri")
         return digest.digest().joinToString("") { "%02x".format(it) }
@@ -374,6 +380,13 @@ class ModelDataParser {
             }
         }
         return name
+    }
+
+    /** Safely close a raw fd obtained via detachFd() */
+    private fun closeFdSafely(fd: Int) {
+        try {
+            ParcelFileDescriptor.adoptFd(fd).close()
+        } catch (_: Throwable) {}
     }
 
     private fun checksumDirectory(dir: File): String {
@@ -423,6 +436,27 @@ data class DiffusionConfig(
             put("width", width)
             put("height", height)
         }.toString()
+    }
+
+    companion object {
+        fun fromJson(jsonString: String?): DiffusionConfig {
+            if (jsonString == null) return DiffusionConfig()
+            return try {
+                val json = JSONObject(jsonString)
+                DiffusionConfig(
+                    textEmbeddingSize = json.optInt("text_embedding_size", 768),
+                    runOnCpu = json.optBoolean("run_on_cpu", false),
+                    useCpuClip = json.optBoolean("use_cpu_clip", true),
+                    isPony = json.optBoolean("is_pony", false),
+                    httpPort = json.optInt("http_port", 8081),
+                    safetyMode = json.optBoolean("safety_mode", false),
+                    width = json.optInt("width", 512),
+                    height = json.optInt("height", 512)
+                )
+            } catch (_: Exception) {
+                DiffusionConfig()
+            }
+        }
     }
 }
 

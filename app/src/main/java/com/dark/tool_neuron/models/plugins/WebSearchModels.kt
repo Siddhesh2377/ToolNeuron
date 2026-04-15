@@ -31,21 +31,3 @@ data class ScrapedContent(
     val fetchTime: Long,
     val metadata: Map<String, String> = emptyMap()
 )
-
-/**
- * Tool-specific parameters for DuckDuckGo search
- */
-data class DuckDuckGoSearchParams(
-    val query: String,
-    val maxResults: Int = 5,
-    val safeSearch: Boolean = true
-)
-
-/**
- * Tool-specific parameters for web scraping
- */
-data class WebScrapingParams(
-    val url: String,
-    val selector: String? = null,
-    val maxLength: Int = 5000
-)

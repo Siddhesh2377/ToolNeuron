@@ -11,13 +11,7 @@ enum class LoadingMode(val value: Int) {
 
 enum class Permission(val value: Int) {
     READ(0x01),
-    WRITE(0x02),
-    ADMIN(0x04),
-    READ_WRITE_ADMIN(0x07);
-
-    fun hasRead() = value and READ.value != 0
-    fun hasWrite() = value and WRITE.value != 0
-    fun hasAdmin() = value and ADMIN.value != 0
+    ADMIN(0x04);
 
     companion object {
         fun fromValue(value: Int) = entries.firstOrNull { it.value == value } ?: READ
@@ -92,10 +86,6 @@ data class PacketSession(
     val loadingMode: LoadingMode,
     internal val dek: ByteArray?
 ) {
-    val isAdmin get() = permissions.hasAdmin()
-    val canWrite get() = permissions.hasWrite()
-    val canRead get() = permissions.hasRead()
-
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false

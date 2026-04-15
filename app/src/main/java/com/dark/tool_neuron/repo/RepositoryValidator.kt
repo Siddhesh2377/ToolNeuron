@@ -83,24 +83,4 @@ class RepositoryValidator {
         }
     }
 
-    /**
-     * Gets cached validation result without making API calls
-     */
-    fun getCachedResult(repoId: String): ValidationResult? {
-        return validationCache[repoId]
-    }
-
-    /**
-     * Clears validation cache for a specific repository
-     */
-    fun clearCache(repoId: String) {
-        validationCache.remove(repoId)
-    }
-
-    /**
-     * Clears entire validation cache
-     */
-    fun clearAllCache() {
-        validationCache.clear()
-    }
 }

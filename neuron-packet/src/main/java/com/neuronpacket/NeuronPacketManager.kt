@@ -9,10 +9,6 @@ import java.io.File
 class NeuronPacketManager {
     private val native = NeuronPacketNative()
     private val mutex = Mutex()
-    private val sessionCache = mutableMapOf<String, PacketSession>()
-
-    val version: String get() = native.getVersion()
-    val isOpen: Boolean get() = native.isOpen()
 
     suspend fun export(
         outputFile: File,
@@ -77,7 +73,6 @@ class NeuronPacketManager {
                         loadingMode = LoadingMode.fromValue(native.getLoadingMode()),
                         dek = result.dek
                     )
-                    sessionCache[session.packetId] = session
                     Result.success(session)
                 } else {
                     Result.failure(NeuronPacketException(result.errorMessage))
@@ -106,70 +101,6 @@ class NeuronPacketManager {
     suspend fun close() = withContext(Dispatchers.IO) {
         mutex.withLock {
             native.closePacket()
-            sessionCache.clear()
-        }
-    }
-
-    suspend fun addUser(
-        credentials: UserCredentials,
-        adminPassword: String
-    ): Result<Boolean> = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            try {
-                val success = native.addUser(
-                    credentials.password,
-                    credentials.label,
-                    credentials.permissions.value,
-                    adminPassword
-                )
-                if (success) Result.success(true)
-                else Result.failure(NeuronPacketException("Failed to add user"))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-
-    suspend fun removeUser(slotId: Int, adminPassword: String): Result<Boolean> = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            try {
-                val success = native.removeUser(slotId, adminPassword)
-                if (success) Result.success(true)
-                else Result.failure(NeuronPacketException("Failed to remove user"))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-
-    suspend fun changePassword(
-        slotId: Int,
-        oldPassword: String,
-        newPassword: String
-    ): Result<Boolean> = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            try {
-                val success = native.changePassword(slotId, oldPassword, newPassword)
-                if (success) Result.success(true)
-                else Result.failure(NeuronPacketException("Failed to change password"))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
-    }
-
-    suspend fun resetAdminPassword(
-        recoveryKey: String,
-        newPassword: String
-    ): Result<Boolean> = withContext(Dispatchers.IO) {
-        mutex.withLock {
-            try {
-                val success = native.resetAdminPassword(recoveryKey, newPassword)
-                if (success) Result.success(true)
-                else Result.failure(NeuronPacketException("Invalid recovery key"))
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
         }
     }
 
@@ -181,12 +112,6 @@ class NeuronPacketManager {
             loadingMode = LoadingMode.fromValue(native.getLoadingMode()),
             metadataJson = native.getMetadataJson()
         )
-    }
-
-    fun getCachedSession(packetId: String): PacketSession? = sessionCache[packetId]
-
-    fun clearSessionCache() {
-        sessionCache.clear()
     }
 }
 

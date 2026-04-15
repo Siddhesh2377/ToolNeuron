@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.repo
 
 import android.content.Context
+import com.dark.tool_neuron.global.formatDecimalBytes
 import android.os.Build
 import android.util.Log
 import com.dark.tool_neuron.models.data.HFModelRepository
@@ -32,6 +33,7 @@ class ModelStoreRepository(private val context: Context) {
     private val cacheDir = File(context.filesDir, "cache").apply { mkdirs() }
     private val cacheFile = File(cacheDir, "model_store_cache.json")
 
+    @Volatile
     private var cachedModels: List<HuggingFaceModel>? = null
 
     private val chipsetModelSuffixes = mapOf(
@@ -57,11 +59,6 @@ class ModelStoreRepository(private val context: Context) {
         } else {
             "UNKNOWN"
         }
-    }
-
-    fun isDeviceSupported(): Boolean {
-        val soc = getDeviceSoc()
-        return getChipsetSuffix(soc) != null
     }
 
     fun isQualcommDevice(): Boolean {
@@ -187,10 +184,6 @@ class ModelStoreRepository(private val context: Context) {
         }
     }
 
-    fun invalidateCache() {
-        cachedModels = null
-    }
-
     private suspend fun getSDModels(repositories: List<HFModelRepository>): List<HuggingFaceModel> {
         val models = mutableListOf<HuggingFaceModel>()
         val npuSuffixChain = getNpuSuffixChain() // null = non-Qualcomm
@@ -237,7 +230,7 @@ class ModelStoreRepository(private val context: Context) {
                         val baseName = fileName
                             .replace(matchedPattern, "")
                             .replace(Regex("[_-]qnn[\\d.]*$", RegexOption.IGNORE_CASE), "")
-                        val sizeStr = formatFileSize(file.size ?: 0)
+                        val sizeStr = formatDecimalBytes(file.size ?: 0)
 
                         val tags = mutableListOf("NPU", repo.name)
                         if (repo.category == ModelCategory.UNCENSORED) tags.add("NSFW")
@@ -265,7 +258,7 @@ class ModelStoreRepository(private val context: Context) {
                     zipFiles.forEach { file ->
                         val fileName = file.path.substringAfterLast("/")
                         val baseName = fileName.removeSuffix(".zip").removeSuffix(".ZIP")
-                        val sizeStr = formatFileSize(file.size ?: 0)
+                        val sizeStr = formatDecimalBytes(file.size ?: 0)
 
                         models.add(
                             HuggingFaceModel(
@@ -337,7 +330,7 @@ class ModelStoreRepository(private val context: Context) {
                                 !file.path.contains("projector", ignoreCase = true)
                     }.forEach { file ->
                             val fileName = file.path.substringAfterLast("/")
-                            val sizeStr = formatFileSize(file.size ?: 0)
+                            val sizeStr = formatDecimalBytes(file.size ?: 0)
 
                             // Extract quantization type from filename
                             val quantType =
@@ -379,12 +372,4 @@ class ModelStoreRepository(private val context: Context) {
         return models
     }
 
-    private fun formatFileSize(bytes: Long): String {
-        return when {
-            bytes >= 1_000_000_000 -> String.format("%.2f GB", bytes / 1_000_000_000.0)
-            bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
-            bytes >= 1_000 -> String.format("%.2f KB", bytes / 1_000.0)
-            else -> "$bytes B"
-        }
-    }
 }

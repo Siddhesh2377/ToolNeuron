@@ -4,22 +4,26 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+        android:minSdkVersion="34" />
 
+    <permission
+        android:name="com.dark.tool_neuron.permission.BIND_LLM_SERVICE"
+        android:protectionLevel="signature" />
 
     <application
         android:name=".NVApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:enableOnBackInvokedCallback="true"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:networkSecurityConfig="@xml/network_security_config"
-        android:roundIcon="@mipmap/ic_launcher_monochrome"
+        android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.NeuroVerse"
-        tools:targetApi="33" >
+        tools:targetApi="34" >
         <activity
             android:name=".activity.MainActivity"
             android:exported="true"
@@ -36,7 +40,7 @@
 
         <activity
             android:name=".activity.ModelLoadingActivity"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NeuroVerse"
             android:windowSoftInputMode="adjustResize"
@@ -44,53 +48,10 @@
         </activity>
 
 
-        <activity
-            android:name=".activity.TempActivity"
-            android:exported="true"
-            android:launchMode="singleTask"
-            android:theme="@style/Theme.NeuroVerse"
-            android:windowSoftInputMode="adjustResize"
-            tools:targetApi="33" >
-
-            <!-- Intent filter for .neuron files from file managers -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="file" />
-                <data android:host="*" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.neuron" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-                <data android:host="*" />
-                <data android:mimeType="*/*" />
-                <data android:pathPattern=".*\\.neuron" />
-                <data android:pathPattern=".*\\.NEURON" />
-            </intent-filter>
-
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-
-                <data android:scheme="content" />
-                <data android:host="*" />
-                <data android:mimeType="application/octet-stream" />
-            </intent-filter>
-
-        </activity>
 
         <activity
             android:name=".activity.ModelPickerActivity"
-            android:exported="true"
+            android:exported="false"
             android:launchMode="singleTask"
             android:theme="@style/Theme.NeuroVerse"
             android:windowSoftInputMode="adjustResize"
@@ -131,20 +92,23 @@
             android:enabled="true"
             android:exported="true"
             android:foregroundServiceType="dataSync"
-            android:permission="android.permission.FOREGROUND_SERVICE_DATA_SYNC"
-            android:stopWithTask="false" />
+            android:permission="com.dark.tool_neuron.permission.BIND_LLM_SERVICE"
+            android:stopWithTask="false"
+            tools:targetApi="29" />
 
         <service
             android:name=".service.ModelDownloadService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="dataSync"
+            tools:targetApi="29" />
 
         <!-- WorkManager's foreground service -->
         <service
             android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync"
-            tools:node="merge" />
+            tools:node="merge"
+            tools:targetApi="29" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

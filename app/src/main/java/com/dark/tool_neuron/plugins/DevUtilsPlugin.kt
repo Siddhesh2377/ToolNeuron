@@ -16,9 +16,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.api.SuperPlugin
-import com.dark.tool_neuron.ui.theme.rDp
-import com.mp.ai_gguf.toolcalling.ToolCall
-import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
+import com.dark.gguf_lib.toolcalling.ToolCall
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 import org.json.JSONObject
 import java.security.MessageDigest
 import java.util.UUID
@@ -83,6 +82,24 @@ class DevUtilsPlugin : SuperPlugin {
                     .stringParam("operation", "Operation: encode or decode", required = true)
             )
         )
+    }
+
+    override fun serializeResult(data: Any): String = when (data) {
+        is DevUtilsResponse -> JSONObject().apply {
+            put("tool", data.tool)
+            put("operation", data.operation)
+            put("input", data.input)
+            put("output", data.output)
+        }.toString()
+        is TextStatsResponse -> JSONObject().apply {
+            put("charCount", data.charCount)
+            put("charCountNoSpaces", data.charCountNoSpaces)
+            put("wordCount", data.wordCount)
+            put("lineCount", data.lineCount)
+            put("sentenceCount", data.sentenceCount)
+            put("summary", data.summary)
+        }.toString()
+        else -> data.toString()
     }
 
     override suspend fun executeTool(toolCall: ToolCall): Result<Any> {
@@ -285,7 +302,7 @@ class DevUtilsPlugin : SuperPlugin {
                     text = data.toString(2),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(rDp(8.dp))
+                    modifier = Modifier.padding(8.dp)
                 )
             }
         }
@@ -308,12 +325,12 @@ class DevUtilsPlugin : SuperPlugin {
 
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = title,
@@ -322,14 +339,14 @@ class DevUtilsPlugin : SuperPlugin {
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Surface(
-                    shape = RoundedCornerShape(rDp(4.dp)),
+                    shape = RoundedCornerShape(4.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ) {
                     Text(
                         text = output,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(rDp(8.dp))
+                        modifier = Modifier.padding(8.dp)
                     )
                 }
             }
@@ -340,12 +357,12 @@ class DevUtilsPlugin : SuperPlugin {
     private fun TextStatsResultUI(data: JSONObject) {
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(rDp(6.dp)),
+            shape = RoundedCornerShape(6.dp),
             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
         ) {
             Column(
-                modifier = Modifier.padding(rDp(10.dp)),
-                verticalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                modifier = Modifier.padding(10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "Text Statistics",

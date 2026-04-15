@@ -1,7 +1,6 @@
 package com.neuronpacket
 
 internal class NeuronPacketNative {
-    external fun getVersion(): String
     external fun exportPacket(
         outputPath: String,
         name: String,
@@ -18,10 +17,6 @@ internal class NeuronPacketNative {
     external fun decryptPayload(dek: ByteArray): ByteArray?
     external fun closePacket()
     external fun isOpen(): Boolean
-    external fun addUser(password: String, label: String, permissions: Int, adminPassword: String): Boolean
-    external fun removeUser(slotId: Int, adminPassword: String): Boolean
-    external fun changePassword(slotId: Int, oldPassword: String, newPassword: String): Boolean
-    external fun resetAdminPassword(recoveryKey: String, newPassword: String): Boolean
     external fun getUserCount(): Int
     external fun getLoadingMode(): Int
     external fun getPacketId(): String

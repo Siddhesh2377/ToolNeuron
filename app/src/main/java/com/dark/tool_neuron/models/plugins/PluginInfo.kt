@@ -1,6 +1,6 @@
 package com.dark.tool_neuron.models.plugins
 
-import com.mp.ai_gguf.toolcalling.ToolDefinitionBuilder
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
 
 data class PluginInfo(
     val name: String = "",

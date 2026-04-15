@@ -22,6 +22,7 @@ import java.io.InputStream
  */
 object DocumentParser {
     private const val TAG = "DocumentParser"
+    @Volatile private var pdfBoxInitialized = false
 
     /**
      * Supported document MIME types
@@ -33,7 +34,6 @@ object DocumentParser {
         const val XLS = "application/vnd.ms-excel"
         const val DOCX = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
         const val DOC = "application/msword"
-        const val TXT = "text/plain"
     }
 
     /**
@@ -63,7 +63,7 @@ object DocumentParser {
                     MimeTypes.XLS -> parseXls(inputStream)
                     MimeTypes.DOCX -> parseDocx(inputStream)
                     MimeTypes.DOC -> parseDoc(inputStream)
-                    MimeTypes.TXT -> parsePlainText(inputStream)
+                    "text/plain" -> parsePlainText(inputStream)
                     else -> {
                         // Try to infer from file extension
                         val fileName = uri.lastPathSegment ?: ""
@@ -97,8 +97,15 @@ object DocumentParser {
      */
     private fun parsePdf(inputStream: InputStream, context: Context): String {
         return try {
-            // Initialize PDFBox-Android with context (required for Android)
-            PDFBoxResourceLoader.init(context)
+            // Initialize PDFBox-Android once (thread-safe via volatile flag)
+            if (!pdfBoxInitialized) {
+                synchronized(this) {
+                    if (!pdfBoxInitialized) {
+                        PDFBoxResourceLoader.init(context.applicationContext)
+                        pdfBoxInitialized = true
+                    }
+                }
+            }
 
             PDDocument.load(inputStream).use { document ->
                 val stripper = PDFTextStripper()
@@ -314,23 +321,9 @@ object DocumentParser {
             MimeTypes.EPUB -> "EPUB"
             MimeTypes.XLSX, MimeTypes.XLS -> "Excel"
             MimeTypes.DOCX, MimeTypes.DOC -> "Word"
-            MimeTypes.TXT -> "Text"
+            "text/plain" -> "Text"
             else -> "Document"
         }
     }
 
-    /**
-     * Check if a MIME type is supported
-     */
-    fun isSupportedMimeType(mimeType: String?): Boolean {
-        return mimeType in listOf(
-            MimeTypes.PDF,
-            MimeTypes.EPUB,
-            MimeTypes.XLSX,
-            MimeTypes.XLS,
-            MimeTypes.DOCX,
-            MimeTypes.DOC,
-            MimeTypes.TXT
-        )
-    }
 }

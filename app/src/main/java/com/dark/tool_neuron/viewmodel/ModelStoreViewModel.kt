@@ -6,20 +6,26 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.AppPaths
 import com.dark.tool_neuron.models.data.HFModelRepository
 import com.dark.tool_neuron.models.data.HuggingFaceModel
 import com.dark.tool_neuron.models.data.ModelCategory
 import com.dark.tool_neuron.models.data.ModelType
 import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.repo.HuggingFaceExplorerRepo
+import com.dark.tool_neuron.repo.HuggingFaceExplorerRepository
 import com.dark.tool_neuron.repo.ModelRepositoryDataStore
 import com.dark.tool_neuron.repo.ModelStoreRepository
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.service.ModelDownloadService
-import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.ui.screen.model_store.StoreTab
 import com.dark.tool_neuron.utils.ModelMetadataExtractor
 import com.dark.tool_neuron.utils.SizeCategory
-import com.dark.tool_neuron.ui.screen.StoreTab
+import dagger.hilt.android.lifecycle.HiltViewModel
+import javax.inject.Inject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -39,7 +45,11 @@ data class RepoGroupInfo(
     val modelCount: Int
 )
 
-class ModelStoreViewModel(application: Application) : AndroidViewModel(application) {
+@HiltViewModel
+class ModelStoreViewModel @Inject constructor(
+    application: Application,
+    private val explorerRepository: HuggingFaceExplorerRepository
+) : AndroidViewModel(application) {
 
     private val repository = ModelStoreRepository(application)
     private val systemRepo = AppContainer.getModelRepository()
@@ -115,8 +125,22 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private val _validationResults = MutableStateFlow<Map<String, ValidationResult>>(emptyMap())
     val validationResults: StateFlow<Map<String, ValidationResult>> = _validationResults
 
+    private val _explorerQuery = MutableStateFlow("")
+    val explorerQuery: StateFlow<String> = _explorerQuery
+
+    private val _explorerResults = MutableStateFlow<List<HuggingFaceExplorerRepo>>(emptyList())
+    val explorerResults: StateFlow<List<HuggingFaceExplorerRepo>> = _explorerResults
+
+    private val _isExplorerLoading = MutableStateFlow(false)
+    val isExplorerLoading: StateFlow<Boolean> = _isExplorerLoading
+
+    private val _explorerError = MutableStateFlow<String?>(null)
+    val explorerError: StateFlow<String?> = _explorerError
+
+    private var explorerSearchJob: Job? = null
+
     // App's internal models directory
-    private val appModelsDir = File(application.filesDir, "models")
+    private val appModelsDir = AppPaths.models(application)
 
     init {
         loadDeviceInfo()
@@ -179,8 +203,9 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     private fun loadInstalledModels() {
         viewModelScope.launch {
             try {
-                val installedList = systemRepo.getAllModels().first()
-                _installedModels.value = installedList
+                systemRepo.getAllModels().collect { installedList ->
+                    _installedModels.value = installedList
+                }
             } catch (e: Exception) {
                 Log.e("ModelStoreViewModel", "Error loading installed models", e)
             }
@@ -408,6 +433,19 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
 
     fun downloadModel(model: HuggingFaceModel) {
         val context = getApplication<Application>()
+
+        // Warn user if model is likely too large for their device
+        val approxSizeMB = parseApproxSizeMB(model.approximateSize)
+        if (approxSizeMB > 0) {
+            val activityManager = context.getSystemService(android.content.Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            val memInfo = android.app.ActivityManager.MemoryInfo()
+            activityManager.getMemoryInfo(memInfo)
+            val totalRamMB = (memInfo.totalMem / (1024 * 1024)).toInt()
+            if (approxSizeMB > totalRamMB * 0.8) {
+                _error.value = "Warning: This model (~${approxSizeMB}MB) may be too large for your device (${totalRamMB}MB RAM). It might fail to load."
+            }
+        }
+
         val fileUrl = "https://huggingface.co/${model.fileUri}"
 
         val intent = Intent(context, ModelDownloadService::class.java).apply {
@@ -421,7 +459,17 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, model.textEmbeddingSize)
         }
 
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
+    }
+
+    private fun parseApproxSizeMB(sizeStr: String): Int {
+        val cleaned = sizeStr.trim().uppercase()
+        val number = cleaned.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return 0
+        return when {
+            cleaned.endsWith("GB") -> (number * 1024).toInt()
+            cleaned.endsWith("MB") -> number.toInt()
+            else -> 0
+        }
     }
 
     fun cancelDownload(modelId: String) {
@@ -474,6 +522,66 @@ class ModelStoreViewModel(application: Application) : AndroidViewModel(applicati
     fun addRepository(repo: HFModelRepository) {
         viewModelScope.launch {
             repoDataStore.addRepository(repo)
+            loadModels()
+        }
+    }
+
+    fun setExplorerQuery(query: String) {
+        _explorerQuery.value = query
+        if (query.isBlank()) {
+            _explorerResults.value = emptyList()
+            _explorerError.value = null
+        }
+    }
+
+    fun searchExplorerRepositories() {
+        explorerSearchJob?.cancel()
+        explorerSearchJob = viewModelScope.launch {
+            val query = _explorerQuery.value.trim()
+            if (query.isBlank()) {
+                _explorerError.value = "Enter a search term"
+                _explorerResults.value = emptyList()
+                return@launch
+            }
+
+            _isExplorerLoading.value = true
+            _explorerError.value = null
+
+            try {
+                explorerRepository.searchGgufRepositories(query).onSuccess { repos ->
+                    _explorerResults.value = repos
+                    if (repos.isEmpty()) {
+                        _explorerError.value = "No repositories found"
+                    }
+                }.onFailure { exception ->
+                    _explorerResults.value = emptyList()
+                    _explorerError.value = exception.message ?: "Search failed"
+                }
+            } finally {
+                _isExplorerLoading.value = false
+            }
+        }
+    }
+
+    fun addExplorerRepository(explorerRepo: HuggingFaceExplorerRepo) {
+        viewModelScope.launch {
+            val currentRepos = repositories.first()
+            if (currentRepos.any { it.repoPath.equals(explorerRepo.id, ignoreCase = true) }) {
+                _explorerError.value = "Repository already added"
+                return@launch
+            }
+
+            val repo = HFModelRepository(
+                id = "hf-${explorerRepo.id.replace("/", "-").lowercase()}",
+                name = explorerRepo.id.substringAfter("/"),
+                repoPath = explorerRepo.id,
+                modelType = ModelType.GGUF,
+                isEnabled = true,
+                category = ModelCategory.GENERAL
+            )
+
+            repoDataStore.addRepository(repo)
+            _explorerError.value = null
             loadModels()
         }
     }

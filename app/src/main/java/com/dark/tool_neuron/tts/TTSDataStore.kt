@@ -59,15 +59,4 @@ class TTSDataStore(private val context: Context) {
     suspend fun updateUseNNAPI(enabled: Boolean) {
         context.ttsDataStore.edit { it[USE_NNAPI_KEY] = enabled }
     }
-
-    suspend fun updateSettings(settings: TTSSettings) {
-        context.ttsDataStore.edit { prefs ->
-            prefs[VOICE_KEY] = settings.voice
-            prefs[SPEED_KEY] = settings.speed
-            prefs[STEPS_KEY] = settings.steps
-            prefs[LANGUAGE_KEY] = settings.language
-            prefs[AUTO_SPEAK_KEY] = settings.autoSpeak
-            prefs[USE_NNAPI_KEY] = settings.useNNAPI
-        }
-    }
 }

@@ -4,9 +4,7 @@ enum class BlockType(val code: Byte) {
     MESSAGE(1),
     FILE(2),
     CUSTOM_DATA(3),
-    EMBEDDING(4),
-    REFERENCE(5),
-    METADATA(6);
+    EMBEDDING(4);
 
     companion object {
         private val map = values().associateBy { it.code }

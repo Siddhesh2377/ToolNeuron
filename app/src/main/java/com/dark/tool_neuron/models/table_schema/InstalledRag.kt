@@ -99,9 +99,4 @@ data class InstalledRag(
         }
     }
 
-    fun getLoadingModeName(): String = when (loadingMode) {
-        0 -> "Transient"
-        1 -> "Embedded"
-        else -> "Unknown"
-    }
 }

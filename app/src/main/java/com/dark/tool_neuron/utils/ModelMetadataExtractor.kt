@@ -71,27 +71,4 @@ object ModelMetadataExtractor {
         }
     }
 
-    /**
-     * Extracts all available parameter counts from a list of model names
-     * Returns sorted unique list
-     */
-    fun extractAvailableParameters(modelNames: List<String>): List<String> {
-        return modelNames
-            .mapNotNull { extractParameterCount(it) }
-            .distinct()
-            .sortedBy {
-                it.replace("B", "").toDoubleOrNull() ?: 0.0
-            }
-    }
-
-    /**
-     * Extracts all available quantization levels from a list of filenames
-     * Returns sorted unique list
-     */
-    fun extractAvailableQuantizations(fileNames: List<String>): List<String> {
-        return fileNames
-            .mapNotNull { extractQuantization(it) }
-            .distinct()
-            .sorted()
-    }
 }

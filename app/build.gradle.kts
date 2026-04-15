@@ -17,10 +17,10 @@ android {
 
     defaultConfig {
         applicationId = "com.dark.tool_neuron"
-        minSdk = 31
+        minSdk = 29
         targetSdk = 36
-        versionCode = 26
-        versionName = "2.0.1"
+        versionCode = 30
+        versionName = "2.0.3"
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
         }
@@ -30,6 +30,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -120,13 +121,16 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
 
     // Local Projects & AI Libraries
-    implementation(files("../libs/ai_gguf-release.aar"))
+    implementation(files("../libs/gguf_lib-release.aar"))
     implementation(files("../libs/ai_sd-release.aar"))
     implementation(files("../libs/ai_supertonic_tts-release.aar"))
     //implementation(":runanywhere-core-onnx-release@aar")
     //implementation(":runanywhere-kotlin-release@aar")
     implementation(project(":memory-vault"))
     implementation(project(":neuron-packet"))
+    implementation(project(":system_encryptor"))
+    implementation(project(":file_ops"))
+    implementation(project(":ums"))
     //implementation(project(":character-engine"))
 
     // AndroidX Core & Lifecycle
@@ -147,10 +151,14 @@ dependencies {
     // Material Design
     implementation(libs.androidx.material)
     implementation(libs.androidx.material3)
-    implementation(libs.androidx.material.icons.extended)
 
     // Debug
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // Testing
+    testImplementation(libs.junit)
+    androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.espresso.core)
 }
 
 fun getProperty(value: String): String {

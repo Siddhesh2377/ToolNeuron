@@ -29,12 +29,3 @@ sealed class ToolState {
      */
     data class Error(val error: Throwable, val message: String = error.message ?: "Unknown error") : ToolState()
 }
-
-/**
- * Data class representing a tool's execution result with metadata
- */
-data class ToolResult(
-    val toolName: String,
-    val state: ToolState,
-    val timestamp: Long = System.currentTimeMillis()
-)

@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -22,11 +20,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import com.dark.tool_neuron.R
 import com.dark.tool_neuron.global.Standards
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.worker.ScoredVaultContent
 import com.dark.tool_neuron.worker.VaultStatsInfo
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,10 +47,10 @@ fun MemoryOverlayBottomSheet(
             dragHandle = {
                 Box(
                     Modifier
-                        .padding(vertical = rDp(12.dp))
-                        .width(rDp(40.dp))
-                        .height(rDp(4.dp))
-                        .clip(RoundedCornerShape(rDp(2.dp)))
+                        .padding(vertical = Standards.SpacingMd)
+                        .width(40.dp)
+                        .height(4.dp)
+                        .clip(RoundedCornerShape(2.dp))
                         .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f))
                 )
             }
@@ -61,9 +58,9 @@ fun MemoryOverlayBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = rDp(300.dp))
-                    .padding(horizontal = rDp(Standards.SpacingLg)),
-                verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                    .heightIn(min = 300.dp)
+                    .padding(horizontal = Standards.SpacingLg),
+                verticalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
             ) {
                 // Header
                 SectionHeader(title = "Memory Vault") {
@@ -78,7 +75,7 @@ fun MemoryOverlayBottomSheet(
                 SwitchRow(
                     title = "Enable Memory",
                     description = "Query personal knowledge vault when sending messages",
-                    iconRes = R.drawable.memory_vault,
+                    icon = TnIcons.ShieldLock,
                     checked = isMemoryEnabled,
                     onCheckedChange = onMemoryEnabledChange
                 )
@@ -89,12 +86,12 @@ fun MemoryOverlayBottomSheet(
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))
+                        horizontalArrangement = Arrangement.spacedBy(Standards.SpacingSm)
                     ) {
                         InfoCard(
                             title = "Messages",
                             value = "${vaultStats.messageCount}",
-                            icon = Icons.Default.Storage,
+                            icon = TnIcons.Database,
                             modifier = Modifier.weight(1f)
                         )
                         InfoCard(
@@ -116,11 +113,11 @@ fun MemoryOverlayBottomSheet(
 
                     MemoryTimelineView(
                         entries = memoryResults,
-                        modifier = Modifier.heightIn(max = rDp(400.dp))
+                        modifier = Modifier.heightIn(max = 400.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.height(rDp(Standards.SpacingLg)))
+                Spacer(modifier = Modifier.height(Standards.SpacingLg))
             }
         }
     }

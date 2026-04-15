@@ -1,35 +1,37 @@
 package com.dark.tool_neuron.engine
 
-import android.app.ActivityManager
 import android.content.Context
-import com.dark.tool_neuron.models.table_schema.Model
-import com.dark.tool_neuron.models.table_schema.ModelConfig
-import com.dark.tool_neuron.models.engine_schema.DeviceTier
+import android.util.Log
+import com.dark.gguf_lib.GGMLEngine
+import com.dark.gguf_lib.toolcalling.GrammarMode
+import com.dark.gguf_lib.toolcalling.ToolCallingConfig
+import com.dark.gguf_lib.toolcalling.ToolDefinitionBuilder
+import com.dark.tool_neuron.global.DeviceTuner
+import com.dark.tool_neuron.global.HardwareScanner
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.engine_schema.GgufLoadingParams
-import com.mp.ai_gguf.GGUFNativeLib
-import com.mp.ai_gguf.models.DecodingMetrics
-import com.mp.ai_gguf.models.StreamCallback
-import com.mp.ai_gguf.toolcalling.GrammarMode
-import com.mp.ai_gguf.toolcalling.ToolCallingConfig
+import com.dark.tool_neuron.models.engine_schema.toLocal
+import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.models.table_schema.ModelConfig
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.buffer
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import com.dark.gguf_lib.models.GenerationEvent as LibGenerationEvent
 
 class GGUFEngine {
-    private val nativeLib = GGUFNativeLib()
-    private var isLoaded = false
+    private val engine = GGMLEngine()
     private var currentModelId: String? = null
-    private var currentToolsJson: String? = null  // Cache for grammar optimization
+
+    private var currentToolsJson: String? = null
     private var currentToolCallingConfig: ToolCallingConfig? = null
 
+    val isLoaded: Boolean get() = engine.isLoaded
+
     suspend fun load(model: Model, config: ModelConfig?): Boolean = withContext(Dispatchers.IO) {
-        if (isLoaded) unload()
+        if (engine.isLoaded) unload()
 
         val schema = GgufEngineSchema.fromJson(
             config?.modelLoadingParams,
@@ -39,48 +41,48 @@ class GGUFEngine {
         val loading = schema.loadingParams
         val inference = schema.inferenceParams
 
-        val success = nativeLib.nativeLoadModel(
-            path = model.modelPath,
-            threads = loading.threads,
-            ctxSize = loading.ctxSize,
-            temp = inference.temperature,
-            topK = inference.topK,
-            topP = inference.topP,
-            minP = inference.minP,
-            mirostat = inference.mirostat,
-            mirostatTau = inference.mirostatTau,
-            mirostatEta = inference.mirostatEta,
-            seed = inference.seed,
-            flashAttn = loading.flashAttn,
-            cacheTypeK = loading.cacheTypeK,
-            cacheTypeV = loading.cacheTypeV
-        )
+        val success = try {
+            engine.load(
+                path = model.modelPath,
+                contextSize = loading.ctxSize,
+                threads = loading.threads,
+                flashAttn = loading.flashAttn,
+                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+            )
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OOM loading model", e)
+            try { engine.unload() } catch (_: Throwable) {}
+            false
+        }
 
         if (success) {
-            isLoaded = true
+            engine.setSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
+
             currentModelId = model.id
 
             if (inference.systemPrompt.isNotEmpty()) {
-                nativeLib.nativeSetSystemPrompt(inference.systemPrompt)
+                engine.setSystemPrompt(inference.systemPrompt)
             }
             if (inference.chatTemplate.isNotEmpty()) {
-                nativeLib.nativeSetChatTemplate(inference.chatTemplate)
+                engine.setChatTemplate(inference.chatTemplate)
             }
         }
 
         success
     }
 
-    /**
-     * Load model from file descriptor (for SAF/content:// URIs)
-     * This allows loading models without MANAGE_EXTERNAL_STORAGE permission
-     *
-     * @param fd File descriptor from contentResolver.openFileDescriptor(uri, "r").detachFd()
-     * @param config Optional model configuration
-     * @return true if model loaded successfully
-     */
     suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        if (isLoaded) unload()
+        if (engine.isLoaded) unload()
 
         val schema = GgufEngineSchema.fromJson(
             config?.modelLoadingParams,
@@ -90,151 +92,61 @@ class GGUFEngine {
         val loading = schema.loadingParams
         val inference = schema.inferenceParams
 
-        val success = nativeLib.nativeLoadModelFromFd(
-            fd = fd,
-            threads = loading.threads,
-            ctxSize = loading.ctxSize,
-            temp = inference.temperature,
-            topK = inference.topK,
-            topP = inference.topP,
-            minP = inference.minP,
-            mirostat = inference.mirostat,
-            mirostatTau = inference.mirostatTau,
-            mirostatEta = inference.mirostatEta,
-            seed = inference.seed,
-            flashAttn = loading.flashAttn,
-            cacheTypeK = loading.cacheTypeK,
-            cacheTypeV = loading.cacheTypeV
-        )
+        val success = try {
+            engine.loadFromFd(
+                fd = fd,
+                contextSize = loading.ctxSize,
+                threads = loading.threads,
+                flashAttn = loading.flashAttn,
+                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+            )
+        } catch (e: OutOfMemoryError) {
+            Log.e(TAG, "OOM loading model from FD", e)
+            try { engine.unload() } catch (_: Throwable) {}
+            false
+        }
 
         if (success) {
-            isLoaded = true
+            engine.setSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
+
             currentModelId = "fd_$fd"
 
             if (inference.systemPrompt.isNotEmpty()) {
-                nativeLib.nativeSetSystemPrompt(inference.systemPrompt)
+                engine.setSystemPrompt(inference.systemPrompt)
             }
             if (inference.chatTemplate.isNotEmpty()) {
-                nativeLib.nativeSetChatTemplate(inference.chatTemplate)
+                engine.setChatTemplate(inference.chatTemplate)
             }
         }
 
         success
     }
 
-    /**
-     * Generate tokens as a Flow using callbackFlow (single-turn)
-     *
-     * This properly handles the callback-to-flow conversion without
-     * violating Flow invariants. The native callback runs on whatever
-     * thread llama.cpp uses, and we safely send events to the channel.
-     *
-     * The flow is consumed on IO dispatcher and buffered for smooth streaming.
-     */
-    fun generateFlow(prompt: String, maxTokens: Int): Flow<GenerationEvent> = callbackFlow {
-        if (!isLoaded) {
-            trySend(GenerationEvent.Error("Model not loaded"))
-            close()
-            return@callbackFlow
-        }
+    // ── Generation ──
 
-        val callback = object : StreamCallback {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
+    fun generateFlow(prompt: String, maxTokens: Int): Flow<GenerationEvent> =
+        engine.generateFlow(prompt, maxTokens).map { it.toLocal() }
 
-            override fun onToolCall(name: String, argsJson: String) {
-                trySend(GenerationEvent.ToolCall(name, argsJson))
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-
-            override fun onMetrics(metrics: DecodingMetrics) {
-                trySend(GenerationEvent.Metrics(metrics))
-            }
-        }
-
-        try {
-            nativeLib.nativeGenerateStream(prompt, maxTokens, callback)
-        } catch (e: Exception) {
-            trySend(GenerationEvent.Error(e.message ?: "Generation failed"))
-            close()
-        }
-
-        awaitClose { }
-    }
-        .buffer(Channel.UNLIMITED)
-        .flowOn(Dispatchers.IO)
-
-    /**
-     * Multi-turn generation flow using full conversation history.
-     * Processes a JSON array of {role, content} messages and generates the next response.
-     * Supports tool call detection — when a tool call is detected, the flow emits
-     * GenerationEvent.ToolCall and the caller should execute the tool, append the result
-     * to the conversation, and call this method again for the next turn.
-     *
-     * @param messagesJson JSON array of {role, content} objects representing the conversation
-     * @param maxTokens Maximum tokens to generate for this turn
-     */
-    fun generateMultiTurnFlow(messagesJson: String, maxTokens: Int): Flow<GenerationEvent> = callbackFlow {
-        if (!isLoaded) {
-            trySend(GenerationEvent.Error("Model not loaded"))
-            close()
-            return@callbackFlow
-        }
-
-        val callback = object : StreamCallback {
-            override fun onToken(token: String) {
-                trySend(GenerationEvent.Token(token))
-            }
-
-            override fun onToolCall(name: String, argsJson: String) {
-                trySend(GenerationEvent.ToolCall(name, argsJson))
-            }
-
-            override fun onDone() {
-                trySend(GenerationEvent.Done)
-                close()
-            }
-
-            override fun onError(message: String) {
-                trySend(GenerationEvent.Error(message))
-                close()
-            }
-
-            override fun onMetrics(metrics: DecodingMetrics) {
-                trySend(GenerationEvent.Metrics(metrics))
-            }
-        }
-
-        try {
-            nativeLib.nativeGenerateStreamMultiTurn(messagesJson, maxTokens, callback)
-        } catch (e: Exception) {
-            trySend(GenerationEvent.Error(e.message ?: "Multi-turn generation failed"))
-            close()
-        }
-
-        awaitClose { }
-    }
-        .buffer(Channel.UNLIMITED)
-        .flowOn(Dispatchers.IO)
+    fun generateMultiTurnFlow(messagesJson: String, maxTokens: Int): Flow<GenerationEvent> =
+        engine.generateMultiTurnFlow(messagesJson, maxTokens).map { it.toLocal() }
 
     fun stopGeneration() {
-        nativeLib.nativeStopGeneration()
+        engine.stopGeneration()
     }
 
     suspend fun unload() = withContext(Dispatchers.IO) {
-        if (isLoaded) {
-            nativeLib.nativeRelease()
-            isLoaded = false
+        if (engine.isLoaded) {
+            engine.unload()
             currentModelId = null
             currentToolsJson = null
             currentToolCallingConfig = null
@@ -242,216 +154,353 @@ class GGUFEngine {
     }
 
     fun isModelLoaded(modelId: String): Boolean =
-        isLoaded && currentModelId == modelId
+        engine.isLoaded && currentModelId == modelId
 
     fun getModelInfo(): String? =
-        if (isLoaded) nativeLib.nativeGetModelInfo() else null
+        if (engine.isLoaded) engine.getModelInfoJson() else null
 
-    /**
-     * Check if the loaded model supports tool calling.
-     * Now returns true for any model with a built-in chat template (model-agnostic).
-     */
+    // ── Tool Calling ──
+
     fun isToolCallingSupported(): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeIsToolCallingSupported()
+            engine.isToolCallingSupported()
         } catch (_: Exception) {
             false
         }
     }
 
     /**
-     * Enable tool calling with grammar configuration.
-     * Sets up tools JSON, grammar mode, and typed grammar enforcement.
-     *
-     * @param toolsJson JSON array of tool definitions in OpenAI format
-     * @param grammarMode 0=STRICT (forces JSON), 1=LAZY (model chooses text or tool call)
-     * @param useTypedGrammar Whether to enforce exact param names/types/enums
-     * @return true if tool calling was enabled successfully
+     * Enable tool calling with actual ToolDefinitionBuilder objects (same-process direct call).
+     * This properly configures grammar constraints via the native engine.
+     */
+    fun enableToolCallingDirect(
+        toolDefs: List<ToolDefinitionBuilder>,
+        config: ToolCallingConfig
+    ): Boolean {
+        if (!engine.isLoaded) return false
+
+        return try {
+            val builtDefs = toolDefs.map { it.build() }
+            engine.enableToolCalling(builtDefs, config)
+            currentToolCallingConfig = config
+            currentToolsJson = null // invalidate JSON cache
+            Log.d(TAG, "Tool calling enabled: ${builtDefs.size} tools, grammar=${config.grammarMode.name}, typed=${config.useTypedGrammar}")
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to enable tool calling", e)
+            false
+        }
+    }
+
+    /**
+     * Legacy JSON-based enableToolCalling (for AIDL compatibility).
+     * Falls back to setToolsJson only — grammar not enforced.
      */
     fun enableToolCalling(
         toolsJson: String,
         grammarMode: Int = GrammarMode.LAZY.value,
         useTypedGrammar: Boolean = true
     ): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
 
         return try {
-            // Set tools JSON (grammar caching: skip rebuild if unchanged)
-            if (toolsJson != currentToolsJson) {
-                nativeLib.nativeSetToolsJson(toolsJson)
-                currentToolsJson = toolsJson
-            }
-
-            // Configure grammar mode and typed grammar
-            nativeLib.nativeSetGrammarMode(grammarMode)
-            nativeLib.nativeSetTypedGrammar(useTypedGrammar)
-
-            true
-        } catch (e: Exception) {
-            false
-        }
-    }
-
-    /**
-     * Set tools JSON for function calling support (backward-compatible).
-     * Uses grammar caching — only rebuilds grammar when tools JSON changes.
-     *
-     * @param toolsJson JSON array of tool definitions, or empty string to disable
-     * @return true if tools were set successfully
-     */
-    fun setToolsJson(toolsJson: String): Boolean {
-        if (!isLoaded) return false
-
-        if (toolsJson == currentToolsJson) return true
-
-        return try {
-            nativeLib.nativeSetToolsJson(toolsJson)
+            engine.setToolsJson(toolsJson)
             currentToolsJson = toolsJson
             true
         } catch (e: Exception) {
+            Log.e(TAG, "Failed to set tools JSON", e)
             false
         }
     }
 
-    /**
-     * Set grammar enforcement mode.
-     * @param mode 0=STRICT (forces JSON tool call), 1=LAZY (model chooses text or tool call)
-     */
-    fun setGrammarMode(mode: Int) {
-        if (isLoaded) {
-            try {
-                nativeLib.nativeSetGrammarMode(mode)
-            } catch (_: Exception) { }
+    fun setToolsJson(toolsJson: String): Boolean {
+        if (!engine.isLoaded) return false
+        if (toolsJson == currentToolsJson) return true
+
+        return try {
+            engine.setToolsJson(toolsJson)
+            currentToolsJson = toolsJson
+            true
+        } catch (_: Exception) {
+            false
         }
     }
 
-    /**
-     * Enable or disable parameter-aware typed grammar.
-     * When enabled, grammar enforces exact parameter names, types, and enum values per tool.
-     */
-    fun setTypedGrammar(enabled: Boolean) {
-        if (isLoaded) {
-            try {
-                nativeLib.nativeSetTypedGrammar(enabled)
-            } catch (_: Exception) { }
-        }
-    }
-
-    // ========================================================================
-    // PERSONA ENGINE: Dynamic Sampling + Logit Bias + Control Vectors
-    // ========================================================================
+    // ── Persona Engine ──
 
     fun updateSamplerParams(paramsJson: String): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeUpdateSamplerParams(paramsJson)
+            engine.updateSamplerParams(paramsJson)
         } catch (_: Exception) { false }
     }
 
     fun setLogitBias(biasJson: String): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeSetLogitBias(biasJson)
+            engine.setLogitBias(biasJson)
+            true
         } catch (_: Exception) { false }
     }
 
     fun loadControlVectors(vectorsJson: String): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeLoadControlVectors(vectorsJson)
+            engine.loadControlVectors(vectorsJson)
         } catch (_: Exception) { false }
     }
 
     fun clearControlVector(): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeClearControlVector()
+            engine.clearControlVector()
+            true
         } catch (_: Exception) { false }
     }
 
-    // ========================================================================
-    // KV CACHE STATE PERSISTENCE
-    // ========================================================================
+    // ── KV Cache State Persistence ──
 
     fun getStateSize(): Long {
-        if (!isLoaded) return 0
+        if (!engine.isLoaded) return 0
         return try {
-            nativeLib.nativeGetStateSize()
+            engine.getStateSize()
         } catch (_: Exception) { 0 }
     }
 
     fun stateSaveToFile(path: String): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeStateSaveToFile(path)
+            engine.stateSaveToFile(path)
         } catch (_: Exception) { false }
     }
 
     fun stateLoadFromFile(path: String): Boolean {
-        if (!isLoaded) return false
+        if (!engine.isLoaded) return false
         return try {
-            nativeLib.nativeStateLoadFromFile(path)
+            engine.stateLoadFromFile(path)
         } catch (_: Exception) { false }
     }
 
-    /**
-     * Clear tools configuration and disable function calling
-     */
     fun clearTools() {
-        if (isLoaded) {
+        if (engine.isLoaded) {
             try {
-                nativeLib.nativeSetToolsJson("")
+                engine.clearTools()
                 currentToolsJson = null
                 currentToolCallingConfig = null
             } catch (_: Exception) { }
         }
     }
 
-    /**
-     * Check if tools/function calling is currently enabled
-     */
-    fun hasToolsEnabled(): Boolean = !currentToolsJson.isNullOrEmpty()
+    // ── New Optimizations ──
+
+    fun setSpeculativeDecoding(enabled: Boolean, nDraft: Int = 4, ngramSize: Int = 4) {
+        if (engine.isLoaded) {
+            try {
+                engine.setSpeculativeDecoding(enabled, nDraft, ngramSize)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun setPromptCacheDir(path: String) {
+        if (engine.isLoaded) {
+            try {
+                engine.setPromptCacheDir(path)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun warmUp(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            engine.warmUp()
+        } catch (_: Exception) { false }
+    }
+
+    fun supportsThinking(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            engine.supportsThinking()
+        } catch (_: Exception) { false }
+    }
+
+    fun setThinkingEnabled(enabled: Boolean) {
+        if (engine.isLoaded) {
+            try {
+                engine.setThinkingEnabled(enabled)
+            } catch (_: Exception) { }
+        }
+    }
+
+    fun getContextUsage(): Float {
+        if (!engine.isLoaded) return 0f
+        return try {
+            engine.getContextUsage()
+        } catch (_: Exception) { 0f }
+    }
+
+    // ── Context Window Tracking ──
+
+    fun getContextInfo(prompt: String? = null): com.dark.gguf_lib.ContextInfo {
+        if (!engine.isLoaded) return com.dark.gguf_lib.ContextInfo(0, 0, 0, -1, -1)
+        return try {
+            engine.getContextInfo(prompt)
+        } catch (_: Exception) { com.dark.gguf_lib.ContextInfo(0, 0, 0, -1, -1) }
+    }
+
+    // ── Character Engine ──
+
+    private val characterEngine by lazy { com.dark.gguf_lib.CharacterEngine(engine) }
+
+    fun setPersonality(personalityJson: String): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            val j = org.json.JSONObject(personalityJson)
+            characterEngine.setPersonality(com.dark.gguf_lib.Personality(
+                name = j.optString("name", ""),
+                persona = j.optString("persona", ""),
+                temperature = j.optDouble("temperature", 0.7).toFloat(),
+                topP = j.optDouble("topP", 0.9).toFloat(),
+                repetitionPenalty = j.optDouble("repetitionPenalty", 1.1).toFloat(),
+                creativity = j.optDouble("creativity", 0.5).toFloat(),
+                verbosity = j.optDouble("verbosity", 0.5).toFloat(),
+                formality = j.optDouble("formality", 0.5).toFloat(),
+                topK = j.optInt("topK", -1),
+                minP = j.optDouble("minP", -1.0).toFloat(),
+            ))
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun setMood(mood: Int): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setMood(com.dark.gguf_lib.Mood.entries[mood])
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun setCustomMood(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setCustomMood(tempMod, topPMod, repPenaltyMod)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun getCharacterContext(): String {
+        if (!engine.isLoaded) return ""
+        return try {
+            characterEngine.getContext()
+        } catch (_: Exception) { "" }
+    }
+
+    fun buildPrompt(userPrompt: String): String {
+        if (!engine.isLoaded) return userPrompt
+        return try {
+            characterEngine.buildPrompt(userPrompt)
+        } catch (_: Exception) { userPrompt }
+    }
+
+    fun setUncensored(enabled: Boolean): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.setUncensored(enabled)
+            true
+        } catch (_: Exception) { false }
+    }
+
+    fun isUncensored(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.isUncensored
+        } catch (_: Exception) { false }
+    }
+
+    // ── Activation Steering ──
+
+    fun calcVectors(prompt: String, onProgress: ((Float) -> Unit)? = null): FloatArray? {
+        if (!engine.isLoaded) return null
+        return try {
+            characterEngine.calcVectors(prompt, onProgress)
+        } catch (_: Exception) { null }
+    }
+
+    fun applyVectors(data: FloatArray, strength: Float = 1.0f, ilStart: Int = -1, ilEnd: Int = -1): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.applyVectors(data, strength, ilStart, ilEnd)
+        } catch (_: Exception) { false }
+    }
+
+    fun clearVectors(): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            characterEngine.clearVectors()
+            true
+        } catch (_: Exception) { false }
+    }
+
+    // ── VLM (Vision Language Model) ──
+
+    fun loadVlmProjector(path: String, threads: Int = 0): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            engine.loadVlmProjector(path, threads)
+        } catch (_: Exception) { false }
+    }
+
+    fun loadVlmProjectorFromFd(fd: Int, threads: Int = 0): Boolean {
+        if (!engine.isLoaded) return false
+        return try {
+            engine.loadVlmProjectorFromFd(fd, threads)
+        } catch (_: Exception) { false }
+    }
+
+    fun releaseVlmProjector() {
+        try { engine.releaseVlmProjector() } catch (_: Exception) { }
+    }
+
+    val isVlmLoaded: Boolean get() = engine.isVlmLoaded
+
+    fun getVlmDefaultMarker(): String = engine.getVlmDefaultMarker()
+
+    fun generateVlmFlow(
+        messagesJson: String,
+        imageData: List<ByteArray>,
+        maxTokens: Int
+    ): Flow<GenerationEvent> =
+        engine.generateVlmFlow(messagesJson, imageData, maxTokens).map { it.toLocal() }
 
     companion object {
-        /**
-         * Detect device tier based on available RAM
-         */
-        fun detectDeviceTier(context: Context): DeviceTier {
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val memInfo = ActivityManager.MemoryInfo()
-            activityManager.getMemoryInfo(memInfo)
+        private const val TAG = "GGUFEngine"
 
-            val totalRamGB = memInfo.totalMem / (1024.0 * 1024.0 * 1024.0)
-
-            return when {
-                totalRamGB < 4.0 -> DeviceTier.LOW_END
-                totalRamGB < 8.0 -> DeviceTier.MID_RANGE
-                else -> DeviceTier.HIGH_END
-            }
-        }
-
-        /**
-         * Get recommended loading params for the current device
-         */
         fun getRecommendedParams(context: Context): GgufLoadingParams {
-            val tier = detectDeviceTier(context)
-            return GgufLoadingParams.forDeviceTier(tier)
+            val profile = HardwareScanner.scan(context)
+            // Default to BALANCED — callers with access to coroutine scope should
+            // read performanceMode from DataStore themselves
+            return DeviceTuner.tune(profile, modelSizeMB = 0, mode = com.dark.tool_neuron.global.PerformanceMode.BALANCED)
         }
 
-        /**
-         * Calculate recommended context size based on available memory and model size
-         */
-        fun getRecommendedContextSize(context: Context, modelSizeMB: Int): Int {
-            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val memInfo = ActivityManager.MemoryInfo()
-            activityManager.getMemoryInfo(memInfo)
+        fun getRecommendedContextSize(context: Context, modelSizeMB: Int, modelName: String = ""): Int {
+            return DeviceTuner.recommendContextSize(context, modelSizeMB, modelName)
+        }
 
-            val availableMemoryMB = (memInfo.availMem / (1024 * 1024)).toInt()
-            return GgufLoadingParams.recommendedContextSize(availableMemoryMB, modelSizeMB)
+        /** Convert old Int cache type to new String format */
+        private fun cacheTypeIntToString(type: Int): String = when (type) {
+            0 -> "f32"
+            1 -> "f16"
+            8 -> "q5_1"
+            9 -> "q8_0"
+            10 -> "q4_0"
+            11 -> "q4_1"
+            12 -> "q5_0"
+            else -> "q8_0"
         }
     }
 }
+
+// ── Local GenerationEvent (keeps .args for backward compat) ──
 
 sealed class GenerationEvent {
     data class Token(val text: String) : GenerationEvent()
@@ -459,4 +508,15 @@ sealed class GenerationEvent {
     data object Done : GenerationEvent()
     data class Error(val message: String) : GenerationEvent()
     data class Metrics(val metrics: DecodingMetrics) : GenerationEvent()
+    data class Progress(val progress: Float) : GenerationEvent()
+}
+
+/** Map library GenerationEvent → local GenerationEvent */
+private fun LibGenerationEvent.toLocal(): GenerationEvent = when (this) {
+    is LibGenerationEvent.Token -> GenerationEvent.Token(text)
+    is LibGenerationEvent.ToolCall -> GenerationEvent.ToolCall(name, argsJson)
+    is LibGenerationEvent.Done -> GenerationEvent.Done
+    is LibGenerationEvent.Error -> GenerationEvent.Error(message)
+    is LibGenerationEvent.Metrics -> GenerationEvent.Metrics(metrics.toLocal())
+    is LibGenerationEvent.Progress -> GenerationEvent.Progress(progress)
 }

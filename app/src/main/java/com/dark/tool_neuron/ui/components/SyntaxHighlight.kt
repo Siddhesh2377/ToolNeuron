@@ -11,21 +11,11 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 
-// ==================== Token Types ====================
-
 enum class CodeTokenType {
     Keyword, String, Comment, Number, Function, Type,
     Operator, Annotation, Punctuation, Property, Default
 }
 
-// ==================== Theme Interface ====================
-
-/**
- * Modular syntax highlight theme.
- * Users can implement this interface to provide their own color schemes.
- * The [charLigatures] map enables custom "cute" character replacements
- * in rendered code (e.g., "!=" → "≠", "->" → "→").
- */
 interface SyntaxHighlightTheme {
     val name: String
     val background: Color
@@ -33,20 +23,21 @@ interface SyntaxHighlightTheme {
     val defaultColor: Color
 
     fun colorFor(token: CodeTokenType): Color
-    fun styleFor(token: CodeTokenType): SpanStyle {
-        return when (token) {
-            CodeTokenType.Keyword -> SpanStyle(color = colorFor(token), fontWeight = FontWeight.SemiBold)
-            CodeTokenType.Comment -> SpanStyle(color = colorFor(token), fontStyle = FontStyle.Italic)
-            CodeTokenType.Annotation -> SpanStyle(color = colorFor(token), fontStyle = FontStyle.Italic)
-            else -> SpanStyle(color = colorFor(token))
-        }
+    fun styleFor(token: CodeTokenType): SpanStyle = when (token) {
+        CodeTokenType.Keyword -> SpanStyle(color = colorFor(token), fontWeight = FontWeight.SemiBold)
+        CodeTokenType.Comment -> SpanStyle(color = colorFor(token), fontStyle = FontStyle.Italic)
+        CodeTokenType.Annotation -> SpanStyle(color = colorFor(token), fontStyle = FontStyle.Italic)
+        else -> SpanStyle(color = colorFor(token))
     }
 
-    /** Map of source text → display text for ligature-style replacements. */
-    val charLigatures: Map<String, String> get() = emptyMap()
+    val charLigatures: Map<String, String> get() = defaultLigatures
 }
 
-// ==================== Built-in Dark Theme ====================
+private val defaultLigatures = mapOf(
+    "!=" to "\u2260", ">=" to "\u2265", "<=" to "\u2264",
+    "->" to "\u2192", "=>" to "\u21D2", "::" to "\u2237",
+    "&&" to "\u2227", "||" to "\u2228", "..." to "\u2026"
+)
 
 object OneDarkTheme : SyntaxHighlightTheme {
     override val name = "One Dark"
@@ -55,33 +46,19 @@ object OneDarkTheme : SyntaxHighlightTheme {
     override val defaultColor = Color(0xFFABB2BF)
 
     override fun colorFor(token: CodeTokenType): Color = when (token) {
-        CodeTokenType.Keyword -> Color(0xFFC678DD)      // purple
-        CodeTokenType.String -> Color(0xFF98C379)        // green
-        CodeTokenType.Comment -> Color(0xFF5C6370)       // gray
-        CodeTokenType.Number -> Color(0xFFD19A66)        // orange
-        CodeTokenType.Function -> Color(0xFF61AFEF)      // blue
-        CodeTokenType.Type -> Color(0xFFE5C07B)          // yellow
-        CodeTokenType.Operator -> Color(0xFF56B6C2)      // cyan
-        CodeTokenType.Annotation -> Color(0xFFE06C75)    // red
-        CodeTokenType.Punctuation -> Color(0xFF7F848E)   // dim gray
-        CodeTokenType.Property -> Color(0xFFE06C75)      // red
+        CodeTokenType.Keyword -> Color(0xFFC678DD)
+        CodeTokenType.String -> Color(0xFF98C379)
+        CodeTokenType.Comment -> Color(0xFF5C6370)
+        CodeTokenType.Number -> Color(0xFFD19A66)
+        CodeTokenType.Function -> Color(0xFF61AFEF)
+        CodeTokenType.Type -> Color(0xFFE5C07B)
+        CodeTokenType.Operator -> Color(0xFF56B6C2)
+        CodeTokenType.Annotation -> Color(0xFFE06C75)
+        CodeTokenType.Punctuation -> Color(0xFF7F848E)
+        CodeTokenType.Property -> Color(0xFFE06C75)
         CodeTokenType.Default -> defaultColor
     }
-
-    override val charLigatures = mapOf(
-        "!=" to "≠",
-        ">=" to "≥",
-        "<=" to "≤",
-        "->" to "→",
-        "=>" to "⇒",
-        "::" to "∷",
-        "&&" to "∧",
-        "||" to "∨",
-        "..." to "…"
-    )
 }
-
-// ==================== Built-in Light Theme ====================
 
 object OneLightTheme : SyntaxHighlightTheme {
     override val name = "One Light"
@@ -90,48 +67,29 @@ object OneLightTheme : SyntaxHighlightTheme {
     override val defaultColor = Color(0xFF383A42)
 
     override fun colorFor(token: CodeTokenType): Color = when (token) {
-        CodeTokenType.Keyword -> Color(0xFFA626A4)      // purple
-        CodeTokenType.String -> Color(0xFF50A14F)        // green
-        CodeTokenType.Comment -> Color(0xFFA0A1A7)       // gray
-        CodeTokenType.Number -> Color(0xFF986801)        // amber
-        CodeTokenType.Function -> Color(0xFF4078F2)      // blue
-        CodeTokenType.Type -> Color(0xFFC18401)          // yellow-brown
-        CodeTokenType.Operator -> Color(0xFF0184BC)      // teal
-        CodeTokenType.Annotation -> Color(0xFFE45649)    // red
-        CodeTokenType.Punctuation -> Color(0xFF696C77)   // dim gray
-        CodeTokenType.Property -> Color(0xFFE45649)      // red
+        CodeTokenType.Keyword -> Color(0xFFA626A4)
+        CodeTokenType.String -> Color(0xFF50A14F)
+        CodeTokenType.Comment -> Color(0xFFA0A1A7)
+        CodeTokenType.Number -> Color(0xFF986801)
+        CodeTokenType.Function -> Color(0xFF4078F2)
+        CodeTokenType.Type -> Color(0xFFC18401)
+        CodeTokenType.Operator -> Color(0xFF0184BC)
+        CodeTokenType.Annotation -> Color(0xFFE45649)
+        CodeTokenType.Punctuation -> Color(0xFF696C77)
+        CodeTokenType.Property -> Color(0xFFE45649)
         CodeTokenType.Default -> defaultColor
     }
-
-    override val charLigatures = mapOf(
-        "!=" to "≠",
-        ">=" to "≥",
-        "<=" to "≤",
-        "->" to "→",
-        "=>" to "⇒",
-        "::" to "∷",
-        "&&" to "∧",
-        "||" to "∨",
-        "..." to "…"
-    )
 }
 
-// ==================== CompositionLocal for Theme Injection ====================
-
-/** Provide a custom [SyntaxHighlightTheme] via CompositionLocal. */
 val LocalSyntaxTheme = staticCompositionLocalOf<SyntaxHighlightTheme?> { null }
 
-/**
- * Resolve the active syntax theme.
- * Priority: LocalSyntaxTheme → auto-detect dark/light → OneDark/OneLight.
- */
 @Composable
 fun resolveSyntaxTheme(): SyntaxHighlightTheme {
     LocalSyntaxTheme.current?.let { return it }
     return if (isSystemInDarkTheme()) OneDarkTheme else OneLightTheme
 }
 
-// ==================== Language Definitions ====================
+// ── Language definitions ──
 
 private data class LanguageRules(
     val keywords: Set<String>,
@@ -191,11 +149,8 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "int", "float", "str", "bool", "list", "dict", "set", "tuple",
                 "bytes", "type", "object", "None"
             ),
-            lineComment = "#",
-            blockCommentStart = null,
-            blockCommentEnd = null,
-            hashComment = true,
-            annotationPrefix = '@'
+            lineComment = "#", blockCommentStart = null, blockCommentEnd = null,
+            hashComment = true
         ),
         "javascript" to LanguageRules(
             keywords = setOf(
@@ -203,7 +158,7 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "do", "switch", "case", "default", "break", "continue", "return",
                 "throw", "try", "catch", "finally", "new", "delete", "typeof",
                 "instanceof", "in", "of", "class", "extends", "super", "this",
-                "import", "export", "from", "as", "default", "async", "await",
+                "import", "export", "from", "as", "async", "await",
                 "yield", "true", "false", "null", "undefined", "void"
             ),
             typeKeywords = setOf(
@@ -217,10 +172,10 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "do", "switch", "case", "default", "break", "continue", "return",
                 "throw", "try", "catch", "finally", "new", "delete", "typeof",
                 "instanceof", "in", "of", "class", "extends", "super", "this",
-                "import", "export", "from", "as", "default", "async", "await",
+                "import", "export", "from", "as", "async", "await",
                 "yield", "true", "false", "null", "undefined", "void",
                 "type", "interface", "enum", "namespace", "module", "declare",
-                "abstract", "implements", "readonly", "keyof", "infer", "is",
+                "abstract", "implements", "readonly", "keyof", "infer",
                 "satisfies", "override"
             ),
             typeKeywords = setOf(
@@ -272,7 +227,7 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "int", "char", "float", "double", "long", "short", "void",
                 "unsigned", "signed", "size_t", "int8_t", "int16_t", "int32_t",
                 "int64_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
-                "bool", "FILE", "NULL"
+                "bool", "FILE"
             )
         ),
         "cpp" to LanguageRules(
@@ -324,31 +279,22 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "grep", "sed", "awk", "find", "chmod", "chown", "sudo",
                 "apt", "pip", "npm", "git", "docker", "curl", "wget"
             ),
-            lineComment = "#",
-            blockCommentStart = null,
-            blockCommentEnd = null,
-            hashComment = true,
-            annotationPrefix = null
+            lineComment = "#", blockCommentStart = null, blockCommentEnd = null,
+            hashComment = true, annotationPrefix = null
         ),
         "json" to LanguageRules(
             keywords = setOf("true", "false", "null"),
-            lineComment = null,
-            blockCommentStart = null,
-            blockCommentEnd = null,
+            lineComment = null, blockCommentStart = null, blockCommentEnd = null,
             annotationPrefix = null
         ),
         "xml" to LanguageRules(
             keywords = emptySet(),
-            lineComment = null,
-            blockCommentStart = "<!--",
-            blockCommentEnd = "-->",
+            lineComment = null, blockCommentStart = "<!--", blockCommentEnd = "-->",
             annotationPrefix = null
         ),
         "html" to LanguageRules(
             keywords = emptySet(),
-            lineComment = null,
-            blockCommentStart = "<!--",
-            blockCommentEnd = "-->",
+            lineComment = null, blockCommentStart = "<!--", blockCommentEnd = "-->",
             annotationPrefix = null
         ),
         "css" to LanguageRules(
@@ -374,21 +320,16 @@ private val LANG_RULES: Map<String, LanguageRules> by lazy {
                 "limit", "null", "is", "in", "like", "between", "exists",
                 "case", "when", "then", "else", "end"
             ),
-            lineComment = "--",
-            annotationPrefix = null
+            lineComment = "--", annotationPrefix = null
         ),
         "yaml" to LanguageRules(
             keywords = setOf("true", "false", "null", "yes", "no", "on", "off"),
-            lineComment = "#",
-            blockCommentStart = null,
-            blockCommentEnd = null,
-            hashComment = true,
-            annotationPrefix = null
+            lineComment = "#", blockCommentStart = null, blockCommentEnd = null,
+            hashComment = true, annotationPrefix = null
         )
     )
 }
 
-// Alias mapping for language detection
 private val LANG_ALIASES: Map<String, String> by lazy {
     mapOf(
         "kt" to "kotlin", "kts" to "kotlin",
@@ -398,67 +339,53 @@ private val LANG_ALIASES: Map<String, String> by lazy {
         "rs" to "rust",
         "sh" to "bash", "zsh" to "bash", "shell" to "bash",
         "c++" to "cpp", "cxx" to "cpp", "cc" to "cpp", "h" to "cpp", "hpp" to "cpp",
-        "yml" to "yaml",
-        "htm" to "html",
+        "yml" to "yaml", "htm" to "html",
         "objective-c" to "c", "objc" to "c",
         "jsonc" to "json"
     )
 }
 
-// ==================== Tokenizer ====================
+// ── Tokenizer ──
 
 private data class CodeToken(val text: String, val type: CodeTokenType)
 
-/**
- * Tokenize source code into classified tokens for syntax highlighting.
- * Uses simple regex-based scanning — no full parser needed.
- */
 private fun tokenize(code: String, language: String): List<CodeToken> {
     val lang = language.lowercase().let { LANG_ALIASES[it] ?: it }
     val rules = LANG_RULES[lang] ?: return listOf(CodeToken(code, CodeTokenType.Default))
-
     val tokens = mutableListOf<CodeToken>()
     var pos = 0
 
     while (pos < code.length) {
-        // Block comment
         if (rules.blockCommentStart != null && code.startsWith(rules.blockCommentStart, pos)) {
-            val end = code.indexOf(rules.blockCommentEnd!!, pos + rules.blockCommentStart.length)
-            val commentEnd = if (end >= 0) end + rules.blockCommentEnd.length else code.length
+            val blockEnd = rules.blockCommentEnd ?: ""
+            val end = code.indexOf(blockEnd, pos + rules.blockCommentStart.length)
+            val commentEnd = if (end >= 0) end + blockEnd.length else code.length
             tokens.add(CodeToken(code.substring(pos, commentEnd), CodeTokenType.Comment))
-            pos = commentEnd
-            continue
+            pos = commentEnd; continue
         }
 
-        // Line comment
         if (rules.lineComment != null && code.startsWith(rules.lineComment, pos)) {
             val end = code.indexOf('\n', pos)
             val commentEnd = if (end >= 0) end else code.length
             tokens.add(CodeToken(code.substring(pos, commentEnd), CodeTokenType.Comment))
-            pos = commentEnd
-            continue
+            pos = commentEnd; continue
         }
 
-        // Hash comment (python, bash, yaml)
         if (rules.hashComment && code[pos] == '#') {
             val end = code.indexOf('\n', pos)
             val commentEnd = if (end >= 0) end else code.length
             tokens.add(CodeToken(code.substring(pos, commentEnd), CodeTokenType.Comment))
-            pos = commentEnd
-            continue
+            pos = commentEnd; continue
         }
 
-        // String literals
         if (code[pos] == '"' || code[pos] == '\'' || code[pos] == '`') {
             val quote = code[pos]
-            // Triple quotes (python)
             if (quote != '`' && pos + 2 < code.length && code[pos + 1] == quote && code[pos + 2] == quote) {
                 val tripleQuote = "$quote$quote$quote"
                 val end = code.indexOf(tripleQuote, pos + 3)
                 val strEnd = if (end >= 0) end + 3 else code.length
                 tokens.add(CodeToken(code.substring(pos, strEnd), CodeTokenType.String))
-                pos = strEnd
-                continue
+                pos = strEnd; continue
             }
             var j = pos + 1
             while (j < code.length) {
@@ -468,45 +395,36 @@ private fun tokenize(code: String, language: String): List<CodeToken> {
                 j++
             }
             tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.String))
-            pos = j
-            continue
+            pos = j; continue
         }
 
-        // Annotation
         if (rules.annotationPrefix != null && code[pos] == rules.annotationPrefix) {
             var j = pos + 1
             while (j < code.length && (code[j].isLetterOrDigit() || code[j] == '_' || code[j] == '.')) j++
             if (j > pos + 1) {
                 tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.Annotation))
-                pos = j
-                continue
+                pos = j; continue
             }
         }
 
-        // Number
         if (code[pos].isDigit() || (code[pos] == '.' && pos + 1 < code.length && code[pos + 1].isDigit())) {
             var j = pos
-            // Hex: 0x...
             if (code[pos] == '0' && j + 1 < code.length && (code[j + 1] == 'x' || code[j + 1] == 'X')) {
                 j += 2
                 while (j < code.length && (code[j].isDigit() || code[j] in 'a'..'f' || code[j] in 'A'..'F' || code[j] == '_')) j++
             } else {
                 while (j < code.length && (code[j].isDigit() || code[j] == '.' || code[j] == '_')) j++
-                // Exponent
                 if (j < code.length && (code[j] == 'e' || code[j] == 'E')) {
                     j++
                     if (j < code.length && (code[j] == '+' || code[j] == '-')) j++
                     while (j < code.length && code[j].isDigit()) j++
                 }
             }
-            // Type suffix (f, L, u, etc.)
             if (j < code.length && code[j] in "fFdDlLuU") j++
             tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.Number))
-            pos = j
-            continue
+            pos = j; continue
         }
 
-        // Identifier / keyword
         if (code[pos].isLetter() || code[pos] == '_') {
             var j = pos
             while (j < code.length && (code[j].isLetterOrDigit() || code[j] == '_')) j++
@@ -514,74 +432,51 @@ private fun tokenize(code: String, language: String): List<CodeToken> {
             val type = when {
                 word in rules.keywords -> CodeTokenType.Keyword
                 word in rules.typeKeywords -> CodeTokenType.Type
-                // Capital-starting word likely a type
                 word[0].isUpperCase() && rules.typeKeywords.isNotEmpty() -> CodeTokenType.Type
-                // Followed by ( → function call
                 j < code.length && code[j] == '(' -> CodeTokenType.Function
                 else -> CodeTokenType.Default
             }
             tokens.add(CodeToken(word, type))
-            pos = j
-            continue
+            pos = j; continue
         }
 
-        // XML/HTML tags
         if ((lang == "xml" || lang == "html") && code[pos] == '<') {
             var j = pos + 1
-            // Closing tag or opening tag
             if (j < code.length && code[j] == '/') j++
             while (j < code.length && code[j] != '>' && code[j] != ' ' && code[j] != '\n') j++
             if (j > pos + 1) {
-                val tagName = code.substring(pos, j)
-                tokens.add(CodeToken(tagName, CodeTokenType.Keyword))
-                pos = j
-                continue
+                tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.Keyword))
+                pos = j; continue
             }
         }
 
-        // Operators
         if (code[pos] in "+-*/%=<>!&|^~?:") {
             var j = pos + 1
-            // Multi-char operators
             while (j < code.length && code[j] in "+-*/%=<>!&|^~?:." && j - pos < 3) j++
             tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.Operator))
-            pos = j
-            continue
+            pos = j; continue
         }
 
-        // Punctuation
         if (code[pos] in "{}[]();,.$\\") {
             tokens.add(CodeToken(code[pos].toString(), CodeTokenType.Punctuation))
-            pos++
-            continue
+            pos++; continue
         }
 
-        // Whitespace & other
         if (code[pos].isWhitespace()) {
             var j = pos
             while (j < code.length && code[j].isWhitespace()) j++
             tokens.add(CodeToken(code.substring(pos, j), CodeTokenType.Default))
-            pos = j
-            continue
+            pos = j; continue
         }
 
-        // Anything else
         tokens.add(CodeToken(code[pos].toString(), CodeTokenType.Default))
         pos++
     }
-
     return tokens
 }
 
-// ==================== Public API ====================
+// ── Public API ──
 
-/**
- * Highlight [code] for the given [language] using the provided [theme].
- * Returns an [AnnotatedString] with color spans applied.
- *
- * If [applyLigatures] is true, the theme's [charLigatures] are applied
- * to the displayed text (source structure is preserved in spans).
- */
 fun highlightCode(
     code: String,
     language: String,
@@ -589,7 +484,6 @@ fun highlightCode(
     applyLigatures: Boolean = true
 ): AnnotatedString {
     val tokens = tokenize(code, language)
-
     return buildAnnotatedString {
         for (token in tokens) {
             val displayText = if (applyLigatures && theme.charLigatures.isNotEmpty()) {
@@ -597,17 +491,13 @@ fun highlightCode(
             } else {
                 token.text
             }
-            withStyle(theme.styleFor(token.type)) {
-                append(displayText)
-            }
+            withStyle(theme.styleFor(token.type)) { append(displayText) }
         }
     }
 }
 
 private fun applyCharLigatures(text: String, ligatures: Map<String, String>): String {
-    if (ligatures.isEmpty()) return text
     var result = text
-    // Apply longer ligatures first to avoid partial matches
     for ((from, to) in ligatures.entries.sortedByDescending { it.key.length }) {
         result = result.replace(from, to)
     }

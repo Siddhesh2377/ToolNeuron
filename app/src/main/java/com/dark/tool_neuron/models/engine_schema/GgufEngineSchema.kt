@@ -1,15 +1,7 @@
 package com.dark.tool_neuron.models.engine_schema
 
-import android.app.ActivityManager
-import android.content.Context
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
-
-enum class DeviceTier {
-    LOW_END,    // < 4GB RAM
-    MID_RANGE,  // 4-8GB RAM
-    HIGH_END    // > 8GB RAM
-}
 
 @Serializable
 data class GgufLoadingParams(
@@ -21,43 +13,7 @@ data class GgufLoadingParams(
     val flashAttn: Boolean = true,      // Flash attention (reduces memory bandwidth)
     val cacheTypeK: Int = 9,            // GGML_TYPE_Q8_0 (quantized KV cache keys)
     val cacheTypeV: Int = 9             // GGML_TYPE_Q8_0 (quantized KV cache values)
-) {
-    companion object {
-        fun forDeviceTier(tier: DeviceTier): GgufLoadingParams = when (tier) {
-            DeviceTier.LOW_END -> GgufLoadingParams(
-                threads = 0,
-                ctxSize = 2048,
-                batchSize = 256,
-                useMmap = true,
-                useMlock = false
-            )
-            DeviceTier.MID_RANGE -> GgufLoadingParams(
-                threads = 0,
-                ctxSize = 4096,
-                batchSize = 512,
-                useMmap = true,
-                useMlock = false
-            )
-            DeviceTier.HIGH_END -> GgufLoadingParams(
-                threads = 0,
-                ctxSize = 8192,
-                batchSize = 512,
-                useMmap = true,
-                useMlock = false
-            )
-        }
-
-        fun recommendedContextSize(availableMemoryMB: Int, modelSizeMB: Int): Int {
-            val freeAfterModel = availableMemoryMB - modelSizeMB
-            return when {
-                freeAfterModel < 1024 -> 1024
-                freeAfterModel < 2048 -> 2048
-                freeAfterModel < 4096 -> 4096
-                else -> 8192
-            }
-        }
-    }
-}
+)
 
 @Serializable
 data class GgufInferenceParams(

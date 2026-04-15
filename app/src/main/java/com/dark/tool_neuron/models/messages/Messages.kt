@@ -4,7 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.runtime.Immutable
 import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
 import com.dark.tool_neuron.models.plugins.PluginResultData
-import com.mp.ai_gguf.models.DecodingMetrics
+import com.dark.tool_neuron.models.engine_schema.DecodingMetrics
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import java.util.UUID
@@ -16,6 +16,8 @@ data class Messages(
     val role: Role = Role.Assistant,
     val content: MessageContent = MessageContent(),
     val timestamp: Long? = null, // Nullable for backward compatibility with old messages
+    val modelId: String? = null,
+    val personaId: String? = null,
     val decodingMetrics: DecodingMetrics? = null,
     val imageMetrics: ImageGenerationMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,

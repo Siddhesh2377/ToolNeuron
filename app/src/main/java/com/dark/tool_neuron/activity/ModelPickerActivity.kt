@@ -8,8 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.ui.screen.files.ModelPickerScreen
-import com.dark.tool_neuron.ui.screen.files.PickerMode
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 
 class ModelPickerActivity : ComponentActivity() {
@@ -20,11 +20,11 @@ class ModelPickerActivity : ComponentActivity() {
             NeuroVerseTheme {
                 Surface(Modifier.fillMaxSize()) {
                     ModelPickerScreen(
-                        finishWithPath = { absPath, mode ->
+                        onModelPicked = { uri, providerType ->
                             startActivity(
                                 Intent(this, ModelLoadingActivity::class.java).apply {
-                                    putExtra(EXTRA_RESULT_FILE_PATH, absPath)
-                                    putExtra(EXTRA_PICKER_MODE, mode.name)
+                                    putExtra(EXTRA_RESULT_URI, uri.toString())
+                                    putExtra(EXTRA_PICKER_MODE, providerType.name)
                                     flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
                                 }
                             )
@@ -38,7 +38,8 @@ class ModelPickerActivity : ComponentActivity() {
     }
 
     companion object {
-        const val EXTRA_RESULT_FILE_PATH = "model_file_path"
+        const val EXTRA_RESULT_URI = "model_uri"
+        const val EXTRA_RESULT_FILE_PATH = "model_file_path"  // Legacy compat
         const val EXTRA_PICKER_MODE = "picker_mode"
     }
 }

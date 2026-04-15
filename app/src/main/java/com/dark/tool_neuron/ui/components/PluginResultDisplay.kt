@@ -1,12 +1,7 @@
 package com.dark.tool_neuron.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import com.dark.tool_neuron.ui.theme.Motion
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -15,12 +10,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -35,9 +24,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.models.messages.Messages
+import com.dark.tool_neuron.models.plugins.PluginExecutionMetrics
+import com.dark.tool_neuron.models.plugins.PluginResultData
 import com.dark.tool_neuron.plugins.PluginManager
-import com.dark.tool_neuron.ui.theme.rDp
 import org.json.JSONObject
+import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.global.Standards
 
 @Composable
 fun PluginResultCard(
@@ -48,40 +40,49 @@ fun PluginResultCard(
     val metrics = message.pluginMetrics
 
     var isExpanded by remember { mutableStateOf(false) }
+    var showDetailDialog by remember { mutableStateOf(false) }
+
+    if (showDetailDialog) {
+        PluginResultDetailDialog(
+            pluginData = pluginData,
+            metrics = metrics,
+            onDismiss = { showDetailDialog = false }
+        )
+    }
 
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = rDp(12.dp))
+            .padding(horizontal = Standards.SpacingMd)
     ) {
         // Summary Row
         Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .clickable { isExpanded = !isExpanded },
-            shape = RoundedCornerShape(rDp(8.dp)),
+            shape = RoundedCornerShape(Standards.RadiusMd),
             color = if (pluginData.success) {
                 MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
             } else {
                 MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
             },
-            tonalElevation = rDp(1.dp)
+            tonalElevation = 1.dp
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = rDp(10.dp), vertical = rDp(8.dp)),
+                    .padding(horizontal = 10.dp, vertical = Standards.SpacingSm),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(Standards.SpacingMd),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Build,
+                        imageVector = TnIcons.Tool,
                         contentDescription = null,
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = if (pluginData.success) {
                             MaterialTheme.colorScheme.tertiary
                         } else {
@@ -111,12 +112,12 @@ fun PluginResultCard(
                     // Status Badge
                     Icon(
                         imageVector = if (pluginData.success) {
-                            Icons.Default.CheckCircle
+                            TnIcons.CircleCheck
                         } else {
-                            Icons.Default.Error
+                            TnIcons.AlertTriangle
                         },
                         contentDescription = if (pluginData.success) "Success" else "Failed",
-                        modifier = Modifier.size(rDp(14.dp)),
+                        modifier = Modifier.size(14.dp),
                         tint = if (pluginData.success) {
                             MaterialTheme.colorScheme.tertiary
                         } else {
@@ -125,41 +126,27 @@ fun PluginResultCard(
                     )
                 }
 
-                Icon(
-                    imageVector = if (isExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (isExpanded) "Collapse" else "Expand",
-                    modifier = Modifier.size(rDp(18.dp)),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                ExpandCollapseIcon(isExpanded = isExpanded, size = 18.dp)
             }
         }
 
         // Detailed Results
         AnimatedVisibility(
             visible = isExpanded,
-            enter = expandVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeIn(),
-            exit = shrinkVertically(
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                )
-            ) + fadeOut()
+            enter = Motion.Enter,
+            exit = Motion.Exit
         ) {
             Surface(
+                onClick = { showDetailDialog = true },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = rDp(6.dp)),
-                shape = RoundedCornerShape(rDp(8.dp)),
+                    .padding(top = 6.dp),
+                shape = RoundedCornerShape(Standards.RadiusMd),
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
             ) {
                 Column(
-                    modifier = Modifier.padding(rDp(10.dp)),
-                    verticalArrangement = Arrangement.spacedBy(rDp(10.dp))
+                    modifier = Modifier.padding(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     // Metrics
                     metrics?.let { m ->
@@ -190,14 +177,14 @@ fun PluginResultCard(
                             color = MaterialTheme.colorScheme.onSurface
                         )
                         Surface(
-                            shape = RoundedCornerShape(rDp(6.dp)),
+                            shape = RoundedCornerShape(Standards.RadiusSm),
                             color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                         ) {
                             Text(
                                 text = formatJsonForDisplay(pluginData.inputParams),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(rDp(8.dp))
+                                modifier = Modifier.padding(Standards.SpacingSm)
                             )
                         }
                     }
@@ -226,14 +213,14 @@ fun PluginResultCard(
                         } else {
                             // Fallback to text display if plugin not available or JSON parsing failed
                             Surface(
-                                shape = RoundedCornerShape(rDp(6.dp)),
+                                shape = RoundedCornerShape(Standards.RadiusSm),
                                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                             ) {
                                 Text(
                                     text = pluginData.resultData,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(rDp(8.dp))
+                                    modifier = Modifier.padding(Standards.SpacingSm)
                                 )
                             }
                         }
@@ -246,14 +233,14 @@ fun PluginResultCard(
                             color = MaterialTheme.colorScheme.error
                         )
                         Surface(
-                            shape = RoundedCornerShape(rDp(6.dp)),
+                            shape = RoundedCornerShape(Standards.RadiusSm),
                             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
                         ) {
                             Text(
                                 text = pluginData.resultData,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.padding(rDp(8.dp))
+                                modifier = Modifier.padding(Standards.SpacingSm)
                             )
                         }
                     }
@@ -271,5 +258,31 @@ private fun formatJsonForDisplay(json: String): String {
         }
     } catch (_: Exception) {
         json
+    }
+}
+
+@Composable
+private fun PluginResultDetailDialog(
+    pluginData: PluginResultData,
+    metrics: PluginExecutionMetrics?,
+    onDismiss: () -> Unit
+) {
+    ToolDetailDialog(
+        title = "${pluginData.pluginName} · ${pluginData.toolName}",
+        onDismiss = onDismiss
+    ) {
+        DetailKeyValue("Status", if (pluginData.success) "Success" else "Failed")
+        metrics?.let {
+            DetailKeyValue("Execution Time", "${it.executionTimeMs}ms")
+        }
+
+        if (pluginData.inputParams.isNotBlank()) {
+            DetailSection(label = "Input Parameters", content = formatJsonForDisplay(pluginData.inputParams))
+        }
+
+        DetailSection(
+            label = if (pluginData.success) "Result" else "Error",
+            content = pluginData.resultData
+        )
     }
 }

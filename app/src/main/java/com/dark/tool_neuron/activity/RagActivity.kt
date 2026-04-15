@@ -35,30 +35,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Chat
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Book
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.ChevronLeft
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Memory
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Storage
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -92,22 +76,21 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import com.dark.tool_neuron.ui.components.PasswordTextField
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.global.formatDateWithTime
 import com.dark.tool_neuron.models.table_schema.InstalledRag
 import com.dark.tool_neuron.models.table_schema.RagSourceType
 import com.dark.tool_neuron.models.table_schema.RagStatus
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
-import com.dark.tool_neuron.ui.screen.SecureRagCreationScreen
+import com.dark.tool_neuron.ui.screen.rag.SecureRagCreationScreen
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
-import com.dark.tool_neuron.ui.theme.rDp
 import com.dark.tool_neuron.viewmodel.RagViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -115,6 +98,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import com.dark.tool_neuron.ui.icons.TnIcons
 
 @AndroidEntryPoint
 class RagActivity : ComponentActivity() {
@@ -130,7 +114,7 @@ class RagActivity : ComponentActivity() {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun RagScreen(
     ragViewModel: RagViewModel = hiltViewModel(),
@@ -207,10 +191,10 @@ fun RagScreen(
                 navigationIcon = {
                     ActionTextButton(
                         onClickListener = onClose,
-                        icon = Icons.Default.ChevronLeft,
+                        icon = TnIcons.ChevronLeft,
                         text = "Back",
                         contentDescription = "Close",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 },
                 actions = {
@@ -223,9 +207,9 @@ fun RagScreen(
                                 "*/*"
                             ))
                         },
-                        icon = Icons.Default.Download,
+                        icon = TnIcons.Download,
                         contentDescription = "Import Neuron Package",
-                        shape = RoundedCornerShape(rDp(12.dp))
+                        shape = RoundedCornerShape(12.dp)
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -266,10 +250,10 @@ fun RagScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp)),
+                        .padding(8.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(modifier = Modifier.size(rDp(24.dp)))
+                    LoadingIndicator(modifier = Modifier.size(24.dp))
                 }
             }
 
@@ -278,12 +262,12 @@ fun RagScreen(
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(rDp(8.dp)),
+                        .padding(8.dp),
                     color = MaterialTheme.colorScheme.errorContainer,
-                    shape = RoundedCornerShape(rDp(8.dp))
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(rDp(12.dp)),
+                        modifier = Modifier.padding(12.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -294,9 +278,9 @@ fun RagScreen(
                         )
                         ActionButton(
                             onClickListener = { ragViewModel.clearError() },
-                            icon = Icons.Default.Close,
+                            icon = TnIcons.X,
                             contentDescription = "Dismiss",
-                            shape = RoundedCornerShape(rDp(8.dp)),
+                            shape = RoundedCornerShape(8.dp),
                             colors = IconButtonDefaults.filledIconButtonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer.copy(0.3f),
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -415,7 +399,9 @@ fun RagScreen(
                 ragToLoad = null
             },
             onConfirm = { password ->
-                ragViewModel.loadRag(ragToLoad!!, password)
+                ragToLoad?.let { rag ->
+                    ragViewModel.loadRag(rag, password)
+                }
                 showPasswordDialog = false
                 ragToLoad = null
             }
@@ -495,8 +481,8 @@ private fun RagListContent(
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(rDp(16.dp)),
-            verticalArrangement = Arrangement.spacedBy(rDp(12.dp))
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             items(rags, key = { it.id }) { rag ->
                 RagCard(
@@ -522,12 +508,12 @@ private fun EmptyRagListState(message: String, subMessage: String) {
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(rDp(16.dp))
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Icon(
-                Icons.Default.Memory,
+                TnIcons.Cpu,
                 contentDescription = null,
-                modifier = Modifier.size(rDp(64.dp)),
+                modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
             )
             Text(
@@ -540,12 +526,13 @@ private fun EmptyRagListState(message: String, subMessage: String) {
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(horizontal = rDp(32.dp))
+                modifier = Modifier.padding(horizontal = 32.dp)
             )
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RagCard(
     rag: InstalledRag,
@@ -569,12 +556,12 @@ private fun RagCard(
                 else -> MaterialTheme.colorScheme.surfaceVariant
             }
         ),
-        shape = RoundedCornerShape(rDp(16.dp))
+        shape = RoundedCornerShape(16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(16.dp))
+                .padding(16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -583,20 +570,20 @@ private fun RagCard(
             ) {
                 Row(
                     modifier = Modifier.weight(1f),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(rDp(48.dp))
-                            .clip(RoundedCornerShape(rDp(12.dp)))
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = getRagSourceIcon(rag.sourceType),
                             contentDescription = null,
-                            modifier = Modifier.size(rDp(24.dp)),
+                            modifier = Modifier.size(24.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
                     }
@@ -610,7 +597,7 @@ private fun RagCard(
                             overflow = TextOverflow.Ellipsis
                         )
                         Row(
-                            horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
@@ -637,7 +624,7 @@ private fun RagCard(
             }
 
             if (rag.description.isNotBlank()) {
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodySmall,
@@ -649,9 +636,9 @@ private fun RagCard(
 
             // Tags
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(6.dp))
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     rag.getTagsList().take(4).forEach { tag ->
                         TagChip(tag = tag)
@@ -660,9 +647,9 @@ private fun RagCard(
             }
 
             // Actions
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            Spacer(modifier = Modifier.height(12.dp))
             HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
-            Spacer(modifier = Modifier.height(rDp(12.dp)))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -670,35 +657,34 @@ private fun RagCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formatDate(rag.createdAt),
+                    text = formatDateWithTime(rag.createdAt),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(rDp(8.dp))) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
                             ActionTextButton(
                                 onClickListener = onUnload,
-                                icon = Icons.Default.Close,
+                                icon = TnIcons.X,
                                 text = "Unload",
                                 contentDescription = "Unload RAG",
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             )
                         }
                         RagStatus.LOADING -> {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(rDp(20.dp)),
-                                strokeWidth = rDp(2.dp)
+                            LoadingIndicator(
+                                modifier = Modifier.size(20.dp)
                             )
                         }
                         else -> {
                             ActionTextButton(
                                 onClickListener = onLoad,
-                                icon = Icons.Default.Download,
+                                icon = TnIcons.Download,
                                 text = "Load",
                                 contentDescription = "Load RAG",
-                                shape = RoundedCornerShape(rDp(8.dp))
+                                shape = RoundedCornerShape(8.dp)
                             )
                         }
                     }
@@ -706,26 +692,26 @@ private fun RagCard(
                     onViewData?.let { viewDataAction ->
                         ActionButton(
                             onClickListener = viewDataAction,
-                            icon = Icons.Default.Visibility,
+                            icon = TnIcons.Eye,
                             contentDescription = "View Data",
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
                     onShare?.let { shareAction ->
                         ActionButton(
                             onClickListener = shareAction,
-                            icon = Icons.Default.Share,
+                            icon = TnIcons.Share,
                             contentDescription = "Share",
-                            shape = RoundedCornerShape(rDp(8.dp))
+                            shape = RoundedCornerShape(8.dp)
                         )
                     }
 
                     ActionButton(
                         onClickListener = onDelete,
-                        icon = Icons.Default.Delete,
+                        icon = TnIcons.Trash,
                         contentDescription = "Delete",
-                        shape = RoundedCornerShape(rDp(8.dp)),
+                        shape = RoundedCornerShape(8.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.error
@@ -748,18 +734,18 @@ private fun StatusBadge(status: RagStatus) {
 
     Surface(
         color = color.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(rDp(4.dp))
+        shape = RoundedCornerShape(4.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp)),
-            horizontalArrangement = Arrangement.spacedBy(rDp(4.dp)),
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (status == RagStatus.LOADED) {
                 Icon(
-                    Icons.Default.Check,
+                    TnIcons.Check,
                     contentDescription = null,
-                    modifier = Modifier.size(rDp(12.dp)),
+                    modifier = Modifier.size(12.dp),
                     tint = color
                 )
             }
@@ -777,18 +763,18 @@ private fun StatusBadge(status: RagStatus) {
 private fun TagChip(tag: String) {
     Surface(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-        shape = RoundedCornerShape(rDp(4.dp))
+        shape = RoundedCornerShape(4.dp)
     ) {
         Text(
             text = tag,
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(horizontal = rDp(8.dp), vertical = rDp(4.dp))
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
         )
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun RagDetailBottomSheet(
     rag: InstalledRag,
@@ -807,7 +793,7 @@ private fun RagDetailBottomSheet(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(rDp(24.dp))
+                .padding(24.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // Header
@@ -831,9 +817,9 @@ private fun RagDetailBottomSheet(
                 StatusBadge(status = rag.status)
             }
 
-            Spacer(modifier = Modifier.height(rDp(16.dp)))
+            Spacer(modifier = Modifier.height(16.dp))
             HorizontalDivider()
-            Spacer(modifier = Modifier.height(rDp(16.dp)))
+            Spacer(modifier = Modifier.height(16.dp))
 
             // Description
             if (rag.description.isNotBlank()) {
@@ -842,13 +828,13 @@ private fun RagDetailBottomSheet(
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(rDp(4.dp)))
+                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     text = rag.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
             // Stats
@@ -857,37 +843,37 @@ private fun RagDetailBottomSheet(
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold
             )
-            Spacer(modifier = Modifier.height(rDp(8.dp)))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Surface(
                 color = MaterialTheme.colorScheme.surfaceVariant,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             ) {
-                Column(modifier = Modifier.padding(rDp(16.dp))) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     DetailRow("Nodes", "${rag.nodeCount}")
                     DetailRow("Embedding Dimension", "${rag.embeddingDimension}")
                     DetailRow("Size", rag.getFormattedSize())
                     DetailRow("Domain", rag.domain)
                     DetailRow("Language", rag.language)
                     DetailRow("Version", rag.version)
-                    DetailRow("Created", formatDate(rag.createdAt))
+                    DetailRow("Created", formatDateWithTime(rag.createdAt))
                     rag.lastLoadedAt?.let {
-                        DetailRow("Last Loaded", formatDate(it))
+                        DetailRow("Last Loaded", formatDateWithTime(it))
                     }
                 }
             }
 
             // Tags
             if (rag.getTagsList().isNotEmpty()) {
-                Spacer(modifier = Modifier.height(rDp(16.dp)))
+                Spacer(modifier = Modifier.height(16.dp))
                 Text(
                     text = "Tags",
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold
                 )
-                Spacer(modifier = Modifier.height(rDp(8.dp)))
+                Spacer(modifier = Modifier.height(8.dp))
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(rDp(8.dp)),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     rag.getTagsList().forEach { tag ->
@@ -896,27 +882,27 @@ private fun RagDetailBottomSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(24.dp)))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // Actions
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(rDp(12.dp))
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     when (rag.status) {
                         RagStatus.LOADED -> {
                             FilledTonalButton(
                                 onClick = onUnload,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(rDp(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Icon(Icons.Default.Close, contentDescription = null)
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Icon(TnIcons.X, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Unload")
                             }
                         }
@@ -925,13 +911,12 @@ private fun RagDetailBottomSheet(
                                 onClick = {},
                                 modifier = Modifier.weight(1f),
                                 enabled = false,
-                                shape = RoundedCornerShape(rDp(12.dp))
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(rDp(20.dp)),
-                                    strokeWidth = rDp(2.dp)
+                                LoadingIndicator(
+                                    modifier = Modifier.size(20.dp)
                                 )
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Loading...")
                             }
                         }
@@ -939,14 +924,14 @@ private fun RagDetailBottomSheet(
                             FilledTonalButton(
                                 onClick = onLoad,
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(rDp(12.dp)),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.filledTonalButtonColors(
                                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                                     contentColor = MaterialTheme.colorScheme.primary
                                 )
                             ) {
-                                Icon(Icons.Default.Download, contentDescription = null)
-                                Spacer(modifier = Modifier.width(rDp(8.dp)))
+                                Icon(TnIcons.Download, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text("Load")
                             }
                         }
@@ -955,14 +940,14 @@ private fun RagDetailBottomSheet(
                     FilledTonalButton(
                         onClick = onDelete,
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(rDp(12.dp)),
+                        shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.filledTonalButtonColors(
                             containerColor = MaterialTheme.colorScheme.error.copy(0.1f),
                             contentColor = MaterialTheme.colorScheme.error
                         )
                     ) {
-                        Icon(Icons.Default.Delete, contentDescription = null)
-                        Spacer(modifier = Modifier.width(rDp(8.dp)))
+                        Icon(TnIcons.Trash, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text("Delete")
                     }
                 }
@@ -970,19 +955,19 @@ private fun RagDetailBottomSheet(
                 FilledTonalButton(
                     onClick = onShare,
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp)),
+                    shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.filledTonalButtonColors(
                         containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(0.5f),
                         contentColor = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 ) {
-                    Icon(Icons.Default.Share, contentDescription = null)
-                    Spacer(modifier = Modifier.width(rDp(8.dp)))
+                    Icon(TnIcons.Share, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text("Share RAG")
                 }
             }
 
-            Spacer(modifier = Modifier.height(rDp(24.dp)))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
@@ -992,7 +977,7 @@ private fun DetailRow(label: String, value: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = rDp(4.dp)),
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
@@ -1009,18 +994,14 @@ private fun DetailRow(label: String, value: String) {
 }
 
 private fun getRagSourceIcon(sourceType: RagSourceType): ImageVector = when (sourceType) {
-    RagSourceType.TEXT -> Icons.Default.Book
-    RagSourceType.CHAT -> Icons.AutoMirrored.Filled.Chat
-    RagSourceType.FILE -> Icons.Default.Description
-    RagSourceType.MEDICAL_TEXT -> Icons.Default.Description  // Legacy support
-    RagSourceType.NEURON_PACKET -> Icons.Default.Memory
-    RagSourceType.MEMORY_VAULT -> Icons.Default.Storage
+    RagSourceType.TEXT -> TnIcons.Books
+    RagSourceType.CHAT -> TnIcons.MessageCircle
+    RagSourceType.FILE -> TnIcons.FileText
+    RagSourceType.MEDICAL_TEXT -> TnIcons.FileText  // Legacy support
+    RagSourceType.NEURON_PACKET -> TnIcons.Cpu
+    RagSourceType.MEMORY_VAULT -> TnIcons.Database
 }
 
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("MMM d, yyyy HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
-}
 
 @Composable
 private fun PasswordDialog(
@@ -1033,34 +1014,21 @@ private fun PasswordDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         icon = {
-            Icon(Icons.Default.Lock, contentDescription = null)
+            Icon(TnIcons.Lock, contentDescription = null)
         },
         title = { Text("Enter Password") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(rDp(12.dp))) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
                     text = "This RAG is encrypted. Enter the password to load it.",
                     style = MaterialTheme.typography.bodyMedium
                 )
-                OutlinedTextField(
+                PasswordTextField(
                     value = password,
                     onValueChange = { password = it },
-                    label = { Text("Password") },
-                    singleLine = true,
-                    visualTransformation = if (showPassword)
-                        VisualTransformation.None
-                    else
-                        PasswordVisualTransformation(),
-                    trailingIcon = {
-                        IconButton(onClick = { showPassword = !showPassword }) {
-                            Icon(
-                                if (showPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                contentDescription = null
-                            )
-                        }
-                    },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(rDp(12.dp))
+                    showPasswordState = showPassword,
+                    onToggleVisibility = { showPassword = !showPassword }
                 )
             }
         },
@@ -1068,7 +1036,7 @@ private fun PasswordDialog(
             FilledTonalButton(
                 onClick = { onConfirm(password) },
                 enabled = password.isNotBlank(),
-                shape = RoundedCornerShape(rDp(12.dp)),
+                shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.primary.copy(0.1f),
                     contentColor = MaterialTheme.colorScheme.primary
@@ -1080,7 +1048,7 @@ private fun PasswordDialog(
         dismissButton = {
             TextButton(
                 onClick = onDismiss,
-                shape = RoundedCornerShape(rDp(12.dp))
+                shape = RoundedCornerShape(12.dp)
             ) {
                 Text("Cancel")
             }

@@ -124,7 +124,7 @@
 
 # -- AI Core & GGUF --
 -keep class com.mp.ai_core.** { *; }
--keep class com.mp.ai_gguf.** { *; }
+-keep class com.dark.gguf_lib.** { *; }
 -keep class com.dark.ai_module.** { *; }
 -keep class com.dark.ai_sd.** { *; }
 -keep class com.android.tools.mlkit.** { *; }
@@ -142,13 +142,13 @@
 }
 
 # Keep all callback interfaces and their methods (critical for JNI)
--keep interface com.mp.ai_gguf.models.EmbeddingCallback { *; }
--keep interface com.mp.ai_gguf.models.StreamCallback { *; }
--keep class com.mp.ai_gguf.models.EmbeddingResult { *; }
--keep class com.mp.ai_gguf.models.** { *; }
+-keep interface com.dark.gguf_lib.models.EmbeddingCallback { *; }
+-keep interface com.dark.gguf_lib.models.StreamCallback { *; }
+-keep class com.dark.gguf_lib.models.EmbeddingResult { *; }
+-keep class com.dark.gguf_lib.models.** { *; }
 
 # Keep all methods that might be called from native code
--keepclassmembers class com.mp.ai_gguf.** {
+-keepclassmembers class com.dark.gguf_lib.** {
     native <methods>;
     public <methods>;
     public <fields>;
@@ -161,7 +161,7 @@
 }
 
 # Prevent callback interface methods from being renamed or removed
--keepclassmembers interface com.mp.ai_gguf.models.** {
+-keepclassmembers interface com.dark.gguf_lib.models.** {
     *;
 }
 
@@ -208,6 +208,25 @@
 -keepclassmembers class com.memoryvault.** {
     *;
 }
+
+# -- UMS (Unified Memory System with JNI) --
+-keep class com.dark.ums.** { *; }
+-keepclassmembers class com.dark.ums.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+
+# -- System Encryptor (native encryption with JNI) --
+-keep class com.dark.system_encryptor.** { *; }
+-keepclassmembers class com.dark.system_encryptor.** {
+    native <methods>;
+    public <methods>;
+    public <fields>;
+}
+
+# -- File Operations --
+-keep class com.dark.file_ops.** { *; }
 
 # -- Document Parsing Libraries --
 
@@ -303,6 +322,14 @@
 -keepclasseswithmembernames class * {
     native <methods>;
 }
+
+# -- Prevent R8 repackaging of JNI-accessed classes (AGP 9.1.0+ default) --
+# Native code uses FindClass() with full package paths — repackaging breaks these lookups
+-keeppackagenames com.dark.gguf_lib.**
+-keeppackagenames com.dark.ai_sd.**
+-keeppackagenames com.dark.ums.**
+-keeppackagenames com.dark.system_encryptor.**
+-keeppackagenames com.mp.ai_supertonic_tts.**
 
 # -- Keep Line Numbers for Debugging --
 -keepattributes SourceFile,LineNumberTable

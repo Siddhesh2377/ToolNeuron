@@ -3,15 +3,22 @@ package com.dark.tool_neuron.viewmodel
 import android.app.Application
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.DeviceTuner
+import com.dark.tool_neuron.global.HardwareProfile
+import com.dark.tool_neuron.global.HardwareScanner
+import com.dark.tool_neuron.global.PerformanceMode
+import com.dark.tool_neuron.models.engine_schema.GgufEngineSchema
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.network.NetworkUtils
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
+import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.tts.TTSDataStore
 import com.dark.tool_neuron.tts.TTSManager
 import com.dark.tool_neuron.tts.TTSSettings
@@ -21,12 +28,17 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
 
 class SettingsViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val profileJson = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 
     private val appSettingsDataStore = AppSettingsDataStore(application)
     private val ttsDataStore = TTSDataStore(application)
@@ -102,6 +114,26 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     val localIpAddress: String? = NetworkUtils.getLocalIpAddress()
 
+    val askModelReloadDialog: StateFlow<Boolean> = appSettingsDataStore.askModelReloadDialog
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    // Hardware tuning
+    val hardwareTuningEnabled: StateFlow<Boolean> = appSettingsDataStore.hardwareTuningEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val hardwareProfile: StateFlow<HardwareProfile?> = appSettingsDataStore.hardwareProfileJson
+        .map { json ->
+            json?.takeIf { it.isNotBlank() }?.let {
+                try {
+                    profileJson.decodeFromString<HardwareProfile>(it)
+                } catch (_: Exception) { null }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
+
+    val performanceMode: StateFlow<PerformanceMode> = appSettingsDataStore.performanceMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), PerformanceMode.BALANCED)
+
     // TTS settings
     val ttsSettings: StateFlow<TTSSettings> = ttsDataStore.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TTSSettings())
@@ -167,6 +199,66 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { appSettingsDataStore.updateRemoteApiNsdEnabled(enabled) }
     }
 
+    fun setAskModelReloadDialog(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateAskModelReloadDialog(enabled) }
+    }
+
+    fun setHardwareTuningEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            appSettingsDataStore.updateHardwareTuningEnabled(enabled)
+            // When re-enabling, retune all GGUF configs with current performance mode
+            if (enabled) {
+                val mode = appSettingsDataStore.performanceMode.firstOrNull() ?: PerformanceMode.BALANCED
+                retuneAllGgufConfigs(mode)
+                AppStateManager.requestModelReload()
+            }
+        }
+    }
+
+    fun setPerformanceMode(mode: PerformanceMode) {
+        viewModelScope.launch {
+            appSettingsDataStore.savePerformanceMode(mode)
+
+            val tuningEnabled = appSettingsDataStore.hardwareTuningEnabled.firstOrNull() ?: true
+            if (!tuningEnabled) return@launch
+
+            retuneAllGgufConfigs(mode)
+            AppStateManager.requestModelReload()
+        }
+    }
+
+    private suspend fun retuneAllGgufConfigs(mode: PerformanceMode) {
+        withContext(Dispatchers.IO) {
+            try {
+                val profile = HardwareScanner.scan(getApplication())
+                val allModels = modelRepository.getAllModels().first()
+
+                for (model in allModels.filter { it.providerType == ProviderType.GGUF }) {
+                    val config = modelRepository.getConfigByModelId(model.id) ?: continue
+                    val modelSizeMB = ((model.fileSize ?: 0L) / (1024 * 1024)).toInt()
+                    val newLoading = DeviceTuner.tune(profile, modelSizeMB, model.modelName, mode)
+                    val schema = GgufEngineSchema(loadingParams = newLoading)
+                    modelRepository.updateConfig(config.copy(modelLoadingParams = schema.toLoadingJson()))
+                }
+            } catch (e: Exception) {
+                Log.e("SettingsVM", "Failed to retune configs", e)
+            }
+        }
+    }
+
+    fun rescanHardware() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val profile = HardwareScanner.scan(getApplication())
+                val json = profileJson.encodeToString(profile)
+                appSettingsDataStore.saveHardwareProfile(json)
+            } catch (e: Exception) {
+                Log.e("SettingsVM", "Hardware rescan failed", e)
+            }
+        }
+    }
+    }
+
     // TTS settings updaters
     fun updateVoice(voice: String) {
         viewModelScope.launch { ttsDataStore.updateVoice(voice) }
@@ -209,7 +301,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             putExtra(ModelDownloadService.EXTRA_RUN_ON_CPU, true)
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, 0)
         }
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     fun downloadToolCallingModel() {
@@ -225,7 +317,7 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             putExtra(ModelDownloadService.EXTRA_RUN_ON_CPU, model.runOnCpu)
             putExtra(ModelDownloadService.EXTRA_TEXT_EMBEDDING_SIZE, model.textEmbeddingSize)
         }
-        context.startForegroundService(intent)
+        androidx.core.content.ContextCompat.startForegroundService(context, intent)
     }
 
     fun loadTtsAfterDownload() {

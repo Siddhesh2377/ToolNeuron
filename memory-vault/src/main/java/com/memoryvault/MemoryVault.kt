@@ -7,20 +7,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
-import java.io.File
-import java.util.UUID
 
 class MemoryVault(
     context: Context,
     private val keyAlias: String,
     val migrationListener: MigrationListener? = null
 ) {
-    private val vaultDir = File(context.filesDir, "memory_vault")
-    private val vaultFile = VaultFile(File(vaultDir, "vault.mvlt"))
-    private val walFile = File(vaultDir, "vault.wal")
+    private val vaultDir = java.io.File(context.filesDir, "memory_vault")
+    private val vaultFile = VaultFile(java.io.File(vaultDir, "vault.mvlt"))
+    private val walFile = java.io.File(vaultDir, "vault.wal")
 
-    private val writer: BlockWriter
     private val reader: BlockReader
     private val walManager: WALManager
     private val encryptionManager: EncryptionManager
@@ -28,29 +24,20 @@ class MemoryVault(
     private val index: VaultIndex
     private val fullTextIndex: FullTextIndex
     private val vectorIndices = mutableMapOf<Int, VectorIndex>()
-    private val dedupManager: DedupManager
     private val freeSpaceManager: FreeSpaceManager
-    private val defragManager: DefragManager
-    private val validator: VaultValidator
-    private val backupManager: BackupManager
 
     private val mutex = Mutex()
     private var initialized = false
 
     init {
         vaultDir.mkdirs()
-        writer = BlockWriter(vaultFile)
         reader = BlockReader(vaultFile)
         walManager = WALManager(walFile)
         encryptionManager = EncryptionManager(keyAlias)
         contentProcessor = ContentProcessor(encryptionManager)
         index = VaultIndex()
         fullTextIndex = FullTextIndex()
-        dedupManager = DedupManager()
         freeSpaceManager = FreeSpaceManager()
-        defragManager = DefragManager(vaultFile, reader)
-        validator = VaultValidator(vaultFile, reader)
-        backupManager = BackupManager(File(vaultDir, "vault.mvlt"))
     }
 
     suspend fun initialize() = withContext(Dispatchers.IO) {
@@ -127,231 +114,6 @@ class MemoryVault(
         }
     }
 
-    suspend fun addMessage(
-        content: String,
-        category: String? = null,
-        tags: Set<String> = emptySet()
-    ): String = withContext(Dispatchers.IO) {
-        val messageData = content.toByteArray()
-        val contentHash = BlockMetadata.calculateContentHash(messageData)
-
-        val existingBlock = dedupManager.findDuplicate(contentHash)
-        if (existingBlock != null) {
-            dedupManager.addReference(existingBlock)
-            return@withContext existingBlock.toString()
-        }
-
-        val processed = contentProcessor.processForWrite(messageData, shouldEncrypt = true)
-
-        val walEntry = WALEntry(
-            operation = WALOperation.INSERT,
-            timestamp = System.currentTimeMillis(),
-            blockId = UUID.randomUUID(),
-            data = processed.data
-        )
-        walManager.append(walEntry)
-
-        val result = writer.writeBlockWithId(
-            blockId = walEntry.blockId,
-            blockType = BlockType.MESSAGE,
-            data = processed.data,
-            compressed = processed.compressed,
-            encrypted = processed.encrypted,
-            timestamp = walEntry.timestamp
-        )
-
-        walManager.markCommitted(walEntry.blockId)
-
-        val searchableText = TextTokenizer.extractSearchableText(content)
-
-        val metadata = BlockMetadata(
-            blockId = result.blockId,
-            blockType = BlockType.MESSAGE,
-            fileOffset = result.offset,
-            compressedSize = result.size,
-            uncompressedSize = processed.originalSize.toLong(),
-            timestamp = result.timestamp,
-            category = category,
-            tags = tags,
-            contentHash = contentHash,
-            searchableText = searchableText
-        )
-
-        index.add(metadata)
-        fullTextIndex.addDocument(result.blockId, content)
-        dedupManager.register(contentHash, result.blockId)
-
-        checkpoint()
-
-        result.blockId.toString()
-    }
-
-    suspend fun addFile(
-        file: File,
-        mimeType: String,
-        category: String? = null,
-        tags: Set<String> = emptySet()
-    ): String = withContext(Dispatchers.IO) {
-        val fileData = file.readBytes()
-        val contentHash = BlockMetadata.calculateContentHash(fileData)
-
-        val existingBlock = dedupManager.findDuplicate(contentHash)
-        if (existingBlock != null) {
-            dedupManager.addReference(existingBlock)
-            return@withContext existingBlock.toString()
-        }
-
-        val processed = contentProcessor.processForWrite(fileData, shouldEncrypt = true)
-
-        val walEntry = WALEntry(
-            operation = WALOperation.INSERT,
-            timestamp = System.currentTimeMillis(),
-            blockId = UUID.randomUUID(),
-            data = processed.data
-        )
-        walManager.append(walEntry)
-
-        val result = writer.writeBlockWithId(
-            blockId = walEntry.blockId,
-            blockType = BlockType.FILE,
-            data = processed.data,
-            compressed = processed.compressed,
-            encrypted = processed.encrypted,
-            timestamp = walEntry.timestamp
-        )
-
-        walManager.markCommitted(walEntry.blockId)
-
-        val metadata = BlockMetadata(
-            blockId = result.blockId,
-            blockType = BlockType.FILE,
-            fileOffset = result.offset,
-            compressedSize = result.size,
-            uncompressedSize = processed.originalSize.toLong(),
-            timestamp = result.timestamp,
-            category = category,
-            tags = tags,
-            contentHash = contentHash,
-            searchableText = "${file.name}|$mimeType"
-        )
-
-        index.add(metadata)
-        dedupManager.register(contentHash, result.blockId)
-
-        result.blockId.toString()
-    }
-
-    suspend fun addCustomData(
-        dataType: String,
-        data: JSONObject,
-        category: String? = null,
-        tags: Set<String> = emptySet()
-    ): String = withContext(Dispatchers.IO) {
-        val jsonData = data.toString().toByteArray()
-        val contentHash = BlockMetadata.calculateContentHash(jsonData)
-
-        val processed = contentProcessor.processForWrite(jsonData, shouldEncrypt = true)
-
-        val walEntry = WALEntry(
-            operation = WALOperation.INSERT,
-            timestamp = System.currentTimeMillis(),
-            blockId = UUID.randomUUID(),
-            data = processed.data
-        )
-        walManager.append(walEntry)
-
-        val result = writer.writeBlockWithId(
-            blockId = walEntry.blockId,
-            blockType = BlockType.CUSTOM_DATA,
-            data = processed.data,
-            compressed = processed.compressed,
-            encrypted = processed.encrypted,
-            timestamp = walEntry.timestamp
-        )
-
-        walManager.markCommitted(walEntry.blockId)
-
-        val metadata = BlockMetadata(
-            blockId = result.blockId,
-            blockType = BlockType.CUSTOM_DATA,
-            fileOffset = result.offset,
-            compressedSize = result.size,
-            uncompressedSize = processed.originalSize.toLong(),
-            timestamp = result.timestamp,
-            category = category,
-            tags = tags,
-            contentHash = contentHash,
-            searchableText = dataType
-        )
-
-        index.add(metadata)
-
-        checkpoint()
-
-        result.blockId.toString()
-    }
-
-    suspend fun addEmbedding(
-        vector: FloatArray,
-        linkedContentId: String,
-        modelName: String = "default"
-    ): String = withContext(Dispatchers.IO) {
-        val dimension = vector.size
-
-        val vectorIndex = vectorIndices.getOrPut(dimension) {
-            VectorIndex(dimension)
-        }
-
-        val embeddingData = serializeEmbedding(vector, linkedContentId, modelName)
-        val processed = contentProcessor.processForWrite(embeddingData, shouldEncrypt = true)
-
-        val walEntry = WALEntry(
-            operation = WALOperation.INSERT,
-            timestamp = System.currentTimeMillis(),
-            blockId = UUID.randomUUID(),
-            data = processed.data
-        )
-        walManager.append(walEntry)
-
-        val result = writer.writeBlockWithId(
-            blockId = walEntry.blockId,
-            blockType = BlockType.EMBEDDING,
-            data = processed.data,
-            compressed = processed.compressed,
-            encrypted = processed.encrypted,
-            timestamp = walEntry.timestamp
-        )
-
-        walManager.markCommitted(walEntry.blockId)
-
-        val contentHash = BlockMetadata.calculateContentHash(embeddingData)
-
-        val metadata = BlockMetadata(
-            blockId = result.blockId,
-            blockType = BlockType.EMBEDDING,
-            fileOffset = result.offset,
-            compressedSize = result.size,
-            uncompressedSize = processed.originalSize.toLong(),
-            timestamp = result.timestamp,
-            category = modelName,
-            tags = setOf(linkedContentId),
-            contentHash = contentHash,
-            searchableText = "dim:$dimension|model:$modelName"
-        )
-
-        index.add(metadata)
-        vectorIndex.add(result.blockId, vector)
-
-        result.blockId.toString()
-    }
-
-    suspend fun getById(id: String): VaultItem? = withContext(Dispatchers.IO) {
-        val blockId = UUID.fromString(id)
-        val metadata = index.get(blockId) ?: return@withContext null
-
-        readVaultItem(metadata)
-    }
-
     suspend fun getMessages(
         category: String? = null,
         tags: Set<String>? = null,
@@ -381,14 +143,6 @@ class MemoryVault(
             .mapNotNull { readVaultItem(it) as? MessageItem }
     }
 
-    suspend fun textSearch(query: String): List<VaultItem> = withContext(Dispatchers.IO) {
-        val blockIds = fullTextIndex.search(query)
-        blockIds.mapNotNull { id ->
-            val metadata = index.get(id)
-            metadata?.let { readVaultItem(it) }
-        }
-    }
-
     suspend fun semanticSearch(
         embedding: FloatArray,
         limit: Int = 10,
@@ -407,88 +161,9 @@ class MemoryVault(
         }
     }
 
-    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
-        val blockId = UUID.fromString(id)
-        val metadata = index.get(blockId) ?: return@withContext
-
-        val shouldDelete = dedupManager.removeReference(blockId)
-
-        if (shouldDelete) {
-            val walEntry = WALEntry(
-                operation = WALOperation.DELETE,
-                timestamp = System.currentTimeMillis(),
-                blockId = blockId,
-                data = null
-            )
-            walManager.append(walEntry)
-
-            index.remove(blockId)
-            metadata.searchableText?.let {
-                fullTextIndex.removeDocument(blockId, it)
-            }
-
-            freeSpaceManager.addFreeSpace(metadata.fileOffset, metadata.compressedSize)
-
-            walManager.markCommitted(blockId)
-
-            checkpoint()
-        }
-    }
-
-    suspend fun updateTags(id: String, tags: Set<String>) = withContext(Dispatchers.IO) {
-        val blockId = UUID.fromString(id)
-        val metadata = index.get(blockId) ?: return@withContext
-
-        index.remove(blockId)
-        index.add(metadata.copy(tags = tags))
-    }
-
-    suspend fun updateCategory(id: String, category: String?) = withContext(Dispatchers.IO) {
-        val blockId = UUID.fromString(id)
-        val metadata = index.get(blockId) ?: return@withContext
-
-        index.remove(blockId)
-        index.add(metadata.copy(category = category))
-    }
-
-    suspend fun defragment(onProgress: (Float) -> Unit = {}) = withContext(Dispatchers.IO) {
-        val metadata = index.getAllMetadata()
-        defragManager.defragment(metadata, onProgress)
-    }
-
-    suspend fun validate(): ValidationReport = withContext(Dispatchers.IO) {
-        validator.validate()
-    }
-
-    suspend fun rebuildIndex() = withContext(Dispatchers.IO) {
-        index.clear()
-        fullTextIndex.clear()
-        dedupManager.clear()
-
-        val metadata = validator.rebuildIndex()
-        metadata.forEach { index.add(it) }
-
-        checkpoint()
-    }
-
-    suspend fun backup(destination: File): BackupResult = withContext(Dispatchers.IO) {
-        checkpoint()
-        backupManager.backup(destination, compress = true)
-    }
-
-    suspend fun restore(backup: File) = withContext(Dispatchers.IO) {
-        close()
-        backupManager.restore(backup, decompress = true)
-        initialize()
-    }
-
     suspend fun getByCategory(category: String): List<VaultItem> = withContext(Dispatchers.IO) {
         val metadata = index.getByCategory(category)
         metadata.mapNotNull { readVaultItem(it) }
-    }
-
-    suspend fun getAllMetadata(): List<BlockMetadata> = withContext(Dispatchers.IO) {
-        index.getAllMetadata()
     }
 
     suspend fun getStats(): VaultStats = withContext(Dispatchers.IO) {
@@ -526,19 +201,15 @@ class MemoryVault(
     }
 
     private suspend fun checkpoint() {
-        //Log.d("MemoryVault", "Checkpoint started")
         try {
             val metadata = index.getAllMetadata()
-            //Log.d("MemoryVault", "Checkpointing ${metadata.size} items")
 
             // Serialize first
             val indexData = IndexSerializer.serialize(metadata)
-            //Log.d("MemoryVault", "Serialized index: ${indexData.size} bytes")
 
             // Then encrypt
             val encryptedData = encryptionManager.encrypt(indexData)
             val finalData = encryptedData.toBytes()
-           // Log.d("MemoryVault", "Encrypted index: ${finalData.size} bytes")
 
             val indexOffset = vaultFile.size()
             vaultFile.writeAt(indexOffset, finalData)
@@ -565,19 +236,13 @@ class MemoryVault(
         val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
         val header = VaultHeader.fromBytes(headerBytes)
 
-        //Log.d("MemoryVault", "Loading index: offset=${header.indexOffset}, size=${header.indexSize}")
-
         if (header.indexOffset > 0 && header.indexSize > 0) {
             try {
                 val encryptedIndexData = vaultFile.readAt(header.indexOffset, header.indexSize.toInt())
 
-             //   Log.d("MemoryVault", "Read encrypted index: ${encryptedIndexData.size} bytes")
-
                 // Decrypt first
                 val encryptedData = EncryptedData.fromBytes(encryptedIndexData)
                 val decryptedIndexData = encryptionManager.decrypt(encryptedData)
-
-            //    Log.d("MemoryVault", "Decrypted index: ${decryptedIndexData.size} bytes")
 
                 // Then deserialize
                 val metadata = IndexSerializer.deserialize(decryptedIndexData)
@@ -588,8 +253,6 @@ class MemoryVault(
                         fullTextIndex.addDocument(meta.blockId, meta.searchableText)
                     }
                 }
-
-           //     Log.d("MemoryVault", "Loaded ${metadata.size} items from index")
             } catch (e: Exception) {
                 Log.e("MemoryVault", "Failed to load index", e)
                 // If load fails, start fresh
@@ -648,7 +311,7 @@ class MemoryVault(
                 )
             }
             BlockType.CUSTOM_DATA -> {
-                val json = JSONObject(String(decrypted))
+                val json = org.json.JSONObject(String(decrypted))
                 CustomDataItem(
                     id = metadata.blockId.toString(),
                     timestamp = metadata.timestamp,
@@ -670,20 +333,7 @@ class MemoryVault(
                     modelName = model
                 )
             }
-            else -> null
         }
-    }
-
-    private fun serializeEmbedding(vector: FloatArray, linkedId: String, model: String): ByteArray {
-        val output = java.io.ByteArrayOutputStream()
-        val dos = java.io.DataOutputStream(output)
-
-        dos.writeInt(vector.size)
-        vector.forEach { dos.writeFloat(it) }
-        dos.writeUTF(linkedId)
-        dos.writeUTF(model)
-
-        return output.toByteArray()
     }
 
     private fun deserializeEmbedding(data: ByteArray): Triple<FloatArray, String, String> {

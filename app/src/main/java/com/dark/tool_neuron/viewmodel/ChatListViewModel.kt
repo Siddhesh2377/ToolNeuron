@@ -6,7 +6,7 @@ import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.state.AppStateManager
 import com.dark.tool_neuron.worker.ChatManager
 import dagger.hilt.android.lifecycle.HiltViewModel
-import jakarta.inject.Inject
+import javax.inject.Inject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -23,9 +23,6 @@ class ChatListViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error
-
-    private val _searchQuery = MutableStateFlow("")
-    val searchQuery: StateFlow<String> = _searchQuery
 
     private val _isDialogOpen = MutableStateFlow(false)
     val isDialogOpen: StateFlow<Boolean> = _isDialogOpen
@@ -72,70 +69,6 @@ class ChatListViewModel @Inject constructor(
                 _error.value = "Failed to delete chat: ${e.message}"
             }
         }
-    }
-
-    fun searchMessages(query: String) {
-        viewModelScope.launch {
-            _searchQuery.value = query
-
-            if (query.isEmpty()) {
-                loadChats()
-                return@launch
-            }
-
-            _isLoading.value = true
-            _error.value = null
-
-            chatManager.searchMessages(query).onSuccess { messages ->
-                val chatIds = messages.map { it.msgId }.distinct()
-                val filteredChats = _chats.value.filter { chat ->
-                    chatIds.contains(chat.chatId)
-                }
-                _chats.value = filteredChats
-            }.onFailure { e ->
-                _error.value = "Search failed: ${e.message}"
-            }
-
-            _isLoading.value = false
-        }
-    }
-
-    fun clearSearch() {
-        _searchQuery.value = ""
-        loadChats()
-    }
-
-    fun exportChat(chatId: String, exportPath: String) {
-        viewModelScope.launch {
-            _error.value = null
-
-            chatManager.exportChat(chatId, exportPath).onSuccess {
-                // Success feedback
-            }.onFailure { e ->
-                _error.value = "Export failed: ${e.message}"
-            }
-        }
-    }
-
-    fun importChat(importPath: String, onImported: (String) -> Unit) {
-        viewModelScope.launch {
-            _error.value = null
-
-            chatManager.importChat(importPath).onSuccess { chatId ->
-                loadChats()
-                onImported(chatId)
-            }.onFailure { e ->
-                _error.value = "Import failed: ${e.message}"
-            }
-        }
-    }
-
-    fun openDialog() {
-        _isDialogOpen.value = true
-    }
-
-    fun closeDialog() {
-        _isDialogOpen.value = false
     }
 
     fun clearError() {

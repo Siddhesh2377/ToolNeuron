@@ -169,20 +169,4 @@ class MigrationManager(
         }
     }
 
-    suspend fun needsMigration(): Boolean = withContext(Dispatchers.IO) {
-        try {
-            if (!vaultFile.exists() || vaultFile.size() == 0L) {
-                return@withContext false
-            }
-
-            val headerBytes = vaultFile.readAt(0, VaultHeader.HEADER_SIZE)
-            val header = VaultHeader.fromBytes(headerBytes)
-
-            // Need migration if keyVersion is 0 (old key)
-            header.keyVersion.toInt() == 0
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking migration status", e)
-            false
-        }
-    }
 }

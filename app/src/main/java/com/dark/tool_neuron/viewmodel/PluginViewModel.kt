@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.models.plugins.PluginInfo
 import com.dark.tool_neuron.plugins.PluginManager
-import com.mp.ai_gguf.toolcalling.GrammarMode
-import com.mp.ai_gguf.toolcalling.ToolCallingConfig
+import com.dark.gguf_lib.toolcalling.GrammarMode
+import com.dark.gguf_lib.toolcalling.ToolCallingConfig
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
