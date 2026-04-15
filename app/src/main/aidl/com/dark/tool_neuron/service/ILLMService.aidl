@@ -72,4 +72,9 @@ interface ILLMService {
     void stopDiffusionBackend();
     String getDiffusionBackendState();
     String getCurrentDiffusionModel();
+
+    // Remote Server Control
+    void startRemoteServer(int port);
+    void stopRemoteServer();
+    boolean isRemoteServerRunning();
 }

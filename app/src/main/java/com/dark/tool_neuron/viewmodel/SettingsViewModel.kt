@@ -9,6 +9,7 @@ import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.di.AppContainer
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
+import com.dark.tool_neuron.network.NetworkUtils
 import com.dark.tool_neuron.plugins.PluginManager
 import com.dark.tool_neuron.service.ModelDownloadService
 import com.dark.tool_neuron.tts.TTSDataStore
@@ -89,6 +90,18 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     val aiMemoryEnabled: StateFlow<Boolean> = appSettingsDataStore.aiMemoryEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
 
+    // Remote API Settings
+    val remoteApiEnabled: StateFlow<Boolean> = appSettingsDataStore.remoteApiEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    val remoteApiPort: StateFlow<Int> = appSettingsDataStore.remoteApiPort
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 11434)
+
+    val remoteApiNsdEnabled: StateFlow<Boolean> = appSettingsDataStore.remoteApiNsdEnabled
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val localIpAddress: String? = NetworkUtils.getLocalIpAddress()
+
     // TTS settings
     val ttsSettings: StateFlow<TTSSettings> = ttsDataStore.settings
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), TTSSettings())
@@ -99,9 +112,9 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
     // App info
     val appVersion: String = try {
         val pInfo = application.packageManager.getPackageInfo(application.packageName, 0)
-        pInfo.versionName ?: "1.0"
+        pInfo.versionName ?: "2.1.0"
     } catch (_: Exception) {
-        "1.0"
+        "2.1.0"
     }
 
     // App settings updaters
@@ -139,6 +152,19 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
 
     fun setAiMemoryEnabled(enabled: Boolean) {
         viewModelScope.launch { appSettingsDataStore.updateAiMemoryEnabled(enabled) }
+    }
+
+    // Remote API Updaters
+    fun setRemoteApiEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateRemoteApiEnabled(enabled) }
+    }
+
+    fun setRemoteApiPort(port: Int) {
+        viewModelScope.launch { appSettingsDataStore.updateRemoteApiPort(port) }
+    }
+
+    fun setRemoteApiNsdEnabled(enabled: Boolean) {
+        viewModelScope.launch { appSettingsDataStore.updateRemoteApiNsdEnabled(enabled) }
     }
 
     // TTS settings updaters

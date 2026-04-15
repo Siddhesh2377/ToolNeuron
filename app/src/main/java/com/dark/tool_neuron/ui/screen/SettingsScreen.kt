@@ -104,6 +104,12 @@ fun SettingsScreen(
     val loadTTSOnStart by viewModel.loadTTSOnStart.collectAsStateWithLifecycle()
     val codeHighlightEnabled by viewModel.codeHighlightEnabled.collectAsStateWithLifecycle()
     val aiMemoryEnabled by viewModel.aiMemoryEnabled.collectAsStateWithLifecycle()
+    
+    // Remote API settings
+    val remoteApiEnabled by viewModel.remoteApiEnabled.collectAsStateWithLifecycle()
+    val remoteApiPort by viewModel.remoteApiPort.collectAsStateWithLifecycle()
+    val remoteApiNsdEnabled by viewModel.remoteApiNsdEnabled.collectAsStateWithLifecycle()
+    
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -309,6 +315,45 @@ fun SettingsScreen(
                             onCheckedChange = { viewModel.setToolCallingBypassEnabled(it) },
                             titleColor = MaterialTheme.colorScheme.error
                         )
+                    }
+                }
+            }
+
+            // ==================== Remote API ====================
+            item { Spacer(Modifier.height(rDp(Standards.SpacingSm))) }
+            item { SectionDivider() }
+            item { SectionHeader(title = "Remote API Access") }
+            
+            item {
+                SwitchRow(
+                    title = "Enable Remote API",
+                    description = "Expose ToolNeuron over local network (OpenAI-compatible)",
+                    checked = remoteApiEnabled,
+                    onCheckedChange = { viewModel.setRemoteApiEnabled(it) }
+                )
+            }
+            
+            item {
+                SwitchRow(
+                    title = "Network Discovery (NSD)",
+                    description = "Broadcast as ToolNeuron-API.local",
+                    checked = remoteApiNsdEnabled,
+                    onCheckedChange = { viewModel.setRemoteApiNsdEnabled(it) },
+                    enabled = remoteApiEnabled
+                )
+            }
+            
+            if (remoteApiEnabled) {
+                item {
+                    StandardCard(title = "API Configuration") {
+                        Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingXs))) {
+                            val ip = viewModel.localIpAddress ?: "Unknown IP"
+                            val baseUrl = "http://$ip:$remoteApiPort"
+                            
+                            CaptionText(text = "Base URL: $baseUrl")
+                            CaptionText(text = "Chat URL: $baseUrl/v1/chat/completions")
+                            CaptionText(text = "Image URL: $baseUrl/v1/images/generations")
+                        }
                     }
                 }
             }
@@ -711,12 +756,17 @@ fun SettingsScreen(
             item {
                 StandardCard(
                     title = "ToolNeuron",
-                    description = "On-device AI — LLM, Image Generation, TTS"
+                    description = "Privacy-First Local AI Assistant"
                 ) {
-                    BodyLabel(
-                        text = "Version ${viewModel.appVersion}",
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(verticalArrangement = Arrangement.spacedBy(rDp(4.dp))) {
+                        Text(
+                            text = "Version ${viewModel.appVersion}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        CaptionText(text = "Complete on-device intelligence: LLM, Image Gen, TTS, RAG, and OpenAI-compatible Remote API.")
+                    }
                 }
             }
 
@@ -1164,7 +1214,7 @@ private fun DataManagementSection(viewModel: SettingsViewModel) {
                 Text("Delete All Data", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.error)
             },
             text = {
-                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm))) {
+                Column(verticalArrangement = Arrangement.spacedBy(rDp(Standards.SpacingSm)) ) {
                     Text(
                         "This will permanently delete all chats, memories, personas, RAG data, and settings. This cannot be undone.",
                         style = MaterialTheme.typography.bodySmall,

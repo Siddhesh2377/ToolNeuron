@@ -38,11 +38,6 @@ class MemoryVault(
     private var initialized = false
 
     init {
-        // Validate keyAlias configuration
-        require(keyAlias != "sample_val") {
-            "Invalid keyAlias configuration. Please set ALIAS in local.properties or environment variables."
-        }
-
         vaultDir.mkdirs()
         writer = BlockWriter(vaultFile)
         reader = BlockReader(vaultFile)

@@ -102,10 +102,11 @@ fun IntroScreen() {
         }
     }
 
-    Scaffold(Modifier.fillMaxSize()) { _ ->
+    Scaffold(Modifier.fillMaxSize()) { padding ->
         Box(
             Modifier
                 .fillMaxSize()
+                .padding(padding)
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(

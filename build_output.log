@@ -1,0 +1,330 @@
+Reusing configuration cache.
+> Task :memory-vault:preBuild UP-TO-DATE
+> Task :neuron-packet:generateDebugAssets UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :memory-vault:generateReleaseAssets UP-TO-DATE
+> Task :neuron-packet:preBuild UP-TO-DATE
+> Task :memory-vault:generateDebugAssets UP-TO-DATE
+> Task :app:generateReleaseAssets UP-TO-DATE
+> Task :neuron-packet:generateReleaseAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :neuron-packet:preDebugBuild UP-TO-DATE
+> Task :memory-vault:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :neuron-packet:prepareLintJarForPublish UP-TO-DATE
+> Task :memory-vault:prepareLintJarForPublish UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :neuron-packet:processDebugNavigationResources UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :neuron-packet:javaPreCompileDebug UP-TO-DATE
+> Task :memory-vault:writeDebugAarMetadata UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :memory-vault:processDebugNavigationResources UP-TO-DATE
+> Task :neuron-packet:mergeDebugAssets UP-TO-DATE
+> Task :memory-vault:javaPreCompileDebug UP-TO-DATE
+> Task :neuron-packet:generateDebugResources UP-TO-DATE
+> Task :memory-vault:generateDebugResources UP-TO-DATE
+> Task :memory-vault:mergeDebugAssets UP-TO-DATE
+> Task :memory-vault:extractDeepLinksDebug UP-TO-DATE
+> Task :neuron-packet:writeDebugAarMetadata UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksDebug UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :memory-vault:mapDebugSourceSetPaths UP-TO-DATE
+> Task :memory-vault:processDebugManifest UP-TO-DATE
+> Task :neuron-packet:mapDebugSourceSetPaths UP-TO-DATE
+> Task :neuron-packet:processDebugManifest UP-TO-DATE
+> Task :app:preReleaseBuild UP-TO-DATE
+> Task :memory-vault:mergeDebugJniLibFolders UP-TO-DATE
+> Task :neuron-packet:mergeDebugJniLibFolders UP-TO-DATE
+> Task :memory-vault:preReleaseBuild UP-TO-DATE
+> Task :memory-vault:packageDebugResources UP-TO-DATE
+> Task :neuron-packet:packageDebugResources UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :memory-vault:parseDebugLocalResources UP-TO-DATE
+> Task :app:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :neuron-packet:preReleaseBuild UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :memory-vault:mergeDebugNativeLibs NO-SOURCE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :memory-vault:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :memory-vault:generateReleaseResources UP-TO-DATE
+> Task :neuron-packet:parseDebugLocalResources UP-TO-DATE
+> Task :memory-vault:compileDebugLibraryResources UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :memory-vault:generateDebugRFile UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :memory-vault:mergeReleaseNativeLibs NO-SOURCE
+> Task :memory-vault:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :neuron-packet:compileDebugLibraryResources UP-TO-DATE
+> Task :neuron-packet:generateDebugRFile UP-TO-DATE
+> Task :neuron-packet:mergeReleaseJniLibFolders UP-TO-DATE
+> Task :neuron-packet:generateReleaseResources UP-TO-DATE
+> Task :memory-vault:processReleaseNavigationResources UP-TO-DATE
+> Task :memory-vault:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :neuron-packet:javaPreCompileRelease UP-TO-DATE
+> Task :neuron-packet:processReleaseNavigationResources UP-TO-DATE
+> Task :neuron-packet:packageReleaseResources UP-TO-DATE
+> Task :memory-vault:packageReleaseResources UP-TO-DATE
+> Task :memory-vault:prepareReleaseArtProfile UP-TO-DATE
+> Task :memory-vault:javaPreCompileRelease UP-TO-DATE
+> Task :neuron-packet:parseReleaseLocalResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :memory-vault:parseReleaseLocalResources UP-TO-DATE
+> Task :neuron-packet:prepareReleaseArtProfile UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :memory-vault:generateReleaseRFile UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :neuron-packet:generateReleaseRFile UP-TO-DATE
+> Task :app:generateReleaseBuildConfig UP-TO-DATE
+> Task :app:checkReleaseDuplicateClasses UP-TO-DATE
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :app:generateReleaseResources UP-TO-DATE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :app:processReleaseNavigationResources UP-TO-DATE
+> Task :app:packageReleaseResources UP-TO-DATE
+> Task :app:mergeReleaseArtProfile UP-TO-DATE
+> Task :memory-vault:writeReleaseAarMetadata UP-TO-DATE
+> Task :app:javaPreCompileRelease UP-TO-DATE
+> Task :app:parseReleaseLocalResources UP-TO-DATE
+> Task :neuron-packet:writeReleaseAarMetadata UP-TO-DATE
+> Task :app:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :app:compileReleaseNavigationResources UP-TO-DATE
+> Task :app:generateReleaseRFile UP-TO-DATE
+> Task :memory-vault:extractDeepLinksRelease UP-TO-DATE
+> Task :app:createReleaseCompatibleScreenManifests UP-TO-DATE
+> Task :app:extractDeepLinksRelease UP-TO-DATE
+> Task :memory-vault:processReleaseManifest UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksRelease UP-TO-DATE
+> Task :app:checkReleaseAarMetadata UP-TO-DATE
+> Task :neuron-packet:processReleaseManifest UP-TO-DATE
+> Task :app:extractProguardFiles UP-TO-DATE
+> Task :memory-vault:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :neuron-packet:mapReleaseSourceSetPaths UP-TO-DATE
+> Task :app:mergeReleaseResources UP-TO-DATE
+> Task :app:mergeReleaseStartupProfile UP-TO-DATE
+> Task :memory-vault:compileReleaseLibraryResources UP-TO-DATE
+> Task :neuron-packet:mergeReleaseAssets UP-TO-DATE
+> Task :app:extractReleaseVersionControlInfo UP-TO-DATE
+> Task :neuron-packet:compileReleaseLibraryResources UP-TO-DATE
+> Task :neuron-packet:extractProguardFiles UP-TO-DATE
+> Task :memory-vault:mergeReleaseAssets UP-TO-DATE
+> Task :memory-vault:extractProguardFiles UP-TO-DATE
+> Task :memory-vault:stripReleaseDebugSymbols NO-SOURCE
+> Task :memory-vault:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :memory-vault:checkReleaseAarMetadata UP-TO-DATE
+> Task :memory-vault:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :app:processReleaseMainManifest UP-TO-DATE
+> Task :app:mergeReleaseAssets UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksForAarRelease UP-TO-DATE
+> Task :app:processReleaseManifest UP-TO-DATE
+> Task :neuron-packet:checkReleaseAarMetadata UP-TO-DATE
+> Task :app:compressReleaseAssets UP-TO-DATE
+> Task :memory-vault:extractReleaseAnnotations UP-TO-DATE
+> Task :app:processReleaseManifestForPackage UP-TO-DATE
+> Task :neuron-packet:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :neuron-packet:extractReleaseAnnotations UP-TO-DATE
+> Task :app:writeReleaseSigningConfigVersions UP-TO-DATE
+> Task :app:writeReleaseAppMetadata UP-TO-DATE
+> Task :memory-vault:writeReleaseLintModelMetadata UP-TO-DATE
+> Task :app:compileReleaseAidl UP-TO-DATE
+> Task :memory-vault:stripDebugDebugSymbols NO-SOURCE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :neuron-packet:compileDebugKotlin UP-TO-DATE
+> Task :memory-vault:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :memory-vault:checkDebugAarMetadata UP-TO-DATE
+> Task :memory-vault:extractDebugAnnotations UP-TO-DATE
+> Task :memory-vault:prepareDebugArtProfile UP-TO-DATE
+> Task :memory-vault:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :neuron-packet:compileDebugJavaWithJavac NO-SOURCE
+> Task :neuron-packet:checkDebugAarMetadata UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :app:processReleaseResources UP-TO-DATE
+> Task :neuron-packet:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :neuron-packet:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :neuron-packet:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :neuron-packet:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :neuron-packet:processDebugJavaRes UP-TO-DATE
+> Task :app:processDebugResources UP-TO-DATE
+> Task :memory-vault:compileDebugKotlin UP-TO-DATE
+> Task :app:preDebugAndroidTestBuild SKIPPED
+> Task :neuron-packet:prepareDebugArtProfile UP-TO-DATE
+> Task :app:optimizeReleaseResources UP-TO-DATE
+> Task :neuron-packet:configureCMakeDebug[x86_64]
+> Task :neuron-packet:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :memory-vault:writeDebugLintModelMetadata UP-TO-DATE
+> Task :neuron-packet:compileReleaseKotlin UP-TO-DATE
+> Task :app:preDebugUnitTestBuild UP-TO-DATE
+> Task :neuron-packet:mergeDebugJavaResource UP-TO-DATE
+> Task :memory-vault:compileDebugJavaWithJavac NO-SOURCE
+> Task :neuron-packet:createFullJarDebug UP-TO-DATE
+> Task :neuron-packet:writeDebugLintModelMetadata UP-TO-DATE
+> Task :app:collectReleaseDependencies UP-TO-DATE
+> Task :memory-vault:processDebugJavaRes UP-TO-DATE
+> Task :neuron-packet:configureCMakeRelWithDebInfo[x86_64]
+> Task :memory-vault:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :neuron-packet:compileReleaseJavaWithJavac NO-SOURCE
+> Task :neuron-packet:processReleaseJavaRes UP-TO-DATE
+> Task :memory-vault:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :memory-vault:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :memory-vault:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :memory-vault:createFullJarDebug UP-TO-DATE
+> Task :neuron-packet:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :neuron-packet:configureCMakeDebug[arm64-v8a]
+> Task :app:sdkReleaseDependencyData UP-TO-DATE
+> Task :memory-vault:mergeDebugJavaResource UP-TO-DATE
+> Task :neuron-packet:extractDebugAnnotations UP-TO-DATE
+> Task :neuron-packet:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :neuron-packet:configureCMakeRelWithDebInfo[arm64-v8a]
+> Task :memory-vault:compileReleaseKotlin UP-TO-DATE
+> Task :memory-vault:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :neuron-packet:mergeReleaseJavaResource UP-TO-DATE
+> Task :neuron-packet:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :neuron-packet:createFullJarRelease UP-TO-DATE
+> Task :neuron-packet:syncReleaseLibJars UP-TO-DATE
+> Task :neuron-packet:syncDebugLibJars UP-TO-DATE
+> Task :memory-vault:compileReleaseJavaWithJavac NO-SOURCE
+> Task :memory-vault:syncDebugLibJars UP-TO-DATE
+> Task :neuron-packet:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :memory-vault:processReleaseJavaRes UP-TO-DATE
+> Task :memory-vault:bundleLibCompileToJarRelease UP-TO-DATE
+> Task :memory-vault:mergeReleaseGeneratedProguardFiles UP-TO-DATE
+> Task :neuron-packet:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :memory-vault:bundleLibRuntimeToJarRelease UP-TO-DATE
+> Task :memory-vault:exportReleaseConsumerProguardFiles UP-TO-DATE
+> Task :memory-vault:mergeReleaseJavaResource UP-TO-DATE
+> Task :memory-vault:mergeReleaseConsumerProguardFiles UP-TO-DATE
+> Task :memory-vault:createFullJarRelease UP-TO-DATE
+> Task :memory-vault:syncReleaseLibJars UP-TO-DATE
+> Task :memory-vault:bundleDebugLocalLintAar UP-TO-DATE
+> Task :neuron-packet:generateReleaseLintVitalModel UP-TO-DATE
+> Task :neuron-packet:generateReleaseLintModel UP-TO-DATE
+> Task :memory-vault:generateReleaseLintModel UP-TO-DATE
+> Task :memory-vault:generateDebugLintModel UP-TO-DATE
+> Task :memory-vault:preDebugUnitTestBuild UP-TO-DATE
+> Task :memory-vault:preDebugAndroidTestBuild UP-TO-DATE
+> Task :memory-vault:generateReleaseLintVitalModel UP-TO-DATE
+> Task :memory-vault:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :neuron-packet:preDebugAndroidTestBuild UP-TO-DATE
+> Task :neuron-packet:generateDebugLintModel UP-TO-DATE
+> Task :neuron-packet:preDebugUnitTestBuild UP-TO-DATE
+> Task :app:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :memory-vault:bundleReleaseAar UP-TO-DATE
+> Task :memory-vault:bundleDebugAar UP-TO-DATE
+> Task :memory-vault:assembleDebug UP-TO-DATE
+> Task :memory-vault:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :neuron-packet:lintVitalAnalyzeRelease UP-TO-DATE
+> Task :memory-vault:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :neuron-packet:lintAnalyzeDebug UP-TO-DATE
+> Task :memory-vault:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :memory-vault:mergeReleaseResources UP-TO-DATE
+> Task :memory-vault:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :neuron-packet:mergeReleaseResources UP-TO-DATE
+> Task :memory-vault:generateDebugLintReportModel UP-TO-DATE
+> Task :memory-vault:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :memory-vault:lintAnalyzeDebug UP-TO-DATE
+> Task :neuron-packet:javaPreCompileDebugUnitTest UP-TO-DATE
+> Task :memory-vault:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :memory-vault:verifyReleaseResources UP-TO-DATE
+> Task :memory-vault:assembleRelease UP-TO-DATE
+> Task :memory-vault:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :neuron-packet:generateDebugLintReportModel UP-TO-DATE
+> Task :memory-vault:assemble UP-TO-DATE
+> Task :neuron-packet:verifyReleaseResources UP-TO-DATE
+> Task :neuron-packet:generateDebugUnitTestStubRFile UP-TO-DATE
+> Task :memory-vault:lintReportDebug UP-TO-DATE
+> Task :memory-vault:lintDebug
+> Task :memory-vault:lint
+> Task :neuron-packet:buildCMakeDebug[x86_64]
+> Task :neuron-packet:buildCMakeRelWithDebInfo[arm64-v8a]
+> Task :neuron-packet:buildCMakeDebug[arm64-v8a]
+> Task :neuron-packet:buildCMakeRelWithDebInfo[x86_64]
+> Task :neuron-packet:mergeReleaseNativeLibs UP-TO-DATE
+> Task :neuron-packet:mergeDebugNativeLibs UP-TO-DATE
+> Task :neuron-packet:copyReleaseJniLibsProjectOnly UP-TO-DATE
+> Task :neuron-packet:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :neuron-packet:stripReleaseDebugSymbols UP-TO-DATE
+> Task :neuron-packet:stripDebugDebugSymbols UP-TO-DATE
+> Task :neuron-packet:copyReleaseJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :neuron-packet:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :neuron-packet:bundleReleaseAar UP-TO-DATE
+> Task :neuron-packet:bundleDebugLocalLintAar UP-TO-DATE
+> Task :neuron-packet:bundleReleaseLocalLintAar UP-TO-DATE
+> Task :neuron-packet:bundleDebugAar UP-TO-DATE
+> Task :neuron-packet:assembleRelease UP-TO-DATE
+> Task :neuron-packet:assembleDebug UP-TO-DATE
+> Task :neuron-packet:assemble UP-TO-DATE
+> Task :neuron-packet:generateDebugUnitTestLintModel UP-TO-DATE
+> Task :neuron-packet:generateDebugAndroidTestLintModel UP-TO-DATE
+> Task :neuron-packet:lintAnalyzeDebugUnitTest UP-TO-DATE
+> Task :neuron-packet:lintAnalyzeDebugAndroidTest UP-TO-DATE
+> Task :app:mergeReleaseNativeLibs UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:stripReleaseDebugSymbols UP-TO-DATE
+> Task :neuron-packet:lintReportDebug UP-TO-DATE
+> Task :app:extractReleaseNativeSymbolTables UP-TO-DATE
+> Task :app:mergeReleaseNativeDebugMetadata UP-TO-DATE
+> Task :neuron-packet:lintDebug
+> Task :neuron-packet:lint
+
+> Task :neuron-packet:compileDebugUnitTestKotlin FAILED
+
+> Task :memory-vault:compileDebugUnitTestKotlin FAILED
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/neuron-packet/src/test/java/com/neuronpacket/ExampleUnitTest.kt:3:12 Unresolved reference 'junit'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/neuron-packet/src/test/java/com/neuronpacket/ExampleUnitTest.kt:5:12 Unresolved reference 'junit'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/neuron-packet/src/test/java/com/neuronpacket/ExampleUnitTest.kt:13:6 Unresolved reference 'Test'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/neuron-packet/src/test/java/com/neuronpacket/ExampleUnitTest.kt:15:9 Unresolved reference 'assertEquals'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/memory-vault/src/test/java/com/memoryvault/ExampleUnitTest.kt:3:12 Unresolved reference 'junit'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/memory-vault/src/test/java/com/memoryvault/ExampleUnitTest.kt:5:12 Unresolved reference 'junit'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/memory-vault/src/test/java/com/memoryvault/ExampleUnitTest.kt:13:6 Unresolved reference 'Test'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/memory-vault/src/test/java/com/memoryvault/ExampleUnitTest.kt:15:9 Unresolved reference 'assertEquals'.
+
+> Task :app:kspDebugKotlin
+> Task :app:kspReleaseKotlin
+
+FAILURE: Build completed with 2 failures.
+
+1: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':memory-vault:compileDebugUnitTestKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+2: Task failed with an exception.
+-----------
+* What went wrong:
+Execution failed for task ':neuron-packet:compileDebugUnitTestKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+==============================================================================
+
+BUILD FAILED in 17s
+246 actionable tasks: 14 executed, 232 up-to-date
+Configuration cache entry reused.

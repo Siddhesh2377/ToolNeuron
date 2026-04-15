@@ -11,6 +11,7 @@ import android.os.Process
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.dark.tool_neuron.R
+import com.dark.tool_neuron.data.AppSettingsDataStore
 import com.dark.tool_neuron.engine.DiffusionEngine
 import com.dark.tool_neuron.engine.GGUFEngine
 import com.dark.tool_neuron.engine.GenerationEvent
@@ -18,13 +19,20 @@ import com.dark.tool_neuron.models.enums.PathType
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.models.table_schema.Model
 import com.dark.tool_neuron.models.table_schema.ModelConfig
+import com.dark.tool_neuron.network.NsdHelper
+import com.dark.tool_neuron.network.RemoteServer
 import com.dark.tool_neuron.state.AppStateManager
+import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class LLMService : Service() {
 
     companion object {
@@ -34,6 +42,12 @@ class LLMService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val ggufEngine = GGUFEngine()
     private val diffusionEngine = DiffusionEngine()
+
+    @Inject
+    lateinit var remoteServer: RemoteServer
+
+    @Inject
+    lateinit var nsdHelper: NsdHelper
 
     private val binder = object : ILLMService.Stub() {
 
@@ -448,6 +462,21 @@ class LLMService : Service() {
             val model = diffusionEngine.getCurrentModel()
             return model?.let { "${it.name})" }
         }
+
+        override fun startRemoteServer(port: Int) {
+            remoteServer.setEngines(ggufEngine, diffusionEngine)
+            remoteServer.start(port)
+            nsdHelper.registerService(port)
+        }
+
+        override fun stopRemoteServer() {
+            remoteServer.stop()
+            nsdHelper.unregisterService()
+        }
+
+        override fun isRemoteServerRunning(): Boolean {
+            return remoteServer.isRunning()
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -466,9 +495,38 @@ class LLMService : Service() {
         }
 
         startForeground(1, createNotification())
+
+        // Monitor settings for Remote API
+        scope.launch {
+            val settings = AppSettingsDataStore(applicationContext)
+            combine(
+                settings.remoteApiEnabled,
+                settings.remoteApiPort,
+                settings.remoteApiNsdEnabled
+            ) { enabled, port, nsdEnabled ->
+                Triple(enabled, port, nsdEnabled)
+            }.collect { (enabled, port, nsdEnabled) ->
+                if (enabled) {
+                    if (!remoteServer.isRunning()) {
+                        remoteServer.setEngines(ggufEngine, diffusionEngine)
+                        remoteServer.start(port)
+                    }
+                    if (nsdEnabled) {
+                        nsdHelper.registerService(port)
+                    } else {
+                        nsdHelper.unregisterService()
+                    }
+                } else {
+                    remoteServer.stop()
+                    nsdHelper.unregisterService()
+                }
+            }
+        }
     }
 
     override fun onDestroy() {
+        remoteServer.stop()
+        nsdHelper.unregisterService()
         scope.launch {
             ggufEngine.unload()
             diffusionEngine.cleanup()

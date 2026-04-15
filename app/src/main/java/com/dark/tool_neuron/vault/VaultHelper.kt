@@ -46,6 +46,15 @@ object VaultHelper {
 
     fun isInitialized(): Boolean = initialized
 
+    private fun getKeyAlias(): String {
+        val alias = BuildConfig.ALIAS
+        return if (alias.isNullOrBlank() || alias == "sample_val" || alias.contains(" ")) {
+            "tool_neuron_default_vault_key"
+        } else {
+            alias
+        }
+    }
+
     fun getVault(): MemoryVault {
         if (!initialized) {
             throw IllegalStateException("VaultHelper is not initialized. Call initialize() first.")
@@ -170,13 +179,14 @@ object VaultHelper {
 
     suspend fun initialize(context: Context) {
         appContext = context.applicationContext
+        val alias = getKeyAlias()
         mutex.withLock {
             if (!initialized) {
                 try {
                     VaultLogger.log(LogLevel.INFO, "INIT", "Initializing Memory Vault...")
                     vault = MemoryVault(
                         context = context,
-                        keyAlias = BuildConfig.ALIAS,
+                        keyAlias = alias,
                         migrationListener = object : MigrationListener {
                             override fun onMigrationStarted() {
                                 Log.d("VaultHelper", "Migration started")
@@ -218,7 +228,7 @@ object VaultHelper {
 
                     vault = MemoryVault(
                         context = context,
-                        keyAlias = BuildConfig.ALIAS
+                        keyAlias = alias
                     )
                     vault.initialize()
                     initialized = true
@@ -244,6 +254,7 @@ object VaultHelper {
 
     suspend fun clearVault(context: Context) {
         VaultLogger.log(LogLevel.WARNING, "VAULT", "⚠ CLEAR_VAULT requested - deleting all data")
+        val alias = getKeyAlias()
         mutex.withLock {
             if (initialized) {
                 vault.close()
@@ -255,7 +266,7 @@ object VaultHelper {
 
             vault = MemoryVault(
                 context = context,
-                keyAlias = BuildConfig.ALIAS
+                keyAlias = alias
             )
             vault.initialize()
             initialized = true

@@ -333,3 +333,14 @@
 -keepclassmembers class kotlin.Metadata {
     public <methods>;
 }
+
+# -- Netty & Ktor (Remote API) --
+-keep class io.netty.** { *; }
+-dontwarn io.netty.**
+-dontwarn io.ktor.**
+-dontwarn org.apache.log4j.**
+-dontwarn reactor.blockhound.**
+-dontwarn java.lang.management.**
+-dontwarn jdk.jfr.**
+-dontwarn org.conscrypt.**
+-dontwarn org.slf4j.**

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,11 @@ class AppSettingsDataStore(private val context: Context) {
         private val LAST_MODEL_ID = stringPreferencesKey("last_model_id")
         private val ACTIVE_PERSONA_ID = stringPreferencesKey("active_persona_id")
         private val AI_MEMORY_ENABLED = booleanPreferencesKey("ai_memory_enabled")
+        
+        // Remote API Settings
+        private val REMOTE_API_ENABLED = booleanPreferencesKey("remote_api_enabled")
+        private val REMOTE_API_PORT = intPreferencesKey("remote_api_port")
+        private val REMOTE_API_NSD_ENABLED = booleanPreferencesKey("remote_api_nsd_enabled")
     }
 
     val streamingEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
@@ -132,6 +138,31 @@ class AppSettingsDataStore(private val context: Context) {
 
     suspend fun updateAiMemoryEnabled(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[AI_MEMORY_ENABLED] = enabled }
+    }
+
+    // Remote API Accessors
+    val remoteApiEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[REMOTE_API_ENABLED] ?: false
+    }
+
+    val remoteApiPort: Flow<Int> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[REMOTE_API_PORT] ?: 11434
+    }
+
+    val remoteApiNsdEnabled: Flow<Boolean> = context.appSettingsDataStore.data.map { prefs ->
+        prefs[REMOTE_API_NSD_ENABLED] ?: true
+    }
+
+    suspend fun updateRemoteApiEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[REMOTE_API_ENABLED] = enabled }
+    }
+
+    suspend fun updateRemoteApiPort(port: Int) {
+        context.appSettingsDataStore.edit { it[REMOTE_API_PORT] = port }
+    }
+
+    suspend fun updateRemoteApiNsdEnabled(enabled: Boolean) {
+        context.appSettingsDataStore.edit { it[REMOTE_API_NSD_ENABLED] = enabled }
     }
 
     suspend fun clear() {
