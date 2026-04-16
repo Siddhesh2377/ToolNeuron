@@ -6,6 +6,7 @@ import com.dark.tool_neuron.engine.GGUFEngine
 import com.dark.tool_neuron.engine.GenerationEvent
 import com.dark.tool_neuron.models.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.state.AppStateManager
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.serialization.kotlinx.json.json
@@ -47,6 +48,7 @@ class RemoteServer @Inject constructor(
         isLenient = true
         ignoreUnknownKeys = true
         encodeDefaults = true
+        explicitNulls = false
     }
 
     private var ggufEngine: GGUFEngine? = null
@@ -68,10 +70,12 @@ class RemoteServer @Inject constructor(
                     }
                     routing {
                         get("/") {
+                            Log.d("RemoteServer", "GET /")
                             call.respondText("ToolNeuron API is running")
                         }
 
                         get("/api/v1") {
+                            Log.d("RemoteServer", "GET /api/v1")
                             call.respond(mapOf(
                                 "version" to "2.1.0",
                                 "name" to "ToolNeuron",
@@ -82,6 +86,7 @@ class RemoteServer @Inject constructor(
                         }
 
                         get("/v1") {
+                            Log.d("RemoteServer", "GET /v1")
                             call.respond(mapOf(
                                 "version" to "2.1.0",
                                 "name" to "ToolNeuron",
@@ -90,6 +95,7 @@ class RemoteServer @Inject constructor(
                         }
 
                         get("/models") {
+                            Log.d("RemoteServer", "GET /models")
                             try {
                                 val models = modelRepository.getAllModels().first()
                                 val response = ModelsResponse(
@@ -110,6 +116,7 @@ class RemoteServer @Inject constructor(
                         }
 
                         get("/v1/models") {
+                            Log.d("RemoteServer", "GET /v1/models")
                             try {
                                 val models = modelRepository.getAllModels().first()
                                 val response = ModelsResponse(
@@ -130,6 +137,7 @@ class RemoteServer @Inject constructor(
                         }
 
                         get("/v1/image-models") {
+                            Log.d("RemoteServer", "GET /v1/image-models")
                             val models = modelRepository.getModelsByProvider(ProviderType.DIFFUSION).first()
                             val response = ImageModelsResponse(
                                 data = models.map { model ->
@@ -144,65 +152,96 @@ class RemoteServer @Inject constructor(
 
                         post("/v1/chat/completions") {
                             val request = call.receive<ChatCompletionRequest>()
+                            Log.d("RemoteServer", "POST /v1/chat/completions: $request")
                             val engine = ggufEngine ?: return@post call.respondText("Engine not initialized", status = io.ktor.http.HttpStatusCode.InternalServerError)
                             
-                            val messagesJson = json.encodeToString(request.messages)
-                            val maxTokens = request.maxTokens ?: 512
+                            val modelName = engine.getModelInfo() ?: "GGUF"
+                            AppStateManager.setApiCallStatus(true, "Chat Completion", modelName)
 
-                            if (request.stream) {
-                                call.response.header(io.ktor.http.HttpHeaders.ContentType, ContentType.Text.EventStream.toString())
-                                call.response.header(io.ktor.http.HttpHeaders.CacheControl, CacheControl.NoCache(null).toString())
-                                
-                                call.respondTextWriter(contentType = ContentType.Text.EventStream) {
+                            try {
+                                val messagesJson = json.encodeToString(request.messages)
+                                val maxTokens = request.maxTokens ?: 512
+
+                                if (request.stream) {
+                                    call.response.header(io.ktor.http.HttpHeaders.ContentType, ContentType.Text.EventStream.toString())
+                                    call.response.header(io.ktor.http.HttpHeaders.CacheControl, CacheControl.NoCache(null).toString())
+                                    
+                                    val streamId = "chatcmpl-${UUID.randomUUID()}"
+                                    val createdTime = System.currentTimeMillis() / 1000
+
+                                    call.respondTextWriter(contentType = ContentType.Text.EventStream) {
+                                        // 1. Send the initial role chunk
+                                        val firstChunk = ChatCompletionResponse(
+                                            id = streamId,
+                                            obj = "chat.completion.chunk",
+                                            created = createdTime,
+                                            model = "toolneuron-local",
+                                            choices = listOf(ChatChoice(index = 0, delta = ChatCompletionDelta(role = "assistant", content = "")))
+                                        )
+                                        write("data: ${json.encodeToString(firstChunk)}\n\n")
+                                        flush()
+
+                                        engine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
+                                            when (event) {
+                                                is GenerationEvent.Token -> {
+                                                    val chunk = ChatCompletionResponse(
+                                                        id = streamId,
+                                                        obj = "chat.completion.chunk",
+                                                        created = createdTime,
+                                                        model = "toolneuron-local",
+                                                        choices = listOf(ChatChoice(index = 0, delta = ChatCompletionDelta(content = event.text)))
+                                                    )
+                                                    write("data: ${json.encodeToString(chunk)}\n\n")
+                                                    flush()
+                                                }
+                                                is GenerationEvent.Done -> {
+                                                    val lastChunk = ChatCompletionResponse(
+                                                        id = streamId,
+                                                        obj = "chat.completion.chunk",
+                                                        created = createdTime,
+                                                        model = "toolneuron-local",
+                                                        choices = listOf(ChatChoice(index = 0, delta = ChatCompletionDelta(content = ""), finishReason = "stop"))
+                                                    )
+                                                    write("data: ${json.encodeToString(lastChunk)}\n\n")
+                                                    write("data: [DONE]\n\n")
+                                                    flush()
+                                                }
+                                                is GenerationEvent.Error -> {
+                                                    write("data: {\"error\": \"${event.message}\"}\n\n")
+                                                    flush()
+                                                }
+                                                else -> {}
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    val fullResponse = StringBuilder()
+                                    var promptTokens = 0
+                                    var completionTokens = 0
+                                    
                                     engine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
                                         when (event) {
                                             is GenerationEvent.Token -> {
-                                                val chunk = ChatCompletionResponse(
-                                                    id = "chatcmpl-${UUID.randomUUID()}",
-                                                    created = System.currentTimeMillis() / 1000,
-                                                    model = "toolneuron-local",
-                                                    choices = listOf(ChatChoice(index = 0, delta = ChatCompletionMessage("assistant", event.text)))
-                                                )
-                                                write("data: ${json.encodeToString(chunk)}\n\n")
-                                                flush()
+                                                fullResponse.append(event.text)
                                             }
-                                            is GenerationEvent.Done -> {
-                                                write("data: [DONE]\n\n")
-                                                flush()
-                                            }
-                                            is GenerationEvent.Error -> {
-                                                write("data: {\"error\": \"${event.message}\"}\n\n")
-                                                flush()
+                                            is GenerationEvent.Metrics -> {
+                                                promptTokens = event.metrics.tokensEvaluated
+                                                completionTokens = event.metrics.tokensPredicted
                                             }
                                             else -> {}
                                         }
                                     }
-                                }
-                            } else {
-                                val fullResponse = StringBuilder()
-                                var promptTokens = 0
-                                var completionTokens = 0
-                                
-                                engine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
-                                    when (event) {
-                                        is GenerationEvent.Token -> {
-                                            fullResponse.append(event.text)
-                                        }
-                                        is GenerationEvent.Metrics -> {
-                                            promptTokens = event.metrics.tokensEvaluated
-                                            completionTokens = event.metrics.tokensPredicted
-                                        }
-                                        else -> {}
-                                    }
-                                }
 
-                                call.respond(ChatCompletionResponse(
-                                    id = "chatcmpl-${UUID.randomUUID()}",
-                                    created = System.currentTimeMillis() / 1000,
-                                    model = "toolneuron-local",
-                                    choices = listOf(ChatChoice(index = 0, message = ChatCompletionMessage("assistant", fullResponse.toString()), finishReason = "stop")),
-                                    usage = Usage(promptTokens, completionTokens, promptTokens + completionTokens)
-                                ))
+                                    call.respond(ChatCompletionResponse(
+                                        id = "chatcmpl-${UUID.randomUUID()}",
+                                        created = System.currentTimeMillis() / 1000,
+                                        model = "toolneuron-local",
+                                        choices = listOf(ChatChoice(index = 0, message = ChatCompletionMessage("assistant", fullResponse.toString()), finishReason = "stop")),
+                                        usage = Usage(promptTokens, completionTokens, promptTokens + completionTokens)
+                                    ))
+                                }
+                            } finally {
+                                AppStateManager.setApiCallStatus(false)
                             }
                         }
 
@@ -210,58 +249,84 @@ class RemoteServer @Inject constructor(
                             val request = call.receive<ImageGenerationRequest>()
                             val engine = diffusionEngine ?: return@post call.respondText("Diffusion engine not initialized", status = io.ktor.http.HttpStatusCode.InternalServerError)
                             
-                            // Load specified model if provided
-                            if (request.model != null) {
-                                val model = modelRepository.getModelByName(request.model)
-                                if (model == null) {
-                                    return@post call.respondText("Model not found: ${request.model}", status = io.ktor.http.HttpStatusCode.BadRequest)
-                                }
-                                
-                                val loadResult = engine.loadModel(
-                                    name = model.modelName,
-                                    modelDir = model.modelPath,
-                                    safetyMode = true
-                                )
-                                
-                                if (loadResult.isFailure) {
-                                    return@post call.respondText("Failed to load model: ${loadResult.exceptionOrNull()?.message}", status = io.ktor.http.HttpStatusCode.InternalServerError)
-                                }
-                            }
-                            
-                            val sizeParts = request.size.split("x")
-                            val width = sizeParts.getOrNull(0)?.toIntOrNull() ?: 512
-                            val height = sizeParts.getOrNull(1)?.toIntOrNull() ?: 512
+                            AppStateManager.setApiCallStatus(true, "Image Generation", request.model ?: "Diffusion")
 
-                            engine.generateImage(
-                                prompt = request.prompt,
-                                width = width,
-                                height = height
-                            )
+                            try {
+                                // Load specified model if provided
+                                if (request.model != null) {
+                                    val currentModel = engine.getCurrentModel()
+                                    if (currentModel?.name != request.model) {
+                                        val model = modelRepository.getModelByName(request.model)
+                                        if (model == null) {
+                                            return@post call.respondText("Model not found: ${request.model}", status = io.ktor.http.HttpStatusCode.BadRequest)
+                                        }
 
-                            // Wait for completion via flow
-                            var resultB64: String? = null
-                            var errorMsg: String? = null
-                            
-                            val job = launch {
-                                engine.generationState.collect { state ->
-                                    if (state is com.dark.ai_sd.DiffusionGenerationState.Complete) {
-                                        resultB64 = engine.bitmapToBase64(state.bitmap)
-                                        cancel()
-                                    } else if (state is com.dark.ai_sd.DiffusionGenerationState.Error) {
-                                        errorMsg = state.message
-                                        cancel()
+                                        val config = modelRepository.getConfigByModelId(model.id)
+                                        val diffusionConfig = com.dark.tool_neuron.worker.DiffusionConfig.fromJson(config?.modelLoadingParams)
+                                        
+                                        Log.i("RemoteServer", "Dynamically loading model: ${model.modelName} with config: $diffusionConfig")
+                                        AppStateManager.setLoadingModel(model.modelName)
+
+                                        val loadResult = engine.loadModel(
+                                            name = model.modelName,
+                                            modelDir = model.modelPath,
+                                            textEmbeddingSize = diffusionConfig.textEmbeddingSize,
+                                            runOnCpu = diffusionConfig.runOnCpu,
+                                            useCpuClip = diffusionConfig.useCpuClip,
+                                            isPony = diffusionConfig.isPony,
+                                            safetyMode = diffusionConfig.safetyMode,
+                                            width = diffusionConfig.width,
+                                            height = diffusionConfig.height
+                                        )
+                                        
+                                        if (loadResult.isFailure) {
+                                            val error = loadResult.exceptionOrNull()?.message ?: "Unknown error"
+                                            AppStateManager.setError(error)
+                                            return@post call.respondText("Failed to load model: $error", status = io.ktor.http.HttpStatusCode.InternalServerError)
+                                        }
+                                        AppStateManager.setModelLoaded(model.modelName)
+                                    } else {
+                                        Log.i("RemoteServer", "Model ${request.model} already loaded")
                                     }
                                 }
-                            }
-                            job.join()
+                                
+                                val sizeParts = request.size.split("x")
+                                val width = sizeParts.getOrNull(0)?.toIntOrNull() ?: 512
+                                val height = sizeParts.getOrNull(1)?.toIntOrNull() ?: 512
 
-                            if (resultB64 != null) {
-                                call.respond(ImageResponse(
-                                    created = System.currentTimeMillis() / 1000,
-                                    data = listOf(ImageData(b64Json = resultB64))
-                                ))
-                            } else {
-                                call.respond(io.ktor.http.HttpStatusCode.InternalServerError, mapOf("error" to (errorMsg ?: "Unknown error")))
+                                engine.generateImage(
+                                    prompt = request.prompt,
+                                    width = width,
+                                    height = height
+                                )
+
+                                // Wait for completion via flow
+                                var resultB64: String? = null
+                                var errorMsg: String? = null
+                                
+                                val job = launch {
+                                    engine.generationState.collect { state ->
+                                        if (state is com.dark.ai_sd.DiffusionGenerationState.Complete) {
+                                            resultB64 = engine.bitmapToBase64(state.bitmap)
+                                            cancel()
+                                        } else if (state is com.dark.ai_sd.DiffusionGenerationState.Error) {
+                                            errorMsg = state.message
+                                            cancel()
+                                        }
+                                    }
+                                }
+                                job.join()
+
+                                if (resultB64 != null) {
+                                    call.respond(ImageResponse(
+                                        created = System.currentTimeMillis() / 1000,
+                                        data = listOf(ImageData(b64Json = resultB64))
+                                    ))
+                                } else {
+                                    call.respond(io.ktor.http.HttpStatusCode.InternalServerError, mapOf("error" to (errorMsg ?: "Unknown error")))
+                                }
+                            } finally {
+                                AppStateManager.setApiCallStatus(false)
                             }
                         }
 

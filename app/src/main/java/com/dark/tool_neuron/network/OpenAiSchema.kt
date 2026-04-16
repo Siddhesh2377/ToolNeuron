@@ -23,6 +23,12 @@ data class ChatCompletionMessage(
 )
 
 @Serializable
+data class ChatCompletionDelta(
+    val role: String? = null,
+    val content: String? = null
+)
+
+@Serializable
 data class ChatCompletionResponse(
     val id: String,
     @SerialName("object") val obj: String = "chat.completion",
@@ -36,7 +42,7 @@ data class ChatCompletionResponse(
 data class ChatChoice(
     val index: Int,
     val message: ChatCompletionMessage? = null,
-    val delta: ChatCompletionMessage? = null,
+    val delta: ChatCompletionDelta? = null,
     @SerialName("finish_reason") val finishReason: String? = null
 )
 
