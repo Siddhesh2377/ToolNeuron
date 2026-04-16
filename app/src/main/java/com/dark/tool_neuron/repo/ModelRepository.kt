@@ -7,25 +7,70 @@ import com.dark.tool_neuron.repo.ums.UmsModelRepository
 import kotlinx.coroutines.flow.Flow
 
 class ModelRepository(
-    private val modelRepo: UmsModelRepository,
-    private val configRepo: UmsConfigRepository
+    private val modelRepoProvider: () -> UmsModelRepository?,
+    private val configRepoProvider: () -> UmsConfigRepository?
 ) {
+    private val modelRepo get() = modelRepoProvider()
+    private val configRepo get() = configRepoProvider()
 
-    fun getAllModels(): Flow<List<Model>> = modelRepo.getAll()
+    fun isReady(): Boolean = modelRepo != null && configRepo != null
 
-    suspend fun getModelById(id: String): Model? = modelRepo.getById(id)
+    private fun ensureReady() {
+        if (!isReady()) throw IllegalStateException("VaultManager not initialized")
+    }
 
-    suspend fun insertModel(model: Model) = modelRepo.insert(model)
+    fun getAllModels(): Flow<List<Model>> {
+        val repo = modelRepo ?: return kotlinx.coroutines.flow.flowOf(emptyList())
+        return repo.getAll()
+    }
 
-    suspend fun updateModel(model: Model) = modelRepo.update(model)
+    suspend fun getModelById(id: String): Model? {
+        val repo = modelRepo ?: return null
+        return repo.getById(id)
+    }
 
-    suspend fun deleteModel(model: Model) = modelRepo.delete(model)
+    suspend fun getModelByName(name: String): Model? {
+        val repo = modelRepo ?: return null
+        return repo.getByName(name)
+    }
 
-    suspend fun getConfigByModelId(modelId: String): ModelConfig? = configRepo.getByModelId(modelId)
+    fun getModelsByProvider(providerType: com.dark.tool_neuron.models.enums.ProviderType): Flow<List<Model>> {
+        val repo = modelRepo ?: return kotlinx.coroutines.flow.flowOf(emptyList())
+        return repo.getByProvider(providerType)
+    }
 
-    suspend fun insertConfig(config: ModelConfig) = configRepo.insert(config)
+    suspend fun insertModel(model: Model) {
+        ensureReady()
+        modelRepo?.insert(model)
+    }
 
-    suspend fun updateConfig(config: ModelConfig) = configRepo.update(config)
+    suspend fun updateModel(model: Model) {
+        ensureReady()
+        modelRepo?.update(model)
+    }
 
-    suspend fun deleteConfig(config: ModelConfig) = configRepo.delete(config)
+    suspend fun deleteModel(model: Model) {
+        ensureReady()
+        modelRepo?.delete(model)
+    }
+
+    suspend fun getConfigByModelId(modelId: String): ModelConfig? {
+        val repo = configRepo ?: return null
+        return repo.getByModelId(modelId)
+    }
+
+    suspend fun insertConfig(config: ModelConfig) {
+        ensureReady()
+        configRepo?.insert(config)
+    }
+
+    suspend fun updateConfig(config: ModelConfig) {
+        ensureReady()
+        configRepo?.update(config)
+    }
+
+    suspend fun deleteConfig(config: ModelConfig) {
+        ensureReady()
+        configRepo?.delete(config)
+    }
 }

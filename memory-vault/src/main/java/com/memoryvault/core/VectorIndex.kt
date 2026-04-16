@@ -5,6 +5,11 @@ import java.util.UUID
 class VectorIndex(private val dimension: Int) {
     private val vectors = mutableMapOf<UUID, FloatArray>()
 
+    fun add(blockId: UUID, vector: FloatArray) {
+        require(vector.size == dimension) { "Vector dimension mismatch" }
+        vectors[blockId] = vector
+    }
+
     suspend fun search(queryVector: FloatArray, limit: Int = 10, threshold: Float = 0.7f): List<ScoredResult> {
         require(queryVector.size == dimension) { "Query vector dimension mismatch" }
 

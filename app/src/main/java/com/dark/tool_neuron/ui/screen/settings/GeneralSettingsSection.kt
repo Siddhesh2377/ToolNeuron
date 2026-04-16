@@ -15,6 +15,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +34,69 @@ import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+
+// ── Remote API Section ──
+
+internal fun LazyListScope.remoteApiSection(
+    remoteApiEnabled: Boolean,
+    remoteApiPort: Int,
+    localIpAddress: String?,
+    viewModel: SettingsViewModel
+) {
+    item { Spacer(Modifier.height(Standards.SpacingSm)) }
+    item { SectionDivider() }
+    item { SectionHeader(title = "Remote API Access") }
+
+    item {
+        SwitchRow(
+            title = "Enable Remote API",
+            description = "Allow other devices on the network to access ToolNeuron (OpenAI compatible)",
+            checked = remoteApiEnabled,
+            onCheckedChange = { viewModel.setRemoteApiEnabled(it) }
+        )
+    }
+
+    if (remoteApiEnabled) {
+        item {
+            StandardCard(
+                title = "API Endpoints",
+                description = "Use these URLs in applications like OpenWebUI or other OpenAI compatible frontends."
+            ) {
+                Column(
+                    modifier = Modifier.padding(top = Standards.SpacingSm),
+                    verticalArrangement = Arrangement.spacedBy(Standards.SpacingXs)
+                ) {
+                    val baseUrl = "http://${localIpAddress ?: "127.0.0.1"}:$remoteApiPort"
+                    
+                    EndpointRow(label = "Base URL", value = baseUrl)
+                    EndpointRow(label = "Chat URL", value = "$baseUrl/v1")
+                    EndpointRow(label = "Models", value = "$baseUrl/v1/models")
+                    EndpointRow(label = "Images", value = "$baseUrl/v1/images/generations")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun EndpointRow(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
 
 // ── General Settings Section ──
 

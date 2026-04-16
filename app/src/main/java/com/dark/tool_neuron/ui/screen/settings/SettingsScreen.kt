@@ -50,6 +50,10 @@ fun SettingsScreen(
     val hardwareTuningEnabled by viewModel.hardwareTuningEnabled.collectAsStateWithLifecycle()
     val hardwareProfile by viewModel.hardwareProfile.collectAsStateWithLifecycle()
     val performanceMode by viewModel.performanceMode.collectAsStateWithLifecycle()
+    // Remote API settings
+    val remoteApiEnabled by viewModel.remoteApiEnabled.collectAsStateWithLifecycle()
+    val remoteApiPort by viewModel.remoteApiPort.collectAsStateWithLifecycle()
+    val localIpAddress = viewModel.localIpAddress
     // Installed models
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle(initialValue = emptyList())
 
@@ -162,6 +166,14 @@ fun SettingsScreen(
             // ── Image Generation ──
             imageGenerationSection(
                 imageBlurEnabled = imageBlurEnabled,
+                viewModel = viewModel
+            )
+
+            // ── Remote API ──
+            remoteApiSection(
+                remoteApiEnabled = remoteApiEnabled,
+                remoteApiPort = remoteApiPort,
+                localIpAddress = localIpAddress,
                 viewModel = viewModel
             )
 

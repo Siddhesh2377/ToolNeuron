@@ -257,7 +257,6 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
-    }
 
     // TTS settings updaters
     fun updateVoice(voice: String) {

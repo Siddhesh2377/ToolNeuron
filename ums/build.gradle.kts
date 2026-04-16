@@ -20,7 +20,7 @@ android {
         minSdk = 29
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
-        buildConfigField("String", "KEY_ALIAS", "${localProps.getProperty("ALIAS", "")}")
+        buildConfigField("String", "KEY_ALIAS", getProperty("ALIAS"))
 
         externalNativeBuild {
             cmake {
@@ -70,4 +70,9 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
+}
+
+fun getProperty(value: String): String {
+    val prop = localProps.getProperty(value) ?: "sample_val"
+    return "\"$prop\""
 }

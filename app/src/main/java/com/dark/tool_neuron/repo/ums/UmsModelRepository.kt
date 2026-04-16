@@ -50,6 +50,15 @@ class UmsModelRepository(private val ums: UnifiedMemorySystem) {
             .firstOrNull()?.toModel()
     }
 
+    suspend fun getByName(name: String): Model? = withContext(Dispatchers.IO) {
+        ums.queryString(collection, Tags.Model.MODEL_NAME, name)
+            .firstOrNull()?.toModel()
+    }
+
+    fun getByProvider(providerType: ProviderType): Flow<List<Model>> = MutableStateFlow(
+        _allModels.value.filter { it.providerType == providerType }
+    )
+
     fun getAll(): Flow<List<Model>> = _allModels
 
     suspend fun getAllOnce(): List<Model> = withContext(Dispatchers.IO) {

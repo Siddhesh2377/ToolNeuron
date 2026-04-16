@@ -136,6 +136,7 @@ dependencies {
     // AndroidX Core & Lifecycle
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
 
     // Jetpack Compose
@@ -162,12 +163,13 @@ dependencies {
 }
 
 fun getProperty(value: String): String {
-    return if (localPropertiesFile.exists()) {
+    val prop = if (localPropertiesFile.exists()) {
         val localProps = Properties().apply {
             load(FileInputStream(localPropertiesFile))
         }
-        localProps.getProperty(value) ?: "\"sample_val\""
+        localProps.getProperty(value) ?: "sample_val"
     } else {
-        System.getenv(value) ?: "\"sample_val\""
+        System.getenv(value) ?: "sample_val"
     }
+    return "\"$prop\""
 }

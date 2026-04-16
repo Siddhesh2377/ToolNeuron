@@ -189,8 +189,8 @@ class RemoteServer @Inject constructor(
                                             fullResponse.append(event.text)
                                         }
                                         is GenerationEvent.Metrics -> {
-                                            promptTokens = event.metrics.promptTokens
-                                            completionTokens = event.metrics.generatedTokens
+                                            promptTokens = event.metrics.tokensEvaluated
+                                            completionTokens = event.metrics.tokensPredicted
                                         }
                                         else -> {}
                                     }

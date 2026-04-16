@@ -38,7 +38,7 @@ import com.dark.tool_neuron.ui.screen.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.settings.SettingsScreen
 import com.dark.tool_neuron.ui.screen.setup.ImageGenSetupScreen
 import com.dark.tool_neuron.ui.screen.setup.SetupScreen
-import com.dark.tool_neuron.viewModel.VaultGateViewModel
+import com.dark.tool_neuron.viewmodel.VaultGateViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel

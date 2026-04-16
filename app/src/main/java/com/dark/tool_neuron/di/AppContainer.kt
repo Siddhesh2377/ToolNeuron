@@ -42,9 +42,10 @@ object AppContainer {
     }
 
     private fun initModelRepository() {
-        val mRepo = VaultManager.modelRepo ?: return
-        val cRepo = VaultManager.configRepo ?: return
-        modelRepository = ModelRepository(modelRepo = mRepo, configRepo = cRepo)
+        modelRepository = ModelRepository(
+            modelRepoProvider = { VaultManager.modelRepo },
+            configRepoProvider = { VaultManager.configRepo }
+        )
     }
 
     fun ensureVaultInitialized() {

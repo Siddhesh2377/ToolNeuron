@@ -18,6 +18,7 @@ class MemoryVault(
     private val walFile = java.io.File(vaultDir, "vault.wal")
 
     private val reader: BlockReader
+    private val writer: BlockWriter
     private val walManager: WALManager
     private val encryptionManager: EncryptionManager
     private val contentProcessor: ContentProcessor
@@ -32,6 +33,7 @@ class MemoryVault(
     init {
         vaultDir.mkdirs()
         reader = BlockReader(vaultFile)
+        writer = BlockWriter(vaultFile)
         walManager = WALManager(walFile)
         encryptionManager = EncryptionManager(keyAlias)
         contentProcessor = ContentProcessor(encryptionManager)
@@ -112,6 +114,197 @@ class MemoryVault(
 
             initialized = false
         }
+    }
+
+    suspend fun addMessage(
+        content: String,
+        category: String? = null,
+        tags: Set<String> = emptySet()
+    ): String = withContext(Dispatchers.IO) {
+        val data = content.toByteArray()
+        val blockId = java.util.UUID.randomUUID()
+        
+        val processed = processForWrite(data)
+        
+        val result = writer.writeBlockWithId(
+            blockId = blockId,
+            blockType = BlockType.MESSAGE,
+            data = processed.data,
+            compressed = processed.compressed,
+            encrypted = processed.encrypted
+        )
+
+        val metadata = BlockMetadata(
+            blockId = blockId,
+            blockType = BlockType.MESSAGE,
+            fileOffset = result.offset,
+            compressedSize = processed.data.size.toLong(),
+            uncompressedSize = data.size.toLong(),
+            timestamp = result.timestamp,
+            category = category,
+            tags = tags,
+            contentHash = BlockMetadata.calculateContentHash(data),
+            searchableText = content.take(200)
+        )
+
+        index.add(metadata)
+        fullTextIndex.addDocument(blockId, content)
+        
+        walManager.append(WALEntry(WALOperation.INSERT, result.timestamp, blockId, null))
+        
+        blockId.toString()
+    }
+
+    suspend fun addFile(
+        fileName: String,
+        data: ByteArray,
+        mimeType: String,
+        category: String? = null,
+        tags: Set<String> = emptySet()
+    ): String = withContext(Dispatchers.IO) {
+        val blockId = java.util.UUID.randomUUID()
+        
+        val processed = processForWrite(data)
+        
+        val result = writer.writeBlockWithId(
+            blockId = blockId,
+            blockType = BlockType.FILE,
+            data = processed.data,
+            compressed = processed.compressed,
+            encrypted = processed.encrypted
+        )
+
+        val metadata = BlockMetadata(
+            blockId = blockId,
+            blockType = BlockType.FILE,
+            fileOffset = result.offset,
+            compressedSize = processed.data.size.toLong(),
+            uncompressedSize = data.size.toLong(),
+            timestamp = result.timestamp,
+            category = category,
+            tags = tags,
+            contentHash = BlockMetadata.calculateContentHash(data),
+            searchableText = "$fileName|$mimeType"
+        )
+
+        index.add(metadata)
+        
+        walManager.append(WALEntry(WALOperation.INSERT, result.timestamp, blockId, null))
+        
+        blockId.toString()
+    }
+
+    suspend fun addCustomData(
+        dataType: String,
+        data: org.json.JSONObject,
+        category: String? = null,
+        tags: Set<String> = emptySet()
+    ): String = withContext(Dispatchers.IO) {
+        val bytes = data.toString().toByteArray()
+        val blockId = java.util.UUID.randomUUID()
+        
+        val processed = processForWrite(bytes)
+        
+        val result = writer.writeBlockWithId(
+            blockId = blockId,
+            blockType = BlockType.CUSTOM_DATA,
+            data = processed.data,
+            compressed = processed.compressed,
+            encrypted = processed.encrypted
+        )
+
+        val metadata = BlockMetadata(
+            blockId = blockId,
+            blockType = BlockType.CUSTOM_DATA,
+            fileOffset = result.offset,
+            compressedSize = processed.data.size.toLong(),
+            uncompressedSize = bytes.size.toLong(),
+            timestamp = result.timestamp,
+            category = category,
+            tags = tags,
+            contentHash = BlockMetadata.calculateContentHash(bytes),
+            searchableText = dataType
+        )
+
+        index.add(metadata)
+        
+        walManager.append(WALEntry(WALOperation.INSERT, result.timestamp, blockId, null))
+        
+        blockId.toString()
+    }
+
+    suspend fun addEmbedding(
+        vector: FloatArray,
+        linkedContentId: String,
+        modelName: String,
+        category: String? = null,
+        tags: Set<String> = emptySet()
+    ): String = withContext(Dispatchers.IO) {
+        val bytes = serializeEmbedding(vector, linkedContentId, modelName)
+        val blockId = java.util.UUID.randomUUID()
+        
+        val processed = processForWrite(bytes)
+        
+        val result = writer.writeBlockWithId(
+            blockId = blockId,
+            blockType = BlockType.EMBEDDING,
+            data = processed.data,
+            compressed = processed.compressed,
+            encrypted = processed.encrypted
+        )
+
+        val metadata = BlockMetadata(
+            blockId = blockId,
+            blockType = BlockType.EMBEDDING,
+            fileOffset = result.offset,
+            compressedSize = processed.data.size.toLong(),
+            uncompressedSize = bytes.size.toLong(),
+            timestamp = result.timestamp,
+            category = category,
+            tags = tags,
+            contentHash = BlockMetadata.calculateContentHash(bytes),
+            searchableText = modelName
+        )
+
+        index.add(metadata)
+        
+        // Add to vector index if it exists, or create it
+        val vectorIndex = vectorIndices.getOrPut(vector.size) { VectorIndex(vector.size) }
+        vectorIndex.add(blockId, vector)
+        
+        walManager.append(WALEntry(WALOperation.INSERT, result.timestamp, blockId, null))
+        
+        blockId.toString()
+    }
+
+    private fun serializeEmbedding(vector: FloatArray, linkedId: String, model: String): ByteArray {
+        val output = java.io.ByteArrayOutputStream()
+        val dos = java.io.DataOutputStream(output)
+        dos.writeInt(vector.size)
+        vector.forEach { dos.writeFloat(it) }
+        dos.writeUTF(linkedId)
+        dos.writeUTF(model)
+        return output.toByteArray()
+    }
+
+    private fun processForWrite(data: ByteArray): ProcessedData {
+        var processed = data
+        var compressed = false
+        
+        if (CompressionUtils.shouldCompress(data)) {
+            processed = CompressionUtils.compress(data)
+            compressed = true
+        }
+        
+        val encrypted = encryptionManager.encrypt(processed)
+        return ProcessedData(encrypted.toBytes(), compressed, true)
+    }
+
+    private data class ProcessedData(val data: ByteArray, val compressed: Boolean, val encrypted: Boolean)
+
+    suspend fun getById(id: String): VaultItem? = withContext(Dispatchers.IO) {
+        val uuid = try { java.util.UUID.fromString(id) } catch (_: Exception) { return@withContext null }
+        index.get(uuid)?.let { readVaultItem(it) }
     }
 
     suspend fun getMessages(

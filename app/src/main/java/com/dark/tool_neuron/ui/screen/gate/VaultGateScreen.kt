@@ -37,9 +37,10 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.icons.TnIcons
-import com.dark.tool_neuron.viewModel.VaultGateState
-import com.dark.tool_neuron.viewModel.VaultGateViewModel
+import com.dark.tool_neuron.viewmodel.VaultGateState
+import com.dark.tool_neuron.viewmodel.VaultGateViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import com.dark.tool_neuron.global.Standards

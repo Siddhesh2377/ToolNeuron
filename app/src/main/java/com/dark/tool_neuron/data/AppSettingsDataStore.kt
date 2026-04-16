@@ -222,7 +222,6 @@ class AppSettingsDataStore(private val context: Context) {
     suspend fun updateAskModelReloadDialog(enabled: Boolean) {
         context.appSettingsDataStore.edit { it[ASK_MODEL_RELOAD_DIALOG] = enabled }
     }
-    }
 
     suspend fun clear() {
         context.appSettingsDataStore.edit { it.clear() }

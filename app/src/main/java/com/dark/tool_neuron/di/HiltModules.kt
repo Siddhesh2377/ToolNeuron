@@ -45,6 +45,15 @@
 
         @Provides
         @Singleton
+        fun provideModelRepository(): com.dark.tool_neuron.repo.ModelRepository {
+            return com.dark.tool_neuron.repo.ModelRepository(
+                modelRepoProvider = { com.dark.tool_neuron.data.VaultManager.modelRepo },
+                configRepoProvider = { com.dark.tool_neuron.data.VaultManager.configRepo }
+            )
+        }
+
+        @Provides
+        @Singleton
         fun provideRagRepository(
             database: AppDatabase,
             @ApplicationContext context: Context

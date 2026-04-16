@@ -10,9 +10,9 @@ import com.dark.tool_neuron.models.vault.ChatData
 import com.dark.tool_neuron.models.vault.ChatInfo
 import com.dark.tool_neuron.ui.screen.memory.LogLevel
 import com.dark.tool_neuron.ui.screen.memory.VaultLogger
-import com.memoryvault.MemoryVault
-import com.memoryvault.MigrationListener
+import com.memoryvault.*
 import kotlinx.coroutines.Dispatchers
+import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first

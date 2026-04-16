@@ -1,4 +1,4 @@
-package com.dark.tool_neuron.viewModel
+package com.dark.tool_neuron.viewmodel
 
 import android.app.Application
 import android.util.Log
