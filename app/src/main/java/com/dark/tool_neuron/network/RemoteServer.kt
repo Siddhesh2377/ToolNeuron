@@ -13,8 +13,11 @@ import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
+import io.ktor.server.http.content.staticResources
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -71,8 +74,45 @@ class RemoteServer @Inject constructor(
                     }
                     routing {
                         get("/") {
-                            Log.d("RemoteServer", "GET /")
-                            call.respondText("ToolNeuron API is running")
+                            try {
+                                val content = context.assets.open("webui/index.html").bufferedReader().use { it.readText() }
+                                call.respondText(content, ContentType.Text.Html)
+                            } catch (e: Exception) {
+                                Log.e("RemoteServer", "Error serving index.html", e)
+                                call.respondText("Web UI not found", status = io.ktor.http.HttpStatusCode.InternalServerError)
+                            }
+                        }
+
+                        get("/app.js") {
+                            try {
+                                val content = context.assets.open("webui/app.js").bufferedReader().use { it.readText() }
+                                call.respondText(content, ContentType.parse("application/javascript"))
+                            } catch (e: Exception) {
+                                call.respondText("JS not found", status = io.ktor.http.HttpStatusCode.NotFound)
+                            }
+                        }
+
+                        get("/style.css") {
+                            try {
+                                val content = context.assets.open("webui/style.css").bufferedReader().use { it.readText() }
+                                call.respondText(content, ContentType.Text.CSS)
+                            } catch (e: Exception) {
+                                call.respondText("CSS not found", status = io.ktor.http.HttpStatusCode.NotFound)
+                            }
+                        }
+
+                        get("/v1/chat-models") {
+                            Log.d("RemoteServer", "GET /v1/chat-models")
+                            val models = modelRepository.getModelsByProvider(ProviderType.GGUF).first()
+                            val response = ModelsResponse(
+                                data = models.map { model ->
+                                    ModelData(
+                                        id = model.modelName,
+                                        created = System.currentTimeMillis() / 1000
+                                    )
+                                }
+                            )
+                            call.respond(response)
                         }
 
                         get("/api/v1") {
@@ -226,11 +266,14 @@ class RemoteServer @Inject constructor(
                                         Log.i("RemoteServer", "Dynamically loading GGUF model: ${model.modelName}")
                                         
                                         AppStateManager.setLoadingModel(model.modelName)
-                                        val success = engine.load(model, config)
-                                        if (!success) {
-                                            AppStateManager.setError("Failed to load model ${model.modelName}")
-                                            return@post call.respondText("Failed to load model", status = io.ktor.http.HttpStatusCode.InternalServerError)
+                                        val loadResult = engine.load(model, config)
+                                        
+                                        loadResult.onFailure { error ->
+                                            val errorMsg = error.message ?: "Unknown error"
+                                            AppStateManager.setError("Failed to load model ${model.modelName}: $errorMsg")
+                                            return@post call.respondText("Failed to load model: $errorMsg", status = io.ktor.http.HttpStatusCode.InternalServerError)
                                         }
+                                        
                                         AppStateManager.setModelLoaded(model.modelName)
                                     }
                                 }

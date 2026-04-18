@@ -1,0 +1,484 @@
+Reusing configuration cache.
+> Task :ums:generateDebugAssets UP-TO-DATE
+> Task :file_ops:preBuild UP-TO-DATE
+> Task :system_encryptor:generateDebugAssets UP-TO-DATE
+> Task :file_ops:generateDebugAssets UP-TO-DATE
+> Task :memory-vault:preBuild UP-TO-DATE
+> Task :memory-vault:generateDebugAssets UP-TO-DATE
+> Task :neuron-packet:preBuild UP-TO-DATE
+> Task :ums:preBuild UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :system_encryptor:preBuild UP-TO-DATE
+> Task :memory-vault:preDebugBuild UP-TO-DATE
+> Task :neuron-packet:generateDebugAssets UP-TO-DATE
+> Task :file_ops:prepareLintJarForPublish UP-TO-DATE
+> Task :memory-vault:prepareLintJarForPublish UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :system_encryptor:prepareLintJarForPublish UP-TO-DATE
+> Task :neuron-packet:prepareLintJarForPublish UP-TO-DATE
+> Task :file_ops:preDebugBuild UP-TO-DATE
+> Task :system_encryptor:preDebugBuild UP-TO-DATE
+> Task :memory-vault:generateDebugResources UP-TO-DATE
+> Task :neuron-packet:preDebugBuild UP-TO-DATE
+> Task :memory-vault:javaPreCompileDebug UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :ums:preDebugBuild UP-TO-DATE
+> Task :file_ops:generateDebugResources UP-TO-DATE
+> Task :system_encryptor:generateDebugResources UP-TO-DATE
+> Task :memory-vault:processDebugNavigationResources UP-TO-DATE
+> Task :system_encryptor:processDebugNavigationResources UP-TO-DATE
+> Task :file_ops:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugBuildConfig UP-TO-DATE
+> Task :neuron-packet:processDebugNavigationResources UP-TO-DATE
+> Task :system_encryptor:javaPreCompileDebug UP-TO-DATE
+> Task :app:generateDebugResources UP-TO-DATE
+> Task :neuron-packet:javaPreCompileDebug UP-TO-DATE
+> Task :ums:generateDebugBuildConfig UP-TO-DATE
+> Task :file_ops:processDebugNavigationResources UP-TO-DATE
+> Task :ums:generateDebugResources UP-TO-DATE
+> Task :app:javaPreCompileDebug UP-TO-DATE
+> Task :ums:processDebugNavigationResources UP-TO-DATE
+> Task :neuron-packet:generateDebugResources UP-TO-DATE
+> Task :file_ops:mergeDebugAssets UP-TO-DATE
+> Task :memory-vault:mergeDebugAssets UP-TO-DATE
+> Task :system_encryptor:packageDebugResources UP-TO-DATE
+> Task :file_ops:packageDebugResources UP-TO-DATE
+> Task :neuron-packet:mergeDebugAssets UP-TO-DATE
+> Task :file_ops:writeDebugAarMetadata UP-TO-DATE
+> Task :ums:mergeDebugAssets UP-TO-DATE
+> Task :ums:javaPreCompileDebug UP-TO-DATE
+> Task :memory-vault:packageDebugResources UP-TO-DATE
+> Task :app:packageDebugResources UP-TO-DATE
+> Task :app:desugarDebugFileDependencies UP-TO-DATE
+> Task :ums:writeDebugAarMetadata UP-TO-DATE
+> Task :system_encryptor:parseDebugLocalResources UP-TO-DATE
+> Task :system_encryptor:writeDebugAarMetadata UP-TO-DATE
+> Task :file_ops:parseDebugLocalResources UP-TO-DATE
+> Task :memory-vault:parseDebugLocalResources UP-TO-DATE
+> Task :system_encryptor:mergeDebugAssets UP-TO-DATE
+> Task :memory-vault:writeDebugAarMetadata UP-TO-DATE
+> Task :memory-vault:extractDeepLinksDebug UP-TO-DATE
+> Task :app:extractDeepLinksDebug UP-TO-DATE
+> Task :file_ops:extractDeepLinksDebug UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksDebug UP-TO-DATE
+> Task :app:createDebugCompatibleScreenManifests UP-TO-DATE
+> Task :app:mapDebugSourceSetPaths UP-TO-DATE
+> Task :file_ops:processDebugManifest UP-TO-DATE
+> Task :memory-vault:generateDebugRFile UP-TO-DATE
+> Task :neuron-packet:writeDebugAarMetadata UP-TO-DATE
+> Task :file_ops:generateDebugRFile UP-TO-DATE
+> Task :ums:packageDebugResources UP-TO-DATE
+> Task :app:processDebugNavigationResources UP-TO-DATE
+> Task :file_ops:mapDebugSourceSetPaths UP-TO-DATE
+> Task :system_encryptor:generateDebugRFile UP-TO-DATE
+> Task :memory-vault:processDebugManifest UP-TO-DATE
+> Task :neuron-packet:packageDebugResources UP-TO-DATE
+> Task :neuron-packet:processDebugManifest UP-TO-DATE
+> Task :system_encryptor:extractDeepLinksDebug UP-TO-DATE
+> Task :app:compileDebugNavigationResources UP-TO-DATE
+> Task :app:parseDebugLocalResources UP-TO-DATE
+> Task :system_encryptor:processDebugManifest UP-TO-DATE
+> Task :app:mergeDebugAssets UP-TO-DATE
+> Task :ums:extractDeepLinksDebug UP-TO-DATE
+> Task :memory-vault:mapDebugSourceSetPaths UP-TO-DATE
+> Task :memory-vault:compileDebugLibraryResources UP-TO-DATE
+> Task :neuron-packet:parseDebugLocalResources UP-TO-DATE
+> Task :neuron-packet:mapDebugSourceSetPaths UP-TO-DATE
+> Task :ums:parseDebugLocalResources UP-TO-DATE
+> Task :file_ops:compileDebugKotlin NO-SOURCE
+> Task :file_ops:compileDebugLibraryResources UP-TO-DATE
+> Task :ums:generateDebugRFile UP-TO-DATE
+> Task :system_encryptor:mapDebugSourceSetPaths UP-TO-DATE
+> Task :file_ops:compileDebugJavaWithJavac NO-SOURCE
+> Task :file_ops:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :ums:processDebugManifest UP-TO-DATE
+> Task :neuron-packet:generateDebugRFile UP-TO-DATE
+> Task :app:compressDebugAssets UP-TO-DATE
+> Task :neuron-packet:compileDebugLibraryResources UP-TO-DATE
+> Task :file_ops:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :file_ops:processDebugJavaRes NO-SOURCE
+> Task :app:generateDebugRFile UP-TO-DATE
+> Task :file_ops:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :system_encryptor:compileDebugLibraryResources UP-TO-DATE
+> Task :app:compileDebugAidl UP-TO-DATE
+> Task :app:mergeDebugJniLibFolders UP-TO-DATE
+> Task :ums:mapDebugSourceSetPaths UP-TO-DATE
+> Task :app:mergeDebugResources UP-TO-DATE
+> Task :app:checkDebugAarMetadata UP-TO-DATE
+> Task :memory-vault:mergeDebugJniLibFolders UP-TO-DATE
+> Task :file_ops:mergeDebugJniLibFolders UP-TO-DATE
+> Task :neuron-packet:mergeDebugJniLibFolders UP-TO-DATE
+> Task :ums:compileDebugLibraryResources UP-TO-DATE
+> Task :memory-vault:mergeDebugNativeLibs NO-SOURCE
+> Task :memory-vault:compileDebugKotlin UP-TO-DATE
+> Task :ums:mergeDebugJniLibFolders UP-TO-DATE
+> Task :memory-vault:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :app:checkDebugDuplicateClasses UP-TO-DATE
+> Task :memory-vault:processDebugJavaRes UP-TO-DATE
+> Task :app:validateSigningDebug UP-TO-DATE
+> Task :system_encryptor:mergeDebugJniLibFolders UP-TO-DATE
+> Task :app:writeDebugAppMetadata UP-TO-DATE
+> Task :app:writeDebugSigningConfigVersions UP-TO-DATE
+> Task :system_encryptor:compileDebugKotlin UP-TO-DATE
+> Task :file_ops:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :system_encryptor:compileDebugJavaWithJavac NO-SOURCE
+> Task :system_encryptor:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :memory-vault:compileDebugJavaWithJavac NO-SOURCE
+> Task :system_encryptor:processDebugJavaRes UP-TO-DATE
+> Task :memory-vault:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :system_encryptor:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :file_ops:extractDebugAnnotations UP-TO-DATE
+> Task :system_encryptor:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :memory-vault:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :file_ops:prepareDebugArtProfile UP-TO-DATE
+> Task :file_ops:mergeDebugJavaResource UP-TO-DATE
+> Task :file_ops:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :memory-vault:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :file_ops:syncDebugLibJars UP-TO-DATE
+> Task :ums:compileDebugKotlin UP-TO-DATE
+> Task :file_ops:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :ums:processDebugJavaRes UP-TO-DATE
+> Task :file_ops:checkDebugAarMetadata UP-TO-DATE
+> Task :ums:compileDebugJavaWithJavac UP-TO-DATE
+> Task :ums:configureCMakeDebug[x86_64]
+> Task :app:mergeExtDexDebug UP-TO-DATE
+> Task :memory-vault:stripDebugDebugSymbols NO-SOURCE
+> Task :ums:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :ums:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :ums:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :memory-vault:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :memory-vault:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :memory-vault:prepareDebugArtProfile UP-TO-DATE
+> Task :memory-vault:mergeDebugJavaResource UP-TO-DATE
+> Task :neuron-packet:configureCMakeDebug[arm64-v8a]
+> Task :memory-vault:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :neuron-packet:checkDebugAarMetadata UP-TO-DATE
+> Task :neuron-packet:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :memory-vault:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :neuron-packet:configureCMakeDebug[x86_64]
+> Task :ums:configureCMakeDebug[arm64-v8a]
+> Task :memory-vault:extractDebugAnnotations UP-TO-DATE
+> Task :neuron-packet:prepareDebugArtProfile UP-TO-DATE
+> Task :neuron-packet:extractDebugAnnotations UP-TO-DATE
+> Task :system_encryptor:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :system_encryptor:prepareDebugArtProfile UP-TO-DATE
+> Task :memory-vault:syncDebugLibJars UP-TO-DATE
+> Task :system_encryptor:checkDebugAarMetadata UP-TO-DATE
+> Task :system_encryptor:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :system_encryptor:mergeDebugJavaResource UP-TO-DATE
+> Task :system_encryptor:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :system_encryptor:extractDebugAnnotations UP-TO-DATE
+> Task :ums:extractDeepLinksForAarDebug UP-TO-DATE
+> Task :ums:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :ums:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :ums:checkDebugAarMetadata UP-TO-DATE
+> Task :ums:prepareDebugArtProfile UP-TO-DATE
+> Task :ums:prepareLintJarForPublish UP-TO-DATE
+> Task :system_encryptor:syncDebugLibJars UP-TO-DATE
+> Task :ums:extractDebugAnnotations UP-TO-DATE
+> Task :ums:mergeDebugJavaResource UP-TO-DATE
+> Task :ums:syncDebugLibJars UP-TO-DATE
+> Task :neuron-packet:compileDebugKotlin UP-TO-DATE
+> Task :memory-vault:checkDebugAarMetadata UP-TO-DATE
+> Task :app:processDebugMainManifest UP-TO-DATE
+> Task :neuron-packet:compileDebugJavaWithJavac NO-SOURCE
+> Task :neuron-packet:bundleLibRuntimeToDirDebug UP-TO-DATE
+> Task :neuron-packet:processDebugJavaRes UP-TO-DATE
+> Task :neuron-packet:bundleLibRuntimeToJarDebug UP-TO-DATE
+> Task :neuron-packet:bundleLibCompileToJarDebug UP-TO-DATE
+> Task :app:processDebugManifest UP-TO-DATE
+> Task :neuron-packet:mergeDebugGeneratedProguardFiles UP-TO-DATE
+> Task :neuron-packet:mergeDebugJavaResource UP-TO-DATE
+> Task :neuron-packet:mergeDebugConsumerProguardFiles UP-TO-DATE
+> Task :neuron-packet:syncDebugLibJars UP-TO-DATE
+> Task :app:mergeLibDexDebug UP-TO-DATE
+> Task :file_ops:configureCMakeDebug[arm64-v8a]
+> Task :system_encryptor:configureCMakeDebug[x86_64]
+> Task :app:processDebugManifestForPackage UP-TO-DATE
+> Task :memory-vault:bundleDebugAar UP-TO-DATE
+> Task :system_encryptor:configureCMakeDebug[arm64-v8a]
+> Task :memory-vault:assembleDebug UP-TO-DATE
+> Task :file_ops:configureCMakeDebug[x86_64]
+> Task :app:processDebugResources UP-TO-DATE
+> Task :neuron-packet:buildCMakeDebug[x86_64]
+> Task :file_ops:buildCMakeDebug[arm64-v8a]
+> Task :neuron-packet:buildCMakeDebug[arm64-v8a]
+> Task :neuron-packet:mergeDebugNativeLibs UP-TO-DATE
+> Task :neuron-packet:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :neuron-packet:stripDebugDebugSymbols UP-TO-DATE
+> Task :neuron-packet:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :neuron-packet:bundleDebugAar UP-TO-DATE
+> Task :neuron-packet:assembleDebug UP-TO-DATE
+> Task :file_ops:buildCMakeDebug[x86_64]
+> Task :file_ops:mergeDebugNativeLibs UP-TO-DATE
+> Task :file_ops:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :file_ops:stripDebugDebugSymbols UP-TO-DATE
+> Task :file_ops:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :file_ops:bundleDebugAar UP-TO-DATE
+> Task :file_ops:assembleDebug UP-TO-DATE
+> Task :system_encryptor:buildCMakeDebug[x86_64]
+> Task :ums:buildCMakeDebug[arm64-v8a]
+> Task :system_encryptor:buildCMakeDebug[arm64-v8a]
+> Task :system_encryptor:mergeDebugNativeLibs UP-TO-DATE
+> Task :system_encryptor:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :system_encryptor:stripDebugDebugSymbols UP-TO-DATE
+> Task :system_encryptor:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :system_encryptor:bundleDebugAar UP-TO-DATE
+> Task :system_encryptor:assembleDebug UP-TO-DATE
+> Task :ums:buildCMakeDebug[x86_64]
+> Task :ums:mergeDebugNativeLibs UP-TO-DATE
+> Task :ums:copyDebugJniLibsProjectOnly UP-TO-DATE
+> Task :ums:stripDebugDebugSymbols UP-TO-DATE
+> Task :ums:copyDebugJniLibsProjectAndLocalJars UP-TO-DATE
+> Task :ums:bundleDebugAar UP-TO-DATE
+> Task :ums:assembleDebug UP-TO-DATE
+> Task :app:mergeDebugNativeLibs UP-TO-DATE
+> Task :app:stripDebugDebugSymbols UP-TO-DATE
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:17:2 Unresolved reference 'AndroidEntryPoint'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:20:6 Unresolved reference 'Inject'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:28:9 Unresolved reference 'LlmModelWorker'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:30:14 Unresolved reference 'NotificationPermissionHelper'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:31:13 Unresolved reference 'NotificationPermissionHelper'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:32:21 Unresolved reference 'it'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:43:13 Unresolved reference 'NeuroVerseTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:47:41 Unresolved reference 'remember'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:47:52 Unresolved reference 'mutableStateOf'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:48:43 Unresolved reference 'remember'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:48:54 Unresolved reference 'mutableStateOf'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:49:39 Unresolved reference 'remember'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:49:50 Unresolved reference 'mutableStateOf'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:51:17 Unresolved reference 'LaunchedEffect'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:52:21 Unresolved reference 'withContext'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:52:33 Unresolved reference 'Dispatchers'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:54:69 Unresolved reference 'coroutineScope'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:54:69 Operator call 'component1()' is ambiguous for destructuring of type 'ERROR CLASS: Unresolved name: coroutineScope'. Applicable candidates:
+fun <T> Array<out T>.component1(): T
+fun ByteArray.component1(): Byte
+fun ShortArray.component1(): Short
+fun IntArray.component1(): Int
+fun LongArray.component1(): Long
+fun FloatArray.component1(): Float
+fun DoubleArray.component1(): Double
+fun BooleanArray.component1(): Boolean
+fun CharArray.component1(): Char
+fun <T> List<T>.component1(): T
+fun <K, V> Map.Entry<K, V>.component1(): K
+fun UIntArray.component1(): UInt
+fun ULongArray.component1(): ULong
+fun UByteArray.component1(): UByte
+fun UShortArray.component1(): UShort
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:54:69 Operator call 'component2()' is ambiguous for destructuring of type 'ERROR CLASS: Unresolved name: coroutineScope'. Applicable candidates:
+fun <T> Array<out T>.component2(): T
+fun ByteArray.component2(): Byte
+fun ShortArray.component2(): Short
+fun IntArray.component2(): Int
+fun LongArray.component2(): Long
+fun FloatArray.component2(): Float
+fun DoubleArray.component2(): Double
+fun BooleanArray.component2(): Boolean
+fun CharArray.component2(): Char
+fun <T> List<T>.component2(): T
+fun <K, V> Map.Entry<K, V>.component2(): V
+fun UIntArray.component2(): UInt
+fun ULongArray.component2(): ULong
+fun UByteArray.component2(): UByte
+fun UShortArray.component2(): UShort
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:54:69 Operator call 'component3()' is ambiguous for destructuring of type 'ERROR CLASS: Unresolved name: coroutineScope'. Applicable candidates:
+fun <T> Array<out T>.component3(): T
+fun ByteArray.component3(): Byte
+fun ShortArray.component3(): Short
+fun IntArray.component3(): Int
+fun LongArray.component3(): Long
+fun FloatArray.component3(): Float
+fun DoubleArray.component3(): Double
+fun BooleanArray.component3(): Boolean
+fun CharArray.component3(): Char
+fun <T> List<T>.component3(): T
+fun UIntArray.component3(): UInt
+fun ULongArray.component3(): ULong
+fun UByteArray.component3(): UByte
+fun UShortArray.component3(): UShort
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:55:37 Unresolved reference 'async'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:55:45 Unresolved reference 'TermsDataStore'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:56:37 Unresolved reference 'async'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:56:45 Unresolved reference 'SetupDataStore'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:57:37 Unresolved reference 'async'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:57:45 Unresolved reference 'AppSettingsDataStore'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:58:29 Cannot infer type for type parameter 'A'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:58:29 Cannot infer type for type parameter 'B'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:58:29 Cannot infer type for type parameter 'C'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:62:30 Unresolved reference 'VaultManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:62:60 Unresolved reference 'VaultManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:63:29 Unresolved reference 'VaultManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:64:29 Unresolved reference 'AppContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:67:42 Unresolved reference 'VaultManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:71:37 Unresolved reference 'AppPaths'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:77:55 Unresolved reference 'AppContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:80:37 Unresolved reference 'it'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:80:56 Unresolved reference 'ProviderType'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:80:77 Unresolved reference 'it'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:80:96 Unresolved reference 'ProviderType'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:91:43 Unresolved reference 'not' for operator '!'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:94:43 Unresolved reference 'not' for operator '!'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:97:29 Unresolved reference 'not' for operator '!'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:103:29 Unresolved reference 'not' for operator '!'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:113:17 Unresolved reference 'Box'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:113:32 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:120:42 Unresolved reference 'AppStateManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:121:40 Unresolved reference 'AppStateManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:122:41 Unresolved reference 'AppStateManager'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:138:9 Unresolved reference 'LlmModelWorker'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:139:9 Unresolved reference 'AppContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:161:2 Unresolved reference 'Composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:162:5 Functions which invoke @Composable functions must be marked with the @Composable annotation
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:167:61 @Composable invocations can only happen from the context of a @Composable function
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:168:17 Unresolved reference 'rememberCoroutineScope'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:169:25 Unresolved reference 'rememberNavController'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:172:24 Unresolved reference 'ChatViewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:172:40 Unresolved reference 'hiltViewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:173:28 Unresolved reference 'LLMModelViewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:173:48 Unresolved reference 'hiltViewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:175:5 Unresolved reference 'NavHost'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:179:13 Unresolved reference 'slideIntoContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:181:33 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:185:13 Unresolved reference 'slideOutOfContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:187:33 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:191:13 Unresolved reference 'slideIntoContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:193:33 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:197:13 Unresolved reference 'slideOutOfContainer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:199:33 Cannot infer type for type parameter 'T'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:205:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:207:13 Unresolved reference 'LaunchedEffect'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:210:21 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:210:51 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:215:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:216:37 Unresolved reference 'VaultGateViewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:216:58 Unresolved reference 'viewModel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:217:13 Unresolved reference 'VaultGateScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:221:25 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:221:59 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:227:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:228:31 Unresolved reference 'remember'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:228:42 Unresolved reference 'AppSettingsDataStore'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:229:13 Unresolved reference 'GuideScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:232:21 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:232:51 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:237:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:238:34 Unresolved reference 'remember'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:238:45 Unresolved reference 'TermsDataStore'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:239:13 Unresolved reference 'TermsAndConditionsScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:247:29 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:247:42 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:252:29 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:252:59 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:259:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:260:13 Unresolved reference 'SetupScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:263:25 Unresolved reference 'popUpTo'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:263:38 Unresolved reference 'inclusive'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:270:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:270:41 Cannot infer type for implicit value parameter 'it'. Specify it explicitly.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:271:13 Unresolved reference 'HomeScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:289:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:290:13 Unresolved reference 'ModelConfigEditorScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:295:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:296:13 Unresolved reference 'ModelStoreScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:301:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:302:13 Unresolved reference 'SettingsScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:309:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:310:13 Unresolved reference 'VaultDashboard'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:313:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:314:13 Unresolved reference 'AiMemoryScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:319:9 Unresolved reference 'composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:320:13 Unresolved reference 'ImageGenSetupScreen'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:322:39 Unresolved reference 'onQnnSetupComplete'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:326:39 Unresolved reference 'onQnnSetupDismissed'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:330:39 Unresolved reference 'onQnnSetupDismissed'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:338:2 Unresolved reference 'Composable'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:344:5 Unresolved reference 'AnimatedVisibility'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:348:20 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:352:9 Unresolved reference 'Box'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:353:24 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:354:32 Unresolved reference 'Alignment'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:356:13 Unresolved reference 'Surface'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:357:28 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:360:22 Unresolved reference 'clip'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:360:27 Unresolved reference 'RoundedCornerShape'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:360:46 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:361:25 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:362:37 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:363:37 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:364:69 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:364:73 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:366:17 Unresolved reference 'Column'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:367:32 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:368:34 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:370:43 Unresolved reference 'Arrangement'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:371:43 Unresolved reference 'Alignment'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:374:69 Unresolved reference 'TnIcons'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:375:70 Unresolved reference 'TnIcons'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:376:33 Unresolved reference 'TnIcons'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:379:21 Unresolved reference 'Box'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:380:36 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:380:53 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:381:44 Unresolved reference 'Alignment'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:383:25 Unresolved reference 'CircularProgressIndicator'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:384:40 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:385:45 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:386:37 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:388:25 Unresolved reference 'Icon'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:391:36 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:392:40 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:392:57 Unresolved reference 'dp'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:396:21 Unresolved reference 'Spacer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:396:28 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:396:44 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:398:21 Unresolved reference 'Text'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:400:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:401:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:402:38 Unresolved reference 'FontWeight'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:405:21 Unresolved reference 'Text'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:407:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:408:38 Unresolved reference 'FontWeight'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:409:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:413:21 Unresolved reference 'Spacer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:413:28 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:413:44 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:415:21 Unresolved reference 'Surface'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:416:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:417:33 Unresolved reference 'RoundedCornerShape'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:417:52 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:419:25 Unresolved reference 'Text'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:421:37 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:422:37 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:423:40 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:423:70 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:423:102 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:430:21 Unresolved reference 'Spacer'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:430:28 Unresolved reference 'Modifier'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:430:44 Unresolved reference 'Standards'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:432:21 Unresolved reference 'Text'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:434:33 Unresolved reference 'MaterialTheme'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/activity/MainActivity.kt:435:33 Unresolved reference 'MaterialTheme'.
+
+> Task :app:compileDebugKotlin FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 24s
+206 actionable tasks: 18 executed, 188 up-to-date
+Configuration cache entry reused.

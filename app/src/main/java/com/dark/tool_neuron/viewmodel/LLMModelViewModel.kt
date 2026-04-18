@@ -89,6 +89,13 @@ class LLMModelViewModel @Inject constructor(
 
     init {
         viewModelScope.launch(Dispatchers.IO) {
+            // Check if Remote API is enabled — if so, skip auto-loading to save resources for API calls
+            val apiEnabled = appSettings.remoteApiEnabled.first()
+            if (apiEnabled) {
+                Log.i("LLMModelVM", "Remote API enabled: skipping startup model auto-load")
+                return@launch
+            }
+
             val savedId = appSettings.lastModelId.first() ?: return@launch
             // Only offer if no model is currently loaded
             if (_currentModelID.value.isNotEmpty()) return@launch

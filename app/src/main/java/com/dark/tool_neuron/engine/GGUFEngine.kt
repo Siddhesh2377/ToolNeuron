@@ -33,11 +33,11 @@ class GGUFEngine {
 
     val isLoaded: Boolean get() = engine.isLoaded
 
-    suspend fun load(model: Model, config: ModelConfig?): Boolean = loadMutex.withLock {
+    suspend fun load(model: Model, config: ModelConfig?): Result<Unit> = loadMutex.withLock {
         withContext(Dispatchers.IO) {
             if (isModelLoaded(model.id)) {
                 Log.i(TAG, "Model ${model.modelName} already loaded, skipping redundant load")
-                return@withContext true
+                return@withContext Result.success(Unit)
             }
 
             if (engine.isLoaded) unloadInternal()
@@ -50,8 +50,8 @@ class GGUFEngine {
             val loading = schema.loadingParams
             val inference = schema.inferenceParams
 
-            val success = try {
-                engine.load(
+            try {
+                val success = engine.load(
                     path = model.modelPath,
                     contextSize = loading.ctxSize,
                     threads = loading.threads,
@@ -59,42 +59,46 @@ class GGUFEngine {
                     cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
                     cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
                 )
+
+                if (!success) {
+                    return@withContext Result.failure(Exception("Engine failed to load GGUF at ${model.modelPath}"))
+                }
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG, "OOM loading model", e)
                 try { engine.unload() } catch (_: Throwable) {}
-                false
+                return@withContext Result.failure(Exception("Out of memory while loading ${model.modelName}"))
+            } catch (e: Exception) {
+                return@withContext Result.failure(e)
             }
 
-            if (success) {
-                engine.setSampling(
-                    temperature = inference.temperature,
-                    topK = inference.topK,
-                    topP = inference.topP,
-                    minP = inference.minP,
-                    mirostat = inference.mirostat,
-                    mirostatTau = inference.mirostatTau,
-                    mirostatEta = inference.mirostatEta,
-                    seed = inference.seed
-                )
+            engine.setSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
 
-                currentModelId = model.id
+            currentModelId = model.id
 
-                if (inference.systemPrompt.isNotEmpty()) {
-                    engine.setSystemPrompt(inference.systemPrompt)
-                }
-                if (inference.chatTemplate.isNotEmpty()) {
-                    engine.setChatTemplate(inference.chatTemplate)
-                }
+            if (inference.systemPrompt.isNotEmpty()) {
+                engine.setSystemPrompt(inference.systemPrompt)
+            }
+            if (inference.chatTemplate.isNotEmpty()) {
+                engine.setChatTemplate(inference.chatTemplate)
             }
 
-            success
+            Result.success(Unit)
         }
     }
 
-    suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Boolean = loadMutex.withLock {
+    suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Result<Unit> = loadMutex.withLock {
         withContext(Dispatchers.IO) {
             val modelId = "fd_$fd"
-            if (isModelLoaded(modelId)) return@withContext true
+            if (isModelLoaded(modelId)) return@withContext Result.success(Unit)
 
             if (engine.isLoaded) unloadInternal()
 
@@ -106,8 +110,8 @@ class GGUFEngine {
             val loading = schema.loadingParams
             val inference = schema.inferenceParams
 
-            val success = try {
-                engine.loadFromFd(
+            try {
+                val success = engine.loadFromFd(
                     fd = fd,
                     contextSize = loading.ctxSize,
                     threads = loading.threads,
@@ -115,35 +119,39 @@ class GGUFEngine {
                     cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
                     cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
                 )
+
+                if (!success) {
+                    return@withContext Result.failure(Exception("Engine failed to load from file descriptor $fd"))
+                }
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG, "OOM loading model from FD", e)
                 try { engine.unload() } catch (_: Throwable) {}
-                false
+                return@withContext Result.failure(Exception("Out of memory while loading model from FD"))
+            } catch (e: Exception) {
+                return@withContext Result.failure(e)
             }
 
-            if (success) {
-                engine.setSampling(
-                    temperature = inference.temperature,
-                    topK = inference.topK,
-                    topP = inference.topP,
-                    minP = inference.minP,
-                    mirostat = inference.mirostat,
-                    mirostatTau = inference.mirostatTau,
-                    mirostatEta = inference.mirostatEta,
-                    seed = inference.seed
-                )
+            engine.setSampling(
+                temperature = inference.temperature,
+                topK = inference.topK,
+                topP = inference.topP,
+                minP = inference.minP,
+                mirostat = inference.mirostat,
+                mirostatTau = inference.mirostatTau,
+                mirostatEta = inference.mirostatEta,
+                seed = inference.seed
+            )
 
-                currentModelId = modelId
+            currentModelId = modelId
 
-                if (inference.systemPrompt.isNotEmpty()) {
-                    engine.setSystemPrompt(inference.systemPrompt)
-                }
-                if (inference.chatTemplate.isNotEmpty()) {
-                    engine.setChatTemplate(inference.chatTemplate)
-                }
+            if (inference.systemPrompt.isNotEmpty()) {
+                engine.setSystemPrompt(inference.systemPrompt)
+            }
+            if (inference.chatTemplate.isNotEmpty()) {
+                engine.setChatTemplate(inference.chatTemplate)
             }
 
-            success
+            Result.success(Unit)
         }
     }
 

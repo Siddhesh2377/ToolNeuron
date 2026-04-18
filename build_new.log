@@ -1,0 +1,214 @@
+Calculating task graph as no cached configuration is available for tasks: assembleDebug
+
+> Configure project :file_ops
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:1:1: Unresolved reference 'android'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:2:5: Unresolved reference 'namespace'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:3:5: Unresolved reference 'compileSdk'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:4:19: Unresolved reference 'release'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:5:13: Unresolved reference 'minorApiLevel'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:9:5: Unresolved reference 'defaultConfig'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:10:9: Unresolved reference 'minSdk'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:11:9: Unresolved reference 'testInstrumentationRunner'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:12:9: Unresolved reference 'consumerProguardFiles'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:13:9: Unresolved reference 'externalNativeBuild'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:14:13: Unresolved reference 'cmake'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:15:17: Unresolved reference 'cppFlags'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:18:9: Unresolved reference 'ndk'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:19:13: Unresolved reference 'abiFilters'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:23:5: Unresolved reference 'buildTypes'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:24:9: Unresolved reference 'release'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:25:13: Unresolved reference 'isMinifyEnabled'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:26:13: Unresolved reference 'proguardFiles'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:27:17: Unresolved reference 'getDefaultProguardFile'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:32:5: Unresolved reference 'externalNativeBuild'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:33:9: Unresolved reference 'cmake'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:34:13: None of the following candidates is applicable:
+fun <T : Any> Action<in T>.invoke(target: T): Unit
+fun ArtifactHandler.invoke(configuration: ArtifactHandlerScope.() -> Unit): Unit
+fun <V> Callable<V>.invoke(): V
+fun ConfigurationContainer.invoke(configuration: Action<ConfigurationContainerScope>): ConfigurationContainer
+fun <D : ModuleDependency> DependencyModifier.invoke(dependency: D): D
+fun DependencyModifier.invoke(dependencyNotation: CharSequence): ExternalModuleDependency
+fun DependencyModifier.invoke(dependency: ProviderConvertible<out MinimalExternalModuleDependency>): Provider<out MinimalExternalModuleDependency>
+fun DependencyModifier.invoke(dependency: Provider<out ModuleDependency>): Provider<out ModuleDependency>
+fun DependencyCollector.invoke(dependencyNotation: CharSequence): Unit
+fun DependencyCollector.invoke(dependencyNotation: CharSequence, configuration: Action<in ExternalModuleDependency>): Unit
+fun DependencyCollector.invoke(files: FileCollection): Unit
+fun DependencyCollector.invoke(files: FileCollection, configuration: Action<in FileCollectionDependency>): Unit
+fun DependencyCollector.invoke(externalModule: ProviderConvertible<out MinimalExternalModuleDependency>): Unit
+fun DependencyCollector.invoke(externalModule: ProviderConvertible<out MinimalExternalModuleDependency>, configuration: Action<in ExternalModuleDependency>): Unit
+fun DependencyCollector.invoke(dependency: Dependency): Unit
+fun <D : Dependency> DependencyCollector.invoke(dependency: D, configuration: Action<in D>): Unit
+fun DependencyCollector.invoke(dependency: Provider<out Dependency>): Unit
+fun <D : Dependency> DependencyCollector.invoke(dependency: Provider<out D>, configuration: Action<in D>): Unit
+fun DependencyCollector.invoke(dependencyConstraint: DependencyConstraint): Unit
+fun DependencyCollector.invoke(dependencyConstraint: DependencyConstraint, configuration: Action<in DependencyConstraint>): Unit
+fun DependencyCollector.invoke(dependencyConstraint: Provider<out DependencyConstraint>): Unit
+fun DependencyCollector.invoke(dependencyConstraint: Provider<out DependencyConstraint>, configuration: Action<in DependencyConstraint>): Unit
+fun DependencyConstraintHandler.invoke(configuration: DependencyConstraintHandlerScope.() -> Unit): Unit
+fun <T> ExtraPropertiesExtension.invoke(initialValueProvider: () -> T): InitialValueExtraPropertyDelegateProvider<T>
+fun <T> ExtraPropertiesExtension.invoke(initialValue: T): InitialValueExtraPropertyDelegateProvider<T>
+fun <T> Closure<T>.invoke(): T
+fun <T> Closure<T>.invoke(x: Any?): T
+fun <T> Closure<T>.invoke(vararg xs: Any?): T
+fun <T : Any, C : NamedDomainObjectContainer<T>> C.invoke(configuration: Action<NamedDomainObjectContainerScope<T>>): C
+fun <T : Any> NamedDomainObjectProvider<T>.invoke(action: T.() -> Unit): Unit
+fun <T> Spec<T>.invoke(arg: T): Boolean
+fun TaskContainer.invoke(configuration: TaskContainerScope.() -> Unit): TaskContainer
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:38:5: Unresolved reference 'compileOptions'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:39:9: Unresolved reference 'sourceCompatibility'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:40:9: Unresolved reference 'targetCompatibility'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:42:5: Unresolved reference 'packaging'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:43:9: Unresolved reference 'jniLibs'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:44:13: Unresolved reference 'useLegacyPackaging'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:50:5: Unresolved reference 'implementation'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:51:5: Unresolved reference 'testImplementation'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:52:5: Unresolved reference 'androidTestImplementation'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/file_ops/build.gradle.kts:53:5: Unresolved reference 'androidTestImplementation'.
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\marcu\AndroidStudioProjects\ToolNeuron\file_ops\build.gradle.kts' line: 1
+
+* What went wrong:
+Script compilation errors:
+
+  Line 01: android {
+           ^ Unresolved reference 'android'.
+
+  Line 02:     namespace = "com.dark.file_ops"
+               ^ Unresolved reference 'namespace'.
+
+  Line 03:     compileSdk {
+               ^ Unresolved reference 'compileSdk'.
+
+  Line 04:         version = release(36) {
+                             ^ Unresolved reference 'release'.
+
+  Line 05:             minorApiLevel = 1
+                       ^ Unresolved reference 'minorApiLevel'.
+
+  Line 09:     defaultConfig {
+               ^ Unresolved reference 'defaultConfig'.
+
+  Line 10:         minSdk = 29
+                   ^ Unresolved reference 'minSdk'.
+
+  Line 11:         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+                   ^ Unresolved reference 'testInstrumentationRunner'.
+
+  Line 12:         consumerProguardFiles("consumer-rules.pro")
+                   ^ Unresolved reference 'consumerProguardFiles'.
+
+  Line 13:         externalNativeBuild {
+                   ^ Unresolved reference 'externalNativeBuild'.
+
+  Line 14:             cmake {
+                       ^ Unresolved reference 'cmake'.
+
+  Line 15:                 cppFlags("-std=c++17 -fvisibility=hidden")
+                           ^ Unresolved reference 'cppFlags'.
+
+  Line 18:         ndk {
+                   ^ Unresolved reference 'ndk'.
+
+  Line 19:             abiFilters += listOf("arm64-v8a", "x86_64")
+                       ^ Unresolved reference 'abiFilters'.
+
+  Line 23:     buildTypes {
+               ^ Unresolved reference 'buildTypes'.
+
+  Line 24:         release {
+                   ^ Unresolved reference 'release'.
+
+  Line 25:             isMinifyEnabled = false
+                       ^ Unresolved reference 'isMinifyEnabled'.
+
+  Line 26:             proguardFiles(
+                       ^ Unresolved reference 'proguardFiles'.
+
+  Line 27:                 getDefaultProguardFile("proguard-android-optimize.txt"),
+                           ^ Unresolved reference 'getDefaultProguardFile'.
+
+  Line 32:     externalNativeBuild {
+               ^ Unresolved reference 'externalNativeBuild'.
+
+  Line 33:         cmake {
+                   ^ Unresolved reference 'cmake'.
+
+  Line 34:             path("src/main/cpp/CMakeLists.txt")
+                       ^ None of the following candidates is applicable:
+                           fun <T : Any> Action<in T>.invoke(target: T): Unit
+                           fun ArtifactHandler.invoke(configuration: ArtifactHandlerScope.() -> Unit): Unit
+                           fun <V> Callable<V>.invoke(): V
+                           fun ConfigurationContainer.invoke(configuration: Action<ConfigurationContainerScope>): ConfigurationContainer
+                           fun <D : ModuleDependency> DependencyModifier.invoke(dependency: D): D
+                           fun DependencyModifier.invoke(dependencyNotation: CharSequence): ExternalModuleDependency
+                           fun DependencyModifier.invoke(dependency: ProviderConvertible<out MinimalExternalModuleDependency>): Provider<out MinimalExternalModuleDependency>
+                           fun DependencyModifier.invoke(dependency: Provider<out ModuleDependency>): Provider<out ModuleDependency>
+                           fun DependencyCollector.invoke(dependencyNotation: CharSequence): Unit
+                           fun DependencyCollector.invoke(dependencyNotation: CharSequence, configuration: Action<in ExternalModuleDependency>): Unit
+                           fun DependencyCollector.invoke(files: FileCollection): Unit
+                           fun DependencyCollector.invoke(files: FileCollection, configuration: Action<in FileCollectionDependency>): Unit
+                           fun DependencyCollector.invoke(externalModule: ProviderConvertible<out MinimalExternalModuleDependency>): Unit
+                           fun DependencyCollector.invoke(externalModule: ProviderConvertible<out MinimalExternalModuleDependency>, configuration: Action<in ExternalModuleDependency>): Unit
+                           fun DependencyCollector.invoke(dependency: Dependency): Unit
+                           fun <D : Dependency> DependencyCollector.invoke(dependency: D, configuration: Action<in D>): Unit
+                           fun DependencyCollector.invoke(dependency: Provider<out Dependency>): Unit
+                           fun <D : Dependency> DependencyCollector.invoke(dependency: Provider<out D>, configuration: Action<in D>): Unit
+                           fun DependencyCollector.invoke(dependencyConstraint: DependencyConstraint): Unit
+                           fun DependencyCollector.invoke(dependencyConstraint: DependencyConstraint, configuration: Action<in DependencyConstraint>): Unit
+                           fun DependencyCollector.invoke(dependencyConstraint: Provider<out DependencyConstraint>): Unit
+                           fun DependencyCollector.invoke(dependencyConstraint: Provider<out DependencyConstraint>, configuration: Action<in DependencyConstraint>): Unit
+                           fun DependencyConstraintHandler.invoke(configuration: DependencyConstraintHandlerScope.() -> Unit): Unit
+                           fun <T> ExtraPropertiesExtension.invoke(initialValueProvider: () -> T): InitialValueExtraPropertyDelegateProvider<T>
+                           fun <T> ExtraPropertiesExtension.invoke(initialValue: T): InitialValueExtraPropertyDelegateProvider<T>
+                           fun <T> Closure<T>.invoke(): T
+                           fun <T> Closure<T>.invoke(x: Any?): T
+                           fun <T> Closure<T>.invoke(vararg xs: Any?): T
+                           fun <T : Any, C : NamedDomainObjectContainer<T>> C.invoke(configuration: Action<NamedDomainObjectContainerScope<T>>): C
+                           fun <T : Any> NamedDomainObjectProvider<T>.invoke(action: T.() -> Unit): Unit
+                           fun <T> Spec<T>.invoke(arg: T): Boolean
+                           fun TaskContainer.invoke(configuration: TaskContainerScope.() -> Unit): TaskContainer
+
+  Line 38:     compileOptions {
+               ^ Unresolved reference 'compileOptions'.
+
+  Line 39:         sourceCompatibility = JavaVersion.VERSION_17
+                   ^ Unresolved reference 'sourceCompatibility'.
+
+  Line 40:         targetCompatibility = JavaVersion.VERSION_17
+                   ^ Unresolved reference 'targetCompatibility'.
+
+  Line 42:     packaging {
+               ^ Unresolved reference 'packaging'.
+
+  Line 43:         jniLibs {
+                   ^ Unresolved reference 'jniLibs'.
+
+  Line 44:             useLegacyPackaging = true
+                       ^ Unresolved reference 'useLegacyPackaging'.
+
+  Line 50:     implementation(libs.androidx.core.ktx)
+               ^ Unresolved reference 'implementation'.
+
+  Line 51:     testImplementation(libs.junit)
+               ^ Unresolved reference 'testImplementation'.
+
+  Line 52:     androidTestImplementation(libs.androidx.junit)
+               ^ Unresolved reference 'androidTestImplementation'.
+
+  Line 53:     androidTestImplementation(libs.androidx.espresso.core)
+               ^ Unresolved reference 'androidTestImplementation'.
+
+32 errors
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2s
+Configuration cache entry stored.

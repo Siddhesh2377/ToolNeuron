@@ -128,18 +128,23 @@ class LLMService : Service() {
                         modelInferenceParams = inferenceParams
                     )
 
-                    val success = ggufEngine.load(model, config)
+                    val result = ggufEngine.load(model, config)
 
-                    if (success) {
-                        AppStateManager.setModelLoaded(modelName)
-                        callback.onSuccess()
-                    } else {
-                        AppStateManager.setError("Failed to load model: $modelName")
-                        callback.onError("Failed to load model")
-                    }
+                    result.fold(
+                        onSuccess = {
+                            AppStateManager.setModelLoaded(modelName)
+                            callback.onSuccess()
+                        },
+                        onFailure = { error ->
+                            val errorMsg = error.message ?: "Failed to load model"
+                            AppStateManager.setError("Load failed: $errorMsg")
+                            callback.onError(errorMsg)
+                        }
+                    )
                 } catch (e: Exception) {
-                    AppStateManager.setError(e.message ?: "Unknown error loading model")
-                    callback.onError(e.message ?: "Unknown error")
+                    val errorMsg = e.message ?: "Unknown error"
+                    AppStateManager.setError("Exception: $errorMsg")
+                    callback.onError(errorMsg)
                 }
             }
         }
@@ -165,18 +170,23 @@ class LLMService : Service() {
                         modelInferenceParams = inferenceParams
                     )
 
-                    val success = ggufEngine.loadFromFd(fd, config)
+                    val result = ggufEngine.loadFromFd(fd, config)
 
-                    if (success) {
-                        AppStateManager.setModelLoaded(modelName)
-                        callback.onSuccess()
-                    } else {
-                        AppStateManager.setError("Failed to load model from FD: $modelName")
-                        callback.onError("Failed to load model from file descriptor")
-                    }
+                    result.fold(
+                        onSuccess = {
+                            AppStateManager.setModelLoaded(modelName)
+                            callback.onSuccess()
+                        },
+                        onFailure = { error ->
+                            val errorMsg = error.message ?: "Failed to load model from file descriptor"
+                            AppStateManager.setError("Load from FD failed: $errorMsg")
+                            callback.onError(errorMsg)
+                        }
+                    )
                 } catch (e: Exception) {
-                    AppStateManager.setError(e.message ?: "Unknown error loading model from FD")
-                    callback.onError(e.message ?: "Unknown error")
+                    val errorMsg = e.message ?: "Unknown error"
+                    AppStateManager.setError("Exception: $errorMsg")
+                    callback.onError(errorMsg)
                 }
             }
         }

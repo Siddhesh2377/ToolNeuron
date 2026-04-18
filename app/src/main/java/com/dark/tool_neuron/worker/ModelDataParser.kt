@@ -50,14 +50,14 @@ class ModelDataParser {
             val fd = pfd.detachFd()  // Detach so engine owns the fd
             pfd.close()              // Close the PFD wrapper (no-op after detach, but tidy)
 
-            val success = try {
+            val loadResult = try {
                 engine.loadFromFd(fd, config)
             } catch (e: Exception) {
                 closeFdSafely(fd)
                 throw e
             }
 
-            if (success) {
+            if (loadResult.isSuccess) {
                 // Engine now owns fd — do not close it
                 val infoJson = engine.getModelInfo()
                 if (infoJson != null) {
@@ -68,7 +68,8 @@ class ModelDataParser {
                 }
             } else {
                 closeFdSafely(fd)
-                ModelLoadResult.Error("Failed to load GGUF model from URI")
+                val errorMsg = loadResult.exceptionOrNull()?.message ?: "Failed to load GGUF model"
+                ModelLoadResult.Error("Load from URI failed: $errorMsg")
             }
         } catch (e: Exception) {
             ModelLoadResult.Error("GGUF loading error: ${e.message}")
@@ -80,9 +81,9 @@ class ModelDataParser {
     ): ModelLoadResult = withContext(Dispatchers.IO) {
         try {
             val engine = GGUFEngine()
-            val success = engine.load(model, config)
+            val loadResult = engine.load(model, config)
 
-            if (success) {
+            if (loadResult.isSuccess) {
                 val infoJson = engine.getModelInfo()
                 if (infoJson != null) {
                     val modelInfo = parseGGUFInfo(infoJson)
@@ -93,7 +94,8 @@ class ModelDataParser {
                     ModelLoadResult.Error("Failed to retrieve model information")
                 }
             } else {
-                ModelLoadResult.Error("Failed to load GGUF model")
+                val errorMsg = loadResult.exceptionOrNull()?.message ?: "Failed to load GGUF model"
+                ModelLoadResult.Error("Load failed: $errorMsg")
             }
         } catch (e: Exception) {
             ModelLoadResult.Error("GGUF loading error: ${e.message}")

@@ -1,0 +1,274 @@
+Calculating task graph as configuration cache cannot be reused because file 'gradle\libs.versions.toml' has changed.
+
+> Configure project :app
+WARNING: The option setting 'android.disallowKotlinSourceSets=false' is experimental.
+The current default is 'true'.
+
+> Task :ums:generateDebugAssets UP-TO-DATE
+> Task :app:generateDebugAssets UP-TO-DATE
+> Task :ums:preBuild UP-TO-DATE
+> Task :memory-vault:preBuild UP-TO-DATE
+> Task :file_ops:generateDebugAssets UP-TO-DATE
+> Task :memory-vault:generateDebugAssets UP-TO-DATE
+> Task :neuron-packet:preBuild UP-TO-DATE
+> Task :neuron-packet:generateDebugAssets UP-TO-DATE
+> Task :file_ops:preBuild UP-TO-DATE
+> Task :system_encryptor:preBuild UP-TO-DATE
+> Task :ums:preDebugBuild UP-TO-DATE
+> Task :system_encryptor:generateDebugAssets UP-TO-DATE
+> Task :app:preBuild UP-TO-DATE
+> Task :file_ops:preDebugBuild UP-TO-DATE
+> Task :memory-vault:preDebugBuild UP-TO-DATE
+> Task :neuron-packet:preDebugBuild UP-TO-DATE
+> Task :system_encryptor:preDebugBuild UP-TO-DATE
+> Task :app:preDebugBuild UP-TO-DATE
+> Task :app:mergeDebugNativeDebugMetadata NO-SOURCE
+> Task :neuron-packet:processDebugNavigationResources
+> Task :memory-vault:processDebugNavigationResources
+> Task :file_ops:processDebugNavigationResources
+> Task :ums:processDebugNavigationResources
+> Task :system_encryptor:processDebugNavigationResources
+> Task :file_ops:generateDebugResources
+> Task :app:generateDebugResources
+> Task :memory-vault:generateDebugResources
+> Task :neuron-packet:generateDebugResources
+> Task :ums:generateDebugBuildConfig
+> Task :app:generateDebugBuildConfig
+> Task :system_encryptor:generateDebugResources
+> Task :neuron-packet:packageDebugResources
+> Task :file_ops:packageDebugResources
+> Task :memory-vault:packageDebugResources
+> Task :system_encryptor:packageDebugResources
+> Task :file_ops:javaPreCompileDebug
+> Task :system_encryptor:prepareLintJarForPublish
+> Task :ums:prepareLintJarForPublish
+> Task :ums:generateDebugResources
+> Task :ums:javaPreCompileDebug
+> Task :ums:packageDebugResources
+> Task :ums:parseDebugLocalResources
+> Task :app:packageDebugResources
+> Task :memory-vault:parseDebugLocalResources
+> Task :memory-vault:generateDebugRFile
+> Task :neuron-packet:parseDebugLocalResources
+> Task :file_ops:prepareLintJarForPublish
+> Task :neuron-packet:mergeDebugAssets
+> Task :neuron-packet:generateDebugRFile
+> Task :file_ops:mergeDebugAssets
+> Task :neuron-packet:prepareLintJarForPublish
+> Task :memory-vault:javaPreCompileDebug
+> Task :system_encryptor:javaPreCompileDebug
+> Task :ums:generateDebugRFile
+> Task :memory-vault:writeDebugAarMetadata
+> Task :app:javaPreCompileDebug
+> Task :neuron-packet:javaPreCompileDebug
+> Task :app:mapDebugSourceSetPaths
+> Task :neuron-packet:writeDebugAarMetadata
+> Task :app:createDebugCompatibleScreenManifests
+> Task :app:extractDeepLinksDebug
+> Task :file_ops:extractDeepLinksDebug
+> Task :memory-vault:mergeDebugAssets
+> Task :memory-vault:extractDeepLinksDebug
+> Task :system_encryptor:writeDebugAarMetadata
+> Task :neuron-packet:extractDeepLinksDebug
+> Task :file_ops:writeDebugAarMetadata
+> Task :system_encryptor:extractDeepLinksDebug
+> Task :system_encryptor:parseDebugLocalResources
+> Task :memory-vault:processDebugManifest
+> Task :ums:extractDeepLinksDebug
+> Task :system_encryptor:generateDebugRFile
+> Task :file_ops:parseDebugLocalResources
+> Task :system_encryptor:processDebugManifest
+> Task :file_ops:processDebugManifest
+> Task :file_ops:mapDebugSourceSetPaths
+> Task :ums:writeDebugAarMetadata
+> Task :neuron-packet:processDebugManifest
+> Task :memory-vault:mapDebugSourceSetPaths
+> Task :ums:processDebugManifest
+> Task :neuron-packet:mapDebugSourceSetPaths
+> Task :file_ops:compileDebugLibraryResources
+> Task :system_encryptor:mapDebugSourceSetPaths
+> Task :memory-vault:compileDebugLibraryResources
+> Task :ums:mapDebugSourceSetPaths
+> Task :file_ops:generateDebugRFile
+> Task :file_ops:compileDebugKotlin NO-SOURCE
+> Task :file_ops:compileDebugJavaWithJavac NO-SOURCE
+> Task :ums:mergeDebugAssets
+> Task :file_ops:bundleLibRuntimeToJarDebug
+> Task :file_ops:processDebugJavaRes NO-SOURCE
+> Task :system_encryptor:compileDebugLibraryResources
+> Task :ums:compileDebugLibraryResources
+> Task :system_encryptor:mergeDebugAssets
+> Task :app:compileDebugAidl
+> Task :app:processDebugNavigationResources
+> Task :app:desugarDebugFileDependencies
+> Task :memory-vault:prepareLintJarForPublish
+> Task :file_ops:bundleLibRuntimeToDirDebug
+> Task :app:mergeDebugJniLibFolders
+> Task :app:compileDebugNavigationResources
+> Task :neuron-packet:compileDebugLibraryResources
+> Task :file_ops:bundleLibCompileToJarDebug
+> Task :file_ops:mergeDebugJniLibFolders
+> Task :memory-vault:mergeDebugJniLibFolders
+> Task :memory-vault:mergeDebugNativeLibs NO-SOURCE
+> Task :app:parseDebugLocalResources
+> Task :app:generateDebugRFile
+> Task :neuron-packet:mergeDebugJniLibFolders
+> Task :app:checkDebugAarMetadata
+> Task :system_encryptor:mergeDebugJniLibFolders
+> Task :memory-vault:copyDebugJniLibsProjectOnly
+> Task :ums:mergeDebugJniLibFolders
+> Task :app:validateSigningDebug
+> Task :app:writeDebugAppMetadata
+> Task :app:checkDebugDuplicateClasses
+> Task :app:writeDebugSigningConfigVersions
+> Task :app:mergeDebugAssets
+> Task :app:processDebugMainManifest
+> Task :app:processDebugManifest
+> Task :system_encryptor:compileDebugKotlin
+> Task :system_encryptor:compileDebugJavaWithJavac NO-SOURCE
+
+> Task :file_ops:configureCMakeDebug[arm64-v8a]
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+[CXX5304] This version only understands SDK XML versions up to 3 but an SDK XML file of version 4 was encountered. This can happen if you use versions of Android Studio and the command-line tools that were released at different times.
+[CXX5304] package.xml parsing problem. unerwartetes Element (URI:"", lokal:"canary-number"). Erwartete Elemente sind <{}codename>,<{}layoutlib>,<{}base-extension>,<{}api-level>,<{}extension-level>
+[CXX5304] package.xml parsing problem. unerwartetes Element (URI:"", lokal:"canary-number"). Erwartete Elemente sind <{}codename>,<{}layoutlib>,<{}base-extension>,<{}api-level>,<{}extension-level>
+
+> Task :app:mergeDebugResources
+> Task :file_ops:configureCMakeDebug[x86_64]
+> Task :neuron-packet:configureCMakeDebug[x86_64]
+> Task :ums:configureCMakeDebug[x86_64]
+> Task :system_encryptor:configureCMakeDebug[x86_64]
+> Task :system_encryptor:configureCMakeDebug[arm64-v8a]
+> Task :ums:configureCMakeDebug[arm64-v8a]
+> Task :neuron-packet:configureCMakeDebug[arm64-v8a]
+> Task :system_encryptor:processDebugJavaRes
+> Task :file_ops:buildCMakeDebug[arm64-v8a]
+> Task :neuron-packet:buildCMakeDebug[x86_64]
+> Task :file_ops:buildCMakeDebug[x86_64]
+> Task :system_encryptor:buildCMakeDebug[x86_64]
+> Task :file_ops:extractDeepLinksForAarDebug
+> Task :file_ops:mergeDebugGeneratedProguardFiles
+> Task :file_ops:mergeDebugConsumerProguardFiles
+> Task :file_ops:prepareDebugArtProfile
+> Task :system_encryptor:buildCMakeDebug[arm64-v8a]
+> Task :ums:buildCMakeDebug[arm64-v8a]
+> Task :neuron-packet:buildCMakeDebug[arm64-v8a]
+> Task :system_encryptor:mergeDebugNativeLibs
+> Task :ums:buildCMakeDebug[x86_64]
+> Task :system_encryptor:copyDebugJniLibsProjectOnly
+> Task :memory-vault:stripDebugDebugSymbols NO-SOURCE
+> Task :memory-vault:copyDebugJniLibsProjectAndLocalJars
+> Task :memory-vault:extractDebugAnnotations
+> Task :memory-vault:extractDeepLinksForAarDebug
+> Task :memory-vault:prepareDebugArtProfile
+> Task :system_encryptor:bundleLibCompileToJarDebug
+> Task :system_encryptor:bundleLibRuntimeToJarDebug
+> Task :file_ops:extractDebugAnnotations
+> Task :neuron-packet:extractDebugAnnotations
+> Task :neuron-packet:extractDeepLinksForAarDebug
+> Task :neuron-packet:prepareDebugArtProfile
+> Task :system_encryptor:stripDebugDebugSymbols
+> Task :system_encryptor:checkDebugAarMetadata
+> Task :system_encryptor:extractDebugAnnotations
+> Task :system_encryptor:extractDeepLinksForAarDebug
+> Task :system_encryptor:mergeDebugGeneratedProguardFiles
+> Task :system_encryptor:mergeDebugConsumerProguardFiles
+> Task :system_encryptor:prepareDebugArtProfile
+> Task :file_ops:mergeDebugJavaResource
+> Task :file_ops:syncDebugLibJars
+> Task :ums:checkDebugAarMetadata
+> Task :ums:extractDebugAnnotations
+> Task :ums:extractDeepLinksForAarDebug
+> Task :ums:prepareDebugArtProfile
+> Task :memory-vault:compileDebugKotlin
+> Task :neuron-packet:compileDebugKotlin
+> Task :app:mergeExtDexDebug
+> Task :file_ops:checkDebugAarMetadata
+> Task :app:compressDebugAssets
+> Task :app:processDebugManifestForPackage
+> Task :system_encryptor:bundleLibRuntimeToDirDebug
+> Task :file_ops:mergeDebugNativeLibs
+> Task :memory-vault:checkDebugAarMetadata
+> Task :neuron-packet:mergeDebugNativeLibs
+> Task :ums:mergeDebugNativeLibs
+> Task :neuron-packet:checkDebugAarMetadata
+> Task :ums:compileDebugKotlin
+> Task :system_encryptor:copyDebugJniLibsProjectAndLocalJars
+> Task :memory-vault:compileDebugJavaWithJavac NO-SOURCE
+> Task :file_ops:copyDebugJniLibsProjectOnly
+> Task :memory-vault:bundleLibCompileToJarDebug
+> Task :memory-vault:processDebugJavaRes
+> Task :memory-vault:mergeDebugGeneratedProguardFiles
+> Task :memory-vault:mergeDebugConsumerProguardFiles
+> Task :ums:copyDebugJniLibsProjectOnly
+> Task :neuron-packet:compileDebugJavaWithJavac NO-SOURCE
+> Task :system_encryptor:mergeDebugJavaResource
+> Task :memory-vault:bundleLibRuntimeToDirDebug
+> Task :neuron-packet:processDebugJavaRes
+> Task :memory-vault:mergeDebugJavaResource
+> Task :file_ops:stripDebugDebugSymbols
+> Task :file_ops:copyDebugJniLibsProjectAndLocalJars
+> Task :neuron-packet:mergeDebugGeneratedProguardFiles
+> Task :neuron-packet:mergeDebugConsumerProguardFiles
+> Task :neuron-packet:bundleLibRuntimeToDirDebug
+> Task :memory-vault:syncDebugLibJars
+> Task :system_encryptor:syncDebugLibJars
+> Task :memory-vault:bundleLibRuntimeToJarDebug
+> Task :memory-vault:bundleDebugAar
+> Task :memory-vault:assembleDebug
+> Task :neuron-packet:bundleLibRuntimeToJarDebug
+> Task :file_ops:bundleDebugAar
+> Task :neuron-packet:mergeDebugJavaResource
+> Task :file_ops:assembleDebug
+> Task :neuron-packet:syncDebugLibJars
+> Task :system_encryptor:bundleDebugAar
+> Task :system_encryptor:assembleDebug
+> Task :ums:stripDebugDebugSymbols
+> Task :neuron-packet:bundleLibCompileToJarDebug
+> Task :ums:copyDebugJniLibsProjectAndLocalJars
+> Task :neuron-packet:stripDebugDebugSymbols
+> Task :neuron-packet:copyDebugJniLibsProjectOnly
+> Task :neuron-packet:copyDebugJniLibsProjectAndLocalJars
+> Task :neuron-packet:bundleDebugAar
+> Task :neuron-packet:assembleDebug
+> Task :ums:processDebugJavaRes
+> Task :ums:mergeDebugJavaResource
+> Task :ums:compileDebugJavaWithJavac
+> Task :ums:mergeDebugGeneratedProguardFiles
+> Task :ums:bundleLibRuntimeToJarDebug
+> Task :ums:syncDebugLibJars
+> Task :ums:bundleLibCompileToJarDebug
+> Task :ums:mergeDebugConsumerProguardFiles
+> Task :ums:bundleLibRuntimeToDirDebug
+> Task :ums:bundleDebugAar
+> Task :ums:assembleDebug
+> Task :app:mergeLibDexDebug
+> Task :app:processDebugResources
+> Task :app:mergeDebugNativeLibs
+> Task :app:stripDebugDebugSymbols
+> Task :app:kspDebugKotlin
+
+> Task :app:compileDebugKotlin FAILED
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:81:25 Unresolved reference 'method'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:82:25 Unresolved reference 'method'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:83:25 Unresolved reference 'method'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:84:25 Unresolved reference 'method'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:85:25 Unresolved reference 'method'.
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/app/src/main/java/com/dark/tool_neuron/network/RemoteServer.kt:86:25 Unresolved reference 'method'.
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':app:compileDebugKotlin'.
+> A failure occurred while executing org.jetbrains.kotlin.compilerRunner.GradleCompilerRunnerWithWorkers$GradleKotlinCompilerWorkAction
+   > Compilation error. See log for more details
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 2m 40s
+206 actionable tasks: 206 executed
+Configuration cache entry stored.

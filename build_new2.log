@@ -1,0 +1,26 @@
+Calculating task graph as no cached configuration is available for tasks: assembleDebug
+
+> Configure project :ums
+e: file:///C:/Users/marcu/AndroidStudioProjects/ToolNeuron/ums/build.gradle.kts:23:49: Unresolved reference 'getProperty'.
+
+FAILURE: Build failed with an exception.
+
+* Where:
+Build file 'C:\Users\marcu\AndroidStudioProjects\ToolNeuron\ums\build.gradle.kts' line: 23
+
+* What went wrong:
+Script compilation error:
+
+  Line 23:         buildConfigField("String", "KEY_ALIAS", getProperty("ALIAS"))
+                                                           ^ Unresolved reference 'getProperty'.
+
+1 error
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights from a Build Scan (powered by Develocity).
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 8s
+Configuration cache entry stored.
