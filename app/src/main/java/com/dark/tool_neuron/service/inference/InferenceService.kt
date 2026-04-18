@@ -83,7 +83,7 @@ class InferenceService : Service() {
                     val success = engine.load(
                         path = modelPath,
                         contextSize = config.optInt("contextSize", 4096),
-                        threads = config.optInt("threads", 0),
+                        threadMode = config.optInt("threadMode", 1),
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
@@ -113,7 +113,7 @@ class InferenceService : Service() {
                     val success = engine.loadFromFd(
                         fd = fd,
                         contextSize = config.optInt("contextSize", 4096),
-                        threads = config.optInt("threads", 0),
+                        threadMode = config.optInt("threadMode", 1),
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
