@@ -28,6 +28,23 @@ object AppStateManager {
     fun requestModelReload() { _reloadModelRequested.value = true }
     fun clearReloadRequest() { _reloadModelRequested.value = false }
 
+    // ── Remote API Status ──
+
+    private val _apiCallActive = MutableStateFlow(false)
+    val apiCallActive: StateFlow<Boolean> = _apiCallActive.asStateFlow()
+
+    private val _apiCallType = MutableStateFlow("")
+    val apiCallType: StateFlow<String> = _apiCallType.asStateFlow()
+
+    private val _apiCallModel = MutableStateFlow("")
+    val apiCallModel: StateFlow<String> = _apiCallModel.asStateFlow()
+
+    fun setApiCallStatus(active: Boolean, type: String = "", model: String = "") {
+        _apiCallActive.value = active
+        _apiCallType.value = type
+        _apiCallModel.value = model
+    }
+
     // Model loading progress tracking
     private var loadingStartTime: Long = 0
 

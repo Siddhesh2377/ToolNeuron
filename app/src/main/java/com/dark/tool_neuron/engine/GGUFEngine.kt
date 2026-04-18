@@ -19,117 +19,132 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import com.dark.gguf_lib.models.GenerationEvent as LibGenerationEvent
 
 class GGUFEngine {
     private val engine = GGMLEngine()
     private var currentModelId: String? = null
+    private val loadMutex = Mutex()
 
     private var currentToolsJson: String? = null
     private var currentToolCallingConfig: ToolCallingConfig? = null
 
     val isLoaded: Boolean get() = engine.isLoaded
 
-    suspend fun load(model: Model, config: ModelConfig?): Boolean = withContext(Dispatchers.IO) {
-        if (engine.isLoaded) unload()
+    suspend fun load(model: Model, config: ModelConfig?): Boolean = loadMutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (isModelLoaded(model.id)) {
+                Log.i(TAG, "Model ${model.modelName} already loaded, skipping redundant load")
+                return@withContext true
+            }
 
-        val schema = GgufEngineSchema.fromJson(
-            config?.modelLoadingParams,
-            config?.modelInferenceParams
-        )
+            if (engine.isLoaded) unloadInternal()
 
-        val loading = schema.loadingParams
-        val inference = schema.inferenceParams
-
-        val success = try {
-            engine.load(
-                path = model.modelPath,
-                contextSize = loading.ctxSize,
-                threads = loading.threads,
-                flashAttn = loading.flashAttn,
-                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
-                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
-            )
-        } catch (e: OutOfMemoryError) {
-            Log.e(TAG, "OOM loading model", e)
-            try { engine.unload() } catch (_: Throwable) {}
-            false
-        }
-
-        if (success) {
-            engine.setSampling(
-                temperature = inference.temperature,
-                topK = inference.topK,
-                topP = inference.topP,
-                minP = inference.minP,
-                mirostat = inference.mirostat,
-                mirostatTau = inference.mirostatTau,
-                mirostatEta = inference.mirostatEta,
-                seed = inference.seed
+            val schema = GgufEngineSchema.fromJson(
+                config?.modelLoadingParams,
+                config?.modelInferenceParams
             )
 
-            currentModelId = model.id
+            val loading = schema.loadingParams
+            val inference = schema.inferenceParams
 
-            if (inference.systemPrompt.isNotEmpty()) {
-                engine.setSystemPrompt(inference.systemPrompt)
+            val success = try {
+                engine.load(
+                    path = model.modelPath,
+                    contextSize = loading.ctxSize,
+                    threads = loading.threads,
+                    flashAttn = loading.flashAttn,
+                    cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                    cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+                )
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "OOM loading model", e)
+                try { engine.unload() } catch (_: Throwable) {}
+                false
             }
-            if (inference.chatTemplate.isNotEmpty()) {
-                engine.setChatTemplate(inference.chatTemplate)
+
+            if (success) {
+                engine.setSampling(
+                    temperature = inference.temperature,
+                    topK = inference.topK,
+                    topP = inference.topP,
+                    minP = inference.minP,
+                    mirostat = inference.mirostat,
+                    mirostatTau = inference.mirostatTau,
+                    mirostatEta = inference.mirostatEta,
+                    seed = inference.seed
+                )
+
+                currentModelId = model.id
+
+                if (inference.systemPrompt.isNotEmpty()) {
+                    engine.setSystemPrompt(inference.systemPrompt)
+                }
+                if (inference.chatTemplate.isNotEmpty()) {
+                    engine.setChatTemplate(inference.chatTemplate)
+                }
             }
+
+            success
         }
-
-        success
     }
 
-    suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Boolean = withContext(Dispatchers.IO) {
-        if (engine.isLoaded) unload()
+    suspend fun loadFromFd(fd: Int, config: ModelConfig? = null): Boolean = loadMutex.withLock {
+        withContext(Dispatchers.IO) {
+            val modelId = "fd_$fd"
+            if (isModelLoaded(modelId)) return@withContext true
 
-        val schema = GgufEngineSchema.fromJson(
-            config?.modelLoadingParams,
-            config?.modelInferenceParams
-        )
+            if (engine.isLoaded) unloadInternal()
 
-        val loading = schema.loadingParams
-        val inference = schema.inferenceParams
-
-        val success = try {
-            engine.loadFromFd(
-                fd = fd,
-                contextSize = loading.ctxSize,
-                threads = loading.threads,
-                flashAttn = loading.flashAttn,
-                cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
-                cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
-            )
-        } catch (e: OutOfMemoryError) {
-            Log.e(TAG, "OOM loading model from FD", e)
-            try { engine.unload() } catch (_: Throwable) {}
-            false
-        }
-
-        if (success) {
-            engine.setSampling(
-                temperature = inference.temperature,
-                topK = inference.topK,
-                topP = inference.topP,
-                minP = inference.minP,
-                mirostat = inference.mirostat,
-                mirostatTau = inference.mirostatTau,
-                mirostatEta = inference.mirostatEta,
-                seed = inference.seed
+            val schema = GgufEngineSchema.fromJson(
+                config?.modelLoadingParams,
+                config?.modelInferenceParams
             )
 
-            currentModelId = "fd_$fd"
+            val loading = schema.loadingParams
+            val inference = schema.inferenceParams
 
-            if (inference.systemPrompt.isNotEmpty()) {
-                engine.setSystemPrompt(inference.systemPrompt)
+            val success = try {
+                engine.loadFromFd(
+                    fd = fd,
+                    contextSize = loading.ctxSize,
+                    threads = loading.threads,
+                    flashAttn = loading.flashAttn,
+                    cacheTypeK = cacheTypeIntToString(loading.cacheTypeK),
+                    cacheTypeV = cacheTypeIntToString(loading.cacheTypeV)
+                )
+            } catch (e: OutOfMemoryError) {
+                Log.e(TAG, "OOM loading model from FD", e)
+                try { engine.unload() } catch (_: Throwable) {}
+                false
             }
-            if (inference.chatTemplate.isNotEmpty()) {
-                engine.setChatTemplate(inference.chatTemplate)
+
+            if (success) {
+                engine.setSampling(
+                    temperature = inference.temperature,
+                    topK = inference.topK,
+                    topP = inference.topP,
+                    minP = inference.minP,
+                    mirostat = inference.mirostat,
+                    mirostatTau = inference.mirostatTau,
+                    mirostatEta = inference.mirostatEta,
+                    seed = inference.seed
+                )
+
+                currentModelId = modelId
+
+                if (inference.systemPrompt.isNotEmpty()) {
+                    engine.setSystemPrompt(inference.systemPrompt)
+                }
+                if (inference.chatTemplate.isNotEmpty()) {
+                    engine.setChatTemplate(inference.chatTemplate)
+                }
             }
+
+            success
         }
-
-        success
     }
 
     // ── Generation ──
@@ -144,7 +159,11 @@ class GGUFEngine {
         engine.stopGeneration()
     }
 
-    suspend fun unload() = withContext(Dispatchers.IO) {
+    suspend fun unload() = loadMutex.withLock {
+        unloadInternal()
+    }
+
+    private suspend fun unloadInternal() = withContext(Dispatchers.IO) {
         if (engine.isLoaded) {
             engine.unload()
             currentModelId = null
@@ -152,6 +171,8 @@ class GGUFEngine {
             currentToolCallingConfig = null
         }
     }
+
+    fun getCurrentModelId(): String? = currentModelId
 
     fun isModelLoaded(modelId: String): Boolean =
         engine.isLoaded && currentModelId == modelId

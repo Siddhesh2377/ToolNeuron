@@ -24,7 +24,10 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.io.ByteArrayOutputStream
 import java.util.Base64
 
@@ -39,6 +42,7 @@ class DiffusionEngine {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var observeJob: Job? = null
     private val initDeferred = CompletableDeferred<Boolean>()
+    private val loadMutex = Mutex()
 
     // Expose state flows
     val backendState: StateFlow<DiffusionBackendState>
@@ -83,37 +87,50 @@ class DiffusionEngine {
         height: Int = 512,
         safetyMode: Boolean
     ): Result<String> {
-        // Wait for init() to complete before proceeding (fixes race with LLMService.onCreate)
+        // 1. Wait for init() to complete WITHOUT holding the mutex (fixes deadlock)
         val initSuccess = withTimeoutOrNull(INIT_TIMEOUT_MS) { initDeferred.await() }
         if (initSuccess != true) {
             return Result.failure(IllegalStateException("DiffusionEngine initialization timed out or failed"))
         }
-        val mgr = sdManager ?: return Result.failure(IllegalStateException("DiffusionEngine not initialized"))
-        return try {
-            val model = modelConfig {
-                name(name)
-                modelDir(modelDir)
-                textEmbeddingSize(textEmbeddingSize)
-                runOnCpu(runOnCpu)
-                useCpuClip(useCpuClip)
-                isPony(isPony)
-                setSafetyMode(safetyMode)
+
+        return loadMutex.withLock {
+            withContext(Dispatchers.IO) {
+                val mgr = sdManager ?: return@withContext Result.failure(IllegalStateException("DiffusionEngine not initialized"))
+
+                // Idempotency check: don't reload if already loaded
+                val currentModel = mgr.getCurrentModel()
+                if (currentModel != null && currentModel.name == name) {
+                    Log.i(TAG, "Model $name is already loaded, skipping redundant load")
+                    return@withContext Result.success("Model already loaded: $name")
+                }
+
+                try {
+                    val model = modelConfig {
+                        name(name)
+                        modelDir(modelDir)
+                        textEmbeddingSize(textEmbeddingSize)
+                        runOnCpu(runOnCpu)
+                        useCpuClip(useCpuClip)
+                        isPony(isPony)
+                        setSafetyMode(safetyMode)
+                    }
+
+                    Log.i(TAG, "Loading model: $model")
+
+                    val success = mgr.loadModel(model, width = width, height = height)
+
+                    if (success) {
+                        Log.i(TAG, "Model loaded successfully: $name")
+                        Result.success("Model loaded: $name (${if (runOnCpu) "CPU" else "NPU"})")
+                    } else {
+                        Log.e(TAG, "Failed to load model: $name")
+                        Result.failure(Exception("Failed to load model: $name"))
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "loadModel exception: ${e.message}", e)
+                    Result.failure(e)
+                }
             }
-
-            Log.i(TAG, "Loading model: $model")
-
-            val success = mgr.loadModel(model, width = width, height = height)
-
-            if (success) {
-                Log.i(TAG, "Model loaded successfully: $name")
-                Result.success("Model loaded: $name (${if (runOnCpu) "CPU" else "NPU"})")
-            } else {
-                Log.e(TAG, "Failed to load model: $name")
-                Result.failure(Exception("Failed to load model: $name"))
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "loadModel exception: ${e.message}", e)
-            Result.failure(e)
         }
     }
 

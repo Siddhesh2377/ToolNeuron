@@ -38,6 +38,7 @@ import javax.inject.Singleton
 
 @Singleton
 class RemoteServer @Inject constructor(
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
     private val modelRepository: ModelRepository
 ) {
 
@@ -150,15 +151,97 @@ class RemoteServer @Inject constructor(
                             call.respond(response)
                         }
 
+                        get("/api/ps") {
+                            Log.d("RemoteServer", "GET /api/ps")
+                            val runningModels = mutableListOf<RunningModel>()
+
+                            // Check GGUF Engine
+                            ggufEngine?.let { engine ->
+                                if (engine.isLoaded) {
+                                    val modelId = engine.getCurrentModelId()
+                                    if (modelId != null) {
+                                        val model = modelRepository.getModelById(modelId)
+                                        if (model != null) {
+                                            val infoJson = engine.getModelInfo()
+                                            var quantization = "unknown"
+                                            var family = "unknown"
+                                            
+                                            if (infoJson != null) {
+                                                try {
+                                                    val json = org.json.JSONObject(infoJson)
+                                                    quantization = json.optString("quantization", "unknown")
+                                                    family = json.optString("architecture", "unknown")
+                                                } catch (_: Exception) {}
+                                            }
+
+                                            runningModels.add(RunningModel(
+                                                name = model.modelName,
+                                                model = model.modelName,
+                                                size = model.fileSize ?: 0L,
+                                                details = RunningModelDetails(
+                                                    format = "gguf",
+                                                    family = family,
+                                                    quantization_level = quantization
+                                                ),
+                                                sizeVram = model.fileSize ?: 0L // Approximation
+                                            ))
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Check Diffusion Engine
+                            diffusionEngine?.let { engine ->
+                                val currentModel = engine.getCurrentModel()
+                                if (currentModel != null) {
+                                    runningModels.add(RunningModel(
+                                        name = currentModel.name,
+                                        model = currentModel.name,
+                                        size = 2000000000L, // Placeholder approx size
+                                        details = RunningModelDetails(
+                                            format = "diffusers",
+                                            family = "stable-diffusion",
+                                            backend = if (currentModel.runOnCpu) "cpu" else "npu"
+                                        ),
+                                        sizeVram = 2000000000L
+                                    ))
+                                }
+                            }
+
+                            val hardware = com.dark.tool_neuron.global.HardwareScanner.scan(context)
+                            call.respond(ProcessResponse(models = runningModels, hardware = hardware))
+                        }
+
                         post("/v1/chat/completions") {
                             val request = call.receive<ChatCompletionRequest>()
                             Log.d("RemoteServer", "POST /v1/chat/completions: $request")
                             val engine = ggufEngine ?: return@post call.respondText("Engine not initialized", status = io.ktor.http.HttpStatusCode.InternalServerError)
                             
-                            val modelName = engine.getModelInfo() ?: "GGUF"
-                            AppStateManager.setApiCallStatus(true, "Chat Completion", modelName)
-
                             try {
+                                // Dynamic model loading for GGUF
+                                if (request.model != null && request.model != "toolneuron-local") {
+                                    val model = modelRepository.getModelByName(request.model)
+                                    if (model != null && !engine.isModelLoaded(model.id)) {
+                                        val config = modelRepository.getConfigByModelId(model.id)
+                                        Log.i("RemoteServer", "Dynamically loading GGUF model: ${model.modelName}")
+                                        
+                                        AppStateManager.setLoadingModel(model.modelName)
+                                        val success = engine.load(model, config)
+                                        if (!success) {
+                                            AppStateManager.setError("Failed to load model ${model.modelName}")
+                                            return@post call.respondText("Failed to load model", status = io.ktor.http.HttpStatusCode.InternalServerError)
+                                        }
+                                        AppStateManager.setModelLoaded(model.modelName)
+                                    }
+                                }
+
+                                if (!engine.isLoaded) {
+                                    return@post call.respondText("No model loaded", status = io.ktor.http.HttpStatusCode.BadRequest)
+                                }
+
+                                val modelName = engine.getModelInfo() ?: "GGUF"
+                                AppStateManager.setApiCallStatus(true, "Chat Completion", modelName)
+
                                 val messagesJson = json.encodeToString(request.messages)
                                 val maxTokens = request.maxTokens ?: 512
 

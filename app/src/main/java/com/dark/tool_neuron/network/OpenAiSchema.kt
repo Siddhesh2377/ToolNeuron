@@ -106,3 +106,31 @@ data class ModelData(
     val root: String? = null,
     val parent: String? = null
 )
+
+@Serializable
+data class ProcessResponse(
+    val models: List<RunningModel>,
+    val hardware: com.dark.tool_neuron.global.HardwareProfile? = null
+)
+
+@Serializable
+data class RunningModel(
+    val name: String,
+    val model: String,
+    val size: Long,
+    val digest: String? = null,
+    val details: RunningModelDetails,
+    @SerialName("expires_at") val expiresAt: String? = null,
+    @SerialName("size_vram") val sizeVram: Long
+)
+
+@Serializable
+data class RunningModelDetails(
+    val parent_model: String = "",
+    val format: String,
+    val family: String? = null,
+    val families: List<String>? = null,
+    val parameter_size: String? = null,
+    val quantization_level: String? = null,
+    val backend: String? = null
+)

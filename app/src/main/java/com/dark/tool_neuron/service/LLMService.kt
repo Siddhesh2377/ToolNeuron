@@ -478,7 +478,7 @@ class LLMService : Service() {
 
         override fun getCurrentDiffusionModel(): String? {
             val model = diffusionEngine.getCurrentModel()
-            return model?.let { "${it.name})" }
+            return model?.name
         }
 
         override fun startRemoteServer(port: Int) {

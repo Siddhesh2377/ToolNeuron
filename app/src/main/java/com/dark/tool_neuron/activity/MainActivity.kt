@@ -9,6 +9,26 @@ import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -17,7 +37,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -26,7 +53,11 @@ import com.dark.tool_neuron.data.SetupDataStore
 import com.dark.tool_neuron.data.TermsDataStore
 import com.dark.tool_neuron.data.VaultManager
 import com.dark.tool_neuron.di.AppContainer
+import com.dark.tool_neuron.global.AppPaths
+import com.dark.tool_neuron.global.Standards
 import com.dark.tool_neuron.models.enums.ProviderType
+import com.dark.tool_neuron.state.AppStateManager
+import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.screen.gate.VaultGateScreen
 import com.dark.tool_neuron.ui.screen.guide.GuideScreen
 import com.dark.tool_neuron.ui.screen.guide.TermsAndConditionsScreen
@@ -38,11 +69,10 @@ import com.dark.tool_neuron.ui.screen.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screen.settings.SettingsScreen
 import com.dark.tool_neuron.ui.screen.setup.ImageGenSetupScreen
 import com.dark.tool_neuron.ui.screen.setup.SetupScreen
-import com.dark.tool_neuron.viewmodel.VaultGateViewModel
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.dark.tool_neuron.ui.theme.NeuroVerseTheme
 import com.dark.tool_neuron.viewmodel.ChatViewModel
 import com.dark.tool_neuron.viewmodel.LLMModelViewModel
+import com.dark.tool_neuron.viewmodel.VaultGateViewModel
 import com.dark.tool_neuron.worker.LlmModelWorker
 import com.dark.tool_neuron.worker.NotificationPermissionHelper
 import dagger.hilt.android.AndroidEntryPoint
@@ -53,8 +83,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.dark.tool_neuron.global.AppPaths
-import java.io.File
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -110,8 +141,8 @@ class MainActivity : ComponentActivity() {
 
                         // Check for legacy data that needs migration
                         val roomDb = context.getDatabasePath("llm_models_database").exists()
-                        val vault = AppPaths.vaultFile(context).exists()
-                        needsMigration = roomDb || vault
+                        val vaultFile = AppPaths.vaultFile(context).exists()
+                        needsMigration = roomDb || vaultFile
 
                         // Only check models if vault is ready
                         val hasModel = if (vaultReady) {
@@ -152,11 +183,23 @@ class MainActivity : ComponentActivity() {
 
                 val dest = startDestination ?: return@NeuroVerseTheme
 
-                AppNavigation(
-                    startDestination = dest,
-                    hasModelsInstalled = hasModelsInstalled,
-                    needsMigration = needsMigration
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AppNavigation(
+                        startDestination = dest,
+                        hasModelsInstalled = hasModelsInstalled,
+                        needsMigration = needsMigration
+                    )
+
+                    val apiCallActive by AppStateManager.apiCallActive.collectAsState()
+                    val apiCallType by AppStateManager.apiCallType.collectAsState()
+                    val apiCallModel by AppStateManager.apiCallModel.collectAsState()
+
+                    ApiStatusOverlay(
+                        visible = apiCallActive,
+                        type = apiCallType,
+                        model = apiCallModel
+                    )
+                }
             }
         }
     }
@@ -361,6 +404,111 @@ fun AppNavigation(
                     navController.popBackStack()
                 }
             )
+        }
+    }
+}
+
+@Composable
+private fun ApiStatusOverlay(
+    visible: Boolean,
+    type: String,
+    model: String
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn() + scaleIn(initialScale = 0.8f),
+        exit = fadeOut() + scaleOut(targetScale = 0.8f),
+        modifier = Modifier
+            .fillMaxSize()
+            .zIndex(999f)
+    ) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .fillMaxHeight(0.6f)
+                    .clip(RoundedCornerShape(Standards.RadiusXl)),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.98f),
+                tonalElevation = 12.dp,
+                shadowElevation = 8.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(Standards.SpacingXl)
+                        .fillMaxSize(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    val icon = when {
+                        type.contains("Chat", ignoreCase = true) -> TnIcons.Message
+                        type.contains("Image", ignoreCase = true) -> TnIcons.Photo
+                        else -> TnIcons.Sparkles
+                    }
+
+                    Box(
+                        modifier = Modifier.size(80.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.fillMaxSize(),
+                            strokeWidth = 4.dp,
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        )
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(40.dp)
+                        )
+                    }
+
+                    Spacer(Modifier.height(Standards.SpacingXl))
+
+                    Text(
+                        text = "Remote API",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Text(
+                        text = type,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+
+                    Spacer(Modifier.height(Standards.SpacingMd))
+
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(Standards.RadiusMd)
+                    ) {
+                        Text(
+                            text = model,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = Standards.SpacingMd, vertical = Standards.SpacingXs),
+                            maxLines = 2,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
+                    }
+
+                    Spacer(Modifier.height(Standards.SpacingXl))
+
+                    Text(
+                        text = "Processing Request...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.6f)
+                    )
+                }
+            }
         }
     }
 }
