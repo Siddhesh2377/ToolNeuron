@@ -17,7 +17,7 @@ import javax.inject.Singleton
 
 @Singleton
 class ChatRepository @Inject constructor(
-    @field:ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context
 ) {
     private val storage = HexStorage()
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())

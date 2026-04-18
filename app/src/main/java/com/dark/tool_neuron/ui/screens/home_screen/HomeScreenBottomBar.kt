@@ -19,15 +19,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButtonDefaults
@@ -35,15 +32,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,17 +53,16 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.dark.tool_neuron.model.ChatDocument
-import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.components.ActionButton
-import com.dark.tool_neuron.ui.components.ActionTextButton
+import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.components.TnTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.viewmodel.HomeViewModel
-import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
 
 @Composable
@@ -72,17 +73,39 @@ fun HomeScreenBottomBar(
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     var text by remember { mutableStateOf("") }
 
     val plusMenuExpanded by viewModel.plusMenuExpanded.collectAsStateWithLifecycle()
     val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
+    val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
+    val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
     val chatDocuments by viewModel.chatDocuments.collectAsStateWithLifecycle()
     val currentChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
     val loadModelWindow by viewModel.loadModelWindows.collectAsStateWithLifecycle()
+    val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val modelLoadState by viewModel.modelLoadState.collectAsStateWithLifecycle()
 
-    val contextUsage = if (isModelLoaded) InferenceClient.getContextUsage() else -1f
+    val messageCount by remember { derivedStateOf { viewModel.messages.value.size } }
+
+    val canSend by remember {
+        derivedStateOf { text.isNotBlank() && isModelLoaded && !isGenerating }
+    }
+
+    var contextUsage by remember { mutableFloatStateOf(-1f) }
+    LaunchedEffect(isModelLoaded, isGenerating, messageCount) {
+        if (!isModelLoaded) {
+            contextUsage = -1f
+            return@LaunchedEffect
+        }
+        contextUsage = InferenceClient.getContextUsage()
+        while (isGenerating) {
+            delay(250)
+            contextUsage = InferenceClient.getContextUsage()
+        }
+    }
     val contextText = if (contextUsage >= 0f) "${(contextUsage * 100).toInt()}%" else "--"
 
     val filePicker =
@@ -115,21 +138,24 @@ fun HomeScreenBottomBar(
                 )
             }
         }
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
+            .imePadding()
             .padding(horizontal = dimens.spacingMd)
             .padding(bottom = dimens.spacingXs)
     ) {
         AnimatedVisibility(
             visible = plusMenuExpanded,
-            enter = fadeIn(Motion.state()) + expandVertically(animationSpec = Motion.content()),
-            exit = fadeOut(Motion.state()) + shrinkVertically(animationSpec = Motion.content())
+            enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+            exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
         ) {
             PlusMenuCard(
                 webSearchEnabled = webSearchEnabled,
                 thinkingEnabled = thinkingEnabled,
+                showThinking = supportsThinking,
                 documentCount = chatDocuments.size,
                 onWebSearchToggle = { viewModel.toggleWebSearch() },
                 onThinkingToggle = { viewModel.toggleThinking() },
@@ -138,25 +164,25 @@ fun HomeScreenBottomBar(
                     filePicker.launch(arrayOf("text/*", "application/pdf", "application/json"))
                 },
                 onImageClick = {},
-                onDismiss = { viewModel.dismissPlusMenu() }
             )
         }
+
         AnimatedVisibility(
             visible = chatDocuments.isNotEmpty(),
-            enter = fadeIn(Motion.state()) + expandVertically(animationSpec = Motion.content()),
-            exit = fadeOut(Motion.state()) + shrinkVertically(animationSpec = Motion.content())
+            enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+            exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState())
                     .padding(bottom = dimens.spacingXs),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
             ) {
                 chatDocuments.forEach { doc ->
                     DocumentChip(
                         name = doc.name,
-                        onRemove = { viewModel.removeDocument(doc.id) }
+                        onRemove = { viewModel.removeDocument(doc.id) },
                     )
                 }
             }
@@ -164,19 +190,26 @@ fun HomeScreenBottomBar(
 
         AnimatedVisibility(
             visible = loadModelWindow,
-            enter = fadeIn(Motion.state()) + expandVertically(animationSpec = Motion.content()),
-            exit = fadeOut(Motion.state()) + shrinkVertically(animationSpec = Motion.content())
+            enter = fadeIn(Motion.state()) + expandVertically(Motion.content()),
+            exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
         ) {
-            LoadModelWindow(viewModel.installedModels){
-                viewModel.loadModel(it)
-            }
+            LoadModelWindow(
+                models = installedModels,
+                loadState = modelLoadState,
+                onLoad = { viewModel.loadModel(it) },
+                onUnload = { viewModel.unloadModel() },
+                onBrowseStore = {
+                    viewModel.toggleLoadModelWindow()
+                    navController.navigate(NavScreens.ModelStore.route)
+                },
+            )
         }
 
         Surface(
             shape = tnShapes.xl,
             color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f)
                 .compositeOver(MaterialTheme.colorScheme.surface),
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Column {
                 TnTextField(
@@ -184,7 +217,7 @@ fun HomeScreenBottomBar(
                     onValueChange = { text = it },
                     placeholder = "Send a message...",
                     modifier = Modifier.fillMaxWidth(),
-                    maxLines = 5
+                    maxLines = 5,
                 )
 
                 Row(
@@ -193,10 +226,10 @@ fun HomeScreenBottomBar(
                         .padding(
                             start = dimens.spacingSm,
                             end = dimens.spacingSm,
-                            bottom = dimens.spacingSm
+                            bottom = dimens.spacingSm,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
                 ) {
                     Box {
                         ActionButton(
@@ -211,8 +244,8 @@ fun HomeScreenBottomBar(
                                 contentColor = if (plusMenuExpanded)
                                     MaterialTheme.colorScheme.onPrimary
                                 else
-                                    MaterialTheme.colorScheme.primary
-                            )
+                                    MaterialTheme.colorScheme.primary,
+                            ),
                         )
                         if (chatDocuments.isNotEmpty()) {
                             Surface(
@@ -220,14 +253,14 @@ fun HomeScreenBottomBar(
                                 color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier
                                     .align(Alignment.TopEnd)
-                                    .size(16.dp)
+                                    .size(16.dp),
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
                                     Text(
                                         text = "${chatDocuments.size}",
                                         style = MaterialTheme.typography.labelSmall,
                                         color = MaterialTheme.colorScheme.onPrimary,
-                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f
+                                        fontSize = MaterialTheme.typography.labelSmall.fontSize * 0.85f,
                                     )
                                 }
                             }
@@ -235,11 +268,9 @@ fun HomeScreenBottomBar(
                     }
 
                     ActionButton(
-                        onClickListener = {
-                            viewModel.toggleLoadModelWindow()
-                        },
+                        onClickListener = { viewModel.toggleLoadModelWindow() },
                         icon = TnIcons.Leaf,
-                        contentDescription = "Load Model"
+                        contentDescription = "Load Model",
                     )
 
                     Spacer(Modifier.weight(1f))
@@ -247,26 +278,21 @@ fun HomeScreenBottomBar(
                     ContextIndicator(
                         text = contextText,
                         progress = if (contextUsage >= 0f) contextUsage else 0f,
-                        isActive = isModelLoaded
+                        isActive = isModelLoaded,
                     )
 
                     Spacer(Modifier.width(dimens.spacingXs))
 
-                    ActionButton(
-                        onClickListener = {},
-                        icon = TnIcons.Send,
-                        contentDescription = "Send",
-                        shape = tnShapes.full,
-                        colors = IconButtonDefaults.filledIconButtonColors(
-                            containerColor = if (text.isNotBlank())
-                                MaterialTheme.colorScheme.primary
-                            else
-                                MaterialTheme.colorScheme.primary.copy(0.15f),
-                            contentColor = if (text.isNotBlank())
-                                MaterialTheme.colorScheme.onPrimary
-                            else
-                                MaterialTheme.colorScheme.primary.copy(0.4f)
-                        )
+                    SendOrStopButton(
+                        canSend = canSend,
+                        isGenerating = isGenerating,
+                        onSend = {
+                            focusManager.clearFocus()
+                            val toSend = text
+                            text = ""
+                            viewModel.sendMessage(toSend)
+                        },
+                        onStop = { viewModel.stopGeneration() },
                     )
                 }
             }
@@ -275,42 +301,40 @@ fun HomeScreenBottomBar(
 }
 
 @Composable
-private fun ModelCard(modelName: String, onLoad: () -> Unit) {
-    val dimens = LocalDimens.current
+private fun SendOrStopButton(
+    canSend: Boolean,
+    isGenerating: Boolean,
+    onSend: () -> Unit,
+    onStop: () -> Unit,
+) {
     val tnShapes = LocalTnShapes.current
-    Card(shape = tnShapes.actionIcon, colors = CardDefaults.cardColors()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(dimens.spacingSm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(modelName)
-            ActionTextButton(onClickListener = onLoad, text = "Load", icon = TnIcons.Load)
-        }
-    }
-}
-
-@Composable
-private fun LoadModelWindow(modelList: StateFlow<List<ModelInfo>>, onLoadModel: (ModelInfo) -> Unit) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-    val installedModels = modelList.collectAsStateWithLifecycle()
-
-    Surface(
-        shape = tnShapes.xl,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
-        modifier = Modifier
-            .padding(bottom = dimens.spacingSm)
-    ) {
-        LazyColumn {
-            items(items = installedModels.value, key = { it.id }) {
-                ModelCard(it.name){
-                    onLoadModel(it)
-                }
-            }
-        }
+    if (isGenerating) {
+        ActionProgressButton(
+            onClickListener = onStop,
+            icon = TnIcons.PlayerStop,
+            contentDescription = "Stop generation",
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+            ),
+        )
+    } else {
+        ActionButton(
+            onClickListener = onSend,
+            icon = TnIcons.Send,
+            contentDescription = "Send",
+            shape = tnShapes.full,
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = if (canSend)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.primary.copy(0.15f),
+                contentColor = if (canSend)
+                    MaterialTheme.colorScheme.onPrimary
+                else
+                    MaterialTheme.colorScheme.primary.copy(0.4f),
+            ),
+        )
     }
 }
 
@@ -331,10 +355,10 @@ private fun DocumentChip(
                 start = dimens.spacingSm,
                 end = dimens.spacingXs,
                 top = dimens.spacingXxs,
-                bottom = dimens.spacingXxs
+                bottom = dimens.spacingXxs,
             ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs)
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
         ) {
             Text(
                 text = name,
@@ -342,7 +366,7 @@ private fun DocumentChip(
                 color = MaterialTheme.colorScheme.primary,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.width(100.dp)
+                modifier = Modifier.width(100.dp),
             )
             Icon(
                 imageVector = TnIcons.X,
@@ -352,9 +376,9 @@ private fun DocumentChip(
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() },
-                        onClick = onRemove
+                        onClick = onRemove,
                     ),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.6f),
             )
         }
     }
@@ -367,30 +391,41 @@ private fun ContextIndicator(
     isActive: Boolean,
 ) {
     val dimens = LocalDimens.current
-    val color = if (isActive)
+    val tnShapes = LocalTnShapes.current
+
+    val contentColor = if (isActive)
         MaterialTheme.colorScheme.primary
     else
-        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f)
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
 
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs)
+    Surface(
+        shape = tnShapes.full,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
     ) {
-        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(18.dp)) {
-            CircularProgressIndicator(
-                progress = { progress.coerceIn(0f, 1f) },
-                modifier = Modifier.size(16.dp),
-                color = color,
-                trackColor = color.copy(alpha = 0.15f),
-                strokeWidth = 2.dp
+        Row(
+            modifier = Modifier.padding(
+                horizontal = dimens.spacingMd,
+                vertical = dimens.spacingSm,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(dimens.iconSm)) {
+                CircularProgressIndicator(
+                    progress = { progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.size(dimens.iconSm),
+                    color = contentColor,
+                    trackColor = contentColor.copy(alpha = 0.15f),
+                    strokeWidth = 2.dp,
+                )
+            }
+            Text(
+                text = text,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = contentColor,
             )
         }
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Medium,
-            color = color
-        )
     }
 }
 
@@ -398,12 +433,12 @@ private fun ContextIndicator(
 private fun PlusMenuCard(
     webSearchEnabled: Boolean,
     thinkingEnabled: Boolean,
+    showThinking: Boolean,
     documentCount: Int,
     onWebSearchToggle: () -> Unit,
     onThinkingToggle: () -> Unit,
     onDocumentsClick: () -> Unit,
     onImageClick: () -> Unit,
-    onDismiss: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -413,49 +448,52 @@ private fun PlusMenuCard(
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
         tonalElevation = 0.dp,
         shadowElevation = 0.dp,
-        modifier = Modifier
-            .padding(bottom = dimens.spacingSm)
+        modifier = Modifier.padding(bottom = dimens.spacingSm),
     ) {
         Column(
             modifier = Modifier.padding(dimens.spacingSm),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
                 PlusMenuItem(
                     modifier = Modifier.weight(0.5f),
                     icon = TnIcons.Search,
                     label = "Web Search",
                     isToggled = webSearchEnabled,
-                    onClick = onWebSearchToggle
+                    onClick = onWebSearchToggle,
                 )
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Sparkles,
-                    label = "Thinking",
-                    isToggled = thinkingEnabled,
-                    onClick = onThinkingToggle
-                )
+                if (showThinking) {
+                    PlusMenuItem(
+                        modifier = Modifier.weight(0.5f),
+                        icon = TnIcons.Sparkles,
+                        label = "Thinking",
+                        isToggled = thinkingEnabled,
+                        onClick = onThinkingToggle,
+                    )
+                } else {
+                    Spacer(modifier = Modifier.weight(0.5f))
+                }
             }
             Row(
                 Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
                 PlusMenuItem(
                     modifier = Modifier.weight(0.5f),
                     icon = TnIcons.BookOpen,
                     label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
                     isToggled = documentCount > 0,
-                    onClick = onDocumentsClick
+                    onClick = onDocumentsClick,
                 )
                 PlusMenuItem(
                     modifier = Modifier.weight(0.5f),
                     icon = TnIcons.Photo,
                     label = "Image",
                     isToggled = false,
-                    onClick = onImageClick
+                    onClick = onImageClick,
                 )
             }
         }
@@ -479,7 +517,7 @@ private fun PlusMenuItem(
         else
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
         animationSpec = Motion.state(),
-        label = "plusItemBg"
+        label = "plusItemBg",
     )
     val contentColor by animateColorAsState(
         targetValue = if (isToggled)
@@ -487,7 +525,7 @@ private fun PlusMenuItem(
         else
             MaterialTheme.colorScheme.onSurface,
         animationSpec = Motion.state(),
-        label = "plusItemContent"
+        label = "plusItemContent",
     )
 
     Surface(
@@ -497,36 +535,36 @@ private fun PlusMenuItem(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                onClick = onClick
-            )
+                onClick = onClick,
+            ),
     ) {
         Row(
             modifier = Modifier.padding(
                 horizontal = dimens.spacingMd,
-                vertical = dimens.spacingSm
+                vertical = dimens.spacingSm,
             ),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm)
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
             Icon(
                 imageVector = icon,
                 contentDescription = null,
                 modifier = Modifier.size(dimens.iconMd),
-                tint = contentColor
+                tint = contentColor,
             )
             Text(
                 text = label,
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
                 color = contentColor,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
             if (isToggled) {
                 Icon(
                     imageVector = TnIcons.Check,
                     contentDescription = null,
                     modifier = Modifier.size(dimens.iconSm),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
                 )
             }
         }

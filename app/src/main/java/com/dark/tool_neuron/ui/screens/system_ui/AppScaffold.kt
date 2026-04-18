@@ -1,6 +1,6 @@
 package com.dark.tool_neuron.ui.screens.system_ui
 
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -44,7 +44,6 @@ fun AppScaffold() {
     val scope = rememberCoroutineScope()
 
     ModalNavigationDrawer(
-        modifier = Modifier.imePadding(),
         drawerState = drawerState,
         gesturesEnabled = showDrawer,
         drawerContent = {
@@ -75,7 +74,7 @@ fun AppScaffold() {
         }
     ) {
         Scaffold(
-            modifier = Modifier,
+            modifier = Modifier.fillMaxSize(),
             topBar = {
                 if (!isFullscreen) AppTopBar(
                     currentRoute = currentRoute,

@@ -20,6 +20,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.ui.components.action_window.ActionWindowOverlay
+import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.viewmodel.HomeViewModel
 import java.util.UUID
 
@@ -34,8 +35,12 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val context = LocalContext.current
+    val dimens = LocalDimens.current
     val chatDocuments by viewModel.chatDocuments.collectAsStateWithLifecycle()
     val currentChatId by viewModel.currentChatId.collectAsStateWithLifecycle()
+    val messages by viewModel.messages.collectAsStateWithLifecycle()
+    val streaming by viewModel.streamingFragment.collectAsStateWithLifecycle()
+    val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -70,15 +75,29 @@ fun HomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
+            .padding(innerPadding),
     ) {
-        Text(
-            text = "No model loaded.\nDownload one to get started.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.align(Alignment.Center)
-        )
+        if (messages.isEmpty() && streaming == null) {
+            Text(
+                text = "No model loaded.\nDownload one to get started.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else {
+            ChatMessageList(
+                messages = messages,
+                streaming = streaming,
+                isGenerating = isGenerating,
+                onRegenerate = viewModel::regenerateLast,
+                onDelete = viewModel::deleteMessage,
+                contentPadding = PaddingValues(
+                    horizontal = dimens.spacingLg,
+                    vertical = dimens.spacingMd,
+                ),
+            )
+        }
 
         ActionWindowOverlay(
             expanded = actionWindowExpanded,

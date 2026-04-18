@@ -22,6 +22,7 @@ import com.dark.tool_neuron.ui.screens.setup_screen.ModelSetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
+import com.dark.tool_neuron.viewmodel.HomeViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
@@ -60,10 +61,13 @@ fun TNavigation(
             IntroScreen(innerPadding)
         }
         composable(NavScreens.HomeScreen.route) {
+            val activity = LocalContext.current as ComponentActivity
+            val homeViewModel: HomeViewModel = hiltViewModel(activity)
             HomeScreen(
                 innerPadding = innerPadding,
                 actionWindowExpanded = actionWindowExpanded,
-                onActionWindowDismiss = onActionWindowDismiss
+                onActionWindowDismiss = onActionWindowDismiss,
+                viewModel = homeViewModel,
             )
         }
         composable(NavScreens.DevNotes.route) {
