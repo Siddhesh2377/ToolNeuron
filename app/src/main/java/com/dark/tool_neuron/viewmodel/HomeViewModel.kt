@@ -1,7 +1,5 @@
 package com.dark.tool_neuron.viewmodel
 
-import android.content.Context
-import androidx.core.net.toUri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.model.Chat
@@ -9,16 +7,20 @@ import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.MessageKind
-import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
-import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.service.inference.InferenceClient
-import com.dark.tool_neuron.service.inference.InferenceEvent
+import com.dark.tool_neuron.viewmodel.home_vm.GenerationOutcome
+import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
+import com.dark.tool_neuron.viewmodel.home_vm.InferenceCoordinator
+import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
+import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
+import com.dark.tool_neuron.viewmodel.home_vm.PillState
+import com.dark.tool_neuron.viewmodel.home_vm.StreamingFragment
+import com.dark.tool_neuron.viewmodel.home_vm.ToolCallCoordinator
 import dagger.hilt.android.lifecycle.HiltViewModel
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -30,74 +32,27 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.launch
-import org.json.JSONArray
-import org.json.JSONObject
 import java.util.UUID
 import javax.inject.Inject
 
-private const val MAX_TOKENS = 2048
-
-sealed interface ModelLoadState {
-    data object Idle : ModelLoadState
-    data class Loading(val modelId: String) : ModelLoadState
-    data class Active(val modelId: String) : ModelLoadState
-    data class Error(val modelId: String, val message: String) : ModelLoadState
-}
-
-enum class PillState(val label: String) {
-    Idle("No Model Loaded"),
-    Loading("Loading Model"),
-    Loaded("Model Loaded"),
-    Generating("Generating Reply"),
-    Thinking("Deep Thinking"),
-    ToolCalling("Tool Calling"),
-    Image("Image Mode"),
-    Rag("RAG Search"),
-    Error("Model Error"),
-}
-
-data class StreamingFragment(
-    val chatId: String,
-    val content: String,
-    val thinkingContent: String,
-)
-
-sealed interface GenerationStatus {
-    data object Hidden : GenerationStatus
-    data object Welcome : GenerationStatus
-    data object NoModelLoaded : GenerationStatus
-    data class ModelLoading(val modelName: String) : GenerationStatus
-    data class GeneratingText(
-        val modelName: String,
-        val wordCount: Int,
-        val contextUsage: Float,
-    ) : GenerationStatus
-    data class Thinking(
-        val modelName: String,
-        val wordCount: Int,
-        val contextUsage: Float,
-    ) : GenerationStatus
-    data class ExecutingTool(val toolName: String, val pluginName: String) : GenerationStatus
-    data class ToolComplete(
-        val toolName: String,
-        val success: Boolean,
-        val elapsedMs: Long,
-        val errorMessage: String? = null,
-    ) : GenerationStatus
-    data class Error(val message: String, val modelName: String? = null) : GenerationStatus
-}
+private const val ROLE_USER = "user"
+private const val ROLE_ASSISTANT = "assistant"
+private val WHITESPACE = "\\s+".toRegex()
 
 @HiltViewModel
 class HomeViewModel @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val modelRepo: ModelRepository,
     private val chatRepo: ChatRepository,
+    private val modelSession: ModelSessionManager,
+    private val toolCallCoordinator: ToolCallCoordinator,
+    private val inferenceCoordinator: InferenceCoordinator,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
     val chats: StateFlow<List<Chat>> = chatRepo.chats
+    val modelLoadState: StateFlow<ModelLoadState> = modelSession.loadState
+    val supportsThinking: StateFlow<Boolean> = modelSession.supportsThinking
 
     val activeModel: StateFlow<ModelInfo?> = installedModels
         .map { list -> list.firstOrNull { it.isActive } }
@@ -111,12 +66,6 @@ class HomeViewModel @Inject constructor(
 
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating: StateFlow<Boolean> = _isGenerating.asStateFlow()
-
-    private val _modelLoadState = MutableStateFlow<ModelLoadState>(ModelLoadState.Idle)
-    val modelLoadState: StateFlow<ModelLoadState> = _modelLoadState.asStateFlow()
-
-    private val _supportsThinking = MutableStateFlow(false)
-    val supportsThinking: StateFlow<Boolean> = _supportsThinking.asStateFlow()
 
     private val _actionWindowExpanded = MutableStateFlow(false)
     val actionWindowExpanded = _actionWindowExpanded.asStateFlow()
@@ -145,12 +94,15 @@ class HomeViewModel @Inject constructor(
     private val _lastMemoryMetrics = MutableStateFlow<MemoryMetrics?>(null)
     val lastMemoryMetrics: StateFlow<MemoryMetrics?> = _lastMemoryMetrics.asStateFlow()
 
+    private val _contextUsage = MutableStateFlow(0f)
+    val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
+
     val pillState: StateFlow<PillState> = combine(
         InferenceClient.isModelLoaded,
-        _modelLoadState,
+        modelSession.loadState,
         _isGenerating,
         _thinkingEnabled,
-        _supportsThinking,
+        modelSession.supportsThinking,
     ) { isLoaded, loadState, generating, thinkingOn, supportsThink ->
         when {
             generating && thinkingOn && supportsThink -> PillState.Thinking
@@ -162,15 +114,12 @@ class HomeViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PillState.Idle)
 
-    private val _contextUsage = MutableStateFlow(0f)
-    val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
-
     val generationStatus: StateFlow<GenerationStatus> = combine(
         InferenceClient.isModelLoaded,
-        _modelLoadState,
+        modelSession.loadState,
         _isGenerating,
         _thinkingEnabled,
-        _supportsThinking,
+        modelSession.supportsThinking,
         activeModel,
         _messages,
         _streamingFragment,
@@ -255,35 +204,11 @@ class HomeViewModel @Inject constructor(
     }
 
     fun loadModel(model: ModelInfo) {
-        viewModelScope.launch {
-            _modelLoadState.value = ModelLoadState.Loading(model.id)
-            val config = modelRepo.getConfig(model.id)
-            val configJson = buildConfigJson(config)
-            val result = when (model.pathType) {
-                PathType.FILE -> InferenceClient.loadModel(model.path, configJson)
-                PathType.CONTENT_URI -> InferenceClient.loadModelFromUri(
-                    context, model.path.toUri(), configJson
-                )
-            }
-            result
-                .onSuccess {
-                    modelRepo.setActive(model.id)
-                    _supportsThinking.value = InferenceClient.supportsThinking()
-                    _modelLoadState.value = ModelLoadState.Active(model.id)
-                }
-                .onFailure { err ->
-                    _supportsThinking.value = false
-                    _modelLoadState.value = ModelLoadState.Error(model.id, err.message ?: "Load failed")
-                }
-        }
+        viewModelScope.launch { modelSession.load(model) }
     }
 
     fun unloadModel() {
-        viewModelScope.launch {
-            InferenceClient.unloadModel()
-            _supportsThinking.value = false
-            _modelLoadState.value = ModelLoadState.Idle
-        }
+        viewModelScope.launch { modelSession.unload() }
     }
 
     fun sendMessage(text: String) {
@@ -323,7 +248,8 @@ class HomeViewModel @Inject constructor(
 
     fun stopGeneration() {
         if (!_isGenerating.value) return
-        InferenceClient.stopGeneration()
+        modelSession.stopGeneration()
+        generationJob?.cancel()
     }
 
     private fun runGeneration(chatId: String, isFirstTurn: Boolean, userText: String) {
@@ -331,59 +257,39 @@ class HomeViewModel @Inject constructor(
         _streamingFragment.value = StreamingFragment(chatId, "", "")
         _isGenerating.value = true
 
-        val thinkingOn = _thinkingEnabled.value && _supportsThinking.value
-        InferenceClient.setThinkingEnabled(thinkingOn)
-
-        val historyJson = buildMessagesJson(_messages.value)
+        val thinkingOn = _thinkingEnabled.value && modelSession.supportsThinking.value
+        modelSession.setThinkingEnabled(thinkingOn)
+        toolCallCoordinator.configureInference(_webSearchEnabled.value)
 
         generationJob = viewModelScope.launch {
-            var rawAssistant = ""
-            var cleanContent = ""
-            var thinkingContent = ""
-            var errorMessage: String? = null
-            var textMetrics: TextMetrics? = null
-            var memoryMetrics: MemoryMetrics? = null
-
+            var outcome: GenerationOutcome? = null
+            var fallbackError: String? = null
             try {
-                InferenceClient.generateMultiTurn(historyJson, MAX_TOKENS)
-                    .transformWhile { event ->
-                        emit(event)
-                        event !is InferenceEvent.Done && event !is InferenceEvent.Error
-                    }
-                    .collect { event ->
-                        when (event) {
-                            is InferenceEvent.Token -> {
-                                rawAssistant += event.text
-                                val (clean, think) = parseThinking(rawAssistant)
-                                cleanContent = clean
-                                thinkingContent = think
-                                _streamingFragment.value = StreamingFragment(chatId, clean, think)
-                            }
-                            is InferenceEvent.Metrics -> {
-                                val parsed = parseMetrics(event.metricsJson)
-                                textMetrics = parsed.first
-                                memoryMetrics = parsed.second
-                                parsed.first?.let { _lastTextMetrics.value = it }
-                                parsed.second?.let { _lastMemoryMetrics.value = it }
-                            }
-                            is InferenceEvent.Error -> errorMessage = event.message
-                            else -> {}
-                        }
-                    }
+                outcome = inferenceCoordinator.run(
+                    chatId = chatId,
+                    onStreamingUpdate = { content, thinking ->
+                        _streamingFragment.value = StreamingFragment(chatId, content, thinking)
+                    },
+                    onToolExecuted = { msgs -> _messages.value = msgs },
+                    onMetrics = { text, mem ->
+                        text?.let { _lastTextMetrics.value = it }
+                        mem?.let { _lastMemoryMetrics.value = it }
+                    },
+                )
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                errorMessage = e.message
+                fallbackError = e.message
             } finally {
                 finalizeAssistantMessage(
                     chatId = chatId,
-                    content = cleanContent,
-                    thinking = thinkingContent,
-                    error = errorMessage,
+                    content = outcome?.content.orEmpty(),
+                    thinking = outcome?.thinking.orEmpty(),
+                    error = outcome?.error ?: fallbackError,
                     isFirstTurn = isFirstTurn,
                     userText = userText,
-                    textMetrics = textMetrics,
-                    memoryMetrics = memoryMetrics,
+                    textMetrics = outcome?.textMetrics,
+                    memoryMetrics = outcome?.memoryMetrics,
                 )
             }
         }
@@ -431,108 +337,8 @@ class HomeViewModel @Inject constructor(
         _isGenerating.value = false
     }
 
-    private fun parseMetrics(json: String): Pair<TextMetrics?, MemoryMetrics?> {
-        if (json.isBlank()) return null to null
-        return try {
-            val o = JSONObject(json)
-            val text = TextMetrics(
-                tokensPerSecond = o.optDouble("tokensPerSecond", 0.0),
-                timeToFirstTokenMs = o.optLong("timeToFirstTokenMs", 0L),
-                totalTimeMs = o.optLong("totalTimeMs", 0L),
-                promptTokens = o.optInt("tokensEvaluated", 0),
-                generatedTokens = o.optInt("tokensPredicted", 0),
-            )
-            val mem = MemoryMetrics(
-                modelSizeMB = o.optDouble("modelSizeMB", 0.0),
-                contextSizeMB = o.optDouble("contextSizeMB", 0.0),
-                peakMemoryMB = o.optDouble("peakMemoryMB", 0.0),
-                usagePercent = o.optDouble("memoryUsagePercent", 0.0),
-            )
-            val textValid = text.tokensPerSecond > 0.0 || text.generatedTokens > 0
-            val memValid = mem.modelSizeMB > 0.0 || mem.peakMemoryMB > 0.0
-            (if (textValid) text else null) to (if (memValid) mem else null)
-        } catch (_: Exception) {
-            null to null
-        }
-    }
-
-    private fun buildMessagesJson(messages: List<ChatMessage>): String {
-        val arr = JSONArray()
-        messages.forEach { msg ->
-            if (msg.role == ROLE_USER || msg.role == ROLE_ASSISTANT) {
-                arr.put(JSONObject().apply {
-                    put("role", msg.role)
-                    put("content", msg.content)
-                })
-            }
-        }
-        return arr.toString()
-    }
-
-    private fun buildConfigJson(config: ModelConfig?): String {
-        if (config == null) return "{}"
-        val sb = StringBuilder(256).append('{')
-        val loading = config.loadingParamsJson
-        val inference = config.inferenceParamsJson
-        if (loading != "{}" && loading.isNotBlank()) {
-            val inner = loading.trim().removePrefix("{").removeSuffix("}")
-            if (inner.isNotBlank()) sb.append(inner).append(',')
-        }
-        if (inference != "{}" && inference.isNotBlank()) {
-            val inner = inference.trim().removePrefix("{").removeSuffix("}")
-            if (inner.isNotBlank()) sb.append(inner)
-        }
-        if (sb.last() == ',') sb.deleteCharAt(sb.length - 1)
-        sb.append('}')
-        return sb.toString()
-    }
-
-    private fun parseThinking(raw: String): Pair<String, String> {
-        val content = StringBuilder()
-        val thinking = StringBuilder()
-        var i = 0
-        while (i < raw.length) {
-            val next = THINK_TAGS
-                .map { (open, _) -> raw.indexOf(open, i) to open }
-                .filter { it.first >= 0 }
-                .minByOrNull { it.first }
-            if (next == null) {
-                content.append(raw, i, raw.length)
-                break
-            }
-            val (start, openTag) = next
-            content.append(raw, i, start)
-            val closeTag = THINK_TAGS.first { it.first == openTag }.second
-            val bodyStart = start + openTag.length
-            val end = raw.indexOf(closeTag, bodyStart)
-            if (end < 0) {
-                if (thinking.isNotEmpty()) thinking.append("\n\n")
-                thinking.append(raw, bodyStart, raw.length)
-                i = raw.length
-            } else {
-                if (thinking.isNotEmpty()) thinking.append("\n\n")
-                thinking.append(raw, bodyStart, end)
-                i = end + closeTag.length
-            }
-        }
-        return content.toString().trim() to thinking.toString().trim()
-    }
-
     private fun String.wordCount(): Int {
         if (isBlank()) return 0
         return trim().split(WHITESPACE).count { it.isNotEmpty() }
-    }
-
-    private companion object {
-        const val ROLE_USER = "user"
-        const val ROLE_ASSISTANT = "assistant"
-
-        val WHITESPACE = "\\s+".toRegex()
-
-        val THINK_TAGS = listOf(
-            "<think>" to "</think>",
-            "[THINK]" to "[/THINK]",
-            "<reasoning>" to "</reasoning>",
-        )
     }
 }
