@@ -30,8 +30,8 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
-import com.dark.tool_neuron.viewmodel.GenerationStatus
-import com.dark.tool_neuron.viewmodel.StreamingFragment
+import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
+import com.dark.tool_neuron.viewmodel.home_vm.StreamingFragment
 import kotlinx.coroutines.launch
 
 private const val ROLE_ASSISTANT = "assistant"

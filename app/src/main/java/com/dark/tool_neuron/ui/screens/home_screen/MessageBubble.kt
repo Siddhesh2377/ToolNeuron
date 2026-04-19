@@ -20,12 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.model.ChatMessage
+import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.ui.components.markdown.MarkdownText
 import com.dark.tool_neuron.ui.components.markdown.ThinkingBlock
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 
 private const val ROLE_USER = "user"
+private const val ROLE_TOOL = "tool"
 private val UserBubbleMaxWidth = 280.dp
 
 @Composable
@@ -37,22 +39,25 @@ fun MessageBubble(
     onDelete: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (message.role == ROLE_USER) {
-        UserBubble(
-            message = message,
-            canDelete = canDelete,
-            onDelete = onDelete,
-            modifier = modifier,
-        )
-    } else {
-        AssistantBubble(
-            message = message,
-            canRegenerate = canRegenerate,
-            canDelete = canDelete,
-            onRegenerate = onRegenerate,
-            onDelete = onDelete,
-            modifier = modifier,
-        )
+    when {
+        message.kind == MessageKind.ToolResult || message.role == ROLE_TOOL ->
+            ToolResultBubble(message = message, modifier = modifier)
+        message.role == ROLE_USER ->
+            UserBubble(
+                message = message,
+                canDelete = canDelete,
+                onDelete = onDelete,
+                modifier = modifier,
+            )
+        else ->
+            AssistantBubble(
+                message = message,
+                canRegenerate = canRegenerate,
+                canDelete = canDelete,
+                onRegenerate = onRegenerate,
+                onDelete = onDelete,
+                modifier = modifier,
+            )
     }
 }
 
