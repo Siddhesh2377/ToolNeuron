@@ -73,6 +73,7 @@ dependencies {
     implementation(project(":hxs_encryptor"))
     implementation(project(":hxs"))
     implementation(project(":download_manager"))
+    implementation(project(":networking"))
 
     // AI inference AARs
     implementation(files("../libs/gguf_lib-release.aar"))
@@ -81,6 +82,7 @@ dependencies {
     implementation("org.apache.commons:commons-compress:1.27.1")
     implementation("org.tukaani:xz:1.10")
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
     // DI
     implementation(libs.hilt.android)
