@@ -196,6 +196,22 @@ object TnIcons {
         )
     }
 
+    val Globe by lazy {
+        icon(
+            "M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0",
+            "M3.6 9h16.8",
+            "M3.6 15h16.8",
+            "M11.5 3a17 17 0 0 0 0 18",
+            "M12.5 3a17 17 0 0 1 0 18",
+        )
+    }
+
+    val Puzzle by lazy {
+        icon(
+            "M4 7h3a1 1 0 0 0 1 -1v-1a2 2 0 0 1 4 0v1a1 1 0 0 0 1 1h3a1 1 0 0 1 1 1v3a1 1 0 0 0 1 1h1a2 2 0 0 1 0 4h-1a1 1 0 0 0 -1 1v3a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-1a2 2 0 0 0 -4 0v1a1 1 0 0 1 -1 1h-3a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1h1a2 2 0 0 0 0 -4h-1a1 1 0 0 1 -1 -1v-3a1 1 0 0 1 1 -1"
+        )
+    }
+
 }
 
 private fun icon(vararg paths: String): ImageVector {
