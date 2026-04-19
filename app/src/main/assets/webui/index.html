@@ -13,6 +13,29 @@
         .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); }
         .chat-bubble { max-width: 85%; }
         .tab-btn.active { background-color: rgb(30 41 59); color: white; }
+        
+        /* Performance Popover */
+        .perf-popover {
+            visibility: hidden;
+            opacity: 0;
+            transition: opacity 0.2s;
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            z-index: 50;
+            width: 200px;
+            background: #1e293b;
+            border: 1px border #334155;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        .perf-trigger:hover .perf-popover {
+            visibility: visible;
+            opacity: 1;
+        }
     </style>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col">
@@ -61,6 +84,12 @@
                 </div>
             </div>
 
+            <div class="px-4 py-2 border-t border-slate-800 flex gap-2 overflow-x-auto bg-slate-950/30">
+                <button onclick="setTestPrompt('What is a lunar eclipse?')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-700 text-xs text-slate-400 hover:border-blue-500 hover:text-white transition-all">Lunar Eclipse</button>
+                <button onclick="setTestPrompt('Tell me a fact about the romans')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-700 text-xs text-slate-400 hover:border-blue-500 hover:text-white transition-all">Roman Fact</button>
+                <button onclick="setTestPrompt('Solve 2+2')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-700 text-xs text-slate-400 hover:border-blue-500 hover:text-white transition-all">Simple Math</button>
+            </div>
+
             <div class="p-4 glass border-t border-slate-800">
                 <div class="max-w-4xl mx-auto relative">
                     <textarea id="chat-input" rows="1" placeholder="Type a message..." 
@@ -93,6 +122,17 @@
                                 <option value="1024x1024">1024 x 1024 (XL)</option>
                             </select>
                         </div>
+                        <div class="space-y-2">
+                            <div class="flex justify-between items-center">
+                                <label class="text-sm font-semibold text-slate-300">Iterations</label>
+                                <input type="number" id="image-steps-num" value="20" min="1" max="100" class="bg-slate-900 border border-slate-800 rounded text-xs w-12 text-center py-0.5 focus:ring-1 focus:ring-purple-500 outline-none">
+                            </div>
+                            <input type="range" id="image-steps-slider" min="1" max="20" value="20" class="w-full accent-purple-600 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer">
+                            <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+                                <span>1</span>
+                                <span id="image-steps-max-label">20</span>
+                            </div>
+                        </div>
                         <button id="generate-btn" class="w-full bg-purple-600 hover:bg-purple-500 text-white py-4 rounded-2xl font-bold flex items-center justify-center gap-2 shadow-lg shadow-purple-900/20 transition-all active:scale-[0.98]">
                             <i data-lucide="sparkles" class="w-5 h-5"></i>
                             Generate Image
@@ -101,6 +141,13 @@
 
                     <!-- Prompt Area -->
                     <div class="flex-1 flex flex-col gap-4">
+                        <div class="flex gap-2 overflow-x-auto pb-1">
+                            <button onclick="setImagePrompt('A serene mountain lake at dawn')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-800 text-xs text-slate-400 hover:border-purple-500 hover:text-white transition-all">Mountain Lake</button>
+                            <button onclick="setImagePrompt('Cyberpunk street market, neon lights')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-800 text-xs text-slate-400 hover:border-purple-500 hover:text-white transition-all">Cyberpunk</button>
+                            <button onclick="setImagePrompt('Vibrant coral reef underwater')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-800 text-xs text-slate-400 hover:border-purple-500 hover:text-white transition-all">Coral Reef</button>
+                            <button onclick="setImagePrompt('Mystical forest with glowing mushrooms')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-800 text-xs text-slate-400 hover:border-purple-500 hover:text-white transition-all">Mystical Forest</button>
+                            <button onclick="setImagePrompt('Futuristic spaceship cockpit view')" class="whitespace-nowrap px-3 py-1 rounded-full border border-slate-800 text-xs text-slate-400 hover:border-purple-500 hover:text-white transition-all">Spaceship</button>
+                        </div>
                         <textarea id="image-prompt" placeholder="Enter your prompt here... (e.g. A futuristic robot reading a book in a library)" 
                             class="flex-1 min-h-[160px] bg-slate-900 border border-slate-800 rounded-2xl p-6 outline-none focus:ring-2 focus:ring-purple-500 text-lg leading-relaxed resize-none"></textarea>
                     </div>
@@ -173,6 +220,7 @@
                                     <th class="px-6 py-4">Type</th>
                                     <th class="px-6 py-4">Family</th>
                                     <th class="px-6 py-4">Quantization</th>
+                                    <th class="px-6 py-4">Status</th>
                                     <th class="px-6 py-4">Backend</th>
                                 </tr>
                             </thead>
@@ -203,6 +251,18 @@
         </div>
     </div>
 
+    <!-- Image Overlay Popup -->
+    <div id="image-overlay" class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-black/90 backdrop-blur-md cursor-zoom-out" onclick="closeImageOverlay()">
+        <button class="absolute top-6 right-6 text-white/50 hover:text-white p-2 transition-all">
+            <i data-lucide="x" class="w-8 h-8"></i>
+        </button>
+        <img id="overlay-img" src="" alt="Full size" class="max-w-[90%] max-h-[90%] object-contain rounded-xl shadow-2xl cursor-default" onclick="event.stopPropagation()">
+    </div>
+
+    <script>
+        // Set dynamic base URL for API calls
+        window.BASE_URL = window.location.origin;
+    </script>
     <script src="app.js"></script>
 </body>
 </html>

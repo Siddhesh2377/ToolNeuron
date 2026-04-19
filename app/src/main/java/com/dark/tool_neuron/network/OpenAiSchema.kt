@@ -35,7 +35,16 @@ data class ChatCompletionResponse(
     val created: Long,
     val model: String,
     val choices: List<ChatChoice>,
-    val usage: Usage? = null
+    val usage: Usage? = null,
+    val performance: PerformanceMetrics? = null
+)
+
+@Serializable
+data class PerformanceMetrics(
+    @SerialName("total_time_ms") val totalTimeMs: Float,
+    @SerialName("tokens_per_second") val tokensPerSecond: Float,
+    @SerialName("prompt_tokens") val promptTokens: Int,
+    @SerialName("completion_tokens") val completionTokens: Int
 )
 
 @Serializable
@@ -52,14 +61,14 @@ data class Usage(
     @SerialName("completion_tokens") val completionTokens: Int,
     @SerialName("total_tokens") val totalTokens: Int
 )
-
 @Serializable
 data class ImageGenerationRequest(
     val prompt: String,
     val model: String? = null,
-    @SerialName("n") val count: Int = 1,
+    val n: Int? = 1,
     val size: String = "512x512",
-    @SerialName("response_format") val responseFormat: String = "b64_json",
+    val steps: Int? = null,
+    @SerialName("response_format") val responseFormat: String? = "b64_json",
     val user: String? = null
 )
 
@@ -121,7 +130,9 @@ data class RunningModel(
     val digest: String? = null,
     val details: RunningModelDetails,
     @SerialName("expires_at") val expiresAt: String? = null,
-    @SerialName("size_vram") val sizeVram: Long
+    @SerialName("size_vram") val sizeVram: Long,
+    val status: String = "idle",
+    val error: String? = null
 )
 
 @Serializable

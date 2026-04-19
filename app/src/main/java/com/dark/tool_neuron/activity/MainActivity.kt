@@ -193,11 +193,13 @@ class MainActivity : ComponentActivity() {
                     val apiCallActive by AppStateManager.apiCallActive.collectAsState()
                     val apiCallType by AppStateManager.apiCallType.collectAsState()
                     val apiCallModel by AppStateManager.apiCallModel.collectAsState()
+                    val apiCallDetails by AppStateManager.apiCallDetails.collectAsState()
 
                     ApiStatusOverlay(
                         visible = apiCallActive,
                         type = apiCallType,
-                        model = apiCallModel
+                        model = apiCallModel,
+                        details = apiCallDetails
                     )
                 }
             }
@@ -241,7 +243,7 @@ fun AppNavigation(
     val scope = rememberCoroutineScope()
     val navController = rememberNavController()
 
-    // Activity-scoped ViewModels for shared state between Chat and Personas
+    // Activity-scoped ViewModels for shared state across navigation
     val chatViewModel: ChatViewModel = hiltViewModel()
     val llmModelViewModel: LLMModelViewModel = hiltViewModel()
 
@@ -276,7 +278,6 @@ fun AppNavigation(
 
         // ============ ONBOARDING SCREENS ============
         composable(Screen.Intro.route) {
-            // IntroScreen was removed — skip straight to Guide or Migration
             LaunchedEffect(Unit) {
                 val nextRoute = if (needsMigration) Screen.Migration.route else Screen.Guide.route
                 navController.navigate(nextRoute) {
@@ -315,12 +316,10 @@ fun AppNavigation(
                         termsDataStore.acceptTerms()
                     }
                     if (hasModelsInstalled) {
-                        // Returning user: skip setup, go to chat
                         navController.navigate(Screen.Chat.route) {
                             popUpTo(0) { inclusive = true }
                         }
                     } else {
-                        // New user: proceed to setup
                         navController.navigate(Screen.OnboardingSetup.route) {
                             popUpTo(Screen.Terms.route) { inclusive = true }
                         }
@@ -340,7 +339,7 @@ fun AppNavigation(
         }
 
         // ============ MAIN APP ROUTES ============
-        composable(Screen.Chat.route) { _ ->
+        composable(Screen.Chat.route) {
             HomeScreen(
                 onSettingsClick = {
                     navController.navigate(Screen.Settings.route)
@@ -412,7 +411,8 @@ fun AppNavigation(
 private fun ApiStatusOverlay(
     visible: Boolean,
     type: String,
-    model: String
+    model: String,
+    details: String? = null
 ) {
     AnimatedVisibility(
         visible = visible,
@@ -482,6 +482,16 @@ private fun ApiStatusOverlay(
                         color = MaterialTheme.colorScheme.onSecondaryContainer,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
+
+                    details?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 4.dp)
+                        )
+                    }
 
                     Spacer(Modifier.height(Standards.SpacingMd))
 

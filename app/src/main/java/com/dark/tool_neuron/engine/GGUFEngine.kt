@@ -24,12 +24,21 @@ import kotlinx.coroutines.sync.withLock
 import com.dark.gguf_lib.models.GenerationEvent as LibGenerationEvent
 
 class GGUFEngine {
-    private val engine = GGMLEngine()
+    private var engine = GGMLEngine()
     private var currentModelId: String? = null
     private val loadMutex = Mutex()
 
     private var currentToolsJson: String? = null
     private var currentToolCallingConfig: ToolCallingConfig? = null
+
+    private var characterEngine: com.dark.gguf_lib.CharacterEngine? = null
+
+    private fun getCharacterEngine(): com.dark.gguf_lib.CharacterEngine {
+        if (characterEngine == null) {
+            characterEngine = com.dark.gguf_lib.CharacterEngine(engine)
+        }
+        return characterEngine!!
+    }
 
     val isLoaded: Boolean get() = engine.isLoaded
 
@@ -40,7 +49,8 @@ class GGUFEngine {
                 return@withContext Result.success(Unit)
             }
 
-            if (engine.isLoaded) unloadInternal()
+            // Always perform a hard reset when switching models to ensure absolute clean state
+            unloadInternal(hard = true)
 
             val schema = GgufEngineSchema.fromJson(
                 config?.modelLoadingParams,
@@ -65,7 +75,7 @@ class GGUFEngine {
                 }
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG, "OOM loading model", e)
-                try { engine.unload() } catch (_: Throwable) {}
+                unloadInternal(hard = true)
                 return@withContext Result.failure(Exception("Out of memory while loading ${model.modelName}"))
             } catch (e: Exception) {
                 return@withContext Result.failure(e)
@@ -100,7 +110,8 @@ class GGUFEngine {
             val modelId = "fd_$fd"
             if (isModelLoaded(modelId)) return@withContext Result.success(Unit)
 
-            if (engine.isLoaded) unloadInternal()
+            // Always perform a hard reset when switching models
+            unloadInternal(hard = true)
 
             val schema = GgufEngineSchema.fromJson(
                 config?.modelLoadingParams,
@@ -121,13 +132,17 @@ class GGUFEngine {
                 )
 
                 if (!success) {
+                    // If load fails, we MUST close the FD because we detached it from the caller
+                    closeFdSafely(fd)
                     return@withContext Result.failure(Exception("Engine failed to load from file descriptor $fd"))
                 }
             } catch (e: OutOfMemoryError) {
                 Log.e(TAG, "OOM loading model from FD", e)
-                try { engine.unload() } catch (_: Throwable) {}
+                closeFdSafely(fd)
+                unloadInternal(hard = true)
                 return@withContext Result.failure(Exception("Out of memory while loading model from FD"))
             } catch (e: Exception) {
+                closeFdSafely(fd)
                 return@withContext Result.failure(e)
             }
 
@@ -168,16 +183,37 @@ class GGUFEngine {
     }
 
     suspend fun unload() = loadMutex.withLock {
-        unloadInternal()
+        unloadInternal(hard = true)
     }
 
-    private suspend fun unloadInternal() = withContext(Dispatchers.IO) {
-        if (engine.isLoaded) {
-            engine.unload()
+    private suspend fun unloadInternal(hard: Boolean = false) = withContext(Dispatchers.IO) {
+        if (engine.isLoaded || hard) {
+            try {
+                engine.unload()
+            } catch (_: Throwable) {}
+
+            if (hard) {
+                // Nuclear reset: drop the whole engine instance to force native cleanup
+                engine = GGMLEngine()
+                characterEngine = null
+
+                // Aggressive GC to reclaim native memory
+                System.gc()
+                System.runFinalization()
+                System.gc()
+            }
+
             currentModelId = null
             currentToolsJson = null
             currentToolCallingConfig = null
         }
+    }
+
+    /** Safely close a raw fd obtained via detachFd() */
+    private fun closeFdSafely(fd: Int) {
+        try {
+            android.os.ParcelFileDescriptor.adoptFd(fd).close()
+        } catch (_: Throwable) {}
     }
 
     fun getCurrentModelId(): String? = currentModelId
@@ -379,13 +415,11 @@ class GGUFEngine {
 
     // ── Character Engine ──
 
-    private val characterEngine by lazy { com.dark.gguf_lib.CharacterEngine(engine) }
-
     fun setPersonality(personalityJson: String): Boolean {
         if (!engine.isLoaded) return false
         return try {
             val j = org.json.JSONObject(personalityJson)
-            characterEngine.setPersonality(com.dark.gguf_lib.Personality(
+            getCharacterEngine().setPersonality(com.dark.gguf_lib.Personality(
                 name = j.optString("name", ""),
                 persona = j.optString("persona", ""),
                 temperature = j.optDouble("temperature", 0.7).toFloat(),
@@ -404,7 +438,7 @@ class GGUFEngine {
     fun setMood(mood: Int): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.setMood(com.dark.gguf_lib.Mood.entries[mood])
+            getCharacterEngine().setMood(com.dark.gguf_lib.Mood.entries[mood])
             true
         } catch (_: Exception) { false }
     }
@@ -412,7 +446,7 @@ class GGUFEngine {
     fun setCustomMood(tempMod: Float, topPMod: Float, repPenaltyMod: Float): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.setCustomMood(tempMod, topPMod, repPenaltyMod)
+            getCharacterEngine().setCustomMood(tempMod, topPMod, repPenaltyMod)
             true
         } catch (_: Exception) { false }
     }
@@ -420,21 +454,21 @@ class GGUFEngine {
     fun getCharacterContext(): String {
         if (!engine.isLoaded) return ""
         return try {
-            characterEngine.getContext()
+            getCharacterEngine().getContext()
         } catch (_: Exception) { "" }
     }
 
     fun buildPrompt(userPrompt: String): String {
         if (!engine.isLoaded) return userPrompt
         return try {
-            characterEngine.buildPrompt(userPrompt)
+            getCharacterEngine().buildPrompt(userPrompt)
         } catch (_: Exception) { userPrompt }
     }
 
     fun setUncensored(enabled: Boolean): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.setUncensored(enabled)
+            getCharacterEngine().setUncensored(enabled)
             true
         } catch (_: Exception) { false }
     }
@@ -442,7 +476,7 @@ class GGUFEngine {
     fun isUncensored(): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.isUncensored
+            getCharacterEngine().isUncensored
         } catch (_: Exception) { false }
     }
 
@@ -451,21 +485,21 @@ class GGUFEngine {
     fun calcVectors(prompt: String, onProgress: ((Float) -> Unit)? = null): FloatArray? {
         if (!engine.isLoaded) return null
         return try {
-            characterEngine.calcVectors(prompt, onProgress)
+            getCharacterEngine().calcVectors(prompt, onProgress)
         } catch (_: Exception) { null }
     }
 
     fun applyVectors(data: FloatArray, strength: Float = 1.0f, ilStart: Int = -1, ilEnd: Int = -1): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.applyVectors(data, strength, ilStart, ilEnd)
+            getCharacterEngine().applyVectors(data, strength, ilStart, ilEnd)
         } catch (_: Exception) { false }
     }
 
     fun clearVectors(): Boolean {
         if (!engine.isLoaded) return false
         return try {
-            characterEngine.clearVectors()
+            getCharacterEngine().clearVectors()
             true
         } catch (_: Exception) { false }
     }

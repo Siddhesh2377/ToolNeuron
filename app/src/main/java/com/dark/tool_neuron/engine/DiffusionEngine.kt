@@ -41,8 +41,10 @@ class DiffusionEngine {
     private var sdManager: StableDiffusionManager? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var observeJob: Job? = null
-    private val initDeferred = CompletableDeferred<Boolean>()
+    private var initDeferred = CompletableDeferred<Boolean>()
     private val loadMutex = Mutex()
+    private var context: Context? = null
+    private var isFullyInitialized = false
 
     // Expose state flows
     val backendState: StateFlow<DiffusionBackendState>
@@ -55,6 +57,13 @@ class DiffusionEngine {
         get() = sdManager?.isGenerating ?: MutableStateFlow(false)
 
     suspend fun init(context: Context, safetyCheckerEnabled: Boolean = true) {
+        this.context = context.applicationContext
+        
+        if (isFullyInitialized) {
+            Log.i(TAG, "Re-initializing DiffusionEngine...")
+            initDeferred = CompletableDeferred()
+        }
+
         try {
             val mgr = StableDiffusionManager.getInstance(context)
             sdManager = mgr
@@ -66,12 +75,41 @@ class DiffusionEngine {
                     safetyCheckerAssetPath = if (safetyCheckerEnabled) "safety_checker.mnn" else ""
                 )
             )
+            isFullyInitialized = true
             initDeferred.complete(true)
             Log.i(TAG, "DiffusionEngine initialized successfully")
         } catch (e: Exception) {
+            isFullyInitialized = false
             initDeferred.complete(false)
             Log.e(TAG, "Init failed: ${e.message}", e)
             throw e
+        }
+    }
+
+    /**
+     * Performs a deep cleanup of the entire engine and its native manager.
+     */
+    suspend fun hardReset() = loadMutex.withLock {
+        withContext(Dispatchers.IO) {
+            Log.w(TAG, "PERFORMING HARD HARDWARE RESET...")
+            try {
+                sdManager?.stopBackend()
+                sdManager?.cleanup()
+            } catch (e: Exception) {
+                Log.e(TAG, "Cleanup error: ${e.message}")
+            }
+            
+            sdManager = null
+            isFullyInitialized = false
+            
+            clearResourceCache()
+            
+            // Aggressive Garbage Collection to drop JNI/RPC handles
+            repeat(3) {
+                System.gc()
+                System.runFinalization()
+                kotlinx.coroutines.delay(200)
+            }
         }
     }
 
@@ -105,6 +143,9 @@ class DiffusionEngine {
                 }
 
                 try {
+                    // BEFORE LOADING: Clear persistent driver/MNN caches to prevent resource exhaustion
+                    clearResourceCache()
+                    
                     val model = modelConfig {
                         name(name)
                         modelDir(modelDir)
@@ -131,6 +172,60 @@ class DiffusionEngine {
                     Result.failure(e)
                 }
             }
+        }
+    }
+
+    /** 
+     * Clears internal NPU/MNN cache files that can cause "Operation not permitted" 
+     * after multiple model switches.
+     */
+    private fun clearResourceCache() {
+        val ctx = context ?: return
+        try {
+            Log.i(TAG, "Executing aggressive resource cache purge...")
+            
+            // Force GC to encourage releasing JNI/NPU handles
+            System.gc()
+            System.runFinalization()
+            System.gc()
+
+            // 1. Clear standard Android cache
+            ctx.cacheDir.deleteRecursively()
+            ctx.cacheDir.mkdirs()
+            
+            // 2. Clear any temporary runtime artifacts in filesDir
+            val runtimeDir = java.io.File(ctx.filesDir, "runtime_libs/qnnlibs")
+            if (runtimeDir.exists()) {
+                runtimeDir.listFiles()?.forEach { file ->
+                    // Do NOT delete the .so files, just the cached graphs and bins
+                    if (file.name.endsWith(".graph") || file.name.endsWith(".bin") || file.name.endsWith(".cache")) {
+                        Log.d(TAG, "Clearing runtime artifact: ${file.name}")
+                        file.delete()
+                    }
+                }
+            }
+
+            // 3. Clear potential QNN specific cache dirs
+            val qnnCache = java.io.File(ctx.filesDir, "qnn_cache")
+            if (qnnCache.exists()) {
+                qnnCache.deleteRecursively()
+                qnnCache.mkdirs()
+            }
+            
+            // 4. Also check model directories for sidecar .cache files
+            val modelsDir = java.io.File(ctx.filesDir, "models")
+            if (modelsDir.exists()) {
+                modelsDir.walkTopDown().forEach { file ->
+                    if (file.name.endsWith(".cache") || file.name.endsWith(".mnn.bin")) {
+                        Log.d(TAG, "Deleting orphaned model cache: ${file.name}")
+                        file.delete()
+                    }
+                }
+            }
+            
+            Log.i(TAG, "Resource cache purge complete")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to clear resource cache: ${e.message}")
         }
     }
 

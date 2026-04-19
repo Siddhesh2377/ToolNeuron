@@ -16,6 +16,7 @@ import io.ktor.server.engine.embeddedServer
 import io.ktor.server.http.content.staticResources
 import io.ktor.server.netty.Netty
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.server.request.receive
@@ -48,7 +49,7 @@ class RemoteServer @Inject constructor(
     private var serverJob: Job? = null
     private val scope = CoroutineScope(Dispatchers.IO)
     private val json = Json {
-        prettyPrint = true
+        prettyPrint = false
         isLenient = true
         ignoreUnknownKeys = true
         encodeDefaults = true
@@ -71,6 +72,14 @@ class RemoteServer @Inject constructor(
                 embeddedServer(Netty, port = port) {
                     install(ContentNegotiation) {
                         json(json)
+                    }
+                    install(CORS) {
+                        anyHost()
+                        allowHeader(HttpHeaders.ContentType)
+                        allowHeader(HttpHeaders.Authorization)
+                        allowMethod(HttpMethod.Options)
+                        allowMethod(HttpMethod.Get)
+                        allowMethod(HttpMethod.Post)
                     }
                     routing {
                         get("/") {
@@ -223,7 +232,9 @@ class RemoteServer @Inject constructor(
                                                     family = family,
                                                     quantization_level = quantization
                                                 ),
-                                                sizeVram = model.fileSize ?: 0L // Approximation
+                                                sizeVram = model.fileSize ?: 0L, // Approximation
+                                                status = AppStateManager.getModelStatus(model.modelName),
+                                                error = AppStateManager.getModelError(model.modelName)
                                             ))
                                         }
                                     }
@@ -243,7 +254,9 @@ class RemoteServer @Inject constructor(
                                             family = "stable-diffusion",
                                             backend = if (currentModel.runOnCpu) "cpu" else "npu"
                                         ),
-                                        sizeVram = 2000000000L
+                                        sizeVram = 2000000000L,
+                                        status = AppStateManager.getModelStatus(currentModel.name),
+                                        error = AppStateManager.getModelError(currentModel.name)
                                     ))
                                 }
                             }
@@ -284,6 +297,7 @@ class RemoteServer @Inject constructor(
 
                                 val modelName = engine.getModelInfo() ?: "GGUF"
                                 AppStateManager.setApiCallStatus(true, "Chat Completion", modelName)
+                                AppStateManager.setGeneratingText()
 
                                 val messagesJson = json.encodeToString(request.messages)
                                 val maxTokens = request.maxTokens ?: 512
@@ -320,6 +334,23 @@ class RemoteServer @Inject constructor(
                                                     write("data: ${json.encodeToString(chunk)}\n\n")
                                                     flush()
                                                 }
+                                                is GenerationEvent.Metrics -> {
+                                                    val perfChunk = ChatCompletionResponse(
+                                                        id = streamId,
+                                                        obj = "chat.completion.chunk",
+                                                        created = createdTime,
+                                                        model = "toolneuron-local",
+                                                        choices = emptyList(),
+                                                        performance = PerformanceMetrics(
+                                                            totalTimeMs = event.metrics.totalTimeMs,
+                                                            tokensPerSecond = event.metrics.tokensPerSecond,
+                                                            promptTokens = event.metrics.tokensEvaluated,
+                                                            completionTokens = event.metrics.tokensPredicted
+                                                        )
+                                                    )
+                                                    write("data: ${json.encodeToString(perfChunk)}\n\n")
+                                                    flush()
+                                                }
                                                 is GenerationEvent.Done -> {
                                                     val lastChunk = ChatCompletionResponse(
                                                         id = streamId,
@@ -344,6 +375,8 @@ class RemoteServer @Inject constructor(
                                     val fullResponse = StringBuilder()
                                     var promptTokens = 0
                                     var completionTokens = 0
+                                    var totalTimeMs = 0f
+                                    var tokensPerSecond = 0f
                                     
                                     engine.generateMultiTurnFlow(messagesJson, maxTokens).collect { event ->
                                         when (event) {
@@ -353,6 +386,8 @@ class RemoteServer @Inject constructor(
                                             is GenerationEvent.Metrics -> {
                                                 promptTokens = event.metrics.tokensEvaluated
                                                 completionTokens = event.metrics.tokensPredicted
+                                                totalTimeMs = event.metrics.totalTimeMs
+                                                tokensPerSecond = event.metrics.tokensPerSecond
                                             }
                                             else -> {}
                                         }
@@ -363,10 +398,17 @@ class RemoteServer @Inject constructor(
                                         created = System.currentTimeMillis() / 1000,
                                         model = "toolneuron-local",
                                         choices = listOf(ChatChoice(index = 0, message = ChatCompletionMessage("assistant", fullResponse.toString()), finishReason = "stop")),
-                                        usage = Usage(promptTokens, completionTokens, promptTokens + completionTokens)
+                                        usage = Usage(promptTokens, completionTokens, promptTokens + completionTokens),
+                                        performance = PerformanceMetrics(
+                                            totalTimeMs = totalTimeMs,
+                                            tokensPerSecond = tokensPerSecond,
+                                            promptTokens = promptTokens,
+                                            completionTokens = completionTokens
+                                        )
                                     ))
                                 }
                             } finally {
+                                AppStateManager.setGenerationComplete()
                                 AppStateManager.setApiCallStatus(false)
                             }
                         }
@@ -393,6 +435,12 @@ class RemoteServer @Inject constructor(
                                         Log.i("RemoteServer", "Dynamically loading model: ${model.modelName} with config: $diffusionConfig")
                                         AppStateManager.setLoadingModel(model.modelName)
 
+                                        // NUCLEAR HARD RESET: Destroy engine, purge cache, and re-init (fixes QNN session exhaustion)
+                                        engine.hardReset()
+                                        kotlinx.coroutines.delay(2000) 
+                                        engine.init(context)
+                                        kotlinx.coroutines.delay(1000)
+                                        
                                         val loadResult = engine.loadModel(
                                             name = model.modelName,
                                             modelDir = model.modelPath,
@@ -419,11 +467,15 @@ class RemoteServer @Inject constructor(
                                 val sizeParts = request.size.split("x")
                                 val width = sizeParts.getOrNull(0)?.toIntOrNull() ?: 512
                                 val height = sizeParts.getOrNull(1)?.toIntOrNull() ?: 512
+                                val steps = request.steps ?: 20
 
+                                AppStateManager.setApiCallStatus(true, "Image Generation", request.model ?: "Diffusion", "Steps: $steps")
+                                AppStateManager.setGeneratingImage()
                                 engine.generateImage(
                                     prompt = request.prompt,
                                     width = width,
-                                    height = height
+                                    height = height,
+                                    steps = steps
                                 )
 
                                 // Wait for completion via flow
@@ -452,6 +504,7 @@ class RemoteServer @Inject constructor(
                                     call.respond(io.ktor.http.HttpStatusCode.InternalServerError, mapOf("error" to (errorMsg ?: "Unknown error")))
                                 }
                             } finally {
+                                AppStateManager.setGenerationComplete()
                                 AppStateManager.setApiCallStatus(false)
                             }
                         }

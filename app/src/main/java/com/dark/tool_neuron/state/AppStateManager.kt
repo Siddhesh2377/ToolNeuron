@@ -17,6 +17,19 @@ object AppStateManager {
     private var currentModelName: String? = null
     private var hasMessages: Boolean = false
 
+    private val modelStatuses = mutableMapOf<String, String>()
+    private val modelErrors = mutableMapOf<String, String?>()
+
+    fun getModelStatus(modelName: String): String = modelStatuses[modelName] ?: "idle"
+    fun getModelError(modelName: String): String? = modelErrors[modelName]
+
+    fun setModelStatus(modelName: String, status: String) {
+        modelStatuses[modelName] = status
+        if (status != "error") {
+            modelErrors[modelName] = null
+        }
+    }
+
     private val _isChatRefreshed = MutableStateFlow(false)
     val isChatRefreshed: StateFlow<Boolean> = _isChatRefreshed.asStateFlow()
 
@@ -39,10 +52,14 @@ object AppStateManager {
     private val _apiCallModel = MutableStateFlow("")
     val apiCallModel: StateFlow<String> = _apiCallModel.asStateFlow()
 
-    fun setApiCallStatus(active: Boolean, type: String = "", model: String = "") {
+    private val _apiCallDetails = MutableStateFlow<String?>(null)
+    val apiCallDetails: StateFlow<String?> = _apiCallDetails.asStateFlow()
+
+    fun setApiCallStatus(active: Boolean, type: String = "", model: String = "", details: String? = null) {
         _apiCallActive.value = active
         _apiCallType.value = type
         _apiCallModel.value = model
+        _apiCallDetails.value = details
     }
 
     // Model loading progress tracking
@@ -65,6 +82,7 @@ object AppStateManager {
             loadingStartTime = System.currentTimeMillis()
         }
         currentModelName = modelName
+        setModelStatus(modelName, "loading")
         setStateIfChanged(AppState.LoadingModel(modelName, progress))
     }
 
@@ -73,6 +91,7 @@ object AppStateManager {
      */
     fun setModelLoaded(modelName: String) {
         currentModelName = modelName
+        setModelStatus(modelName, "idle")
         val loadingTime = System.currentTimeMillis() - loadingStartTime
         Log.d(TAG, "Model loaded in ${loadingTime}ms")
         updateIdleState()
@@ -82,6 +101,7 @@ object AppStateManager {
      * Update when model is unloaded
      */
     fun setModelUnloaded() {
+        currentModelName?.let { setModelStatus(it, "unloaded") }
         currentModelName = null
         updateIdleState()
     }
@@ -99,6 +119,7 @@ object AppStateManager {
      */
     fun setGeneratingText() {
         currentModelName?.let {
+            setModelStatus(it, "generating")
             setStateIfChanged(AppState.GeneratingText(it))
         }
     }
@@ -108,6 +129,7 @@ object AppStateManager {
      */
     fun setGeneratingImage() {
         currentModelName?.let {
+            setModelStatus(it, "generating")
             setStateIfChanged(AppState.GeneratingImage(it))
         }
     }
@@ -142,6 +164,7 @@ object AppStateManager {
      * Update when generation completes (returns to idle)
      */
     fun setGenerationComplete() {
+        currentModelName?.let { setModelStatus(it, "idle") }
         updateIdleState()
     }
 
@@ -149,6 +172,10 @@ object AppStateManager {
      * Update when an error occurs
      */
     fun setError(message: String) {
+        currentModelName?.let {
+            modelStatuses[it] = "error"
+            modelErrors[it] = message
+        }
         setStateIfChanged(AppState.Error(message, currentModelName))
     }
 
