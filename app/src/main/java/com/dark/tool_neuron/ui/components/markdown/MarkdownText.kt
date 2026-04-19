@@ -45,14 +45,17 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
@@ -71,7 +74,12 @@ val LocalCodeHighlightEnabled = compositionLocalOf { true }
 
 /** Hoisted theme colors — set once at the LazyColumn scope, read per item without re-reading MaterialTheme. */
 val LocalMarkdownColors = compositionLocalOf {
-    InlineColors(codeBg = Color.Transparent, highlightBg = Color.Transparent, mathColor = Color.Transparent)
+    InlineColors(
+        codeBg = Color.Transparent,
+        highlightBg = Color.Transparent,
+        mathColor = Color.Transparent,
+        linkColor = Color.Transparent,
+    )
 }
 
 /**
@@ -82,7 +90,8 @@ val LocalMarkdownColors = compositionLocalOf {
 data class InlineColors(
     val codeBg: Color,
     val highlightBg: Color,
-    val mathColor: Color
+    val mathColor: Color,
+    val linkColor: Color,
 )
 
 /** Resolves InlineColors from the current MaterialTheme. Call once per scope. */
@@ -93,7 +102,8 @@ fun rememberMarkdownColors(): InlineColors {
         InlineColors(
             codeBg = scheme.surfaceVariant.copy(alpha = 0.5f),
             highlightBg = scheme.primary.copy(alpha = 0.3f),
-            mathColor = scheme.primary
+            mathColor = scheme.primary,
+            linkColor = scheme.primary,
         )
     }
 }
@@ -411,6 +421,59 @@ internal fun buildInlineFormatted(text: String, colors: InlineColors): Annotated
     appendFormatted(text, colors)
 }
 
+private fun linkStyles(colors: InlineColors) = TextLinkStyles(
+    style = SpanStyle(color = colors.linkColor, textDecoration = TextDecoration.Underline),
+)
+
+private data class MdLink(val text: String, val url: String, val endExclusive: Int)
+
+// Parse `[text](url)` starting at `from` where text[from] == '['. Returns null
+// if the shape is invalid. Supports nested brackets and parentheses.
+private fun tryParseMdLink(text: String, from: Int): MdLink? {
+    var depth = 1
+    var i = from + 1
+    while (i < text.length && depth > 0) {
+        val c = text[i]
+        if (c == '\\' && i + 1 < text.length) { i += 2; continue }
+        when (c) {
+            '[' -> depth++
+            ']' -> { depth--; if (depth == 0) break }
+        }
+        i++
+    }
+    if (depth != 0 || i + 1 >= text.length || text[i + 1] != '(') return null
+    val linkText = text.substring(from + 1, i)
+    val urlStart = i + 2
+    var j = urlStart
+    var parenDepth = 1
+    while (j < text.length && parenDepth > 0) {
+        when (text[j]) {
+            '(' -> parenDepth++
+            ')' -> { parenDepth--; if (parenDepth == 0) break }
+        }
+        j++
+    }
+    if (parenDepth != 0) return null
+    val url = text.substring(urlStart, j).trim()
+    if (url.isEmpty()) return null
+    return MdLink(linkText, url, j + 1)
+}
+
+private fun isUrlChar(c: Char): Boolean =
+    !c.isWhitespace() && c !in "<>\"'`"
+
+private fun matchBareUrl(text: String, from: Int): Int {
+    val isHttps = text.startsWith("https://", from)
+    val isHttp  = !isHttps && text.startsWith("http://", from)
+    if (!isHttps && !isHttp) return -1
+    val schemeLen = if (isHttps) 8 else 7
+    var end = from + schemeLen
+    while (end < text.length && isUrlChar(text[end])) end++
+    // Trim trailing punctuation unlikely to be part of the URL.
+    while (end > from + schemeLen && text[end - 1] in ".,;:!?)]") end--
+    return if (end > from + schemeLen) end else -1
+}
+
 private fun AnnotatedString.Builder.appendFormatted(text: String, colors: InlineColors) {
     var i = 0
     while (i < text.length) {
@@ -503,6 +566,39 @@ private fun AnnotatedString.Builder.appendFormatted(text: String, colors: Inline
                     pushStyle(SpanStyle(fontFamily = MapleMonoFontFamily, fontStyle = FontStyle.Italic, color = colors.mathColor))
                     append(renderMathToUnicode(text.substring(i + 1, end)))
                     pop(); i = end + 1
+                } else { append(text[i]); i++ }
+            }
+            // Markdown link [text](url)
+            text[i] == '[' -> {
+                val link = tryParseMdLink(text, i)
+                if (link != null) {
+                    withLink(LinkAnnotation.Url(url = link.url, styles = linkStyles(colors))) {
+                        appendFormatted(link.text, colors)
+                    }
+                    i = link.endExclusive
+                } else { append(text[i]); i++ }
+            }
+            // Autolink <https://...> or <http://...> or <mailto:...>
+            text[i] == '<' -> {
+                val close = text.indexOf('>', i + 1)
+                val inner = if (close != -1) text.substring(i + 1, close) else ""
+                val isUrl = inner.startsWith("https://") || inner.startsWith("http://") || inner.startsWith("mailto:")
+                if (isUrl) {
+                    withLink(LinkAnnotation.Url(url = inner, styles = linkStyles(colors))) {
+                        append(inner)
+                    }
+                    i = close + 1
+                } else { append(text[i]); i++ }
+            }
+            // Bare URL https://... or http://...
+            (text[i] == 'h') && (text.startsWith("https://", i) || text.startsWith("http://", i)) -> {
+                val end = matchBareUrl(text, i)
+                if (end > 0) {
+                    val url = text.substring(i, end)
+                    withLink(LinkAnnotation.Url(url = url, styles = linkStyles(colors))) {
+                        append(url)
+                    }
+                    i = end
                 } else { append(text[i]); i++ }
             }
             // Default — handle surrogates
