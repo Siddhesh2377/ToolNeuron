@@ -2,6 +2,7 @@
 
 **Offline AI assistant for Android.** Run LLMs, generate images, search documents — all on-device. No cloud. No subscriptions. No data leaves your phone. Use as local AI server for text and image generation.
 
+[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
 
 ---
 
