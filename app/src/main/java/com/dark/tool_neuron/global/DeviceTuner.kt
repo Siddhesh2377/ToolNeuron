@@ -81,19 +81,24 @@ object DeviceTuner {
         val ctxSize = ((rawCtx / 512) * 512).coerceIn(512, ctxCap)
 
         // ── Batch size ──
+        val isFlagshipSnapdragon = profile.cpuTopology.scanSucceeded &&
+                profile.cpuTopology.clusters.any { it.maxFreqKHz > 4000000 } // 8 Elite @ 4.3GHz
+
         val batchCap = when (mode) {
-            PerformanceMode.PERFORMANCE -> 512
+            PerformanceMode.PERFORMANCE -> if (isFlagshipSnapdragon) 1024 else 512
             PerformanceMode.BALANCED -> 512
             PerformanceMode.POWER_SAVING -> 256
         }
         val rawBatch = (ramAfterModelMB / 4).coerceIn(64, batchCap)
-        val batchSize = (rawBatch / 64) * 64
+        val batchSize = if (isFlagshipSnapdragon && mode == PerformanceMode.PERFORMANCE && rawBatch >= 1024) 1024
+        else (rawBatch / 64) * 64
 
         // ── KV cache quantization ──
         val ramRatio = ramAfterModelMB.toFloat() / modelSizeMB.coerceAtLeast(1)
         val cacheType = when {
-            ramRatio < 0.5f -> 10  // Q4_0
-            ramRatio < 1.0f -> 12  // Q5_0
+            ramRatio < 0.4f -> 10  // Q4_0 (more aggressive only if RAM is very tight)
+            ramRatio < 0.8f -> 12  // Q5_0
+            isFlagshipSnapdragon && mode == PerformanceMode.PERFORMANCE -> 1  // FP16 for best quality on elite silicon
             else -> 9              // Q8_0
         }
 
@@ -131,13 +136,19 @@ object DeviceTuner {
 
     private fun clusterAwareThreads(topo: CpuTopology, mode: PerformanceMode): Int {
         val bigCores = topo.primeCoreCount + topo.performanceCoreCount
+        val isAllBig = topo.efficiencyCoreCount == 0 && topo.totalPhysicalCores >= 8
+
         return when (mode) {
             PerformanceMode.PERFORMANCE -> {
-                bigCores.coerceIn(2, topo.totalPhysicalCores)
+                // On all-big architectures, use most cores but leave 1-2 for OS/UI
+                if (isAllBig) (topo.totalPhysicalCores - 1).coerceAtLeast(4)
+                else bigCores.coerceIn(2, topo.totalPhysicalCores)
             }
             PerformanceMode.BALANCED -> {
-                // Use all big cores if 4 or fewer; otherwise just performance tier
-                if (bigCores <= 4) {
+                if (isAllBig) {
+                    // Use a subset of big cores (e.g., 4) for balanced thermals
+                    4
+                } else if (bigCores <= 4) {
                     bigCores.coerceAtLeast(2)
                 } else {
                     topo.performanceCoreCount.coerceAtLeast(2)
