@@ -1,20 +1,7 @@
-# ToolNeuron
+# ToolNeuron (Remote API & WebUI)
 
-**Offline AI assistant for Android.** Run LLMs, generate images, search documents — all on-device. No cloud. No subscriptions. No data leaves your phone.
+**Offline AI assistant for Android.** Run LLMs, generate images, search documents — all on-device. No cloud. No subscriptions. No data leaves your phone. Use as local AI server for text and image generation.
 
-[![Platform](https://img.shields.io/badge/Platform-Android_12%2B-3DDC84?logo=android&logoColor=white)](https://github.com/Siddhesh2377/ToolNeuron)
-[![License](https://img.shields.io/badge/License-Apache_2.0-green.svg)](LICENSE)
-[![Discord](https://img.shields.io/badge/Discord-Join-5865F2?logo=discord&logoColor=white)](https://discord.gg/mVPwHDhrAP)
-
-<p align="left">
-  <a href="https://play.google.com/store/apps/details?id=com.dark.tool_neuron">
-    <img src="https://play.google.com/intl/en_us/badges/static/images/badges/en_badge_web_generic.png"
-         alt="Get it on Google Play"
-         height="80"/>
-  </a>
-</p>
-
-[Download APK](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Discord](https://discord.gg/mVPwHDhrAP) · [Report Issue](https://github.com/Siddhesh2377/ToolNeuron/issues)
 
 ---
 
@@ -29,6 +16,28 @@
 - **Text-to-speech** — 10 voices, 5 languages, on-device synthesis
 - **Encrypted storage** — AES-256-GCM with hardware-backed keys for all chat data
 - **System backup** — Export everything as an encrypted `.tnbackup` file
+- **Remote Access** — OpenAI-compatible API and built-in Web UI for network-wide access
+
+---
+
+## Remote API & Web UI
+
+ToolNeuron includes a high-performance, OpenAI-compatible remote server. When enabled in **Settings**, you can access ToolNeuron from any device on your local network.
+
+### URL Scheme
+- **Web UI:** `http://<device-ip>:11434/`
+- **API Base:** `http://<device-ip>:11434/v1`
+- **Chat Completions:** `http://<device-ip>:11434/v1/chat/completions`
+- **Images:** `http://<device-ip>:11434/v1/images/generations`
+- **Models:** `http://<device-ip>:11434/v1/models`
+- **System Status:** `http://<device-ip>:11434/api/ps`
+
+### Web UI Features
+Access the built-in interface at the root URL to enjoy:
+- **Chat Studio:** Real-time streaming conversation with specialized model selection and performance metrics (tokens/s).
+- **Image Studio:** Powerful text-to-image generation with resolution and iteration controls, and a session gallery.
+- **System Dashboard:** Live monitoring of CPU clusters, RAM usage, and detailed status of currently loaded models.
+- **Responsive Design:** Optimized for both mobile and desktop browsers with a modern dark theme.
 
 ---
 
