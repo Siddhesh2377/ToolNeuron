@@ -99,10 +99,21 @@ object HardwareScanner {
             val clusters = sortedFreqs.mapIndexed { index, freq ->
                 val tier = when {
                     sortedFreqs.size == 1 -> ClusterTier.PERFORMANCE
-                    sortedFreqs.size == 2 -> if (index == 0) ClusterTier.PRIME else ClusterTier.EFFICIENCY
+                    sortedFreqs.size == 2 -> {
+                        if (index == 0) ClusterTier.PRIME
+                        else {
+                            // High-end SoCs (8 Elite) have 2 big clusters.
+                            // If the 2nd cluster is > 2.4GHz, it's PERFORMANCE, not EFFICIENCY.
+                            if (freq > 2400000) ClusterTier.PERFORMANCE else ClusterTier.EFFICIENCY
+                        }
+                    }
                     else -> when (index) {
                         0 -> ClusterTier.PRIME
-                        sortedFreqs.lastIndex -> ClusterTier.EFFICIENCY
+                        sortedFreqs.lastIndex -> {
+                            // Even in 3+ cluster systems, if the "slowest" core is > 2GHz,
+                            // it's effectively a performance core on modern high-end silicon.
+                            if (freq > 2000000) ClusterTier.PERFORMANCE else ClusterTier.EFFICIENCY
+                        }
                         else -> ClusterTier.PERFORMANCE
                     }
                 }
