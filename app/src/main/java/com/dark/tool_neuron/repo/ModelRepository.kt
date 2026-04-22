@@ -39,13 +39,19 @@ class ModelRepository @Inject constructor(
     }
 
     fun refresh() {
-        _models.value = storage.getAll(COL_MODELS).map { it.toModelInfo() }
+        val all = storage.getAll(COL_MODELS).map { it.toModelInfo() }
+        val seen = HashSet<String>(all.size)
+        _models.value = all.filter { seen.add(it.id) }
     }
 
     fun insert(model: ModelInfo, config: ModelConfig? = null) {
+        val existing = storage.queryString(COL_MODELS, TAG_ID, model.id)
+        existing.forEach { storage.delete(COL_MODELS, it.id) }
         storage.put(COL_MODELS, model.toRecord())
         storage.flush(COL_MODELS)
         if (config != null) {
+            val existingConfigs = storage.queryString(COL_CONFIG, TAG_CONFIG_MODEL_ID, model.id)
+            existingConfigs.forEach { storage.delete(COL_CONFIG, it.id) }
             storage.put(COL_CONFIG, config.toRecord())
             storage.flush(COL_CONFIG)
         }
@@ -91,8 +97,21 @@ class ModelRepository @Inject constructor(
         return dir
     }
 
-    fun modelFile(modelId: String): File {
-        val name = if (modelId.endsWith(".gguf", ignoreCase = true)) modelId else "$modelId.gguf"
+    fun modelFile(modelId: String, originalFileName: String? = null): File {
+        val safeId = modelId.replace('/', '_').replace(':', '_')
+        val name = when {
+            !originalFileName.isNullOrBlank() -> {
+                val ext = originalFileName.substringAfterLast('.', "").lowercase()
+                val base = if (ext.isNotBlank() && safeId.lowercase().endsWith(".$ext")) {
+                    safeId.dropLast(ext.length + 1)
+                } else {
+                    safeId
+                }
+                if (ext.isBlank()) base else "$base.$ext"
+            }
+            safeId.contains('.') -> safeId
+            else -> "$safeId.gguf"
+        }
         return File(getModelsDir(), name)
     }
 
