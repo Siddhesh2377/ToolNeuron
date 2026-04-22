@@ -18,11 +18,6 @@ import com.dark.ai_sherpa.OfflineTtsConfig
 import com.dark.ai_sherpa.OfflineTtsModelConfig
 import com.dark.ai_sherpa.OfflineTtsVitsModelConfig
 import com.dark.ai_sherpa.OfflineWhisperModelConfig
-import com.dark.ai_sd.DiffusionGenerationParams
-import com.dark.ai_sd.DiffusionGenerationResult
-import com.dark.ai_sd.DiffusionModelConfig
-import com.dark.ai_sd.DiffusionRuntimeConfig
-import com.dark.ai_sd.StableDiffusionManager
 import com.dark.gguf_lib.GGMLEngine
 import com.dark.gguf_lib.models.GenerationEvent
 import com.dark.tool_neuron.R
@@ -46,7 +41,6 @@ class InferenceService : Service() {
     private val sttLock = Any()
     private var tts: OfflineTts? = null
     private var stt: OfflineRecognizer? = null
-    private var sdManager: StableDiffusionManager? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -64,8 +58,6 @@ class InferenceService : Service() {
         }
         synchronized(ttsLock) { tts?.close(); tts = null }
         synchronized(sttLock) { stt?.close(); stt = null }
-        sdManager?.cleanup()
-        sdManager = null
         scope.cancel()
         Log.d(TAG, "InferenceService destroyed")
         super.onDestroy()
@@ -354,106 +346,6 @@ class InferenceService : Service() {
             }
         }
 
-        // ── SD (Stable Diffusion) ──
-
-        override fun initSdRuntime(configJson: String): Boolean {
-            val sd = createSdManager(this@InferenceService)
-            sdManager = sd
-            return try {
-                runBlocking(Dispatchers.IO) {
-                    val cfg = parseConfig(configJson)
-                    sd.initialize(DiffusionRuntimeConfig(
-                        runtimeDir = cfg.optString("runtimeDir", "runtime_libs"),
-                        safetyCheckerEnabled = cfg.optBoolean("safetyChecker", true),
-                    ))
-                }
-                true
-            } catch (e: Exception) {
-                Log.e(TAG, "SD runtime init failed", e)
-                false
-            }
-        }
-
-        override fun loadSdModel(configJson: String): Boolean {
-            val sd = sdManager ?: return false
-            return try {
-                val cfg = parseConfig(configJson)
-                sd.loadModel(
-                    DiffusionModelConfig(
-                        name = cfg.optString("name", "sd"),
-                        modelDir = cfg.getString("modelDir"),
-                        textEmbeddingSize = cfg.optInt("textEmbeddingSize", 768),
-                        runOnCpu = cfg.optBoolean("runOnCpu", false),
-                        useCpuClip = cfg.optBoolean("useCpuClip", false),
-                        isPony = cfg.optBoolean("isPony", false),
-                        safetyMode = cfg.optBoolean("safetyMode", false),
-                    ),
-                    width = cfg.optInt("width", 512),
-                    height = cfg.optInt("height", 512),
-                )
-            } catch (e: Exception) {
-                Log.e(TAG, "SD model load failed", e)
-                false
-            }
-        }
-
-        override fun generateSdImage(paramsJson: String, callback: IGenerationCallback) {
-            val sd = sdManager ?: run {
-                try { callback.onError("SD not initialized") } catch (_: Exception) {}
-                return
-            }
-            scope.launch(Dispatchers.IO) {
-                try {
-                    val cfg = parseConfig(paramsJson)
-                    val params = DiffusionGenerationParams(
-                        prompt = cfg.optString("prompt", ""),
-                        negativePrompt = cfg.optString("negativePrompt", ""),
-                        steps = cfg.optInt("steps", 28),
-                        cfgScale = cfg.optDouble("cfgScale", 7.0).toFloat(),
-                        seed = if (cfg.has("seed")) cfg.optLong("seed") else null,
-                        width = cfg.optInt("width", 512),
-                        height = cfg.optInt("height", 512),
-                        scheduler = cfg.optString("scheduler", "dpm"),
-                        useOpenCL = cfg.optBoolean("useOpenCL", false),
-                    )
-                    val result = sd.generateImageSync(params)
-                    when (result) {
-                        is DiffusionGenerationResult.Success -> {
-                            safeCallback(callback) { it.onDone() }
-                        }
-                        is DiffusionGenerationResult.Failure -> {
-                            safeCallback(callback) { it.onError(result.error) }
-                        }
-                    }
-                } catch (e: Exception) {
-                    safeCallback(callback) { it.onError(e.message ?: "SD generation failed") }
-                }
-            }
-        }
-
-        override fun stopSdGeneration() {
-            sdManager?.cancelGeneration()
-        }
-
-        override fun unloadSdModel() {
-            sdManager?.stopBackend()
-            updateNotification("Inference ready")
-        }
-
-        override fun isSdModelLoaded(): Boolean = sdManager?.isBackendRunning() ?: false
-
-        override fun getSdModelInfo(): String? {
-            val model = sdManager?.getCurrentModel() ?: return null
-            return JSONObject().apply {
-                put("name", model.name)
-                put("modelDir", model.modelDir)
-                put("runOnCpu", model.runOnCpu)
-            }.toString()
-        }
-
-        override fun getSocInfo(): String = try {
-            createSdManager(this@InferenceService).getSocInfo()
-        } catch (_: Exception) { "{}" }
     }
 
     // ── Internal helpers ──
@@ -543,14 +435,6 @@ class InferenceService : Service() {
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
-    }
-
-    private fun createSdManager(ctx: android.content.Context): StableDiffusionManager {
-        val ctor = StableDiffusionManager::class.java.declaredConstructors.first {
-            it.parameterCount == 2
-        }
-        ctor.isAccessible = true
-        return ctor.newInstance(ctx.applicationContext, null) as StableDiffusionManager
     }
 
     companion object {

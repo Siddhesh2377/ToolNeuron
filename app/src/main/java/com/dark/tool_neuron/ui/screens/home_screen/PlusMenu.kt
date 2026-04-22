@@ -4,7 +4,6 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,14 +28,11 @@ import com.dark.tool_neuron.ui.theme.Motion
 
 @Composable
 internal fun PlusMenuCard(
-    webSearchEnabled: Boolean,
     thinkingEnabled: Boolean,
     showThinking: Boolean,
     documentCount: Int,
-    onWebSearchToggle: () -> Unit,
     onThinkingToggle: () -> Unit,
     onDocumentsClick: () -> Unit,
-    onImageClick: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -48,51 +44,29 @@ internal fun PlusMenuCard(
         shadowElevation = 0.dp,
         modifier = Modifier.padding(bottom = dimens.spacingSm),
     ) {
-        Column(
-            modifier = Modifier.padding(dimens.spacingSm),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimens.spacingSm),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
+            PlusMenuItem(
+                modifier = Modifier.weight(0.5f),
+                icon = TnIcons.BookOpen,
+                label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
+                isToggled = documentCount > 0,
+                onClick = onDocumentsClick,
+            )
+            if (showThinking) {
                 PlusMenuItem(
                     modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Search,
-                    label = "Web Search",
-                    isToggled = webSearchEnabled,
-                    onClick = onWebSearchToggle,
+                    icon = TnIcons.Sparkles,
+                    label = "Thinking",
+                    isToggled = thinkingEnabled,
+                    onClick = onThinkingToggle,
                 )
-                if (showThinking) {
-                    PlusMenuItem(
-                        modifier = Modifier.weight(0.5f),
-                        icon = TnIcons.Sparkles,
-                        label = "Thinking",
-                        isToggled = thinkingEnabled,
-                        onClick = onThinkingToggle,
-                    )
-                } else {
-                    Spacer(modifier = Modifier.weight(0.5f))
-                }
-            }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.BookOpen,
-                    label = if (documentCount > 0) "Documents ($documentCount)" else "Documents",
-                    isToggled = documentCount > 0,
-                    onClick = onDocumentsClick,
-                )
-                PlusMenuItem(
-                    modifier = Modifier.weight(0.5f),
-                    icon = TnIcons.Photo,
-                    label = "Image",
-                    isToggled = false,
-                    onClick = onImageClick,
-                )
+            } else {
+                Spacer(modifier = Modifier.weight(0.5f))
             }
         }
     }

@@ -62,8 +62,7 @@ class ModelCatalog @Inject constructor(
                 val file = tree.getJSONObject(i)
                 val path = file.optString("path", "")
                 val isGguf = path.endsWith(".gguf", ignoreCase = true)
-                val isZip = path.endsWith(".zip", ignoreCase = true)
-                if (!isGguf && !isZip) continue
+                if (!isGguf) continue
                 if (path.contains("mmproj", ignoreCase = true)) continue
                 if (path.contains("projector", ignoreCase = true)) continue
 
@@ -84,7 +83,7 @@ class ModelCatalog @Inject constructor(
                         if (isGated) add("Gated")
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
                     },
-                    modelType = if (isZip) "sd" else "gguf",
+                    modelType = "gguf",
                 ))
             }
             models.sortedBy { it.sizeBytes }

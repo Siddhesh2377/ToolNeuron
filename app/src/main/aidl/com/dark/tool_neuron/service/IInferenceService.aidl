@@ -66,14 +66,4 @@ interface IInferenceService {
     void unloadSttModel();
     boolean isSttLoaded();
     String recognize(in float[] samples, int sampleRate);
-
-    // SD (Stable Diffusion)
-    boolean initSdRuntime(String configJson);
-    boolean loadSdModel(String configJson);
-    void generateSdImage(String paramsJson, IGenerationCallback callback);
-    void stopSdGeneration();
-    void unloadSdModel();
-    boolean isSdModelLoaded();
-    String getSdModelInfo();
-    String getSocInfo();
 }

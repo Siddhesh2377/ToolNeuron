@@ -1,3 +1,3 @@
 package com.dark.tool_neuron.model.enums
 
-enum class ProviderType { GGUF, TTS, STT, SD }
+enum class ProviderType { GGUF, TTS, STT }

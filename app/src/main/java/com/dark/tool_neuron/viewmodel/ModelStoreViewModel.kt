@@ -311,7 +311,7 @@ class ModelStoreViewModel @Inject constructor(
     fun downloadModel(model: HuggingFaceModel) {
         if (_downloadIds.value.containsKey(model.id)) return
         _downloadStates.value = _downloadStates.value - model.id
-        val destFile = modelRepo.modelFile(model.id)
+        val destFile = modelRepo.modelFile(model.id, model.fileName)
         val hxdId = HxdManager.enqueue(context, model.fileUri, destFile.absolutePath)
         _downloadIds.value = _downloadIds.value + (model.id to hxdId)
 
@@ -325,7 +325,6 @@ class ModelStoreViewModel @Inject constructor(
                         val provider = when (model.modelType) {
                             "tts" -> ProviderType.TTS
                             "stt" -> ProviderType.STT
-                            "sd" -> ProviderType.SD
                             else -> ProviderType.GGUF
                         }
                         modelRepo.insert(ModelInfo(

@@ -238,8 +238,6 @@ internal fun InstalledModelCard(
                     actions = buildList {
                         if (model.isActive) {
                             add(ActionItem(ActionIcon.Vector(TnIcons.PlayerStop), onUnload, "Unload"))
-                        } else {
-                            add(ActionItem(ActionIcon.Vector(TnIcons.Leaf), onLoad, "Load"))
                         }
                         add(ActionItem(ActionIcon.Vector(TnIcons.InfoCircle), onShowDetails, "Details"))
                         add(ActionItem(ActionIcon.Vector(TnIcons.Trash), onDelete, "Delete"))
@@ -277,7 +275,6 @@ internal fun ModelDetailsDialog(
                     ProviderType.GGUF -> "GGUF (LLM)"
                     ProviderType.TTS -> "Text-to-Speech"
                     ProviderType.STT -> "Speech-to-Text"
-                    ProviderType.SD -> "Stable Diffusion"
                 })
                 DetailRow("Status", if (model.isActive) "Active" else "Inactive")
 

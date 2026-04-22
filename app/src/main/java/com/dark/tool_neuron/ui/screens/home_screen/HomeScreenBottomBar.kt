@@ -73,7 +73,6 @@ fun HomeScreenBottomBar(
     var text by remember { mutableStateOf("") }
 
     val plusMenuExpanded by viewModel.plusMenuExpanded.collectAsStateWithLifecycle()
-    val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
     val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
@@ -105,17 +104,14 @@ fun HomeScreenBottomBar(
             exit = fadeOut(Motion.state()) + shrinkVertically(Motion.content()),
         ) {
             PlusMenuCard(
-                webSearchEnabled = webSearchEnabled,
                 thinkingEnabled = thinkingEnabled,
                 showThinking = supportsThinking,
                 documentCount = chatDocuments.size,
-                onWebSearchToggle = viewModel::toggleWebSearch,
                 onThinkingToggle = viewModel::toggleThinking,
                 onDocumentsClick = {
                     viewModel.dismissPlusMenu()
                     filePicker.launch(arrayOf("text/*", "application/pdf", "application/json"))
                 },
-                onImageClick = {},
             )
         }
 
@@ -149,11 +145,9 @@ fun HomeScreenBottomBar(
             isModelLoaded = isModelLoaded,
             contextUsage = contextUsage,
             plusMenuExpanded = plusMenuExpanded,
-            webSearchEnabled = webSearchEnabled,
             documentCount = chatDocuments.size,
             onPlusClick = viewModel::togglePlusMenu,
             onLoadModelClick = viewModel::toggleLoadModelWindow,
-            onWebSearchClick = viewModel::toggleWebSearch,
             onSend = {
                 focusManager.clearFocus()
                 val toSend = text
@@ -174,11 +168,9 @@ private fun InputBar(
     isModelLoaded: Boolean,
     contextUsage: Float,
     plusMenuExpanded: Boolean,
-    webSearchEnabled: Boolean,
     documentCount: Int,
     onPlusClick: () -> Unit,
     onLoadModelClick: () -> Unit,
-    onWebSearchClick: () -> Unit,
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
@@ -221,12 +213,6 @@ private fun InputBar(
                     onClickListener = onLoadModelClick,
                     icon = TnIcons.Leaf,
                     contentDescription = "Load Model",
-                )
-                ActionButton(
-                    onClickListener = onWebSearchClick,
-                    icon = TnIcons.Globe,
-                    contentDescription = if (webSearchEnabled) "Disable web search" else "Enable web search",
-                    colors = toggleIconColors(webSearchEnabled),
                 )
                 Spacer(Modifier.weight(1f))
                 ContextIndicator(

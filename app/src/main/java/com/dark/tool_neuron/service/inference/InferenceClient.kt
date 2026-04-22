@@ -63,9 +63,6 @@ object InferenceClient {
     private val _isSttLoaded = MutableStateFlow(false)
     val isSttLoaded: StateFlow<Boolean> = _isSttLoaded.asStateFlow()
 
-    private val _isSdModelLoaded = MutableStateFlow(false)
-    val isSdModelLoaded: StateFlow<Boolean> = _isSdModelLoaded.asStateFlow()
-
     private var appContext: Context? = null
     @Volatile private var isBinding = false
 
@@ -85,7 +82,6 @@ object InferenceClient {
             _isModelLoaded.value = false
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
-            _isSdModelLoaded.value = false
             _state.value = ServiceState.Crashed("Service process died")
             isBinding = false
             Log.w(TAG, "Service disconnected — will auto-rebind")
@@ -97,7 +93,6 @@ object InferenceClient {
             _isModelLoaded.value = false
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
-            _isSdModelLoaded.value = false
             _state.value = ServiceState.Crashed("Service binding died")
             isBinding = false
             Log.e(TAG, "Binding died — rebinding")
@@ -324,54 +319,6 @@ object InferenceClient {
                 null
             }
         }
-
-    // ── SD ──
-
-    suspend fun initSdRuntime(configJson: String = "{}"): Boolean = withContext(Dispatchers.IO) {
-        try { ensureBound().initSdRuntime(configJson) } catch (e: Exception) {
-            Log.e(TAG, "initSdRuntime failed", e)
-            false
-        }
-    }
-
-    suspend fun loadSdModel(configJson: String): Boolean = withContext(Dispatchers.IO) {
-        try {
-            val result = ensureBound().loadSdModel(configJson)
-            _isSdModelLoaded.value = result
-            result
-        } catch (e: Exception) {
-            Log.e(TAG, "loadSdModel failed", e)
-            false
-        }
-    }
-
-    fun generateSdImage(paramsJson: String): Flow<InferenceEvent> =
-        callbackFlow {
-            val svc = _service.first { it != null }!!
-            val cb = generationCallback { event -> trySend(event) }
-            try {
-                svc.generateSdImage(paramsJson, cb)
-            } catch (e: Exception) {
-                trySend(InferenceEvent.Error(e.message ?: "SD error"))
-                close()
-            }
-            awaitClose {}
-        }.buffer(Channel.UNLIMITED).flowOn(Dispatchers.IO)
-
-    fun stopSdGeneration() {
-        try { _service.value?.stopSdGeneration() } catch (_: Exception) {}
-    }
-
-    suspend fun unloadSdModel() {
-        _isSdModelLoaded.value = false
-        try { ensureBound().unloadSdModel() } catch (_: Exception) {}
-    }
-
-    fun isSdModelLoaded(): Boolean =
-        try { _service.value?.isSdModelLoaded ?: false } catch (_: Exception) { false }
-
-    fun getSocInfo(): String =
-        try { _service.value?.socInfo ?: "{}" } catch (_: Exception) { "{}" }
 
     // ── Internal helpers ──
 

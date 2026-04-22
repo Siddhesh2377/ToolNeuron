@@ -29,9 +29,12 @@ class RepositoryDataStore @Inject constructor(
         return try {
             val arr = JSONArray(file.readText())
             val saved = (0 until arr.length()).map { arr.getJSONObject(it).toRepo() }
+                .filter { it.id !in REMOVED_IDS }
             val savedIds = saved.map { it.id }.toSet()
             val newDefaults = DEFAULT_REPOSITORIES.filter { it.id !in savedIds }
-            if (newDefaults.isNotEmpty()) saved + newDefaults else saved
+            val merged = if (newDefaults.isNotEmpty()) saved + newDefaults else saved
+            if (merged.size != arr.length()) save(merged)
+            merged
         } catch (_: Exception) { DEFAULT_REPOSITORIES }
     }
 
@@ -82,9 +85,8 @@ class RepositoryDataStore @Inject constructor(
             HFRepository("qwen3-0.6b", "Qwen3 0.6B", "Qwen/Qwen3-0.6B-GGUF"),
             HFRepository("unsloth-qwen3_5-0_8b", "Qwen3.5 0.8B", "unsloth/Qwen3.5-0.8B-GGUF"),
             HFRepository("unsloth-qwen3_5-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF"),
-            HFRepository("sd-qnn", "Stable Diffusion (NPU)", "xororz/sd-qnn", category = ModelCategory.GENERAL),
-            HFRepository("sd-mnn", "Stable Diffusion (CPU)", "xororz/sd-mnn", category = ModelCategory.GENERAL),
-            HFRepository("sd-cyberrealistic-qnn", "CyberRealistic Classic (NPU)", "Mr-J-369/cyberrealistic-classic-SD1.5-qnn2.28", category = ModelCategory.UNCENSORED),
         )
+
+        private val REMOVED_IDS = setOf("sd-qnn", "sd-mnn", "sd-cyberrealistic-qnn")
     }
 }

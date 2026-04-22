@@ -27,6 +27,8 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 @Composable
 fun DevNotesBottomBar(navController: NavHostController, onContinue: () -> Unit = {}) {
     val dimens = LocalDimens.current
+    val isOnboarding = navController.previousBackStackEntry?.destination?.route !=
+        NavScreens.HomeScreen.route
 
     Row(
         modifier = Modifier
@@ -42,26 +44,30 @@ fun DevNotesBottomBar(navController: NavHostController, onContinue: () -> Unit =
     ) {
         Column {
             Text(
-                text = "Ready to explore?",
+                text = if (isOnboarding) "Ready to explore?" else "All caught up?",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
                 color = MaterialTheme.colorScheme.onSurface
             )
             Text(
-                text = "Tap continue to open the app",
+                text = if (isOnboarding) "Tap continue to open the app" else "Tap back to return to chat",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
         ActionTextButton(
             onClickListener = {
-                onContinue()
-                navController.navigate(NavScreens.SetupScreen.route) {
-                    popUpTo(NavScreens.DevNotes.route) { inclusive = true }
+                if (isOnboarding) {
+                    onContinue()
+                    navController.navigate(NavScreens.SetupScreen.route) {
+                        popUpTo(NavScreens.DevNotes.route) { inclusive = true }
+                    }
+                } else {
+                    navController.popBackStack()
                 }
             },
-            icon = TnIcons.ChevronDown,
-            text = "Continue"
+            icon = if (isOnboarding) TnIcons.ChevronDown else TnIcons.ArrowLeft,
+            text = if (isOnboarding) "Continue" else "Back"
         )
     }
 }

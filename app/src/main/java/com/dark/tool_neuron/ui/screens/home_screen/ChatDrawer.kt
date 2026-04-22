@@ -52,7 +52,7 @@ fun ChatDrawerContent(
     onPinChat: (String, Boolean) -> Unit,
     onNavigateToStore: () -> Unit,
     onNavigateToGuide: () -> Unit,
-    onNavigateToPlugins: () -> Unit = {},
+    onNavigateToDevNotes: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
@@ -156,8 +156,8 @@ fun ChatDrawerContent(
             verticalAlignment = Alignment.CenterVertically
         ) {
             DrawerQuickLink(icon = TnIcons.Download, label = "Store", onClick = onNavigateToStore)
-            DrawerQuickLink(icon = TnIcons.Puzzle, label = "Plugins", onClick = onNavigateToPlugins)
             DrawerQuickLink(icon = TnIcons.BookOpen, label = "Guide", onClick = onNavigateToGuide)
+            DrawerQuickLink(icon = TnIcons.Info, label = "Dev Notes", onClick = onNavigateToDevNotes)
             DrawerQuickLink(icon = TnIcons.Settings, label = "Settings", onClick = onNavigateToSettings)
         }
     }

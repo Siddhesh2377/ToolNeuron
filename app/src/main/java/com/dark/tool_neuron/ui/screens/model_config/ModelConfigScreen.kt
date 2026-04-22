@@ -108,7 +108,6 @@ fun ModelConfigScreen(
                 loading.put("numThreads", sttThreads)
                 inference.put("language", language)
             }
-            ProviderType.SD -> {}
         }
         return ModelConfig(
             id = initialConfig?.id ?: modelInfo.id,
@@ -328,7 +327,6 @@ fun ModelConfigScreen(
                         }
                     }
                 }
-                ProviderType.SD -> {}
             }
             item { Spacer(Modifier.height(dimens.spacingXl)) }
         }
