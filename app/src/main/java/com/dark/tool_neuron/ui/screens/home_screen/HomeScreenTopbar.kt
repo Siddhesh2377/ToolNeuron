@@ -20,6 +20,7 @@ fun HomeScreenTopbar(
     onMenuClick: () -> Unit = {},
     onStoreClick: () -> Unit = {},
     onGuideClick: () -> Unit = {},
+    onTerminalClick: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
 
@@ -41,9 +42,9 @@ fun HomeScreenTopbar(
         },
         actions = {
             ActionButton(
-                onClickListener = {},
-                icon = TnIcons.HatGlasses,
-                contentDescription = "Persona",
+                onClickListener = onTerminalClick,
+                icon = TnIcons.Terminal,
+                contentDescription = "Terminal",
                 modifier = Modifier.padding(end = dimens.spacingSm)
             )
             ActionButton(

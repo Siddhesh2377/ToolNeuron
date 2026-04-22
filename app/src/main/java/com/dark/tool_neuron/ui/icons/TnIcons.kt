@@ -212,6 +212,125 @@ object TnIcons {
         )
     }
 
+    val Wand by lazy {
+        icon(
+            "M15 4V2",
+            "M15 16v-2",
+            "M8 9h2",
+            "M20 9h2",
+            "M17.8 11.8L19 13",
+            "M15 9h.01",
+            "M17.8 6.2L19 5",
+            "M3 21l9-9",
+            "M12.2 6.2L11 5"
+        )
+    }
+
+    val Dice by lazy {
+        icon(
+            "M2.5 17.5a2 2 0 0 0 2 2h15a2 2 0 0 0 2 -2v-11a2 2 0 0 0 -2 -2h-15a2 2 0 0 0 -2 2z",
+            "M8 9h.01",
+            "M12 12h.01",
+            "M16 15h.01",
+            "M16 9h.01",
+            "M8 15h.01"
+        )
+    }
+
+    val Brush by lazy {
+        icon(
+            "M7 20a4 4 0 0 1 -4 -4",
+            "M4 13a8 8 0 0 1 7 -7",
+            "M8 21a5 5 0 0 0 10 0v-5l4 -4a2 2 0 1 0 -3 -3l-4 4h-5a5 5 0 0 0 -5 5"
+        )
+    }
+
+    val Palette by lazy {
+        icon(
+            "M12 22a10 10 0 1 1 10 -10",
+            "M12 22a5 5 0 0 0 5 -5a4 4 0 0 0 -4 -4h-1a2 2 0 1 1 0 -4a5 5 0 0 0 5 -5",
+            "M7 8h.01",
+            "M10 5h.01",
+            "M5 12h.01"
+        )
+    }
+
+    val Mountain by lazy {
+        icon(
+            "M8 3l-6 18h20l-6 -18z",
+            "M8 15l3 -3l2 2l3 -3"
+        )
+    }
+
+    val Layers by lazy {
+        icon(
+            "M12 2l-9 5 9 5 9 -5z",
+            "M3 12l9 5 9 -5",
+            "M3 17l9 5 9 -5"
+        )
+    }
+
+    val ArrowsMaximize by lazy {
+        icon(
+            "M16 4h4v4",
+            "M14 10l6 -6",
+            "M8 20H4v-4",
+            "M4 20l6 -6",
+            "M16 20h4v-4",
+            "M14 14l6 6",
+            "M8 4H4v4",
+            "M4 4l6 6"
+        )
+    }
+
+    val Crosshair by lazy {
+        icon(
+            "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0 -18z",
+            "M12 8v2",
+            "M12 14v2",
+            "M8 12h2",
+            "M14 12h2"
+        )
+    }
+
+    val ImagePlus by lazy {
+        icon(
+            "M15 8h.01",
+            "M12.5 21H6a3 3 0 0 1 -3 -3V6a3 3 0 0 1 3 -3h12a3 3 0 0 1 3 3v6.5",
+            "M3 16l5 -5c.928 -.893 2.072 -.893 3 0l4 4",
+            "M14 14l1 -1c.928 -.893 2.072 -.893 3 0",
+            "M16 19h6",
+            "M19 16v6"
+        )
+    }
+
+    val Share by lazy {
+        icon(
+            "M6 12a3 3 0 1 0 0 -6a3 3 0 0 0 0 6z",
+            "M18 6a3 3 0 1 0 0 6a3 3 0 0 0 0 -6z",
+            "M18 18a3 3 0 1 0 0 -6a3 3 0 0 0 0 6z",
+            "M8.7 10.7l6.6 -3.4",
+            "M8.7 13.3l6.6 3.4"
+        )
+    }
+
+    val Wallpaper by lazy {
+        icon(
+            "M4 4h6v6H4z",
+            "M14 4h6v6h-6z",
+            "M4 14h6v6H4z",
+            "M14 14h6v6h-6z"
+        )
+    }
+
+    val Terminal by lazy {
+        icon(
+            "M3 5h18a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-18a1 1 0 0 1 -1 -1v-12a1 1 0 0 1 1 -1z",
+            "M7 10l3 3l-3 3",
+            "M12 17h5"
+        )
+    }
+
 }
 
 private fun icon(vararg paths: String): ImageVector {

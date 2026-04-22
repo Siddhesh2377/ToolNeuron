@@ -18,6 +18,7 @@ fun AppTopBar(
     onBack: () -> Unit = {},
     onNavigateToStore: () -> Unit = {},
     onNavigateToGuide: () -> Unit = {},
+    onNavigateToTerminal: () -> Unit = {},
 ) {
     when (currentRoute) {
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
@@ -27,6 +28,7 @@ fun AppTopBar(
             onMenuClick = onMenuClick,
             onStoreClick = onNavigateToStore,
             onGuideClick = onNavigateToGuide,
+            onTerminalClick = onNavigateToTerminal,
         )
         NavScreens.DevNotes.route -> DevNotesTopBar()
         NavScreens.PasswordScreen.route -> PasswordScreenTopBar()

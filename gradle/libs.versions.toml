@@ -1,7 +1,7 @@
 [versions]
 
 # Build plugins
-agp = "9.1.1"
+agp = "9.2.0"
 capsule = "2.1.3"
 kotlin = "2.3.20"
 ksp = "2.3.6"
@@ -24,6 +24,16 @@ junitVersion = "1.3.0"
 espressoCore = "3.7.0"
 coroutines = "1.10.2"
 kotlinx-serialization-json = "1.11.0"
+
+# Termux module deps
+androidxAnnotation = "1.9.1"
+androidxAppcompat = "1.7.0"
+androidxWindow = "1.0.0-alpha09"
+googleMaterial = "1.12.0"
+guava = "33.3.1-jre"
+markwon = "4.6.2"
+hiddenapibypass = "6.1"
+commonsIo = "2.5"
 
 
 [libraries]
@@ -57,6 +67,19 @@ androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "j
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
+
+# Termux module deps
+androidx-annotation = { group = "androidx.annotation", name = "annotation", version.ref = "androidxAnnotation" }
+androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "androidxAppcompat" }
+androidx-window = { group = "androidx.window", name = "window", version.ref = "androidxWindow" }
+google-material = { group = "com.google.android.material", name = "material", version.ref = "googleMaterial" }
+guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
+markwon-core = { group = "io.noties.markwon", name = "core", version.ref = "markwon" }
+markwon-ext-strikethrough = { group = "io.noties.markwon", name = "ext-strikethrough", version.ref = "markwon" }
+markwon-linkify = { group = "io.noties.markwon", name = "linkify", version.ref = "markwon" }
+markwon-recycler = { group = "io.noties.markwon", name = "recycler", version.ref = "markwon" }
+hiddenapibypass = { group = "org.lsposed.hiddenapibypass", name = "hiddenapibypass", version.ref = "hiddenapibypass" }
+commons-io = { group = "commons-io", name = "commons-io", version.ref = "commonsIo" }
 
 [plugins]
 

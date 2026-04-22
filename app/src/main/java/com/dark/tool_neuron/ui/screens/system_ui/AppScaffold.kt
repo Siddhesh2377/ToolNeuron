@@ -70,9 +70,9 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.AppGuide.route)
                     },
-                    onNavigateToPlugins = {
+                    onNavigateToDevNotes = {
                         scope.launch { drawerState.close() }
-                        navController.navigate(NavScreens.PluginHub.route)
+                        navController.navigate(NavScreens.DevNotes.route)
                     },
                 )
             }
@@ -90,6 +90,7 @@ fun AppScaffold() {
                     onBack = { navController.popBackStack() },
                     onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
                     onNavigateToGuide = { navController.navigate(NavScreens.AppGuide.route) },
+                    onNavigateToTerminal = { navController.navigate(NavScreens.Terminal.route) },
                 )
             },
             bottomBar = {

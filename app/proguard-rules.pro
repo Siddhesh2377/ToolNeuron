@@ -18,14 +18,14 @@
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
 
-# ai_sd — keep public API and JNI
--keep class com.dark.ai_sd.** { *; }
-
 # Local native modules — explicit keeps to satisfy R8 whole-program analysis
 -keep class com.dark.hxs.** { *; }
 -keep class com.dark.hxs_encryptor.** { *; }
 -keep class com.dark.download_manager.** { *; }
+-keep class com.dark.networking.** { *; }
 
 -dontwarn com.dark.hxs.**
 -dontwarn com.dark.hxs_encryptor.**
 -dontwarn com.dark.download_manager.**
+-dontwarn com.dark.networking.**
+
