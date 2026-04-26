@@ -1,0 +1,781 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Tool-Neuron · API Docs</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --fg:        #1c1c1e;
+    --fg-muted:  #6b6b70;
+    --bg:        #ffffff;
+    --bg-soft:   #f6f6f8;
+    --bg-card:   #ffffff;
+    --border:    #e5e5ea;
+    --primary:   #0a84ff;
+    --primary-soft: rgba(10,132,255,0.10);
+    --code-bg:   #f4f4f6;
+    --code-fg:   #1c1c1e;
+    --kw:        #ad3da4;
+    --str:       #0e7c3f;
+    --num:       #aa3731;
+    --comment:   #707074;
+    --shadow:    0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03);
+    --radius:    12px;
+    --radius-sm: 8px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --fg:        #f2f2f7;
+      --fg-muted:  #98989f;
+      --bg:        #000000;
+      --bg-soft:   #1c1c1e;
+      --bg-card:   #1c1c1e;
+      --border:    #2c2c2e;
+      --primary:   #0a84ff;
+      --primary-soft: rgba(10,132,255,0.18);
+      --code-bg:   #2c2c2e;
+      --code-fg:   #f2f2f7;
+      --kw:        #ff7ab2;
+      --str:       #6bdf95;
+      --num:       #ff8866;
+      --comment:   #8e8e93;
+      --shadow:    0 1px 2px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+    }
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "SF Pro Text",
+      Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    min-height: 100vh;
+  }
+  @media (max-width: 880px) {
+    .app { grid-template-columns: 1fr; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); z-index: 30; transition: transform 200ms ease-out; }
+    .sidebar.open { transform: translateX(0); }
+    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.32); z-index: 20; opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
+    .scrim.open { opacity: 1; pointer-events: auto; }
+    .topbar-mobile-only { display: flex !important; }
+  }
+
+  .sidebar {
+    background: var(--bg-soft);
+    border-right: 1px solid var(--border);
+    padding: 20px 14px;
+    overflow-y: auto;
+    width: 280px;
+  }
+  .sidebar h1 {
+    font-size: 14px;
+    font-weight: 700;
+    margin: 0 8px 6px;
+    letter-spacing: -0.01em;
+  }
+  .sidebar .sub {
+    font-size: 12px;
+    color: var(--fg-muted);
+    margin: 0 8px 18px;
+  }
+  .sidebar .group {
+    margin-top: 18px;
+    padding: 0 8px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--fg-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin: 1px 0;
+    border-radius: var(--radius-sm);
+    color: var(--fg);
+    text-decoration: none;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background-color 100ms;
+  }
+  .sidebar a:hover { background: rgba(127,127,127,0.08); }
+  .sidebar a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+  .sidebar a .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--fg-muted);
+    flex-shrink: 0;
+  }
+  .sidebar a.active .dot { background: var(--primary); }
+
+  .main { min-width: 0; padding: 24px 28px 96px; }
+  @media (max-width: 880px) { .main { padding: 16px 18px 96px; } }
+  .topbar-mobile-only {
+    display: none;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--border);
+    margin: -16px -18px 16px;
+    background: var(--bg);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: saturate(180%) blur(10px);
+    -webkit-backdrop-filter: saturate(180%) blur(10px);
+  }
+  .menu-btn {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+    color: var(--fg);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .menu-btn:hover { background: var(--bg-soft); }
+  .topbar-title { font-weight: 600; }
+
+  .page { display: none; max-width: 800px; }
+  .page.active { display: block; animation: fadein 180ms ease-out; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  h1.title {
+    margin: 0 0 4px;
+    font-size: 28px;
+    line-height: 1.2;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .lead {
+    color: var(--fg-muted);
+    margin: 0 0 28px;
+    font-size: 16px;
+  }
+  h2 {
+    margin: 36px 0 12px;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+  h3 {
+    margin: 22px 0 10px;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  p { margin: 0 0 12px; }
+  a { color: var(--primary); }
+  ul, ol { margin: 0 0 14px; padding-left: 22px; }
+  li { margin: 4px 0; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+  code {
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    padding: 1.5px 5px;
+    border-radius: 5px;
+  }
+  pre {
+    margin: 12px 0 16px;
+    padding: 14px 16px;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    border-radius: var(--radius);
+    overflow-x: auto;
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.55;
+    position: relative;
+    box-shadow: var(--shadow);
+  }
+  pre code { background: transparent; padding: 0; }
+  .copy-btn {
+    position: absolute; top: 8px; right: 8px;
+    border: 1px solid var(--border); background: var(--bg-card);
+    color: var(--fg-muted);
+    font-size: 11px; padding: 4px 8px;
+    border-radius: 6px; cursor: pointer;
+    opacity: 0;
+    transition: opacity 120ms;
+  }
+  pre:hover .copy-btn { opacity: 1; }
+  .copy-btn.copied { color: var(--primary); border-color: var(--primary); }
+
+  .kw { color: var(--kw); }
+  .str { color: var(--str); }
+  .num { color: var(--num); }
+  .comment { color: var(--comment); font-style: italic; }
+
+  .endpoint {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 0 12px;
+    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+  }
+  .method {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-weight: 700;
+    font-size: 11px;
+    color: #fff;
+  }
+  .method.get { background: #2bb673; }
+  .method.post { background: #ff8c1a; }
+
+  .table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+    margin: 6px 0 16px;
+  }
+  .table th, .table td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  .table th {
+    font-weight: 600;
+    color: var(--fg-muted);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .table tr:last-child td { border-bottom: none; }
+
+  .callout {
+    border-left: 3px solid var(--primary);
+    background: var(--primary-soft);
+    padding: 10px 14px;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .callout.warn { border-left-color: #ff9500; background: rgba(255,149,0,0.10); }
+
+  .pager {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 40px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+  }
+  .pager a {
+    flex: 1;
+    text-decoration: none;
+    color: var(--fg);
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    transition: border-color 100ms, background-color 100ms;
+    cursor: pointer;
+  }
+  .pager a:hover { background: var(--primary-soft); border-color: var(--primary); }
+  .pager a.right { text-align: right; }
+  .pager a .label { font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+  .pager a .target { font-weight: 600; margin-top: 2px; }
+  .pager .empty { visibility: hidden; }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.3); border-radius: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+</style>
+</head>
+<body>
+
+<div class="scrim" id="scrim" onclick="closeNav()"></div>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <h1>Tool-Neuron</h1>
+    <div class="sub">OpenAI-compatible local API · v1</div>
+
+    <div class="group">Getting started</div>
+    <a data-page="overview"><span class="dot"></span>Overview</a>
+    <a data-page="auth"><span class="dot"></span>Authentication</a>
+
+    <div class="group">Endpoints</div>
+    <a data-page="models"><span class="dot"></span>List models</a>
+    <a data-page="chat"><span class="dot"></span>Chat completions</a>
+    <a data-page="streaming"><span class="dot"></span>Streaming (SSE)</a>
+    <a data-page="health"><span class="dot"></span>Health</a>
+
+    <div class="group">Reference</div>
+    <a data-page="errors"><span class="dot"></span>Errors</a>
+    <a data-page="ratelimits"><span class="dot"></span>Rate limits &amp; bans</a>
+    <a data-page="examples"><span class="dot"></span>Examples</a>
+    <a data-page="security"><span class="dot"></span>Security notes</a>
+
+    <div class="group">App</div>
+    <a href="/" target="_blank">↗ Open Web UI</a>
+  </aside>
+
+  <main class="main">
+    <div class="topbar-mobile-only">
+      <button class="menu-btn" onclick="toggleNav()" aria-label="Open menu">☰</button>
+      <span class="topbar-title" id="mobileTitle">Overview</span>
+    </div>
+
+    <section class="page" data-page="overview">
+      <h1 class="title">Overview</h1>
+      <p class="lead">A local, OpenAI-compatible HTTP API running entirely on your device. No cloud, no telemetry — just the model you loaded in the app, exposed over your LAN.</p>
+
+      <h2>Base URL</h2>
+      <p>The base URL is whatever the server screen shows in the app. Two URLs are presented:</p>
+      <ul>
+        <li><strong>From this device:</strong> <code>http://127.0.0.1:&lt;port&gt;</code> — always reachable from the phone's own browser, regardless of Wi-Fi state.</li>
+        <li><strong>From LAN:</strong> <code>http://&lt;wifi-ip&gt;:&lt;port&gt;</code> — visible to any device on the same Wi-Fi network when the bind mode is <code>ALL_INTERFACES</code> or <code>WIFI_ONLY</code>.</li>
+      </ul>
+
+      <h2>Compatibility</h2>
+      <p>Endpoints follow OpenAI's wire format, so most clients (the OpenAI Python SDK, OpenWebUI, llama-index, LangChain, etc.) work by pointing them at this base URL with the bearer token from the app.</p>
+
+      <h2>Endpoints at a glance</h2>
+      <div class="endpoint"><span class="method get">GET</span><code>/health</code></div>
+      <div class="endpoint"><span class="method get">GET</span><code>/v1/models</code></div>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
+
+      <div class="callout">Only <code>/health</code> and the bundled web pages (<code>/</code>, <code>/webui</code>, <code>/docs</code>) are public. Every other route requires a bearer token.</div>
+
+      <div class="pager">
+        <a class="empty"></a>
+        <a class="right" data-page="auth"><div class="label">Next</div><div class="target">Authentication →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="auth">
+      <h1 class="title">Authentication</h1>
+      <p class="lead">All non-public endpoints require a bearer token. The token is generated on the device and never leaves it.</p>
+
+      <h2>Where to get the token</h2>
+      <ol>
+        <li>Open the Tool-Neuron app on the device running the server.</li>
+        <li>Go to <strong>Server</strong> screen.</li>
+        <li>Tap the eye icon on the token card to reveal the token (requires the app to be unlocked).</li>
+        <li>Tap the copy icon, or rotate to generate a new one.</li>
+      </ol>
+
+      <h2>Sending the token</h2>
+      <p>Include it as a standard <code>Authorization: Bearer &lt;token&gt;</code> header on every request.</p>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn">Copy</button></pre>
+
+      <h2>What happens if it's missing</h2>
+      <p>The server replies <code>401 Unauthorized</code> with body <code>{ "error": { "code": 401, "message": "missing or invalid bearer token" } }</code> and a <code>WWW-Authenticate: Bearer</code> header.</p>
+
+      <div class="callout warn">After 20 consecutive auth failures from the same client address, the server bans that address for 1 hour and replies <code>403</code>.</div>
+
+      <h2>Rotating the token</h2>
+      <p>Tap <em>Rotate</em> in the Server screen. The previous token is immediately invalidated in native memory; subsequent requests with the old token return 401 and count toward the ban threshold.</p>
+
+      <div class="pager">
+        <a data-page="overview"><div class="label">Previous</div><div class="target">← Overview</div></a>
+        <a class="right" data-page="models"><div class="label">Next</div><div class="target">List models →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="models">
+      <h1 class="title">List models</h1>
+      <p class="lead">Returns the catalog of models currently loaded by the server.</p>
+
+      <div class="endpoint"><span class="method get">GET</span><code>/v1/models</code></div>
+
+      <h2>Request</h2>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn">Copy</button></pre>
+
+      <h2>Response</h2>
+      <pre><code>{
+  <span class="str">"object"</span>: <span class="str">"list"</span>,
+  <span class="str">"data"</span>: [
+    {
+      <span class="str">"id"</span>: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
+      <span class="str">"object"</span>: <span class="str">"model"</span>,
+      <span class="str">"created"</span>: <span class="num">1714080000</span>,
+      <span class="str">"owned_by"</span>: <span class="str">"tool-neuron"</span>
+    }
+  ]
+}</code><button class="copy-btn">Copy</button></pre>
+
+      <div class="callout">The catalog only contains the model the server currently has loaded. Switch models from inside the app before starting the server — dynamic load over the wire is intentionally not exposed.</div>
+
+      <div class="pager">
+        <a data-page="auth"><div class="label">Previous</div><div class="target">← Authentication</div></a>
+        <a class="right" data-page="chat"><div class="label">Next</div><div class="target">Chat completions →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="chat">
+      <h1 class="title">Chat completions</h1>
+      <p class="lead">Send a list of messages, get the assistant's response.</p>
+
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
+
+      <h2>Request body</h2>
+      <table class="table">
+        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td><code>model</code></td><td>string</td><td>Required. Must match an <code>id</code> from <code>/v1/models</code>.</td></tr>
+          <tr><td><code>messages</code></td><td>array</td><td>Required. Each item is <code>{role, content}</code> where <code>role</code> is one of <code>system / user / assistant</code>.</td></tr>
+          <tr><td><code>stream</code></td><td>boolean</td><td>Optional, default <code>false</code>. When <code>true</code>, response is SSE.</td></tr>
+          <tr><td><code>max_tokens</code></td><td>integer</td><td>Optional. Cap on tokens generated.</td></tr>
+          <tr><td><code>temperature</code></td><td>number</td><td>Optional. <code>0.0</code>–<code>2.0</code>.</td></tr>
+          <tr><td><code>top_p</code></td><td>number</td><td>Optional. Nucleus sampling.</td></tr>
+          <tr><td><code>frequency_penalty</code></td><td>number</td><td>Optional.</td></tr>
+          <tr><td><code>presence_penalty</code></td><td>number</td><td>Optional.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Non-streaming example</h2>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/chat/completions \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "model": "qwen2.5-7b-instruct-q4_k_m",
+    "messages": [
+      { "role": "user", "content": "Hello!" }
+    ]
+  }'</span></code><button class="copy-btn">Copy</button></pre>
+
+      <h2>Response</h2>
+      <pre><code>{
+  <span class="str">"id"</span>: <span class="str">"chatcmpl-..."</span>,
+  <span class="str">"object"</span>: <span class="str">"chat.completion"</span>,
+  <span class="str">"created"</span>: <span class="num">1714080000</span>,
+  <span class="str">"model"</span>: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
+  <span class="str">"choices"</span>: [{
+    <span class="str">"index"</span>: <span class="num">0</span>,
+    <span class="str">"message"</span>: { <span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: <span class="str">"Hi!"</span> },
+    <span class="str">"finish_reason"</span>: <span class="str">"stop"</span>
+  }]
+}</code><button class="copy-btn">Copy</button></pre>
+
+      <div class="pager">
+        <a data-page="models"><div class="label">Previous</div><div class="target">← List models</div></a>
+        <a class="right" data-page="streaming"><div class="label">Next</div><div class="target">Streaming →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="streaming">
+      <h1 class="title">Streaming (SSE)</h1>
+      <p class="lead">Set <code>"stream": true</code> to receive tokens as they're generated.</p>
+
+      <h2>Wire format</h2>
+      <p>Server-Sent Events. Each chunk arrives as <code>data: {json}\n\n</code>. The stream terminates with the literal line <code>data: [DONE]\n\n</code>.</p>
+
+      <pre><code><span class="comment">// First chunk announces the role</span>
+data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"object"</span>:<span class="str">"chat.completion.chunk"</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"role"</span>:<span class="str">"assistant"</span>}}]}
+
+<span class="comment">// Subsequent chunks carry deltas</span>
+data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"content"</span>:<span class="str">"Hi"</span>}}]}
+data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"content"</span>:<span class="str">"!"</span>}}]}
+
+<span class="comment">// Final chunk includes finish_reason and an empty delta</span>
+data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{},<span class="str">"finish_reason"</span>:<span class="str">"stop"</span>}]}
+data: [DONE]</code><button class="copy-btn">Copy</button></pre>
+
+      <h2>JavaScript example</h2>
+      <pre><code><span class="kw">const</span> r = <span class="kw">await</span> fetch(<span class="str">"/v1/chat/completions"</span>, {
+  method: <span class="str">"POST"</span>,
+  headers: {
+    <span class="str">"Authorization"</span>: <span class="str">"Bearer "</span> + token,
+    <span class="str">"Content-Type"</span>: <span class="str">"application/json"</span>,
+  },
+  body: <span class="kw">JSON</span>.stringify({ model, messages, stream: <span class="kw">true</span> }),
+});
+<span class="kw">const</span> reader = r.body.getReader();
+<span class="kw">const</span> dec = <span class="kw">new</span> <span class="kw">TextDecoder</span>();
+<span class="kw">let</span> buf = <span class="str">""</span>;
+<span class="kw">while</span> (<span class="kw">true</span>) {
+  <span class="kw">const</span> { value, done } = <span class="kw">await</span> reader.read();
+  <span class="kw">if</span> (done) <span class="kw">break</span>;
+  buf += dec.decode(value, { stream: <span class="kw">true</span> });
+  <span class="kw">for</span> (<span class="kw">const</span> line <span class="kw">of</span> buf.split(<span class="str">"\n\n"</span>)) {
+    <span class="kw">if</span> (!line.startsWith(<span class="str">"data: "</span>)) <span class="kw">continue</span>;
+    <span class="kw">const</span> json = line.slice(<span class="num">6</span>);
+    <span class="kw">if</span> (json === <span class="str">"[DONE]"</span>) <span class="kw">return</span>;
+    <span class="kw">const</span> chunk = <span class="kw">JSON</span>.parse(json);
+    onDelta(chunk.choices[<span class="num">0</span>]?.delta?.content ?? <span class="str">""</span>);
+  }
+}</code><button class="copy-btn">Copy</button></pre>
+
+      <div class="callout">Streaming chunks intentionally omit <code>usage</code> per OpenAI's spec. Token counts are not reported on the wire.</div>
+
+      <div class="pager">
+        <a data-page="chat"><div class="label">Previous</div><div class="target">← Chat completions</div></a>
+        <a class="right" data-page="health"><div class="label">Next</div><div class="target">Health →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="health">
+      <h1 class="title">Health</h1>
+      <p class="lead">Cheap public ping. No auth needed, returns immediately.</p>
+
+      <div class="endpoint"><span class="method get">GET</span><code>/health</code></div>
+
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/health</code><button class="copy-btn">Copy</button></pre>
+
+      <h2>Response</h2>
+      <pre><code>{ <span class="str">"status"</span>: <span class="str">"ok"</span>, <span class="str">"service"</span>: <span class="str">"tool-neuron"</span>, <span class="str">"version"</span>: <span class="str">"0.18.5"</span> }</code><button class="copy-btn">Copy</button></pre>
+
+      <p>The bundled web UI uses this as a connection probe — it polls every 30 seconds and shows a green dot when the server is reachable.</p>
+
+      <div class="pager">
+        <a data-page="streaming"><div class="label">Previous</div><div class="target">← Streaming</div></a>
+        <a class="right" data-page="errors"><div class="label">Next</div><div class="target">Errors →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="errors">
+      <h1 class="title">Errors</h1>
+      <p class="lead">All errors return a JSON envelope with <code>error.code</code>, <code>error.message</code>, and (where applicable) <code>error.type</code>.</p>
+
+      <h2>Codes</h2>
+      <table class="table">
+        <thead><tr><th>Status</th><th>Type</th><th>Cause</th></tr></thead>
+        <tbody>
+          <tr><td><code>400</code></td><td>invalid_request_error</td><td>Malformed JSON, missing required fields.</td></tr>
+          <tr><td><code>401</code></td><td>authentication_error</td><td>Missing or invalid <code>Bearer</code> token.</td></tr>
+          <tr><td><code>403</code></td><td>permission_error</td><td>Client banned (20 auth fails / hour).</td></tr>
+          <tr><td><code>404</code></td><td>invalid_request_error</td><td>Model id not in <code>/v1/models</code>.</td></tr>
+          <tr><td><code>429</code></td><td>rate_limit_error</td><td>Per-client token bucket exhausted; retry after the <code>Retry-After</code> header.</td></tr>
+          <tr><td><code>499</code></td><td>server_error</td><td>Client cancelled mid-generation.</td></tr>
+          <tr><td><code>500</code></td><td>server_error</td><td>Inference engine error or unexpected exception.</td></tr>
+          <tr><td><code>503</code></td><td>server_error</td><td>Inference bridge not attached or refused to start.</td></tr>
+        </tbody>
+      </table>
+
+      <h2>Envelope shape</h2>
+      <pre><code>{
+  <span class="str">"error"</span>: {
+    <span class="str">"code"</span>: <span class="num">401</span>,
+    <span class="str">"message"</span>: <span class="str">"missing or invalid bearer token"</span>,
+    <span class="str">"type"</span>: <span class="str">"authentication_error"</span>
+  }
+}</code><button class="copy-btn">Copy</button></pre>
+
+      <div class="pager">
+        <a data-page="health"><div class="label">Previous</div><div class="target">← Health</div></a>
+        <a class="right" data-page="ratelimits"><div class="label">Next</div><div class="target">Rate limits &amp; bans →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="ratelimits">
+      <h1 class="title">Rate limits &amp; bans</h1>
+      <p class="lead">Defaults are conservative for a phone serving a LAN; tune them in app code if you control the build.</p>
+
+      <h2>Token bucket (per-client IP)</h2>
+      <table class="table">
+        <thead><tr><th>Default</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Bucket capacity</td><td><code>30</code> tokens</td></tr>
+          <tr><td>Refill rate</td><td><code>1.0</code> tokens / second</td></tr>
+        </tbody>
+      </table>
+      <p>Each request takes one token. When the bucket empties the server returns <code>429</code> with <code>Retry-After: 1</code>.</p>
+
+      <h2>Auth-fail ban list</h2>
+      <table class="table">
+        <thead><tr><th>Default</th><th>Value</th></tr></thead>
+        <tbody>
+          <tr><td>Threshold</td><td><code>20</code> consecutive auth fails</td></tr>
+          <tr><td>Ban duration</td><td><code>3,600,000 ms</code> (1 hour)</td></tr>
+        </tbody>
+      </table>
+      <p>Banned clients receive <code>403</code> for the duration. The list is stored in memory only and clears on server restart.</p>
+
+      <div class="pager">
+        <a data-page="errors"><div class="label">Previous</div><div class="target">← Errors</div></a>
+        <a class="right" data-page="examples"><div class="label">Next</div><div class="target">Examples →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="examples">
+      <h1 class="title">Examples</h1>
+      <p class="lead">Drop-in snippets for common clients.</p>
+
+      <h2>OpenAI Python SDK</h2>
+      <pre><code><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+
+client = OpenAI(
+    base_url=<span class="str">"http://127.0.0.1:11434/v1"</span>,
+    api_key=<span class="str">"tn_sk_..."</span>,
+)
+
+resp = client.chat.completions.create(
+    model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
+    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
+)
+<span class="kw">print</span>(resp.choices[<span class="num">0</span>].message.content)</code><button class="copy-btn">Copy</button></pre>
+
+      <h2>OpenWebUI</h2>
+      <p>In OpenWebUI's <strong>Settings → Connections → OpenAI</strong>, set the base URL to <code>http://&lt;phone-lan-ip&gt;:11434/v1</code> and paste the bearer token. The connected chat dropdown auto-detects the loaded model.</p>
+
+      <h2>Plain fetch (Node / Bun)</h2>
+      <pre><code><span class="kw">const</span> r = <span class="kw">await</span> fetch(<span class="str">"http://127.0.0.1:11434/v1/chat/completions"</span>, {
+  method: <span class="str">"POST"</span>,
+  headers: {
+    <span class="str">"Authorization"</span>: <span class="str">"Bearer tn_sk_..."</span>,
+    <span class="str">"Content-Type"</span>: <span class="str">"application/json"</span>,
+  },
+  body: <span class="kw">JSON</span>.stringify({
+    model: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
+    messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hi!"</span> }],
+  }),
+});
+<span class="kw">const</span> data = <span class="kw">await</span> r.json();
+console.log(data.choices[<span class="num">0</span>].message.content);</code><button class="copy-btn">Copy</button></pre>
+
+      <h2>llama-index</h2>
+      <pre><code><span class="kw">from</span> llama_index.llms.openai_like <span class="kw">import</span> OpenAILike
+
+llm = OpenAILike(
+    api_base=<span class="str">"http://127.0.0.1:11434/v1"</span>,
+    api_key=<span class="str">"tn_sk_..."</span>,
+    model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
+)
+<span class="kw">print</span>(llm.complete(<span class="str">"Hi"</span>).text)</code><button class="copy-btn">Copy</button></pre>
+
+      <div class="pager">
+        <a data-page="ratelimits"><div class="label">Previous</div><div class="target">← Rate limits</div></a>
+        <a class="right" data-page="security"><div class="label">Next</div><div class="target">Security notes →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="security">
+      <h1 class="title">Security notes</h1>
+      <p class="lead">What you can rely on, and what's intentionally not in scope yet.</p>
+
+      <h2>What's enforced</h2>
+      <ul>
+        <li><strong>Bearer auth on every non-public route.</strong> Constant-time comparison.</li>
+        <li><strong>Per-client rate limit + ban list</strong> on auth failures.</li>
+        <li><strong>Token rotation</strong> from the app invalidates the previous token in native memory immediately.</li>
+        <li><strong>Token storage on device</strong> rides the encrypted HXS vault — same key as the rest of app preferences.</li>
+        <li><strong>App lockdown while server runs</strong> — chat-side model load/unload is gated so the server's loaded model isn't yanked mid-request.</li>
+        <li><strong>Static model catalog</strong> per server lifetime — dynamic load over the wire is not exposed.</li>
+      </ul>
+
+      <h2>What's not enforced (yet)</h2>
+      <ul>
+        <li><strong>HTTPS / TLS.</strong> Phase 1 is plain HTTP. The server is intended for trusted LANs. If you need TLS, place a reverse proxy in front (nginx / caddy on a workstation on the same LAN), or wait for a TLS build flavor.</li>
+        <li><strong>mDNS / Bonjour discovery.</strong> Paste the IP manually for now.</li>
+        <li><strong>Per-user / per-key auth.</strong> One token, all-or-nothing.</li>
+        <li><strong>Audit log persistence.</strong> The audit ring buffer is in-memory only; restart clears it.</li>
+        <li><strong>Streaming usage metrics.</strong> Token counts are not reported on the wire (per OpenAI spec for <code>chat.completion.chunk</code>).</li>
+      </ul>
+
+      <div class="callout warn">Treat the bearer token like a password. Anyone on the LAN with the token can drive your model.</div>
+
+      <div class="pager">
+        <a data-page="examples"><div class="label">Previous</div><div class="target">← Examples</div></a>
+        <a class="empty"></a>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  const pages = document.querySelectorAll('section.page');
+  const links = document.querySelectorAll('.sidebar a[data-page]');
+  const mobileTitle = document.getElementById('mobileTitle');
+  const sidebar = document.getElementById('sidebar');
+  const scrim = document.getElementById('scrim');
+
+  function setPage(name, push) {
+    let title = name;
+    pages.forEach(p => {
+      const m = p.getAttribute('data-page') === name;
+      p.classList.toggle('active', m);
+      if (m) {
+        const h = p.querySelector('h1.title');
+        if (h) title = h.textContent;
+      }
+    });
+    document.querySelectorAll('.sidebar a').forEach(a => {
+      a.classList.toggle('active', a.getAttribute('data-page') === name);
+    });
+    mobileTitle.textContent = title;
+    document.title = 'Tool-Neuron · ' + title;
+    closeNav();
+    window.scrollTo(0, 0);
+    if (push !== false) history.replaceState(null, '', '#/' + name);
+  }
+
+  function readHash() {
+    const m = (location.hash || '').match(/^#\/(\w+)/);
+    return m ? m[1] : 'overview';
+  }
+
+  document.querySelectorAll('a[data-page]').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      setPage(a.getAttribute('data-page'));
+    });
+  });
+  window.addEventListener('hashchange', () => setPage(readHash(), false));
+
+  document.querySelectorAll('.copy-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      const pre = btn.closest('pre');
+      const code = pre.querySelector('code');
+      const text = code.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.classList.add('copied');
+        const orig = btn.textContent;
+        btn.textContent = 'Copied';
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.textContent = orig;
+        }, 1200);
+      });
+    });
+  });
+
+  function toggleNav() {
+    sidebar.classList.toggle('open');
+    scrim.classList.toggle('open');
+  }
+  function closeNav() {
+    sidebar.classList.remove('open');
+    scrim.classList.remove('open');
+  }
+  window.toggleNav = toggleNav;
+  window.closeNav = closeNav;
+
+  setPage(readHash(), false);
+</script>
+
+</body>
+</html>

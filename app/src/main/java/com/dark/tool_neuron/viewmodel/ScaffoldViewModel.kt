@@ -8,12 +8,15 @@ import com.dark.tool_neuron.data.RootGuard
 import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.SessionHolder
 import com.dark.tool_neuron.model.NavScreens
+import com.dark.tool_neuron.service.server.ServerController
+import com.dark.tool_neuron.service.server.ServerState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -23,7 +26,16 @@ class ScaffoldViewModel @Inject constructor(
     private val security: SecurityManager,
     private val rootGuard: RootGuard,
     session: SessionHolder,
+    serverController: ServerController,
 ) : ViewModel() {
+
+    val serverRunning: StateFlow<Boolean> = serverController.state
+        .map {
+            it is ServerState.Running ||
+                it is ServerState.Starting ||
+                it is ServerState.LoadingModel
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, serverController.isBusy)
 
     val shouldLock: StateFlow<Boolean> = combine(
         session.active,
