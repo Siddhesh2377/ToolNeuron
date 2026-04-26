@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -36,13 +37,15 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
-import com.dark.tool_neuron.util.formatBytes
+import com.dark.download_manager.formatBytes
 
 @Composable
 fun CatalogModelCard(
     model: HuggingFaceModel,
     isInstalled: Boolean,
     downloadState: HxdState?,
+    isExtracting: Boolean = false,
+    extractingEntryName: String? = null,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
 ) {
@@ -105,6 +108,13 @@ fun CatalogModelCard(
                             TnIcons.CircleCheck, "Installed",
                             tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(24.dp)
+                        )
+                    }
+                    isExtracting -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary,
                         )
                     }
                     isActive -> {
@@ -188,6 +198,33 @@ fun CatalogModelCard(
             ) {
                 if (downloadState != null) {
                     DownloadProgress(downloadState)
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isExtracting,
+                enter = Motion.Enter,
+                exit = Motion.Exit,
+            ) {
+                Row(
+                    modifier = Modifier.padding(top = dimens.spacingSm),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    val label = extractingEntryName?.let { "Extracting $it" } ?: "Extracting…"
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
 

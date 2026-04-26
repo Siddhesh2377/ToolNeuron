@@ -50,6 +50,8 @@ internal fun BrowseModelsTab(
     isLoading: Boolean,
     error: String?,
     downloadStates: Map<String, HxdState>,
+    extractingIds: Set<String>,
+    extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
     viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
@@ -101,7 +103,7 @@ internal fun BrowseModelsTab(
                     if (repoKey == null) {
                         RepoCardListView(viewModel, isLoading, downloadStates)
                     } else {
-                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, installedModelIds, onDownload, onCancelDownload)
+                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload)
                     }
                 }
             }
@@ -197,6 +199,8 @@ internal fun RepoDetailView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
     downloadStates: Map<String, HxdState>,
+    extractingIds: Set<String>,
+    extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit
@@ -242,6 +246,8 @@ internal fun RepoDetailView(
                     model = model,
                     isInstalled = model.id in installedModelIds,
                     downloadState = downloadStates[model.id],
+                    isExtracting = model.id in extractingIds,
+                    extractingEntryName = extractingFile[model.id],
                     onDownload = { onDownload(model) },
                     onCancel = { onCancelDownload(model.id) }
                 )

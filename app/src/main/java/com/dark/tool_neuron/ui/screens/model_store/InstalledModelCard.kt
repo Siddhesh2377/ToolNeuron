@@ -53,9 +53,10 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.maple
+import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.util.extractParameterCount
 import com.dark.tool_neuron.util.extractQuantization
-import com.dark.tool_neuron.util.formatBytes
+import com.dark.download_manager.formatBytes
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -245,6 +246,11 @@ internal fun InstalledModelCard(
                         extractQuantization(model.path) ?: extractQuantization(model.name)
                     }
                     val params = remember(model.name) { extractParameterCount(model.name) }
+                    val isVlm = remember(model.path) {
+                        model.pathType == PathType.FILE &&
+                            model.path.contains("/${VlmPaths.VLM_DIR}/")
+                    }
+                    if (isVlm) ModelTag(text = "VLM")
                     if (!params.isNullOrBlank()) ModelTag(text = params)
                     if (!quant.isNullOrBlank()) ModelTag(text = quant)
                 }

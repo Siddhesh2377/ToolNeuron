@@ -44,7 +44,7 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.extractParameterCount
 import com.dark.tool_neuron.util.extractQuantization
-import com.dark.tool_neuron.util.formatBytes
+import com.dark.download_manager.formatBytes
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)

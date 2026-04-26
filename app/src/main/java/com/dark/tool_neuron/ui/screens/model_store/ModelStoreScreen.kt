@@ -38,13 +38,17 @@ fun ModelStoreScreen(
     innerPadding: PaddingValues,
     viewModel: ModelStoreViewModel,
     onNavigateBack: () -> Unit = {},
+    onNavigateToHfExplorer: () -> Unit = {},
 ) {
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
     val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
     val error by viewModel.error.collectAsStateWithLifecycle()
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
+    val extractingIds by viewModel.extractingIds.collectAsStateWithLifecycle()
+    val extractingFile by viewModel.extractingFile.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
+    val installedMmprojIds by viewModel.installedMmprojIds.collectAsStateWithLifecycle()
     val deviceInfo by viewModel.deviceInfo.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
 
@@ -149,7 +153,9 @@ fun ModelStoreScreen(
                         isLoading = isLoading,
                         error = error,
                         downloadStates = downloadStates,
-                        installedModelIds = installedModels.map { it.id }.toSet(),
+                        extractingIds = extractingIds,
+                        extractingFile = extractingFile,
+                        installedModelIds = installedModels.map { it.id }.toSet() + installedMmprojIds,
                         viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { viewModel.cancelDownload(it) },
@@ -165,7 +171,8 @@ fun ModelStoreScreen(
                     )
                     StoreTab.SETTINGS -> SettingsTab(
                         deviceInfo = deviceInfo,
-                        viewModel = viewModel
+                        viewModel = viewModel,
+                        onOpenHfExplorer = onNavigateToHfExplorer,
                     )
                 }
             }

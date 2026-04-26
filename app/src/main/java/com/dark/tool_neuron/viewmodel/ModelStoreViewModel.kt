@@ -22,11 +22,15 @@ import com.dark.tool_neuron.repo.ModelCatalog
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.RepositoryDataStore
+import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.util.extractParameterCount
 import com.dark.tool_neuron.util.extractQuantization
+import com.dark.tool_neuron.voice.VoiceArchive
+import com.dark.tool_neuron.voice.VoiceKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +63,8 @@ class ModelStoreViewModel @Inject constructor(
     private val explorer: HuggingFaceExplorer,
     private val validator: RepositoryValidator,
     private val ragManager: RagManager,
+    private val prefs: AppPreferences,
+    private val serverController: ServerController,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
@@ -93,6 +99,15 @@ class ModelStoreViewModel @Inject constructor(
     private val _downloadIds = MutableStateFlow<Map<String, Int>>(emptyMap())
     private val _downloadStates = MutableStateFlow<Map<String, HxdState>>(emptyMap())
     val downloadStates: StateFlow<Map<String, HxdState>> = _downloadStates.asStateFlow()
+
+    private val _installedMmprojIds = MutableStateFlow<Set<String>>(emptySet())
+    val installedMmprojIds: StateFlow<Set<String>> = _installedMmprojIds.asStateFlow()
+
+    private val _extractingIds = MutableStateFlow<Set<String>>(emptySet())
+    val extractingIds: StateFlow<Set<String>> = _extractingIds.asStateFlow()
+
+    private val _extractingFile = MutableStateFlow<Map<String, String>>(emptyMap())
+    val extractingFile: StateFlow<Map<String, String>> = _extractingFile.asStateFlow()
 
     val isModelLoaded = InferenceClient.isModelLoaded
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -199,7 +214,6 @@ class ModelStoreViewModel @Inject constructor(
         )
     }
 
-    // ── Filtering ──
 
     private fun applyAllFilters() {
         var filtered = _models.value
@@ -261,6 +275,7 @@ class ModelStoreViewModel @Inject constructor(
         }
 
         _filteredModels.value = filtered
+        refreshInstalledMmproj()
     }
 
     fun filterModels(query: String) { _searchQuery.value = query; applyAllFilters() }
@@ -313,14 +328,28 @@ class ModelStoreViewModel @Inject constructor(
     fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
         _filteredModels.value.filter { it.repoId == repoKey }
 
-    // ── Downloads ──
 
     fun downloadModel(model: HuggingFaceModel) {
         if (_downloadIds.value.containsKey(model.id)) return
-        _downloadStates.value = _downloadStates.value - model.id
-        val destFile = modelRepo.modelFile(model.id, model.fileName)
+
+        val destFile = when {
+            model.isMmproj && model.repoPath.isNotBlank() ->
+                modelRepo.vlmMmprojFile(model.repoPath, model.fileName)
+            model.isVlm && model.repoPath.isNotBlank() ->
+                modelRepo.vlmModelFile(model.repoPath, model.fileName)
+            model.modelType == "tts" ->
+                modelRepo.voiceArchiveFile("tts", model.id, model.fileName)
+            model.modelType == "stt" ->
+                modelRepo.voiceArchiveFile("stt", model.id, model.fileName)
+            else ->
+                modelRepo.modelFile(model.id, model.fileName)
+        }
+        destFile.parentFile?.mkdirs()
+
         val hxdId = HxdManager.enqueue(context, model.fileUri, destFile.absolutePath)
         _downloadIds.value = _downloadIds.value + (model.id to hxdId)
+        _downloadStates.value = _downloadStates.value + (model.id to
+            HxdState(hxdId, model.fileUri, destFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
 
         viewModelScope.launch(Dispatchers.IO) {
             HxdManager.observe(hxdId).collect { state ->
@@ -329,20 +358,16 @@ class ModelStoreViewModel @Inject constructor(
 
                 when (state.status) {
                     HxdStatus.COMPLETED -> {
-                        val provider = when (model.modelType) {
-                            "tts" -> ProviderType.TTS
-                            "stt" -> ProviderType.STT
-                            "embedding" -> ProviderType.EMBEDDING
-                            else -> ProviderType.GGUF
+                        if (model.isMmproj) {
+                            finalizeMmprojDownload(model, destFile)
+                        } else if (model.isVlm && model.mmprojFileUri.isNotBlank()) {
+                            val mmprojFile = modelRepo.vlmMmprojFile(model.repoPath, model.mmprojFileName)
+                            finalizeVlmDownload(model, destFile, mmprojFile)
+                        } else if (model.modelType == "tts" || model.modelType == "stt") {
+                            finalizeVoiceDownload(model, destFile)
+                        } else {
+                            finalizeNonVlmDownload(model, destFile)
                         }
-                        modelRepo.insert(ModelInfo(
-                            id = model.id, name = model.name,
-                            path = destFile.absolutePath, pathType = PathType.FILE,
-                            providerType = provider,
-                            fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
-                        ))
-                        _downloadIds.value = _downloadIds.value - model.id
-                        _downloadStates.value = _downloadStates.value - model.id
                     }
                     HxdStatus.FAILED -> {
                         _downloadIds.value = _downloadIds.value - model.id
@@ -357,13 +382,116 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
+    private fun finalizeMmprojDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+        _installedMmprojIds.value = _installedMmprojIds.value + model.id
+    }
+
+    fun refreshInstalledMmproj() {
+        val catalog = _filteredModels.value
+        val installed = catalog.asSequence()
+            .filter { it.isMmproj && it.repoPath.isNotBlank() }
+            .filter { modelRepo.vlmMmprojFile(it.repoPath, it.fileName).exists() }
+            .map { it.id }
+            .toSet()
+        _installedMmprojIds.value = installed
+    }
+
+    private fun finalizeVoiceDownload(model: HuggingFaceModel, archive: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _extractingIds.value = _extractingIds.value + model.id
+            try {
+                if (!archive.exists()) {
+                    _error.value = "Downloaded archive missing for ${model.name}"
+                    return@launch
+                }
+                val kind = if (model.modelType == "tts") VoiceKind.TTS else VoiceKind.STT
+                val parent = modelRepo.voiceDir(if (kind == VoiceKind.TTS) "tts" else "stt")
+                val result = VoiceArchive.extractAndBuildConfig(archive, parent, kind) { entryName ->
+                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                }
+                when (result) {
+                    is VoiceArchive.ExtractResult.Success -> {
+                        archive.delete()
+                        val provider = if (kind == VoiceKind.TTS) ProviderType.TTS else ProviderType.STT
+                        val folderSize = result.folder.walkTopDown()
+                            .filter { it.isFile }
+                            .sumOf { it.length() }
+                        modelRepo.insert(
+                            ModelInfo(
+                                id = model.id, name = model.name,
+                                path = result.folder.absolutePath, pathType = PathType.FILE,
+                                providerType = provider, fileSize = folderSize,
+                            ),
+                            ModelConfig(
+                                id = model.id, modelId = model.id,
+                                loadingParamsJson = result.configJson,
+                                inferenceParamsJson = "{}",
+                            ),
+                        )
+                        if (kind == VoiceKind.TTS && prefs.activeTtsModelId.isBlank()) {
+                            prefs.activeTtsModelId = model.id
+                        }
+                        if (kind == VoiceKind.STT && prefs.activeSttModelId.isBlank()) {
+                            prefs.activeSttModelId = model.id
+                        }
+                    }
+                    is VoiceArchive.ExtractResult.Failure -> {
+                        android.util.Log.e("ModelStoreVM", "Voice extract failed: ${result.reason}")
+                        _error.value = "Extraction failed: ${result.reason}"
+                    }
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("ModelStoreVM", "finalizeVoiceDownload threw", t)
+                _error.value = "Extraction error: ${t.message}"
+            } finally {
+                _extractingIds.value = _extractingIds.value - model.id
+                _extractingFile.value = _extractingFile.value - model.id
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+            }
+        }
+    }
+
+    private fun finalizeNonVlmDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        val provider = when (model.modelType) {
+            "tts" -> ProviderType.TTS
+            "stt" -> ProviderType.STT
+            "embedding" -> ProviderType.EMBEDDING
+            else -> ProviderType.GGUF
+        }
+        modelRepo.insert(ModelInfo(
+            id = model.id, name = model.name,
+            path = destFile.absolutePath, pathType = PathType.FILE,
+            providerType = provider,
+            fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
+        ))
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+    }
+
+    private fun finalizeVlmDownload(
+        model: HuggingFaceModel,
+        baseFile: java.io.File,
+        mmprojFile: java.io.File,
+    ) {
+        modelRepo.insert(ModelInfo(
+            id = model.id, name = model.name,
+            path = baseFile.absolutePath, pathType = PathType.FILE,
+            providerType = ProviderType.GGUF,
+            fileSize = if (model.sizeBytes > 0) model.sizeBytes else baseFile.length(),
+        ))
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+    }
+
     fun cancelDownload(modelId: String) {
         _downloadIds.value[modelId]?.let { HxdManager.cancel(it) }
         _downloadIds.value = _downloadIds.value - modelId
         _downloadStates.value = _downloadStates.value - modelId
     }
 
-    // ── Model management ──
 
     fun deleteModel(model: ModelInfo) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -378,6 +506,7 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun loadModel(model: ModelInfo) {
+        if (serverController.isBusy) return
         viewModelScope.launch {
             val config = modelRepo.getConfig(model.id)
             val configJson = buildConfigJson(config)
@@ -390,6 +519,7 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun unloadModel() {
+        if (serverController.isBusy) return
         viewModelScope.launch { InferenceClient.unloadModel() }
     }
 
@@ -413,7 +543,6 @@ class ModelStoreViewModel @Inject constructor(
         modelRepo.updateConfig(config)
     }
 
-    // ── Repository management ──
 
     fun addRepository(repo: HFRepository) {
         viewModelScope.launch { repoDataStore.addRepository(repo); loadModels() }
@@ -438,7 +567,6 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
-    // ── Explorer ──
 
     fun setExplorerQuery(query: String) {
         _explorerQuery.value = query
@@ -476,7 +604,6 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
-    // ── Private ──
 
     private fun buildConfigJson(config: ModelConfig?): String {
         if (config == null) return "{}"
