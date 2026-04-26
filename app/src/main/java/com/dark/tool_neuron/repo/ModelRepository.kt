@@ -7,6 +7,7 @@ import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.util.VlmPaths
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -122,7 +123,34 @@ class ModelRepository @Inject constructor(
         return File(getModelsDir(), name)
     }
 
-    // ── HXS tag constants ──
+    fun vlmModelFile(repoPath: String, originalFileName: String): File {
+        val folder = VlmPaths.vlmFolder(getModelsDir(), repoPath)
+        folder.mkdirs()
+        val leaf = originalFileName.substringAfterLast('/')
+        return File(folder, leaf)
+    }
+
+    fun vlmMmprojFile(repoPath: String, mmprojFileName: String): File {
+        val folder = VlmPaths.vlmFolder(getModelsDir(), repoPath)
+        folder.mkdirs()
+        val leaf = mmprojFileName.substringAfterLast('/')
+        return File(folder, leaf)
+    }
+
+    fun voiceDir(kind: String): File {
+        val dir = File(context.filesDir, "voice/$kind")
+        dir.mkdirs()
+        return dir
+    }
+
+    fun voiceArchiveFile(kind: String, modelId: String, fileName: String): File {
+        val dir = voiceDir(kind)
+        val safe = modelId.replace('/', '_').replace(':', '_')
+        val ext = fileName.substringAfterLast('.', "tar.bz2")
+        val leaf = if (fileName.endsWith(".tar.bz2")) "$safe.tar.bz2" else "$safe.$ext"
+        return File(dir, "_archive_$leaf")
+    }
+
 
     companion object {
         private const val COL_MODELS = "models"
@@ -142,7 +170,6 @@ class ModelRepository @Inject constructor(
         private const val TAG_CONFIG_INFERENCE = 4
     }
 
-    // ── Serialization ──
 
     private fun ModelInfo.toRecord(): HxsRecord {
         val m = this
