@@ -44,6 +44,10 @@ fun ChatMessageList(
     streaming: StreamingFragment?,
     isGenerating: Boolean,
     generationStatus: GenerationStatus,
+    speakingMessageId: String?,
+    loadingSpeakId: String?,
+    canSpeak: Boolean,
+    onSpeakToggle: (messageId: String, text: String) -> Unit,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     onEditUserMessage: (messageId: String, newContent: String) -> Unit,
@@ -98,6 +102,10 @@ fun ChatMessageList(
                     onRegenerate = onRegenerate,
                     onDelete = onDelete,
                     onEdit = onEditUserMessage,
+                    isSpeaking = speakingMessageId == message.id,
+                    isSpeakLoading = loadingSpeakId == message.id && speakingMessageId != message.id,
+                    canSpeak = canSpeak,
+                    onSpeakToggle = { onSpeakToggle(message.id, message.content) },
                 )
             }
             if (streaming != null) {

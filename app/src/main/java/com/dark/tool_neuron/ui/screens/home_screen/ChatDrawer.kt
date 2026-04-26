@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
@@ -54,6 +55,7 @@ fun ChatDrawerContent(
     onNavigateToGuide: () -> Unit,
     onNavigateToDevNotes: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
+    onNavigateToServer: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val pinnedChats = remember(chats) { chats.filter { it.isPinned } }
@@ -158,6 +160,7 @@ fun ChatDrawerContent(
             DrawerQuickLink(icon = TnIcons.Download, label = "Store", onClick = onNavigateToStore)
             DrawerQuickLink(icon = TnIcons.BookOpen, label = "Guide", onClick = onNavigateToGuide)
             DrawerQuickLink(icon = TnIcons.Info, label = "Dev Notes", onClick = onNavigateToDevNotes)
+            DrawerQuickLink(icon = TnIcons.Server, label = "Server", onClick = onNavigateToServer)
             DrawerQuickLink(icon = TnIcons.Settings, label = "Settings", onClick = onNavigateToSettings)
         }
     }
@@ -274,7 +277,7 @@ private fun ChatItem(
 
 @Composable
 private fun DrawerQuickLink(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: ImageVector,
     label: String,
     onClick: () -> Unit,
 ) {

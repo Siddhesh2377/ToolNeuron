@@ -54,6 +54,10 @@ fun MessageBubble(
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     onEdit: (messageId: String, newContent: String) -> Unit,
+    isSpeaking: Boolean = false,
+    isSpeakLoading: Boolean = false,
+    canSpeak: Boolean = false,
+    onSpeakToggle: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when {
@@ -75,6 +79,10 @@ fun MessageBubble(
                 canDelete = canDelete,
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
+                isSpeaking = isSpeaking,
+                isSpeakLoading = isSpeakLoading,
+                canSpeak = canSpeak,
+                onSpeakToggle = onSpeakToggle,
                 modifier = modifier,
             )
     }
@@ -240,6 +248,10 @@ private fun AssistantBubble(
     canDelete: Boolean,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
+    isSpeaking: Boolean,
+    isSpeakLoading: Boolean,
+    canSpeak: Boolean,
+    onSpeakToggle: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = LocalDimens.current
@@ -274,6 +286,10 @@ private fun AssistantBubble(
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
                 onEdit = {},
+                isSpeaking = isSpeaking,
+                isSpeakLoading = isSpeakLoading,
+                canSpeak = canSpeak,
+                onSpeakToggle = onSpeakToggle,
             )
         }
     }

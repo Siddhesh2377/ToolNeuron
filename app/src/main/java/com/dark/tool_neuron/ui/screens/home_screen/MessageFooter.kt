@@ -93,7 +93,7 @@ private fun MetricsPill(
     )
 
     Surface(
-        shape = if (expanded) tnShapes.lg else tnShapes.full,
+        shape = if (expanded) tnShapes.lg else tnShapes.actionIcon,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
         modifier = Modifier
             .animateContentSize(animationSpec = Motion.content())

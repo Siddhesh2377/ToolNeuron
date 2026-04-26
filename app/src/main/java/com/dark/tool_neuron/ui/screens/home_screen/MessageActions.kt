@@ -30,6 +30,10 @@ fun MessageActions(
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     onEdit: () -> Unit,
+    isSpeaking: Boolean = false,
+    isSpeakLoading: Boolean = false,
+    canSpeak: Boolean = false,
+    onSpeakToggle: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -53,6 +57,21 @@ fun MessageActions(
                 contentDescription = "Copy",
             )
         )
+        if (message.role == ROLE_ASSISTANT && canSpeak && message.content.isNotBlank()) {
+            val active = isSpeaking || isSpeakLoading
+            add(
+                ActionItem(
+                    icon = ActionIcon.Vector(if (active) TnIcons.PlayerStop else TnIcons.Volume),
+                    onClick = onSpeakToggle,
+                    contentDescription = when {
+                        isSpeakLoading -> "Loading voice"
+                        isSpeaking -> "Stop speaking"
+                        else -> "Speak"
+                    },
+                    isLoading = isSpeakLoading,
+                )
+            )
+        }
         if (canEdit) {
             add(
                 ActionItem(
