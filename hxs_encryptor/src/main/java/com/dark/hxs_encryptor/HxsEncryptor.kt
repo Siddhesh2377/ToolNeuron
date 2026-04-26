@@ -2,7 +2,6 @@ package com.dark.hxs_encryptor
 
 class HxsEncryptor {
 
-    // ── Symmetric encryption (auto AES-256-GCM / ChaCha20-Poly1305) ──
 
     fun encrypt(plaintext: ByteArray, key: ByteArray, aad: ByteArray? = null): ByteArray =
         nativeEncrypt(plaintext, key, aad)
@@ -12,7 +11,6 @@ class HxsEncryptor {
         nativeDecrypt(sealedData, key, aad)
             ?: throw SecurityException("Decryption failed: invalid key or tampered data")
 
-    // ── Key derivation ──
 
     fun deriveKey(ikm: ByteArray, salt: ByteArray? = null, info: String): ByteArray =
         nativeDeriveKey(ikm, salt, info)
@@ -22,7 +20,7 @@ class HxsEncryptor {
         password: ByteArray,
         salt: ByteArray,
         tCost: Int = 3,
-        mCost: Int = 65536,  // 64 MB
+        mCost: Int = 65536,
         parallelism: Int = 4,
         hashLen: Int = 32,
     ): ByteArray =
@@ -38,7 +36,6 @@ class HxsEncryptor {
         nativePbkdf2(password, salt, iterations, keyLength)
             ?: throw SecurityException("PBKDF2 derivation failed")
 
-    // ── Utilities ──
 
     fun randomBytes(size: Int): ByteArray =
         nativeRandomBytes(size)
@@ -50,14 +47,8 @@ class HxsEncryptor {
 
     fun secureWipe(data: ByteArray) = nativeSecureWipe(data)
 
-    /**
-     * Returns the optimal cipher for this device.
-     * 0 = AES-256-GCM (hardware accelerated)
-     * 1 = ChaCha20-Poly1305 (software, faster on devices without AES instructions)
-     */
     fun detectOptimalCipher(): Int = nativeDetectCipher()
 
-    // ── Integrity checks ──
 
     fun isDebuggerAttached(): Boolean = nativeIsDebuggerAttached()
     fun blockDebugger(): Boolean = nativeBlockDebugger()
@@ -69,7 +60,6 @@ class HxsEncryptor {
 
     fun hashFile(path: String): ByteArray? = nativeHashFile(path)
 
-    // ── Post-quantum hybrid KEM (X25519 + ML-KEM-768) ──
 
     data class KeyPair(val publicKey: ByteArray, val secretKey: ByteArray)
     data class EncapsResult(val ciphertext: ByteArray, val sharedSecret: ByteArray)
@@ -90,7 +80,6 @@ class HxsEncryptor {
         nativeHybridKemDecaps(ciphertext, secretKey)
             ?: throw SecurityException("Hybrid KEM decapsulation failed")
 
-    // ── Post-quantum hybrid signatures (Ed25519 + ML-DSA-65) ──
 
     fun hybridSignKeygen(): KeyPair {
         val result = nativeHybridSignKeygen()
@@ -105,7 +94,6 @@ class HxsEncryptor {
     fun hybridVerify(message: ByteArray, signature: ByteArray, publicKey: ByteArray): Boolean =
         nativeHybridVerify(message, signature, publicKey)
 
-    // ── Native declarations ──
 
     private external fun nativeEncrypt(plaintext: ByteArray, key: ByteArray, aad: ByteArray?): ByteArray?
     private external fun nativeDecrypt(sealedData: ByteArray, key: ByteArray, aad: ByteArray?): ByteArray?

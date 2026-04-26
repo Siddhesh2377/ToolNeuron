@@ -10,36 +10,24 @@ import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.ConcurrentHashMap
 
-// ── Public data types ─────────────────────────────────────────────────────────
-
-/**
- * Options for a single download.
- *
- * @param expectedSha256  Optional hex SHA-256 of the expected file. Verified after completion.
- * @param userAgent       HTTP User-Agent header. Defaults to empty string (privacy: no fingerprint).
- * @param headers         Extra HTTP headers (e.g. Authorization for authenticated model downloads).
- */
 data class HxdOptions(
     val expectedSha256: String? = null,
     val userAgent: String = "",
     val headers: Map<String, String> = emptyMap()
 )
 
-/** Current status of a download. Ordinals must match TaskState in download_task.h. */
 enum class HxdStatus { QUEUED, CONNECTING, DOWNLOADING, PAUSED, COMPLETED, FAILED, CANCELLED }
 
-/** Snapshot of a download's current state. Emitted via [HxdManager.observe]. */
 data class HxdState(
     val id: Int,
     val url: String,
     val destPath: String,
     val downloadedBytes: Long,
-    val totalBytes: Long,        // -1 if server did not send Content-Length
-    val speedBps: Long,          // bytes/sec rolling average (last 5 s)
+    val totalBytes: Long,
+    val speedBps: Long,
     val status: HxdStatus,
     val error: String? = null
 ) {
-    /** 0.0–1.0 progress fraction, or -1f if total is unknown. */
     val progress: Float
         get() = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes.toFloat() else -1f
 
@@ -52,8 +40,6 @@ data class HxdState(
         }
 }
 
-// ── Internal task descriptor ──────────────────────────────────────────────────
-
 internal data class HxdTask(
     val id: Int,
     val url: String,
@@ -61,41 +47,20 @@ internal data class HxdTask(
     val options: HxdOptions
 )
 
-// ── HxdManager ────────────────────────────────────────────────────────────────
-
-/**
- * Central coordinator for HXD downloads.
- *
- * Usage:
- * ```kotlin
- * val id = HxdManager.enqueue(context, url, destPath)
- * HxdManager.observe(id).collect { state -> ... }
- * ```
- */
 object HxdManager {
 
-    // Live state map — updated from the service coroutine
     private val _tasks = MutableStateFlow<Map<Int, HxdState>>(emptyMap())
 
-    /** Flow of all known download states (active + completed + failed). */
     val tasks: Flow<List<HxdState>> = _tasks.asStateFlow().map { it.values.toList() }
 
     private val idCounter = AtomicInteger(1)
     private val lastProgressUpdate = ConcurrentHashMap<Int, Long>()
 
-    // Queue + registry — protected by [lock]
     internal val lock         = Any()
     internal val pendingQueue = ArrayDeque<HxdTask>()
 
-    // Registry: keeps task metadata so paused tasks can be re-queued without losing their URL/options.
     private val taskRegistry  = mutableMapOf<Int, HxdTask>()
 
-    // ── Public API ────────────────────────────────────────────────────────────
-
-    /**
-     * Adds a download to the queue and starts (or wakes) the background service.
-     * Returns the download ID that can be used to observe or control this download.
-     */
     fun enqueue(context: Context, url: String, destPath: String, options: HxdOptions = HxdOptions()): Int {
         val id   = idCounter.getAndIncrement()
         val task = HxdTask(id, url, destPath, options)
@@ -112,19 +77,11 @@ object HxdManager {
         return id
     }
 
-    /**
-     * Pauses a download. The partial file is preserved so the download can resume.
-     * Call [resume] to continue later.
-     */
     fun pause(id: Int) {
         HxdNative.nativePause(id)
         updateStatus(id, HxdStatus.PAUSED)
     }
 
-    /**
-     * Resumes a previously paused download.
-     * Re-queues the task; the C++ engine detects the partial file and sends a Range request.
-     */
     fun resume(context: Context, id: Int) {
         val task = synchronized(lock) { taskRegistry[id] } ?: return
         synchronized(lock) {
@@ -134,31 +91,23 @@ object HxdManager {
         startService(context)
     }
 
-    /**
-     * Cancels a download and deletes the partial file.
-     */
     fun cancel(id: Int) {
         val task = synchronized(lock) { taskRegistry[id] }
         HxdNative.nativeCancel(id)
-        // Delete partial temp file
         task?.let { File(it.destPath + ".hxd_tmp").delete() }
         updateStatus(id, HxdStatus.CANCELLED)
         synchronized(lock) { taskRegistry.remove(id) }
     }
 
-    /** Cancels all active downloads. */
     fun cancelAll() {
         val ids = synchronized(lock) { taskRegistry.keys.toList() }
         ids.forEach { cancel(it) }
     }
 
-    /** Observe a specific download's state changes. */
     fun observe(id: Int): Flow<HxdState?> = _tasks.asStateFlow().map { it[id] }
 
-    // ── Internal update methods (called from HxdService) ──────────────────────
-
     internal fun updateProgress(id: Int) {
-        val prog    = HxdNative.nativeGetProgress(id)  // [downloaded, total, speed, state]
+        val prog    = HxdNative.nativeGetProgress(id)
         val current = _tasks.value[id] ?: return
         val status  = HxdStatus.entries.getOrNull(prog[3].toInt()) ?: current.status
 
@@ -183,8 +132,6 @@ object HxdManager {
         val current = _tasks.value[id] ?: return
         _tasks.value = _tasks.value + (id to current.copy(status = status, error = error))
     }
-
-    // ── Persistence helpers (called from HxdService) ──────────────────────────
 
     internal fun saveQueue(queueFile: File) {
         val snap = synchronized(lock) { taskRegistry.values.toList() }
@@ -226,7 +173,6 @@ object HxdManager {
                 _tasks.value = _tasks.value + (id to HxdState(
                     id, url, destPath, downloaded, total, 0L, status
                 ))
-                // Re-queue tasks that were in progress — they will resume via Range request
                 if (status == HxdStatus.DOWNLOADING ||
                     status == HxdStatus.CONNECTING  ||
                     status == HxdStatus.QUEUED) {

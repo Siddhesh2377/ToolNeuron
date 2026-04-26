@@ -17,7 +17,6 @@ class HxsEncryptorTest {
         enc = HxsEncryptor()
     }
 
-    // ── Random bytes ──
 
     @Test
     fun randomBytes_returnsCorrectSize() {
@@ -39,7 +38,6 @@ class HxsEncryptorTest {
         assertEquals(256, enc.randomBytes(256).size)
     }
 
-    // ── SHA-256 ──
 
     @Test
     fun sha256_returnsCorrectLength() {
@@ -67,7 +65,6 @@ class HxsEncryptorTest {
         assertEquals(32, hash.size)
     }
 
-    // ── Symmetric encryption / decryption ──
 
     @Test
     fun encryptDecrypt_roundTrip() {
@@ -152,7 +149,6 @@ class HxsEncryptorTest {
         assertTrue(sealed.size > plaintext.size) // includes nonce + tag
     }
 
-    // ── HKDF key derivation ──
 
     @Test
     fun deriveKey_returnsCorrectLength() {
@@ -185,7 +181,6 @@ class HxsEncryptorTest {
         assertEquals(32, key.size)
     }
 
-    // ── Argon2id ──
 
     @Test
     fun argon2id_returnsCorrectLength() {
@@ -236,7 +231,6 @@ class HxsEncryptorTest {
         assertEquals(32, hash.size)
     }
 
-    // ── PBKDF2 ──
 
     @Test
     fun pbkdf2_returnsCorrectLength() {
@@ -269,7 +263,6 @@ class HxsEncryptorTest {
         assertEquals(64, key.size)
     }
 
-    // ── Secure wipe ──
 
     @Test
     fun secureWipe_zerosOutBuffer() {
@@ -279,7 +272,6 @@ class HxsEncryptorTest {
         assertTrue(data.all { it == 0.toByte() })
     }
 
-    // ── Detect cipher ──
 
     @Test
     fun detectOptimalCipher_returnsValidValue() {
@@ -287,7 +279,6 @@ class HxsEncryptorTest {
         assertTrue(cipher == 0 || cipher == 1) // 0=AES-GCM, 1=ChaCha20
     }
 
-    // ── Integrity checks ──
 
     @Test
     fun isDebuggerAttached_returnsBoolean() {
@@ -318,7 +309,6 @@ class HxsEncryptorTest {
         assertFalse(enc.verifyApkSignature(a, b))
     }
 
-    // ── File hashing ──
 
     @Test
     fun hashFile_existingFile() {
@@ -337,7 +327,6 @@ class HxsEncryptorTest {
         assertNull(hash)
     }
 
-    // ── Hybrid KEM (X25519 + ML-KEM-768) ──
 
     @Test
     fun hybridKem_keygenProducesKeys() {
@@ -378,7 +367,6 @@ class HxsEncryptorTest {
         }
     }
 
-    // ── Hybrid Signatures (Ed25519 + ML-DSA-65) ──
 
     @Test
     fun hybridSign_keygenProducesKeys() {

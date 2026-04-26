@@ -5,7 +5,6 @@ import java.nio.ByteOrder
 
 class HexStorage {
 
-    // ── Vault lifecycle ──
 
     fun createPlaintext(basePath: String): Boolean =
         nativeCreatePlaintext(basePath)
@@ -23,13 +22,11 @@ class HexStorage {
 
     fun exists(basePath: String): Boolean = nativeExists(basePath)
 
-    // ── Collection management (dynamic) ──
 
     fun ensureCollection(name: String): Boolean = nativeEnsureCollection(name)
     fun dropCollection(name: String) = nativeDropCollection(name)
     fun listCollections(): List<String> = nativeListCollections()?.toList() ?: emptyList()
 
-    // ── CRUD ──
 
     fun put(collection: String, record: HxsRecord): Int {
         val encoded = record.encode()
@@ -56,7 +53,6 @@ class HexStorage {
         return arrays.map { HxsRecord.decode(it) }
     }
 
-    // ── Indexing (dynamic add/remove) ──
 
     fun addIndex(collection: String, tag: Int, wireType: Int) =
         nativeAddIndex(collection, tag, wireType)
@@ -64,7 +60,6 @@ class HexStorage {
     fun removeIndex(collection: String, tag: Int) =
         nativeRemoveIndex(collection, tag)
 
-    // ── Queries ──
 
     fun queryString(collection: String, tag: Int, value: String): List<HxsRecord> {
         val arrays = nativeQueryString(collection, tag, value) ?: return emptyList()
@@ -81,17 +76,14 @@ class HexStorage {
         return arrays.map { HxsRecord.decode(it) }
     }
 
-    // ── Flush ──
 
     fun flush(collection: String) = nativeFlush(collection)
     fun flushAll() = nativeFlushAll()
 
-    // ── Schema versioning (per-collection) ──
 
     fun getSchemaVersion(collection: String): Int = nativeGetSchemaVersion(collection)
     fun setSchemaVersion(collection: String, version: Int) = nativeSetSchemaVersion(collection, version)
 
-    // ── Native declarations ──
 
     private external fun nativeCreatePlaintext(basePath: String): Boolean
     private external fun nativeOpenPlaintext(basePath: String): Boolean
@@ -164,7 +156,6 @@ class HxsRecord private constructor(
 ) {
     private data class Field(val tag: Int, val wireType: Int, val data: ByteArray)
 
-    // ── Setters ──
 
     fun putInt(tag: Int, value: Long) {
         val buf = encodeVarint(zigzagEncode(value))
@@ -196,7 +187,6 @@ class HxsRecord private constructor(
         fields[tag] = Field(tag, HexStorage.WIRE_FIXED64, buf)
     }
 
-    // ── Getters ──
 
     fun getInt(tag: Int, default: Long = 0): Long {
         val f = fields[tag] ?: return default
@@ -242,7 +232,6 @@ class HxsRecord private constructor(
     fun removeField(tag: Int) { fields.remove(tag) }
     fun tags(): Set<Int> = fields.keys.toSet()
 
-    // ── Encode to binary ──
 
     fun encode(): ByteArray {
         val allFields = fields.values.toList()

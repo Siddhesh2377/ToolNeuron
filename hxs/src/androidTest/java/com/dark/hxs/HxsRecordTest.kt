@@ -8,7 +8,6 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 class HxsRecordTest {
 
-    // ── Build + String ──
 
     @Test
     fun build_putGetString() {
@@ -34,7 +33,6 @@ class HxsRecordTest {
         assertEquals("日本語🎉", r.getString(1))
     }
 
-    // ── Int ──
 
     @Test
     fun putGetInt_positive() {
@@ -72,7 +70,6 @@ class HxsRecordTest {
         assertEquals(99L, r.getInt(1, 99))
     }
 
-    // ── Bool ──
 
     @Test
     fun putGetBool_true() {
@@ -93,7 +90,6 @@ class HxsRecordTest {
         assertFalse(r.getBool(1, false))
     }
 
-    // ── Timestamp ──
 
     @Test
     fun putGetTimestamp() {
@@ -108,7 +104,6 @@ class HxsRecordTest {
         assertEquals(0L, r.getTimestamp(1))
     }
 
-    // ── Float ──
 
     @Test
     fun putGetFloat() {
@@ -128,7 +123,6 @@ class HxsRecordTest {
         assertEquals(1.0f, r.getFloat(1, 1.0f), 0.001f)
     }
 
-    // ── Double ──
 
     @Test
     fun putGetDouble() {
@@ -142,7 +136,6 @@ class HxsRecordTest {
         assertEquals(0.0, r.getDouble(1), 0.0)
     }
 
-    // ── Bytes ──
 
     @Test
     fun putGetBytes() {
@@ -164,7 +157,6 @@ class HxsRecordTest {
         assertEquals(0, r.getBytes(1)!!.size)
     }
 
-    // ── Multiple fields ──
 
     @Test
     fun multipleFields_allTypes() {
@@ -186,7 +178,6 @@ class HxsRecordTest {
         assertTrue(byteArrayOf(0x0A, 0x0B).contentEquals(r.getBytes(7)))
     }
 
-    // ── Field management ──
 
     @Test
     fun hasField_true() {
@@ -224,7 +215,6 @@ class HxsRecordTest {
         assertTrue(r.tags().isEmpty())
     }
 
-    // ── Overwrite field ──
 
     @Test
     fun putString_overwritesPreviousValue() {
@@ -233,7 +223,6 @@ class HxsRecordTest {
         assertEquals("new", r.getString(1))
     }
 
-    // ── ID and flags ──
 
     @Test
     fun build_withId() {
@@ -253,7 +242,6 @@ class HxsRecordTest {
         assertEquals(0, r.flags)
     }
 
-    // ── Encode / Decode round-trip ──
 
     @Test
     fun encodeDecode_roundTrip() {

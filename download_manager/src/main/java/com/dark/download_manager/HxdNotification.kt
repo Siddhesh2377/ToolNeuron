@@ -6,15 +6,9 @@ import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
 
-/**
- * Builds the persistent grouped download notification shown by [HxdService].
- *
- * Uses IMPORTANCE_LOW so it never makes sound or pops up — it's purely informational.
- * The notification is updated on each 64 KB chunk, throttled by Android's notification rate limit.
- */
 internal object HxdNotification {
 
-    const val NOTIFICATION_ID = 0x48584400  // "HXD\0" — unique within the app
+    const val NOTIFICATION_ID = 0x48584400
 
     private const val CHANNEL_ID   = "hxd_downloads"
     private const val CHANNEL_NAME = "Downloads"
@@ -40,7 +34,7 @@ internal object HxdNotification {
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_PROGRESS)
-            .setVisibility(NotificationCompat.VISIBILITY_SECRET)  // hide on lock screen
+            .setVisibility(NotificationCompat.VISIBILITY_SECRET)
 
         return when {
             active.isEmpty() -> builder
@@ -94,8 +88,6 @@ internal object HxdNotification {
         }
     }
 
-    // ── Formatters ────────────────────────────────────────────────────────────
-
     private fun formatSpeed(bps: Long): String = when {
         bps >= 1_000_000L -> "%.1f MB/s".format(bps / 1_000_000f)
         bps >= 1_000L     -> "%.1f KB/s".format(bps / 1_000f)
@@ -103,10 +95,4 @@ internal object HxdNotification {
         else              -> ""
     }
 
-    private fun formatBytes(bytes: Long): String = when {
-        bytes >= 1_073_741_824L -> "%.2f GB".format(bytes / 1_073_741_824f)
-        bytes >= 1_048_576L     -> "%.1f MB".format(bytes / 1_048_576f)
-        bytes >= 1_024L         -> "%.0f KB".format(bytes / 1_024f)
-        else                    -> "$bytes B"
-    }
 }

@@ -12,17 +12,6 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 
-/**
- * HXD ForegroundService.
- *
- * Lifecycle:
- *  - Started by [HxdManager.enqueue] or [HxdManager.resume] via startForegroundService().
- *  - Stops itself when the pending queue is drained and all slots are idle.
- *  - START_STICKY: Android restarts it after process death; [HxdManager.restoreQueue] re-populates the queue.
- *
- * Concurrency: Semaphore(3) limits concurrent downloads.
- * Each active download runs in a separate child coroutine on Dispatchers.IO.
- */
 class HxdService : Service() {
 
     private val scope               = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -35,14 +24,11 @@ class HxdService : Service() {
         private const val QUEUE_FILE     = "hxd_queue.bin"
     }
 
-    // ── Lifecycle ─────────────────────────────────────────────────────────────
-
     override fun onCreate() {
         super.onCreate()
         HxdNotification.createChannel(this)
         startForeground(HxdNotification.NOTIFICATION_ID, HxdNotification.build(this, emptyList()))
 
-        // Restore queue from previous session (handles process-death restarts)
         HxdManager.restoreQueue(this, queueFile)
 
         launchNotificationUpdater()
@@ -65,8 +51,6 @@ class HxdService : Service() {
         super.onDestroy()
     }
 
-    // ── Notification updater ──────────────────────────────────────────────────
-
     private fun launchNotificationUpdater() {
         scope.launch {
             HxdManager.tasks.collect { states ->
@@ -81,8 +65,6 @@ class HxdService : Service() {
         }
     }
 
-    // ── Task dispatcher ───────────────────────────────────────────────────────
-
     private fun launchDispatcher() {
         scope.launch {
             while (isActive) {
@@ -92,7 +74,6 @@ class HxdService : Service() {
 
                 if (task == null) {
                     delay(300)
-                    // Stop service if nothing pending and all slots free
                     if (semaphore.availablePermits == MAX_CONCURRENT &&
                         synchronized(HxdManager.lock) { HxdManager.pendingQueue.isEmpty() }) {
                         HxdManager.saveQueue(queueFile)
@@ -110,13 +91,10 @@ class HxdService : Service() {
         }
     }
 
-    // ── Download executor ─────────────────────────────────────────────────────
-
     private suspend fun executeDownload(task: HxdTask) = withContext(Dispatchers.IO) {
         val id = task.id
         HxdManager.updateStatus(id, HxdStatus.CONNECTING)
 
-        // Prepare temp file — C++ returns resume offset (size of existing partial)
         val resumeOffset = HxdNative.nativePrepare(id, task.destPath)
         if (resumeOffset < 0) {
             HxdManager.updateStatus(id, HxdStatus.FAILED, "Cannot create destination file")
@@ -137,7 +115,6 @@ class HxdService : Service() {
                 return@withContext
             }
 
-            // Tell C++ the total expected bytes (for progress % calculation)
             val contentLen = conn.contentLengthLong
             if (contentLen > 0) {
                 val total = if (code == 206) resumeOffset + contentLen else contentLen
@@ -146,7 +123,7 @@ class HxdService : Service() {
 
             HxdManager.updateStatus(id, HxdStatus.DOWNLOADING)
 
-            val buf = ByteArray(65_536)  // 64 KB read buffer
+            val buf = ByteArray(65_536)
             var aborted = false
 
             conn.inputStream.use { stream ->
@@ -162,24 +139,20 @@ class HxdService : Service() {
             }
 
             if (aborted) {
-                // Distinguish pause vs cancel via the state C++ set
                 val prog   = HxdNative.nativeGetProgress(id)
                 val status = HxdStatus.entries.getOrNull(prog[3].toInt()) ?: HxdStatus.FAILED
 
-                HxdNative.nativeCleanup(id)  // close fd, keep temp file
+                HxdNative.nativeCleanup(id)
 
                 if (status == HxdStatus.CANCELLED) {
-                    // User cancelled — delete temp file
                     File(task.destPath + ".hxd_tmp").delete()
                     HxdManager.updateStatus(id, HxdStatus.CANCELLED)
                 } else {
-                    // Paused — re-queue so resume() can dispatch it again
                     HxdManager.updateStatus(id, HxdStatus.PAUSED)
                 }
                 return@withContext
             }
 
-            // Optional SHA-256 verification
             if (digest != null) {
                 val actual = digest.digest().joinToString("") { "%02x".format(it) }
                 if (!actual.equals(task.options.expectedSha256, ignoreCase = true)) {
@@ -189,7 +162,6 @@ class HxdService : Service() {
                 }
             }
 
-            // fsync + rename temp → final destination
             if (HxdNative.nativeComplete(id)) {
                 HxdManager.updateStatus(id, HxdStatus.COMPLETED)
             } else {
@@ -209,15 +181,11 @@ class HxdService : Service() {
             connectTimeout      = 30_000
             readTimeout         = 30_000
             instanceFollowRedirects = true
-            // Privacy: no fingerprint unless caller explicitly sets one
             setRequestProperty("User-Agent", task.options.userAgent)
-            // Disable cookie sharing with system CookieManager
             setRequestProperty("Cookie", "")
-            // Resume support
             if (resumeOffset > 0) {
                 setRequestProperty("Range", "bytes=$resumeOffset-")
             }
-            // Caller-provided headers (e.g. Authorization for gated model repos)
             task.options.headers.forEach { (k, v) -> setRequestProperty(k, v) }
         }
     }

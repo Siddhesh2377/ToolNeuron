@@ -31,7 +31,6 @@ class HexStorageTest {
         File(basePath).deleteRecursively()
     }
 
-    // ── Vault lifecycle ──
 
     @Test
     fun exists_returnsTrueAfterCreate() {
@@ -51,7 +50,6 @@ class HexStorageTest {
         s2.close()
     }
 
-    // ── Collection management ──
 
     @Test
     fun ensureCollection_createsCollection() {
@@ -84,7 +82,6 @@ class HexStorageTest {
         assertFalse(storage.listCollections().contains("temp"))
     }
 
-    // ── CRUD: put / get ──
 
     @Test
     fun put_returnsPositiveId() {
@@ -127,7 +124,6 @@ class HexStorageTest {
         assertEquals("c", storage.get("c", id3)?.getString(1))
     }
 
-    // ── CRUD: update ──
 
     @Test
     fun update_modifiesExistingRecord() {
@@ -140,7 +136,6 @@ class HexStorageTest {
         assertEquals("updated", storage.get("c", id)?.getString(1))
     }
 
-    // ── CRUD: delete ──
 
     @Test
     fun delete_removesRecord() {
@@ -156,7 +151,6 @@ class HexStorageTest {
         assertFalse(storage.delete("c", 99999))
     }
 
-    // ── Count ──
 
     @Test
     fun count_emptyCollection() {
@@ -183,7 +177,6 @@ class HexStorageTest {
         assertEquals(1, storage.count("c"))
     }
 
-    // ── getAll ──
 
     @Test
     fun getAll_returnsAllRecords() {
@@ -202,7 +195,6 @@ class HexStorageTest {
         assertTrue(storage.getAll("c").isEmpty())
     }
 
-    // ── Indexing + Queries ──
 
     @Test
     fun queryString_findsMatchingRecords() {
@@ -271,7 +263,6 @@ class HexStorageTest {
         storage.queryString("c", 1, "test")
     }
 
-    // ── Flush & persistence ──
 
     @Test
     fun flushAll_dataPersistedAcrossReopen() {
@@ -305,7 +296,6 @@ class HexStorageTest {
         s2.close()
     }
 
-    // ── Schema versioning ──
 
     @Test
     fun schemaVersion_defaultsToZero() {
