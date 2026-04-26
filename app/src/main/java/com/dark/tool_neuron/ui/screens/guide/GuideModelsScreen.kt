@@ -32,17 +32,17 @@ fun GuideModelsScreen(innerPadding: PaddingValues) {
         steps = listOf(
             GuideStep(
                 title = "Browse the catalog",
-                body = "The Models tab lists curated HuggingFace picks across categories. Filter by quant (Q4, Q5, Q8), size, or category. Tap a card to download.",
+                body = "The Models tab lists curated HuggingFace picks. Filter chips cover chat, embeddings, vlm, tts, stt, plus quant (Q4/Q5/Q8) and size. Tap a card to download.",
                 visual = { FilterChipsVisual() },
             ),
             GuideStep(
-                title = "Add your own repo",
-                body = "On the Settings tab, search HuggingFace directly or add any GGUF repo by user/repo path. The app validates before saving.",
-                visual = { RepoSearchVisual() },
+                title = "Hunt on HuggingFace",
+                body = "Settings → Browse HuggingFace opens the Explorer. Pretty much every filter the website offers, in-app: a parameter-count range slider (100M up to ∞), 52 task chips, 57 libraries, GGUF quant tags, runtime apps, inference providers, BCP-47 languages, licenses, regions. Author and dataset are free-text. Gated is a tri-state. Sort follows HF's five: Trending, Downloads, Likes, Recently updated, Recently created. History sticks across launches.",
+                visual = { HfExplorerVisual() },
             ),
             GuideStep(
                 title = "Import a local GGUF",
-                body = "Bring Your Own Model: pick a .gguf file from your device and give it a name. Useful if you've already downloaded or fine-tuned.",
+                body = "Bring Your Own Model: pick a .gguf from your device. Useful if you've already downloaded or fine-tuned. BYOM is for chat models only — voice models (TTS / STT) install through the Store.",
                 visual = { ImportCardVisual() },
             ),
             GuideStep(
@@ -52,7 +52,7 @@ fun GuideModelsScreen(innerPadding: PaddingValues) {
             ),
             GuideStep(
                 title = "Quick-start preset",
-                body = "First-run picks the \"Tiny & Fast\" card — the app auto-resolves to a Q4_K_M quant so you get a small, fast model instead of full-precision bloat.",
+                body = "First-run picks the \"Tiny & Fast\" card — the app auto-resolves to a Q4_K_M quant (or the next-smallest available) so you get a small, fast model instead of full-precision bloat.",
                 visual = { TinyFastCardVisual() },
             ),
         ),
@@ -60,6 +60,7 @@ fun GuideModelsScreen(innerPadding: PaddingValues) {
             "Active model is marked on the bottom-bar pill. Only one chat model loads at a time.",
             "Delete models you don't use — each can be hundreds of MB.",
             "GGUF is the only supported format. PyTorch / SafeTensors aren't loaded.",
+            "Voice and VLM models live in their own subfolders and have their own auto-load semantics — see those guides.",
         ),
     )
 }
@@ -97,54 +98,133 @@ private fun FilterChipsVisual() {
 }
 
 @Composable
-private fun RepoSearchVisual() {
+private fun HfExplorerVisual() {
     val dimens = LocalDimens.current
     val shapes = LocalTnShapes.current
-    Surface(
-        shape = shapes.card,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+    Column(
         modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
     ) {
-        Row(
-            modifier = Modifier.padding(dimens.spacingSm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        Surface(
+            shape = shapes.card,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Icon(
-                imageVector = TnIcons.Search,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(16.dp),
-            )
-            Text(
-                text = "bartowski/Llama-3.2",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f),
-                modifier = Modifier.weight(1f),
-            )
-            Surface(
-                shape = shapes.full,
-                color = MaterialTheme.colorScheme.primary,
+            Row(
+                modifier = Modifier.padding(dimens.spacingSm),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
-                Row(
-                    modifier = Modifier.padding(
-                        horizontal = dimens.spacingSm,
-                        vertical = dimens.spacingXxs,
-                    ),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
+                Icon(
+                    imageVector = TnIcons.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(16.dp),
+                )
+                Text(
+                    text = "qwen, mistral, deepseek, coder…",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    modifier = Modifier.weight(1f),
+                )
+                Surface(
+                    shape = shapes.full,
+                    color = MaterialTheme.colorScheme.primary,
                 ) {
-                    Icon(
-                        imageVector = TnIcons.Plus,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(12.dp),
-                    )
                     Text(
-                        text = "Add",
+                        text = "Search",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(
+                            horizontal = dimens.spacingSm,
+                            vertical = dimens.spacingXxs,
+                        ),
+                    )
+                }
+            }
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXxs)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                Text(
+                    text = "Parameter count",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+                )
+                Text(
+                    text = "1B — 13B",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val fullWidth = maxWidth
+                Surface(
+                    shape = shapes.full,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.75f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(4.dp),
+                ) {}
+                Box(modifier = Modifier.padding(start = fullWidth * 0.25f)) {
+                    Surface(
+                        shape = shapes.full,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier
+                            .fillMaxWidth(0.4f)
+                            .height(4.dp),
+                    ) {}
+                }
+                Box(
+                    modifier = Modifier.padding(start = (fullWidth * 0.25f - 6.dp).coerceAtLeast(0.dp)),
+                ) {
+                    Surface(
+                        shape = shapes.full,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp),
+                    ) {}
+                }
+                Box(
+                    modifier = Modifier.padding(start = (fullWidth * 0.65f - 6.dp).coerceAtLeast(0.dp)),
+                ) {
+                    Surface(
+                        shape = shapes.full,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(12.dp),
+                    ) {}
+                }
+            }
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            listOf(
+                "Trending" to true,
+                "Text-Generation" to true,
+                "GGUF" to true,
+                "Q4_K_M" to false,
+                "+44 more" to false,
+            ).forEach { (label, sel) ->
+                Surface(
+                    shape = shapes.full,
+                    color = if (sel) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Medium,
+                        color = if (sel) MaterialTheme.colorScheme.onPrimary
+                        else MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(
+                            horizontal = dimens.spacingSm,
+                            vertical = dimens.spacingXxs,
+                        ),
                     )
                 }
             }

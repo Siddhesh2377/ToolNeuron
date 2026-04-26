@@ -67,11 +67,9 @@ import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.MapleMonoFontFamily
 import com.dark.tool_neuron.util.SecureClipboard
 
-// ── Backward-compat composition local ──
 
 val LocalCodeHighlightEnabled = compositionLocalOf { true }
 
-/** Hoisted theme colors — set once at the LazyColumn scope, read per item without re-reading MaterialTheme. */
 val LocalMarkdownColors = compositionLocalOf {
     InlineColors(
         codeBg = Color.Transparent,
@@ -81,10 +79,6 @@ val LocalMarkdownColors = compositionLocalOf {
     )
 }
 
-/**
- * Colors extracted once from MaterialTheme — passed to non-composable formatters
- * to avoid reading theme state inside every Text().
- */
 @Immutable
 data class InlineColors(
     val codeBg: Color,
@@ -93,7 +87,6 @@ data class InlineColors(
     val linkColor: Color,
 )
 
-/** Resolves InlineColors from the current MaterialTheme. Call once per scope. */
 @Composable
 fun rememberMarkdownColors(): InlineColors {
     val scheme = MaterialTheme.colorScheme
@@ -107,11 +100,6 @@ fun rememberMarkdownColors(): InlineColors {
     }
 }
 
-/**
- * Full markdown renderer for completed (non-streaming) messages.
- * Parses text into elements and renders each with appropriate styling.
- * Result is cached by [text] — stable for completed messages.
- */
 @Composable
 fun MarkdownText(text: String, modifier: Modifier = Modifier) {
     val dimens = LocalDimens.current
@@ -125,11 +113,6 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier) {
     }
 }
 
-/**
- * Lazy version — each markdown element is a separate LazyList item.
- * Only visible items are composed. Use inside a LazyColumn.
- * Element-aware spacing: headings get more top padding, blocks get breathing room.
- */
 fun LazyListScope.lazyMarkdownItems(
     text: String,
     keyPrefix: String,
@@ -152,7 +135,6 @@ fun LazyListScope.lazyMarkdownItems(
     }
 }
 
-/** Spacing above — headings get more to create visual section breaks. */
 private fun MarkdownElement.topSpacing(): Dp = when (this) {
     is MarkdownElement.Heading1 -> 14.dp
     is MarkdownElement.Heading2 -> 12.dp
@@ -165,7 +147,6 @@ private fun MarkdownElement.topSpacing(): Dp = when (this) {
     else -> 2.dp
 }
 
-/** Spacing below — content elements get less so they group with following items. */
 private fun MarkdownElement.bottomSpacing(): Dp = when (this) {
     is MarkdownElement.Heading1, is MarkdownElement.Heading2, is MarkdownElement.Heading3 -> 3.dp
     is MarkdownElement.Heading4, is MarkdownElement.Heading5, is MarkdownElement.Heading6 -> 2.dp
@@ -176,7 +157,6 @@ private fun MarkdownElement.bottomSpacing(): Dp = when (this) {
     else -> 2.dp
 }
 
-// ── Sealed element model ──
 
 internal sealed class MarkdownElement {
     data class Heading1(val text: String) : MarkdownElement()
@@ -203,7 +183,6 @@ internal sealed class MarkdownElement {
     data object Divider : MarkdownElement()
 }
 
-// ── Parser cache & precompiled regex ──
 
 private val parseCache = object : LinkedHashMap<String, List<MarkdownElement>>(32, 0.75f, true) {
     override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<MarkdownElement>>): Boolean = size > 24
@@ -222,7 +201,6 @@ private val LATEX_BEGIN_REGEX = Regex("""\\{1,2}begin\s*\{(equation|align|gather
 private val LATEX_NORM_FIX = Regex("""\\begin\s+\{""")
 private val LATEX_ENV_REGEX = Regex("""\\begin\{(equation|align|gather|multline|displaymath|math)(\*?)\}""")
 
-// ── Parser ──
 
 internal fun parseMarkdown(text: String): List<MarkdownElement> {
     val elements = mutableListOf<MarkdownElement>()
@@ -396,7 +374,6 @@ private fun isTableSeparator(line: String): Boolean {
 private fun parseTableRow(line: String): List<String> =
     line.trim().removePrefix("|").removeSuffix("|").split("|").map { it.trim() }
 
-// ── Inline formatting ──
 
 /**
  * Find closing ** for bold, accounting for *** (italic close + bold close).
@@ -415,7 +392,6 @@ private fun findStarClose(text: String, from: Int): Int {
     return -1
 }
 
-/** Pure function — no @Composable, no MaterialTheme reads. Uses single builder via pushStyle/pop. */
 internal fun buildInlineFormatted(text: String, colors: InlineColors): AnnotatedString = buildAnnotatedString {
     appendFormatted(text, colors)
 }
@@ -615,7 +591,6 @@ private fun AnnotatedString.Builder.appendFormatted(text: String, colors: Inline
 private fun cachedInlineFormatting(text: String, colors: InlineColors): AnnotatedString =
     remember(text, colors) { buildInlineFormatted(text, colors) }
 
-// ── Element renderers ──
 
 @Composable
 private fun MarkdownElementView(element: MarkdownElement, colors: InlineColors) {
@@ -754,7 +729,6 @@ private fun InlineCodeView(text: String) {
     )
 }
 
-// ── Code block (collapsed by default) ──
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -844,7 +818,6 @@ private fun CodeBlockView(code: String, language: String) {
     }
 }
 
-// ── Canvas-drawn table ──
 
 @Composable
 private fun TableView(
@@ -949,7 +922,6 @@ private fun DrawScope.drawTableRow(
     }
 }
 
-// ── Math views ──
 
 @Composable
 private fun MathBlockView(expression: String, isTypst: Boolean) {
@@ -1006,6 +978,5 @@ private fun InlineMathView(expression: String) {
     )
 }
 
-// ── Util ──
 
 private fun Color.luminance(): Float = 0.299f * red + 0.587f * green + 0.114f * blue

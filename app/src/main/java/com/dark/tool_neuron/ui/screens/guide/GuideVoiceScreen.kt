@@ -2,8 +2,11 @@ package com.dark.tool_neuron.ui.screens.guide
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
@@ -30,35 +33,86 @@ fun GuideVoiceScreen(innerPadding: PaddingValues) {
     GuideDetailLayout(
         innerPadding = innerPadding,
         icon = TnIcons.Mic,
-        lede = "Speak your message with on-device STT, and have replies read back via on-device TTS. Both run inside the inference service — no network traffic.",
+        lede = "Speak your message with on-device STT, and have replies read back via streaming on-device TTS. Both run inside the inference service — no network traffic.",
         steps = listOf(
             GuideStep(
-                title = "Install an STT model",
-                body = "Speech-to-text uses Whisper-compatible models. Install one from the Store (tagged \"stt\"). Whisper Tiny and Small work great on phones.",
+                title = "Install voice models from the Store",
+                body = "Voice models are Store-only — no SAF / directory import. Filter by the tts or stt chips and tap Download. Archives ship as .tar.bz2; the app extracts them with per-file progress and auto-builds the sherpa config. The first install of each kind becomes the active voice automatically.",
+                visual = { ExtractProgressVisual() },
+            ),
+            GuideStep(
+                title = "STT options",
+                body = "Speech-to-text uses Whisper-compatible models. Whisper Tiny works fine on phones; Tiny multilingual covers most languages. STT auto-unloads after each transcription so it doesn't sit on ~75 MB of RAM.",
                 visual = { SttModelCardVisual() },
             ),
             GuideStep(
-                title = "Install a TTS model",
-                body = "For spoken replies, install a VITS-compatible model (tagged \"tts\"). Multiple speaker IDs are supported where the model allows.",
+                title = "TTS options",
+                body = "Streaming TTS uses VITS / Kokoro voices. The app chunks your text at sentence boundaries so the first chunk plays while the rest synthesize in the background. Sample rate is auto-detected per model.",
                 visual = { TtsModelCardVisual() },
             ),
             GuideStep(
-                title = "Hold to talk",
-                body = "Tap the mic icon in the bottom bar to start recording. Release when done — the app transcribes locally and fills the input.",
+                title = "Tap the mic to dictate",
+                body = "The mic button is always visible in the bottom bar. If no STT is installed, tapping it routes to the Store. On first tap it asks for mic permission and starts recording immediately on grant. The input bar morphs into a recording equalizer with cancel and stop.",
                 visual = { MicVisual() },
             ),
             GuideStep(
-                title = "Hear replies",
-                body = "Tap a message's speaker icon to synthesize and play it via the TTS engine. Audio plays on the phone speaker or current output device.",
+                title = "Hear replies stream in",
+                body = "On any assistant bubble, tap the speak icon. A spinner shows while the active TTS model loads (on demand), then audio starts almost immediately. Tap again to stop mid-sentence.",
                 visual = { SpeakerBubbleVisual() },
             ),
         ),
         tips = listOf(
             "Whisper models are multi-lingual — you don't need a separate one per language.",
             "TTS quality depends heavily on the model; bigger isn't always better.",
-            "Mic permission is requested on first use.",
+            "Mic permission is requested on first tap and never asked for foreground-mic — the app only records while the UI is in the foreground.",
+            "Delete a voice model from the Installed tab; the per-archive folder is wiped recursively.",
         ),
     )
+}
+
+@Composable
+private fun ExtractProgressVisual() {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Extracting whisper-tiny.tar.bz2",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "12 / 18 files",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Surface(
+                shape = shapes.full,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp),
+            ) {}
+            Surface(
+                shape = shapes.full,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth(0.66f)
+                    .height(6.dp),
+            ) {}
+        }
+    }
 }
 
 @Composable

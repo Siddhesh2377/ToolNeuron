@@ -56,7 +56,12 @@ fun GuideSecurityScreen(innerPadding: PaddingValues) {
             ),
             GuideStep(
                 title = "Integrity checks at launch",
-                body = "The app hashes its own native libraries on first launch and compares each subsequent launch. Debugger, Frida, Xposed, root checks run automatically. Hook detection baselines critical functions.",
+                body = "The app hashes its own native libraries on first launch (TOFU) and compares on every subsequent launch within the same install identity. Debugger, Frida and Xposed scans run automatically. Hook detection baselines the first 32 bytes of critical functions and re-checks them after init.",
+            ),
+            GuideStep(
+                title = "Root warning, not refusal",
+                body = "If the device is rooted, the app shows a one-time warning that other root-capable apps could read its on-disk state. After you acknowledge, it never asks again. No hard-fail — your device, your call.",
+                visual = { RootWarningVisual() },
             ),
             GuideStep(
                 title = "Secure clipboard",
@@ -235,6 +240,36 @@ private fun StrongBoxBadge() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun RootWarningVisual() {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Surface(
+        shape = shapes.cardSmall,
+        color = MaterialTheme.colorScheme.error.copy(alpha = 0.12f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(dimens.spacingSm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Icon(
+                imageVector = TnIcons.AlertTriangle,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = "Device looks rooted — shown once, then dismissed forever",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
     }
 }
 

@@ -25,38 +25,44 @@ fun GuideVlmScreen(innerPadding: PaddingValues) {
     GuideDetailLayout(
         innerPadding = innerPadding,
         icon = TnIcons.Eye,
-        lede = "Attach an image and ask about it. Vision-capable models use a separate mmproj projector file to turn pixels into tokens the model can reason over.",
+        lede = "Attach an image and ask about it. Vision-capable repos ship a base LLM plus a sibling mmproj projector. The Store downloads both as one job into a per-repo folder, and loading the base model auto-attaches the projector.",
         steps = listOf(
             GuideStep(
-                title = "Get a compatible base model",
-                body = "VLM needs a vision-tuned chat model — e.g. LLaVA, MiniCPM-V, Qwen2-VL. Load it from the Store as usual.",
+                title = "Find a VLM repo in the Store",
+                body = "Repos that include an mmproj file are detected automatically and tagged VLM in the catalog. Examples: LLaVA, MiniCPM-V, Qwen2-VL, Gemma3 Vision, LFM2-VL, SmolVLM.",
                 visual = { VlmModelCardVisual() },
             ),
             GuideStep(
-                title = "Load the mmproj projector",
-                body = "On the home Plus menu, tap \"Load projector\" and pick the matching .mmproj/.gguf projector file. The app loads it into the inference service — status shows \"VLM on\".",
+                title = "Download — both files, one job",
+                body = "Tap download on a VLM card. The app pulls the base quant AND the colocated mmproj into models/vlm/<repo>/ as a single Store progress entry. There is no separate \"projector\" tile to tap.",
+                visual = { FolderLayoutVisual() },
+            ),
+            GuideStep(
+                title = "Load the model — projector auto-attaches",
+                body = "Select the VLM model like any chat model. On load success, the colocated mmproj attaches automatically — no manual projector UI anywhere in the app. The Plus → Attach image tile flips on to confirm.",
                 visual = { ProjectorVisual() },
             ),
             GuideStep(
-                title = "Attach an image",
-                body = "Plus → Attach image, or the Model Store Settings tab also has a projector card. Pick a photo; a thumbnail appears above the input.",
+                title = "Attach an image and ask",
+                body = "Plus → Attach image, pick a photo, type your question — \"what's in this image?\", \"read the text\", \"identify the chart\". Send as normal. The button is disabled until a VLM is loaded.",
                 visual = { AttachImagePlusVisual() },
             ),
             GuideStep(
-                title = "Ask away",
-                body = "Type your question — \"what's in this image?\", \"read the text\", \"identify the chart\". Send as normal. The app routes through the VLM pipeline automatically.",
+                title = "Ask — the marker is added for you",
+                body = "The app prepends the model's image-marker token (e.g. <image>) to your last user message before inference. You don't have to write it.",
                 visual = { AskVisual() },
             ),
             GuideStep(
-                title = "Release when done",
-                body = "Projector memory stays resident until you tap \"VLM on\" → Release, or unload the base model. On a memory-tight phone, release between images.",
+                title = "Unload releases everything",
+                body = "Unloading the VLM base model also releases the projector — no separate step. Switching to a non-VLM model does the same. The Attach image tile dims back out.",
                 visual = { ReleaseButtonVisual() },
             ),
         ),
         tips = listOf(
-            "Projector files are specific to a base model family. Mixing mismatched pairs fails at load time.",
+            "Base and projector live side-by-side in models/vlm/<repo>/. Deleting the folder removes both.",
             "Images cross IPC via ParcelFileDescriptors, so even multi-MB photos work without hitting the 1 MB binder limit.",
-            "The app inserts the model's default image marker into your prompt automatically.",
+            "The Attach image tile shows a \"VLM\" badge when the projector is live.",
+            "Legacy flat models/ downloads still work for chat — they just won't auto-load a projector.",
         ),
     )
 }
@@ -158,6 +164,59 @@ private fun ProjectorVisual() {
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
+}
+
+@Composable
+private fun FolderLayoutVisual() {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Surface(
+        shape = shapes.card,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        androidx.compose.foundation.layout.Column(
+            modifier = Modifier.padding(dimens.spacingMd),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    imageVector = TnIcons.Package,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = "models/vlm/<repo>/",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            listOf("base.gguf", "mmproj.gguf").forEach { name ->
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                    modifier = Modifier.padding(start = dimens.spacingMd),
+                ) {
+                    Icon(
+                        imageVector = TnIcons.CircleCheck,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = name,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -268,7 +327,7 @@ private fun ReleaseButtonVisual() {
     ) {
         Surface(
             shape = shapes.full,
-            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f),
         ) {
             Row(
                 modifier = Modifier.padding(
@@ -281,14 +340,14 @@ private fun ReleaseButtonVisual() {
                 Icon(
                     imageVector = TnIcons.X,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(14.dp),
                 )
                 Text(
-                    text = "Release projector",
+                    text = "Unload model",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.error,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         }

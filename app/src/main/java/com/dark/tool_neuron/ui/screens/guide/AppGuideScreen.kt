@@ -212,13 +212,13 @@ private fun guideCategories(): List<GuideCategory> = listOf(
             GuideEntry(
                 key = GuideEntryKeys.CHAT,
                 title = "Chat with a model",
-                blurb = "Send messages and watch them stream live. Thinking, stop, regenerate.",
+                blurb = "Send messages and watch them stream. Edit, regenerate, speak, dictate.",
                 icon = TnIcons.MessageCircle,
             ),
             GuideEntry(
                 key = GuideEntryKeys.MODELS,
                 title = "Download and manage models",
-                blurb = "Browse the Store, import GGUF files, configure samplers per model.",
+                blurb = "Browse the Store, search HuggingFace, import GGUF files, tune samplers.",
                 icon = TnIcons.Package,
             ),
             GuideEntry(
@@ -241,8 +241,14 @@ private fun guideCategories(): List<GuideCategory> = listOf(
             GuideEntry(
                 key = GuideEntryKeys.VLM,
                 title = "Vision (VLM)",
-                blurb = "Load a projector once, attach an image, ask questions about it.",
+                blurb = "Drop a VLM repo into the vlm folder; the projector auto-loads on use.",
                 icon = TnIcons.Eye,
+            ),
+            GuideEntry(
+                key = GuideEntryKeys.SERVER,
+                title = "Remote Server",
+                blurb = "Expose the loaded model on your LAN over an OpenAI-compatible API + Web UI.",
+                icon = TnIcons.Server,
             ),
         ),
     ),
@@ -273,4 +279,5 @@ internal object GuideEntryKeys {
     const val VLM = "vlm"
     const val SECURITY = "security"
     const val THEMES = "themes"
+    const val SERVER = "server"
 }

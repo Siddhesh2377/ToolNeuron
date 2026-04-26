@@ -422,7 +422,6 @@ private val subscriptMap = mapOf(
     'v' to '\u1D65', 'x' to '\u2093'
 )
 
-// ── Font command processors ──
 
 private fun processBlackboardBold(input: String): String {
     val bb = mapOf(

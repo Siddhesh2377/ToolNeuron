@@ -89,7 +89,6 @@ fun resolveSyntaxTheme(): SyntaxHighlightTheme {
     return if (isSystemInDarkTheme()) OneDarkTheme else OneLightTheme
 }
 
-// ── Language definitions ──
 
 private data class LanguageRules(
     val keywords: Set<String>,
@@ -345,7 +344,6 @@ private val LANG_ALIASES: Map<String, String> by lazy {
     )
 }
 
-// ── Tokenizer ──
 
 private data class CodeToken(val text: String, val type: CodeTokenType)
 
@@ -475,7 +473,6 @@ private fun tokenize(code: String, language: String): List<CodeToken> {
     return tokens
 }
 
-// ── Public API ──
 
 fun highlightCode(
     code: String,

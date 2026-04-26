@@ -31,7 +31,7 @@ fun GuideChatScreen(innerPadding: PaddingValues) {
     GuideDetailLayout(
         innerPadding = innerPadding,
         icon = TnIcons.MessageCircle,
-        lede = "Tool Neuron runs chat entirely on-device. Load a GGUF model, type, and the reply streams back in real time.",
+        lede = "Tool Neuron runs chat entirely on-device. Load a GGUF model, type or dictate, and the reply streams back in real time.",
         steps = listOf(
             GuideStep(
                 title = "Load a model",
@@ -40,7 +40,7 @@ fun GuideChatScreen(innerPadding: PaddingValues) {
             ),
             GuideStep(
                 title = "Send a message",
-                body = "Type into the input and tap Send. Tokens stream in with live metrics — tokens/sec, time-to-first-token, and context usage shown at the bottom.",
+                body = "Type into the input and tap Send, or tap the mic to dictate — STT runs locally and fills the input. Tokens stream in with live metrics — tokens/sec, time-to-first-token, and context usage at the bottom.",
                 visual = { ChatBubblesVisual() },
             ),
             GuideStep(
@@ -54,15 +54,26 @@ fun GuideChatScreen(innerPadding: PaddingValues) {
                 visual = { MessageActionsVisual() },
             ),
             GuideStep(
+                title = "Hear the reply",
+                body = "On any assistant bubble, tap the speak icon. A small spinner shows while the first sentence synthesizes; playback starts immediately and later sentences chunk in. Tap the same button again to stop mid-sentence.",
+                visual = { SpeakButtonVisual() },
+            ),
+            GuideStep(
                 title = "Stop mid-stream",
                 body = "Tap the red Stop button while generating to cancel. The partial response is kept — nothing is lost.",
                 visual = { StopButtonVisual() },
+            ),
+            GuideStep(
+                title = "Server mode pins you here",
+                body = "If the Remote Server is running, the drawer hides and back is absorbed — chat moves to the bundled Web UI. Stop the server first to return to in-app chat.",
+                visual = { ServerLockNoticeVisual() },
             ),
         ),
         tips = listOf(
             "Drawer lists every chat — pin favorites, delete the rest.",
             "Context pill turns red as you approach the context limit; start a new chat to free memory.",
             "The KV cache persists across messages inside one chat, so follow-ups are fast.",
+            "Speak loads the active TTS model on demand and unloads when idle to save RAM.",
         ),
     )
 }
@@ -295,5 +306,105 @@ private fun StopButtonVisual() {
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.error,
         )
+    }
+}
+
+@Composable
+private fun SpeakButtonVisual() {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            shape = shapes.full,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingSm,
+                    vertical = dimens.spacingXs,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    imageVector = TnIcons.Volume,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = "Speak",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            }
+        }
+        Surface(
+            shape = shapes.full,
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingSm,
+                    vertical = dimens.spacingXs,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    imageVector = TnIcons.PlayerStop,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = "Stop",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServerLockNoticeVisual() {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Surface(
+            shape = shapes.full,
+            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+        ) {
+            Row(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingSm,
+                    vertical = dimens.spacingXs,
+                ),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    imageVector = TnIcons.Server,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(14.dp),
+                )
+                Text(
+                    text = "Server running — chat moved to Web UI",
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
     }
 }

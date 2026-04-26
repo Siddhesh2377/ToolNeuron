@@ -29,8 +29,12 @@ fun GuideThemesScreen(innerPadding: PaddingValues) {
     GuideDetailLayout(
         innerPadding = innerPadding,
         icon = TnIcons.Sparkles,
-        lede = "Choose a theme mode and accent palette. Setup prompts once, Settings lets you change any time.",
+        lede = "Choose a theme mode and accent palette. First-run setup includes a dedicated theme step; Settings lets you change any time.",
         steps = listOf(
+            GuideStep(
+                title = "Picked once during setup",
+                body = "After the lock-mode step, setup drops you into a Theme screen. Pick a mode and palette — picks apply live. Continue lives on the bottom bar. You can change everything later from Settings → Appearance.",
+            ),
             GuideStep(
                 title = "Mode: system, light, dark",
                 body = "\"Follow system\" flips with your OS toggle. \"Light\" and \"Dark\" are fixed. No AMOLED-black mode yet — standard dark surfaces.",
