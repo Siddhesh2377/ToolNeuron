@@ -18,17 +18,29 @@
     @dagger.hilt.android.lifecycle.HiltViewModel <init>(...);
 }
 
-# ai_sd — keep public API and JNI
--keep class com.dark.ai_sd.** { *; }
+# Prebuilt AARs in libs/ — already minified, expose JNI entry points via specific
+# class+method names. R8 must not rename or strip these or the dlsym/JNI lookups
+# inside libgguf_lib.so / libai_sherpa.so fail at runtime.
+-keep class com.dark.gguf_lib.** { *; }
+-keep class com.dark.ai_sherpa.** { *; }
+-dontwarn com.dark.gguf_lib.**
+-dontwarn com.dark.ai_sherpa.**
 
 # Local native modules — explicit keeps to satisfy R8 whole-program analysis
 -keep class com.dark.hxs.** { *; }
 -keep class com.dark.hxs_encryptor.** { *; }
 -keep class com.dark.download_manager.** { *; }
+-keep class com.dark.native_server.** { *; }
 
 -dontwarn com.dark.hxs.**
 -dontwarn com.dark.hxs_encryptor.**
 -dontwarn com.dark.download_manager.**
+-dontwarn com.dark.native_server.**
+
+# Apache Commons Compress (used for sherpa-onnx .tar.bz2 voice archives) carries
+# soft references to optional integrations (osgi, zstd, brotli, xz) that R8 flags
+# as missing. We only use BZip2CompressorInputStream + TarArchiveInputStream.
+-dontwarn org.apache.commons.compress.**
 
 # Release-mode log stripping — R8 treats these calls as having no side effects,
 # deletes them, and drops the string arguments that would otherwise leak paths,
