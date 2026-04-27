@@ -31,7 +31,7 @@ class PasswordViewModel @Inject constructor(
     private val _wiped = MutableStateFlow(false)
     val wiped = _wiped.asStateFlow()
 
-    private val _lockedUntilMs = MutableStateFlow(0L)
+    private val _lockedUntilMs = MutableStateFlow(securityManager.snapshotLockoutState().nextAttemptAtMs)
     val lockedUntilMs = _lockedUntilMs.asStateFlow()
 
     val maxLength = MIN_PIN_LENGTH

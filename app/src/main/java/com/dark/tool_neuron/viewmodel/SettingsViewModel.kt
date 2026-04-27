@@ -50,6 +50,7 @@ class SettingsViewModel @Inject constructor(
     private val _snackbar = MutableStateFlow<String?>(null)
     private val _diskUsage = MutableStateFlow("")
     private val _lockEnabled = MutableStateFlow(security.isLockEnabled)
+    private val _panicPinSet = MutableStateFlow(security.hasPanicPin)
     private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
     private val _activeStt = MutableStateFlow(prefs.activeSttModelId)
     private val appVersion: String = resolveVersion()
@@ -65,6 +66,7 @@ class SettingsViewModel @Inject constructor(
         _snackbar,
         _activeTts,
         _activeStt,
+        _panicPinSet,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -77,6 +79,7 @@ class SettingsViewModel @Inject constructor(
         val snackbar = values[7] as String?
         val activeTts = values[8] as String
         val activeStt = values[9] as String
+        val panicSet = values[10] as Boolean
 
         SettingsState(
             sections = buildSections(
@@ -88,6 +91,7 @@ class SettingsViewModel @Inject constructor(
                 lockEnabled = lockOn,
                 activeTts = activeTts,
                 activeStt = activeStt,
+                panicPinSet = panicSet,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -125,11 +129,12 @@ class SettingsViewModel @Inject constructor(
         lockEnabled: Boolean,
         activeTts: String,
         activeStt: String,
+        panicPinSet: Boolean,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding),
         voiceSection(models, activeTts, activeStt),
         appearanceSection(themeMode, palette),
-        privacySection(lockEnabled),
+        privacySection(lockEnabled, panicPinSet),
         storageSection(diskUsage),
         aboutSection(),
     )
@@ -272,7 +277,7 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    private fun privacySection(lockEnabled: Boolean): SettingsSection {
+    private fun privacySection(lockEnabled: Boolean, panicPinSet: Boolean): SettingsSection {
         val statusLabel = if (lockEnabled) "Enabled (PIN)" else "Disabled"
         val items = mutableListOf<SettingsItem>(
             SettingsItem.Info(
@@ -287,10 +292,35 @@ class SettingsViewModel @Inject constructor(
             items += SettingsItem.Action(
                 id = "change_pin",
                 title = "Change PIN",
-                subtitle = "Enter a new 4-or-more digit PIN.",
+                subtitle = "Enter a new 6-digit PIN.",
                 icon = TnIcons.Edit,
                 onClick = { openPinDialog(isChange = true) },
             )
+            if (panicPinSet) {
+                items += SettingsItem.Action(
+                    id = "change_panic_pin",
+                    title = "Change panic PIN",
+                    subtitle = "Replace the existing wipe-on-entry PIN.",
+                    icon = TnIcons.AlertTriangle,
+                    onClick = { openPanicPinDialog(isChange = true) },
+                )
+                items += SettingsItem.Action(
+                    id = "remove_panic_pin",
+                    title = "Remove panic PIN",
+                    subtitle = "Stop wiping on a second PIN entry.",
+                    icon = TnIcons.Trash,
+                    destructive = true,
+                    onClick = { openRemovePanicPinDialog() },
+                )
+            } else {
+                items += SettingsItem.Action(
+                    id = "set_panic_pin",
+                    title = "Set panic PIN",
+                    subtitle = "A second PIN that wipes the vault when entered.",
+                    icon = TnIcons.AlertTriangle,
+                    onClick = { openPanicPinDialog(isChange = false) },
+                )
+            }
             items += SettingsItem.Action(
                 id = "disable_lock",
                 title = "Disable app lock",
@@ -317,16 +347,58 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    private fun openPanicPinDialog(isChange: Boolean) {
+        _dialog.value = SettingsDialog.PinEntry(
+            title = if (isChange) "Change panic PIN" else "Set panic PIN",
+            message = "Pick a 6-digit PIN that's different from your real one. Entering it instead of the real PIN wipes everything on this device.",
+            minLength = 6,
+            onSubmit = { pin ->
+                viewModelScope.launch {
+                    val ok = withContext(Dispatchers.Default) { security.setPanicPin(pin) }
+                    _dialog.value = null
+                    if (ok) {
+                        _panicPinSet.value = true
+                        _snackbar.value = if (isChange) "Panic PIN updated" else "Panic PIN set"
+                    } else {
+                        _snackbar.value = "Couldn't set panic PIN"
+                    }
+                }
+            },
+        )
+    }
+
+    private fun openRemovePanicPinDialog() {
+        _dialog.value = SettingsDialog.Confirm(
+            title = "Remove panic PIN?",
+            message = "Entering it will no longer wipe the vault. Your real PIN is unaffected.",
+            confirmLabel = "Remove",
+            destructive = true,
+            onConfirm = {
+                val ok = security.clearPanicPin()
+                _dialog.value = null
+                if (ok) {
+                    _panicPinSet.value = false
+                    _snackbar.value = "Panic PIN removed"
+                } else {
+                    _snackbar.value = "Couldn't remove panic PIN"
+                }
+            },
+        )
+    }
+
     private fun openPinDialog(isChange: Boolean) {
         _dialog.value = SettingsDialog.PinEntry(
             title = if (isChange) "Change PIN" else "Set app lock",
             message = "Enter a PIN of at least 6 digits.",
             minLength = 6,
             onSubmit = { pin ->
-                security.setPassword(pin)
-                _lockEnabled.value = true
-                _dialog.value = null
-                _snackbar.value = if (isChange) "PIN updated" else "App lock enabled"
+                viewModelScope.launch {
+                    withContext(Dispatchers.Default) { security.setPassword(pin) }
+                    _lockEnabled.value = true
+                    _panicPinSet.value = false
+                    _dialog.value = null
+                    _snackbar.value = if (isChange) "PIN updated" else "App lock enabled"
+                }
             },
         )
     }
@@ -338,29 +410,35 @@ class SettingsViewModel @Inject constructor(
             minLength = 6,
             confirmLabel = "Disable",
             onSubmit = { pin ->
-                when (val outcome = security.verifyPassword(pin)) {
-                    VerifyResult.Success -> {
-                        security.disableLock()
-                        _lockEnabled.value = false
-                        _dialog.value = null
-                        _snackbar.value = "App lock disabled"
-                    }
-                    VerifyResult.WrongPin -> {
-                        _dialog.value = null
-                        _snackbar.value = "Incorrect PIN"
-                    }
-                    is VerifyResult.LockedOut -> {
-                        _dialog.value = null
-                        _snackbar.value = "Too many tries — locked until ${outcome.retryAtMs}"
-                    }
-                    VerifyResult.Wiped -> {
-                        _dialog.value = null
-                        _lockEnabled.value = false
-                        _snackbar.value = "Vault wiped"
-                    }
-                    VerifyResult.NoLock -> {
-                        _dialog.value = null
-                        _lockEnabled.value = false
+                viewModelScope.launch {
+                    val outcome = withContext(Dispatchers.Default) { security.verifyPassword(pin) }
+                    when (outcome) {
+                        VerifyResult.Success -> {
+                            security.disableLock()
+                            _lockEnabled.value = false
+                            _panicPinSet.value = false
+                            _dialog.value = null
+                            _snackbar.value = "App lock disabled"
+                        }
+                        VerifyResult.WrongPin -> {
+                            _dialog.value = null
+                            _snackbar.value = "Incorrect PIN"
+                        }
+                        is VerifyResult.LockedOut -> {
+                            _dialog.value = null
+                            _snackbar.value = "Too many tries — locked until ${outcome.retryAtMs}"
+                        }
+                        VerifyResult.Wiped -> {
+                            _dialog.value = null
+                            _lockEnabled.value = false
+                            _panicPinSet.value = false
+                            _snackbar.value = "Vault wiped"
+                        }
+                        VerifyResult.NoLock -> {
+                            _dialog.value = null
+                            _lockEnabled.value = false
+                            _panicPinSet.value = false
+                        }
                     }
                 }
             },

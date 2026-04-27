@@ -118,7 +118,7 @@ fun TNavigation(
                     onDelete = viewModel::deleteLast,
                     onClear = viewModel::clearAll,
                     onSubmit = {
-                        if (viewModel.submitPassword()) onSetupComplete()
+                        viewModel.submitPassword(onSuccess = onSetupComplete)
                     },
                     onBack = viewModel::goBack
                 )
@@ -275,6 +275,8 @@ fun TNavigation(
             val error by viewModel.error.collectAsStateWithLifecycle()
             val isVerifying by viewModel.isVerifying.collectAsStateWithLifecycle()
             val unlocked by viewModel.unlocked.collectAsStateWithLifecycle()
+            val lockedUntilMs by viewModel.lockedUntilMs.collectAsStateWithLifecycle()
+            val wiped by viewModel.wiped.collectAsStateWithLifecycle()
 
             LaunchedEffect(Unit) { viewModel.reset() }
             LaunchedEffect(unlocked) {
@@ -286,10 +288,12 @@ fun TNavigation(
                 password = password,
                 error = error,
                 isVerifying = isVerifying,
+                lockedUntilMs = lockedUntilMs,
+                wiped = wiped,
                 onDigit = viewModel::appendDigit,
                 onDelete = viewModel::deleteLast,
                 onClear = viewModel::clearAll,
-                onSubmit = viewModel::submit
+                onSubmit = viewModel::submit,
             )
         }
     }

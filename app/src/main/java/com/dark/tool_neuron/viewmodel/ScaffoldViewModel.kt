@@ -70,7 +70,6 @@ class ScaffoldViewModel @Inject constructor(
         val onboarded = prefs.onboardingComplete
         val secDone = prefs.securitySetupDone
         val modelDone = prefs.modelSetupDone
-        Log.d("ScaffoldVM", "resolveStart: onboarded=$onboarded, securityDone=$secDone, modelDone=$modelDone")
         if (!onboarded) return NavScreens.DevNotes.route
         if (!secDone) return NavScreens.SetupScreen.route
         if (!modelDone) return NavScreens.ModelSetup.route

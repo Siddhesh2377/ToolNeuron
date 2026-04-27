@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.data
 
 import android.content.Context
-import android.util.Log
 import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
 import com.dark.hxs_encryptor.HxsEncryptor
@@ -26,7 +25,6 @@ class AppPreferences @Inject constructor(
 
         val dek = keyStore.unwrapOrCreateDek()
         val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
-        val ukFp = keyFingerprint(userKey)
 
         val existed = storage.exists(basePath)
         val opened = if (existed) {
@@ -40,8 +38,6 @@ class AppPreferences @Inject constructor(
 
         storage.ensureCollection(COLLECTION)
         storage.addIndex(COLLECTION, TAG_KEY, HexStorage.WIRE_BYTES)
-        val count = storage.count(COLLECTION)
-        Log.i(TAG, "init existed=$existed opened=$opened count=$count ukFp=$ukFp path=$basePath")
     }
 
     fun getBoolean(key: String, default: Boolean = false): Boolean =
@@ -60,8 +56,6 @@ class AppPreferences @Inject constructor(
             storage.put(COLLECTION, record)
         }
         storage.flushAll()
-        val readback = findRecord(key)?.getBool(TAG_VALUE_BOOL, false)
-        Log.i(TAG, "putBoolean $key=$value readback=$readback count=${storage.count(COLLECTION)}")
     }
 
     fun getString(key: String, default: String = ""): String =
@@ -80,8 +74,6 @@ class AppPreferences @Inject constructor(
             storage.put(COLLECTION, record)
         }
         storage.flushAll()
-        val readback = findRecord(key)?.getString(TAG_VALUE_STRING, "")
-        Log.i(TAG, "putString $key=$value readback=$readback")
     }
 
     fun getBytes(key: String): ByteArray? =
@@ -216,7 +208,6 @@ class AppPreferences @Inject constructor(
     }
 
     companion object {
-        private const val TAG = "AppPrefs"
         private const val COLLECTION = "app_prefs"
         private const val TAG_KEY = 1
         private const val TAG_VALUE_BOOL = 2

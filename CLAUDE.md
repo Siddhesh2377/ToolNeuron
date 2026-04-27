@@ -15,7 +15,7 @@ Modules:
 - `:hxs` — encrypted key-value store (Kotlin wrapper + C++ core).
 - `:hxs_encryptor` — crypto + integrity primitives: Argon2id, AES-GCM/ChaCha20-Poly1305, BoringSSL, ML-KEM-768, ML-DSA-65, Ed25519, HKDF, mmap+mlock `SecureBuffer`, plus the native security policy / auth / boot-integrity stack.
 - `:native-server` — embedded OpenAI-compatible HTTP server (cpp-httplib + nlohmann/json header-only via FetchContent, no BoringSSL / OpenSSL / zlib dep). Powers Remote Server mode.
-- `:download_manager`, `:networking`, `:rag-doc-lib` — ancillary modules.
+- `:download_manager`, `:networking` — ancillary modules.
 
 ---
 
@@ -108,9 +108,9 @@ State mutations: `register_session`, `invalidate_session`, `set_passthrough`, `m
 
 Clock-rollback defense: `AuthState.lastSeenNowMs` updated on every verify; if `nowMs + CLOCK_SKEW_GRACE_MS (5 min) < lastSeenNowMs`, the attempt is double-penalized and backoff extends from `max(nowMs, lastSeenNowMs)`.
 
-`hardWipe()`: `session.clear()` → `PolicyEngine.invalidateSession()` → `PolicyEngine.markTampered()` → `prefs.clearAuthState()` → `keyStore.wipe()`.
+`hardWipe()`: `session.clear()` → `PolicyEngine.invalidateSession()` → `PolicyEngine.markTampered()` → `prefs.clearAuthState()` → `keyStore.wipe()`. `keyStore.wipe()` is scorched-earth: clears the cached DEK reference, recursively deletes everything under `filesDir` (models, voice, chat_store, chat_documents, model_store, plugin_store, rag_prefs, app_prefs, app_bootstrap, config, cache subtree) and `cacheDir`, then removes the Keystore alias. After hardWipe the app is in an unrecoverable in-process state (`markTampered` latches, files are gone), so the user must hit Restart on `WipedScreen` to bootstrap fresh.
 
-Panic PIN: `SecurityManager.setPanicPin(pin)` (active session required) writes a second Argon2id hash. `verifyPassword` tries real first; on mismatch, if `hasPanic`, tries panic. Panic match → `hardWipe()` + `VerifyResult.Wiped` (UX-indistinguishable from "attempts exceeded").
+Panic PIN: `SecurityManager.setPanicPin(pin)` writes a second Argon2id hash. The gate is `securityMode == APP_PASSWORD` only — the live-session check was removed because `ProcessLifecycleOwner.ON_STOP` (notification panel pull, brief focus loss) clears the session via `AppLockObserver` while a Compose dialog stays visible above the locked screen, producing a non-deterministic "Couldn't set panic PIN" failure when the user submits. The panic-PIN UI is reachable only from Settings, which is itself gated by `shouldLock → PasswordScreen` re-routing, so the persistent "lock is set" fact is sufficient. `verifyPassword` tries real first; on mismatch, if `hasPanic`, tries panic. Panic match → `hardWipe()` + `VerifyResult.Wiped` (UX-indistinguishable from "attempts exceeded"). `clearPanicPin` and `disableLock` use the same `securityMode == APP_PASSWORD` gate for the same reason.
 
 PIN rules: 6 digits exactly. Weak PINs (all-same, monotonic ±1, top-20 commons) rejected at setup via `PinStrength.evaluate`.
 
@@ -242,6 +242,8 @@ void generateVlm(String messagesJson, in ParcelFileDescriptor[] imageFds, int ma
 ### Persistence
 
 `ChatMessage.imageUris: List<String>` persisted via `ChatRepository.TAG_MSG_IMAGES = 8` (JSON array of URI strings). Image bytes never land on disk.
+
+`Chat.forkedFromChatId: String?` persisted via `ChatRepository.TAG_FORKED_FROM = 9` (chats collection). Set by `ChatRepository.forkChat(sourceChatId, atMessageId)` — clones every message up to and including the cut point into a new chat with title `"<src> (fork)"`. Drawer renders `TnIcons.Fork` + "Forked" label next to the title when the field is non-null. Forking is gated on `!isGenerating` in `HomeViewModel.forkFromMessage`.
 
 ### Catalog + downloads
 
@@ -524,6 +526,12 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't ingest a chat document without first writing its bytes to `<filesDir>/chat_documents/sources/<sha256>.bin`. The picker re-ingests from that file on demand.
 - Don't drop `-Wl,-z,max-page-size=16384` in any owned native CMake target. Android 15+ / Play Store requires 0x4000 LOAD alignment on arm64 + x86_64. Verify: `unzip -p libs/ai_sherpa-release.aar jni/arm64-v8a/libai_sherpa.so > /tmp/s.so && readelf -l /tmp/s.so | awk '/LOAD/{getline;print $NF}'` → `0x4000`.
 - Don't `secureWipe` the userKey passed to `HexStorage.openEncrypted`/`createEncrypted`. `hxs.cpp` keeps a `NewGlobalRef`; zeroing turns every later AEAD op into a zero-key op (silent decrypt failure on next launch).
+- Don't zero `AppKeyStore.cachedDek` in-place inside `wipe()`. The same ByteArray is held by HXS via `NewGlobalRef` (it's the `appKey` passed into `openEncrypted`). Filling it with zeros breaks every in-flight HXS op in the running process and crashes the app immediately after panic-PIN wipe. Just null the reference and let process-kill on the WipedScreen Restart button handle physical memory clearing.
+- Don't tighten `migrateLegacyIfNeeded()` back to bootstrap-only. After `hardWipe()`, `app_bootstrap/` is empty (k.bin deleted) but `app_prefs/*` still has records sealed under the now-gone DEK. The migration must fire when EITHER the bootstrap dir has stale files OR `app_prefs/` has files but `k.bin` is missing — otherwise next-launch tries to decrypt records under a fresh DEK and `SecurityException`s.
+- Don't downgrade `keyStore.wipe()` back to deleting only `k.bin` + the Keystore alias. The panic-PIN/wipe contract is "delete everything the user owns" — models, voice files, chat history, RAG documents, plugin state, repo config, the lot. Implementation: `context.filesDir.listFiles().forEach { deleteRecursively() }` + `context.cacheDir.listFiles().forEach { deleteRecursively() }` + alias delete. Anything held mmap'd by `:inference` or `:server` survives via POSIX inode-after-unlink until those processes die, but the data is gone after the user taps Restart.
+- Don't run Argon2id on the main thread. `SecurityManager.setPassword` / `verifyPassword` / `setPanicPin` are all ~1.5 s on a Pixel 8; calling them from a Compose `onSubmit` lambda freezes the UI. Every call site in viewmodels must wrap with `viewModelScope.launch { withContext(Dispatchers.Default) { … } }`. `PasswordViewModel.submit` already does this; `SettingsViewModel.openPinDialog / openDisableLockDialog / openPanicPinDialog` and `SetupViewModel.submitPassword(onSuccess)` were main-thread until 2026-04-27.
+- Try the panic PIN BEFORE the lockout gate in `SecurityManager.verifyPassword`. A duress-PIN must work even when the user is locked out — that's the whole point. Order: (1) try panic against `panicSalt/panicHash`, hardWipe + return Wiped on match; (2) check `nextAttemptAtMs > nowMs` and return LockedOut; (3) try real PIN; (4) bump counter on miss.
+- Prime `PasswordViewModel._lockedUntilMs` from `security.snapshotLockoutState().nextAttemptAtMs` at construction. If you initialize it to `0L`, an app restart while locked shows the password input again (the persisted lockout only kicks in after a SUBMIT, letting the user freely retry inputs). The countdown screen must come up immediately on launch when the lock is still active.
 - Don't eagerly construct `AppKeyStore` or `AppPreferences` from any process other than main. `InferenceService` runs in `:inference`. `TNApplication.isMainProcess()` early-returns; integrity / pref Hilt fields must be `dagger.Lazy<T>`.
 - Don't wrap individual screens in their own `Scaffold`. One Scaffold = `AppScaffold`. Per-route bars go in `AppTopBar.kt` / `AppBottomBar.kt` `when` blocks.
 - Don't set `isMinifyEnabled = true` on any library module. Only `:app` minifies. Library minification collides on `Type a.a is defined multiple times` against pre-minified prebuilts.
@@ -555,6 +563,12 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't sort the drawer quick-links past six. `SpaceEvenly` eats touch targets below ~360 dp at 7+.
 - Don't let `VoiceModelManager` construct `AppPreferences` eagerly. `dagger.Lazy<AppPreferences>`.
 - Don't add `*.md` spec / plan / research / TODO docs at the repo root. Project memory lives here. Implementation roadmaps belong in conversation context.
+- Don't auto-scroll on every streaming token via `LazyListState.scrollToItem(index)`. That fights the user's drag and locks manual scroll mid-generation. The pattern is: track `stickToBottom` from `snapshotFlow { isScrollInProgress }` (re-evaluate when scroll settles via `!canScrollForward`), gate the auto-scroll `LaunchedEffect` on `stickToBottom && !isScrollInProgress`, and use `scrollToItem(last, scrollOffset = Int.MAX_VALUE)` so the bottom of the growing streaming bubble stays in view.
+- Don't drop the `:native-server` consumer-rules.pro keeps for `NativeServer`, `NativeServer$*`, `InferenceBridge`, `BindMode`. The native HTTP server's JVM bridge invokes `InferenceBridge.startGeneration / cancelGeneration / onRequestEvent` via JNI on a `NewGlobalRef`'d jobject; renaming or stripping breaks dlsym at runtime.
+- Don't keep `com.dark.ai_sd.**` in `app/proguard-rules.pro`. The AAR was removed in commit `9d79a3b` — the rule is dead weight.
+- Don't drop the `com.dark.gguf_lib.**` / `com.dark.ai_sherpa.**` keep + `dontwarn` block. The prebuilt AARs are already minified and rely on specific class+method names for JNI lookup.
+- Don't strip `lockedUntilMs` and `wiped` from `PasswordScreen`. Both flow through `PasswordViewModel` from `VerifyResult.LockedOut(retryAtMs)` and `VerifyResult.Wiped`. The screen branches `wiped → WipedScreen → "Restart" → finishAffinity + Process.killProcess(myPid)` (post-`hardWipe`, `PolicyEngine.markTampered()` is latched and the process is unrecoverable in-place). `lockedUntilMs > now → LockedOutScreen` with a 500 ms-tick countdown that clears itself once the timestamp passes.
+- Don't add a "set panic PIN" path that doesn't go through `SecurityManager.setPanicPin`. It gates on `securityMode == APP_PASSWORD` (NOT `session.isAllowed(AUTH_DISABLE)` — that was a non-deterministic timing trap; see Panic PIN section) and writes the second Argon2id hash into the same encrypted `AuthState` blob. UI lives in `Settings → Privacy` and only renders when `isLockEnabled`. `SettingsViewModel._panicPinSet` mirrors `security.hasPanicPin` and must reset to false on `setPassword`, `disableLock`, and `Wiped`. Same gate change applies to `clearPanicPin` and `disableLock`.
 
 ---
 

@@ -41,10 +41,7 @@ class AppKeyStore @Inject constructor(
 
     @Synchronized
     fun unwrapOrCreateDek(): ByteArray {
-        cachedDek?.let {
-            Log.i(TAG, "unwrapOrCreateDek cached fp=${keyFingerprint(it)}")
-            return it
-        }
+        cachedDek?.let { return it }
         val fromDisk = bootstrapFile.exists()
         val dek = if (fromDisk) {
             val blob = readBlob() ?: throw SecurityException("corrupt bootstrap blob")
@@ -57,14 +54,13 @@ class AppKeyStore @Inject constructor(
             fresh
         }
         cachedDek = dek
-        Log.i(TAG, "unwrapOrCreateDek fromDisk=$fromDisk fp=${keyFingerprint(dek)}")
         return dek
     }
 
     fun wipe() {
-        cachedDek?.fill(0)
         cachedDek = null
-        bootstrapFile.delete()
+        context.filesDir.listFiles()?.forEach { it.deleteRecursively() }
+        context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         try {
             val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
             if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
@@ -199,17 +195,18 @@ class AppKeyStore @Inject constructor(
 
     private fun migrateLegacyIfNeeded() {
         if (bootstrapFile.exists()) return
-        val legacyFound = bootstrapDir.listFiles()?.any { it.name != BOOTSTRAP_FILE } == true
-        if (!legacyFound) return
-        bootstrapDir.listFiles()?.forEach { if (it.name != BOOTSTRAP_FILE) it.delete() }
+        val bootstrapStale = bootstrapDir.listFiles()?.any { it.name != BOOTSTRAP_FILE } == true
         val prefsDir = context.filesDir.resolve("app_prefs")
+        val prefsStale = prefsDir.exists() && (prefsDir.listFiles()?.isNotEmpty() == true)
+        if (!bootstrapStale && !prefsStale) return
+        bootstrapDir.listFiles()?.forEach { if (it.name != BOOTSTRAP_FILE) it.delete() }
         if (prefsDir.exists()) prefsDir.listFiles()?.forEach { it.delete() }
         try {
             val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
             if (ks.containsAlias(KEY_ALIAS)) ks.deleteEntry(KEY_ALIAS)
         } catch (_: Throwable) {
         }
-        Log.i(TAG, "migrated: wiped legacy bootstrap + prefs, keystore alias reset")
+        Log.i(TAG, "migrated: wiped stale bootstrap + prefs, keystore alias reset")
     }
 
     companion object {

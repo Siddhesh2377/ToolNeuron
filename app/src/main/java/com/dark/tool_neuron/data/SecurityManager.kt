@@ -22,6 +22,9 @@ class SecurityManager @Inject constructor(
     val isLockEnabled: Boolean
         get() = prefs.readAuthState().securityMode == AppPreferences.SECURITY_APP_PASSWORD
 
+    val hasPanicPin: Boolean
+        get() = prefs.readAuthState().hasPanic
+
     fun snapshotLockoutState(): AuthState = prefs.readAuthState()
 
     fun setPassword(password: String) {
@@ -55,12 +58,21 @@ class SecurityManager @Inject constructor(
 
         val clockRolledBack = state.lastSeenNowMs > 0L && nowMs + CLOCK_SKEW_GRACE_MS < state.lastSeenNowMs
 
-        if (state.nextAttemptAtMs > nowMs && !clockRolledBack) {
-            return VerifyResult.LockedOut(state.nextAttemptAtMs)
-        }
-
         val pin = password.toByteArray(Charsets.UTF_8)
         try {
+            if (state.hasPanic) {
+                val panicToken = AuthNative.verify(pin, state.panicSalt, state.panicHash)
+                if (panicToken != null) {
+                    encryptor.secureWipe(panicToken)
+                    hardWipe()
+                    return VerifyResult.Wiped
+                }
+            }
+
+            if (state.nextAttemptAtMs > nowMs && !clockRolledBack) {
+                return VerifyResult.LockedOut(state.nextAttemptAtMs)
+            }
+
             val token = AuthNative.verify(pin, state.salt, state.hash)
             if (token != null && !clockRolledBack) {
                 session.set(token)
@@ -75,15 +87,6 @@ class SecurityManager @Inject constructor(
             }
             if (token != null) {
                 encryptor.secureWipe(token)
-            }
-
-            if (state.hasPanic) {
-                val panicToken = AuthNative.verify(pin, state.panicSalt, state.panicHash)
-                if (panicToken != null) {
-                    encryptor.secureWipe(panicToken)
-                    hardWipe()
-                    return VerifyResult.Wiped
-                }
             }
 
             val bump = if (clockRolledBack) 2 else 1
@@ -110,7 +113,6 @@ class SecurityManager @Inject constructor(
     }
 
     fun setPanicPin(panicPin: String): Boolean {
-        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
         val current = prefs.readAuthState()
         if (current.securityMode != AppPreferences.SECURITY_APP_PASSWORD) return false
 
@@ -126,14 +128,15 @@ class SecurityManager @Inject constructor(
     }
 
     fun clearPanicPin(): Boolean {
-        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
         val current = prefs.readAuthState()
+        if (current.securityMode != AppPreferences.SECURITY_APP_PASSWORD) return false
         prefs.writeAuthState(current.copy(panicSalt = ByteArray(0), panicHash = ByteArray(0)))
         return true
     }
 
     fun disableLock(): Boolean {
-        if (!session.isAllowed(PolicyEngine.Feature.AUTH_DISABLE)) return false
+        val current = prefs.readAuthState()
+        if (current.securityMode != AppPreferences.SECURITY_APP_PASSWORD) return false
         prefs.writeAuthState(AuthState.DEFAULT)
         session.clear()
         PolicyEngine.setPassthrough(true)

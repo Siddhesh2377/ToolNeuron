@@ -1,12 +1,16 @@
 package com.dark.tool_neuron.viewmodel
 
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.PinStrength
 import com.dark.tool_neuron.data.SecurityManager
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
@@ -30,6 +34,9 @@ class SetupViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+
+    private val _isSubmitting = MutableStateFlow(false)
+    val isSubmitting = _isSubmitting.asStateFlow()
 
     fun selectMode(mode: String) {
         _selectedMode.value = mode
@@ -73,44 +80,49 @@ class SetupViewModel @Inject constructor(
         _error.value = null
     }
 
-    fun submitPassword(): Boolean {
+    fun submitPassword(onSuccess: () -> Unit) {
         val pwd = _password.value
         when (val eval = PinStrength.evaluate(pwd)) {
             is PinStrength.Result.TooShort -> {
                 _error.value = "At least ${eval.min} digits"
-                return false
+                return
             }
             PinStrength.Result.AllSameDigit -> {
                 _error.value = "PIN must use more than one digit"
-                return false
+                return
             }
             PinStrength.Result.Sequential -> {
                 _error.value = "PIN cannot be sequential"
-                return false
+                return
             }
             PinStrength.Result.CommonlyUsed -> {
                 _error.value = "PIN is too common"
-                return false
+                return
             }
             PinStrength.Result.Ok -> Unit
         }
 
         if (!_isConfirmStep.value) {
             _isConfirmStep.value = true
-            return false
+            return
         }
 
         if (_confirmPassword.value != pwd) {
             _confirmPassword.value = ""
             _error.value = "Passwords don't match"
-            return false
+            return
         }
 
-        security.setPassword(pwd)
-        prefs.setupDone = true
-        prefs.securitySetupDone = true
-        prefs.onboardingComplete = true
-        return true
+        if (_isSubmitting.value) return
+        _isSubmitting.value = true
+        viewModelScope.launch {
+            withContext(Dispatchers.Default) { security.setPassword(pwd) }
+            prefs.setupDone = true
+            prefs.securitySetupDone = true
+            prefs.onboardingComplete = true
+            _isSubmitting.value = false
+            onSuccess()
+        }
     }
 
     fun goBack() {
