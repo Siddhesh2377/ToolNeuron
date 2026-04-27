@@ -33,8 +33,8 @@ android {
         applicationId = "com.dark.tool_neuron"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = (rootProject.findProperty("tn.versionCode") as String).toInt()
+        versionName = rootProject.findProperty("tn.versionName") as String
         ndk {
             // arm64-v8a — all modern Android phones and NPU-capable devices
             // x86_64    — emulator support during development
