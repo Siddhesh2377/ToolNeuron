@@ -27,9 +27,11 @@ fun MessageActions(
     canRegenerate: Boolean,
     canDelete: Boolean,
     canEdit: Boolean,
+    canFork: Boolean,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     onEdit: () -> Unit,
+    onFork: (String) -> Unit,
     isSpeaking: Boolean = false,
     isSpeakLoading: Boolean = false,
     canSpeak: Boolean = false,
@@ -87,6 +89,15 @@ fun MessageActions(
                     icon = ActionIcon.Vector(TnIcons.Refresh),
                     onClick = onRegenerate,
                     contentDescription = "Regenerate",
+                )
+            )
+        }
+        if (canFork) {
+            add(
+                ActionItem(
+                    icon = ActionIcon.Vector(TnIcons.Fork),
+                    onClick = { onFork(message.id) },
+                    contentDescription = "Fork into new chat",
                 )
             )
         }

@@ -96,6 +96,7 @@ fun HomeScreen(
             onRegenerate = viewModel::regenerateLast,
             onDelete = viewModel::deleteMessage,
             onEditUserMessage = viewModel::editUserMessage,
+            onForkFromMessage = viewModel::forkFromMessage,
             contentPadding = PaddingValues(
                 horizontal = dimens.spacingLg,
                 vertical = dimens.spacingMd,

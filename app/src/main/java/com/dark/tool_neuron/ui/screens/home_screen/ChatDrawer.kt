@@ -222,14 +222,34 @@ private fun ChatItem(
                 )
 
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = chat.title,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                    ) {
+                        Text(
+                            text = chat.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        if (chat.forkedFromChatId != null) {
+                            Icon(
+                                imageVector = TnIcons.Fork,
+                                contentDescription = "Forked chat",
+                                modifier = Modifier.size(dimens.iconSm),
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
+                            Text(
+                                text = "Forked",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
                     Text(
                         text = chat.modelName,
                         style = MaterialTheme.typography.labelSmall,

@@ -456,6 +456,13 @@ class HomeViewModel @Inject constructor(
         _messages.value = chatRepo.getMessages(chatId)
     }
 
+    fun forkFromMessage(messageId: String) {
+        if (_isGenerating.value) return
+        val sourceChatId = _currentChatId.value ?: return
+        val newChat = chatRepo.forkChat(sourceChatId, messageId) ?: return
+        selectChat(newChat.id)
+    }
+
     fun editUserMessage(messageId: String, newContent: String) {
         if (_isGenerating.value) return
         val chatId = _currentChatId.value ?: return

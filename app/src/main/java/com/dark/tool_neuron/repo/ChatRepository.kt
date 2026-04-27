@@ -134,6 +134,41 @@ class ChatRepository @Inject constructor(
         updateChat(chat.copy(title = title))
     }
 
+    fun forkChat(sourceChatId: String, atMessageId: String): Chat? {
+        val source = getChatById(sourceChatId) ?: return null
+        val all = getMessages(sourceChatId)
+        val cutIndex = all.indexOfFirst { it.id == atMessageId }
+        if (cutIndex < 0) return null
+        val keep = all.subList(0, cutIndex + 1)
+
+        val now = System.currentTimeMillis()
+        val newId = UUID.randomUUID().toString()
+        val newTitle = if (source.title.endsWith(" (fork)")) source.title else "${source.title} (fork)"
+        val newChat = Chat(
+            id = newId,
+            title = newTitle,
+            modelId = source.modelId,
+            modelName = source.modelName,
+            createdAt = now,
+            updatedAt = now,
+            messageCount = keep.size,
+            isPinned = false,
+            forkedFromChatId = sourceChatId,
+        )
+        storage.put(COL_CHATS, newChat.toRecord())
+        keep.forEachIndexed { idx, msg ->
+            val cloned = msg.copy(
+                id = UUID.randomUUID().toString(),
+                chatId = newId,
+                timestamp = now + idx,
+            )
+            storage.put(COL_MESSAGES, cloned.toRecord())
+        }
+        storage.flushAll()
+        refresh()
+        return newChat
+    }
+
     companion object {
         private const val COL_CHATS = "chats"
         private const val COL_MESSAGES = "messages"
@@ -146,6 +181,7 @@ class ChatRepository @Inject constructor(
         private const val TAG_UPDATED_AT = 6
         private const val TAG_MESSAGE_COUNT = 7
         private const val TAG_IS_PINNED = 8
+        private const val TAG_FORKED_FROM = 9
 
         private const val TAG_MSG_ID = 1
         private const val TAG_MSG_CHAT_ID = 2
@@ -172,6 +208,7 @@ class ChatRepository @Inject constructor(
             putTimestamp(TAG_UPDATED_AT, c.updatedAt)
             putTimestamp(TAG_MESSAGE_COUNT, c.messageCount.toLong())
             putBool(TAG_IS_PINNED, c.isPinned)
+            c.forkedFromChatId?.takeIf { it.isNotBlank() }?.let { putString(TAG_FORKED_FROM, it) }
         }
     }
 
@@ -184,6 +221,7 @@ class ChatRepository @Inject constructor(
         updatedAt = getTimestamp(TAG_UPDATED_AT),
         messageCount = getTimestamp(TAG_MESSAGE_COUNT).toInt(),
         isPinned = getBool(TAG_IS_PINNED),
+        forkedFromChatId = getString(TAG_FORKED_FROM).takeIf { it.isNotBlank() },
     )
 
     private fun ChatMessage.toRecord(): HxsRecord {

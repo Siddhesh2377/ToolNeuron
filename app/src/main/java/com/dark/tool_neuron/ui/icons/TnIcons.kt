@@ -247,6 +247,16 @@ object TnIcons {
         )
     }
 
+    val Fork by lazy {
+        icon(
+            "M5 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0",
+            "M15 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0",
+            "M10 19a2 2 0 1 0 4 0a2 2 0 0 0 -4 0",
+            "M7 7v2a2 2 0 0 0 2 2h6a2 2 0 0 0 2 -2v-2",
+            "M12 11v6",
+        )
+    }
+
 }
 
 private fun icon(vararg paths: String): ImageVector {

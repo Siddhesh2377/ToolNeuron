@@ -19,8 +19,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -32,6 +35,7 @@ import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
 import com.dark.tool_neuron.viewmodel.home_vm.GenerationStatus
 import com.dark.tool_neuron.viewmodel.home_vm.StreamingFragment
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 private const val ROLE_ASSISTANT = "assistant"
@@ -51,6 +55,7 @@ fun ChatMessageList(
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
     onEditUserMessage: (messageId: String, newContent: String) -> Unit,
+    onForkFromMessage: (String) -> Unit,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
 ) {
@@ -70,19 +75,29 @@ fun ChatMessageList(
             (if (showStatus) 1 else 0)
     val lastAssistantId = messages.lastOrNull { it.role == ROLE_ASSISTANT }?.id
 
-    val isAtBottom by remember {
-        derivedStateOf {
-            val info = listState.layoutInfo
-            val last = info.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
-            last.index >= info.totalItemsCount - 1
-        }
+    val canScrollForward by remember(listState) {
+        derivedStateOf { listState.canScrollForward }
+    }
+
+    var stickToBottom by remember { mutableStateOf(true) }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.isScrollInProgress }
+            .distinctUntilChanged()
+            .collect { scrolling ->
+                if (!scrolling) stickToBottom = !listState.canScrollForward
+            }
+    }
+
+    LaunchedEffect(messages.size, totalItems) {
+        if (totalItems > 0) stickToBottom = true
     }
 
     val streamingSignature = streaming?.let { it.content.length + it.thinkingContent.length } ?: 0
 
-    LaunchedEffect(streamingSignature, messages.size) {
-        if (isAtBottom && totalItems > 0) {
-            listState.scrollToItem(totalItems - 1)
+    LaunchedEffect(streamingSignature, totalItems) {
+        if (stickToBottom && totalItems > 0 && !listState.isScrollInProgress) {
+            listState.scrollToItem(totalItems - 1, scrollOffset = Int.MAX_VALUE)
         }
     }
 
@@ -99,9 +114,11 @@ fun ChatMessageList(
                     canRegenerate = !isGenerating && message.id == lastAssistantId,
                     canDelete = !isGenerating,
                     canEdit = !isGenerating && message.role == "user",
+                    canFork = !isGenerating,
                     onRegenerate = onRegenerate,
                     onDelete = onDelete,
                     onEdit = onEditUserMessage,
+                    onFork = onForkFromMessage,
                     isSpeaking = speakingMessageId == message.id,
                     isSpeakLoading = loadingSpeakId == message.id && speakingMessageId != message.id,
                     canSpeak = canSpeak,
@@ -123,7 +140,7 @@ fun ChatMessageList(
         }
 
         AnimatedVisibility(
-            visible = !isAtBottom && totalItems > 1,
+            visible = canScrollForward && totalItems > 1,
             enter = fadeIn(Motion.state()) + scaleIn(Motion.state(), initialScale = 0.8f),
             exit = fadeOut(Motion.state()) + scaleOut(Motion.state(), targetScale = 0.8f),
             modifier = Modifier
@@ -133,7 +150,10 @@ fun ChatMessageList(
             ActionButton(
                 onClickListener = {
                     scope.launch {
-                        if (totalItems > 0) listState.animateScrollToItem(totalItems - 1)
+                        if (totalItems > 0) {
+                            listState.animateScrollToItem(totalItems - 1, scrollOffset = Int.MAX_VALUE)
+                        }
+                        stickToBottom = true
                     }
                 },
                 icon = TnIcons.ChevronDown,

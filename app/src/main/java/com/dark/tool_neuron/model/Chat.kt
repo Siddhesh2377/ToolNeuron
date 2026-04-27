@@ -9,6 +9,7 @@ data class Chat(
     val updatedAt: Long,
     val messageCount: Int = 0,
     val isPinned: Boolean = false,
+    val forkedFromChatId: String? = null,
 )
 
 enum class MessageKind {
