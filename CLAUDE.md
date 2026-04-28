@@ -444,14 +444,63 @@ The Action Window's third tab is **Attach** (formerly Tools). It shows the curre
 Every attached document is stored content-addressed by SHA-256 of its bytes:
 
 - `<filesDir>/chat_documents/sources/<sourceId>.bin` — raw bytes, written once per unique content; multiple chats sharing the same content share the file.
-- `chat_documents` HXS plaintext collection — `(id, chatId, sourceId, name, mimeType, chunkCount, sizeBytes, addedAt)`. Persisted across restarts. **Do not** call `documentRepo.clearAll()` from `RagManager.init` — that's the previous (wrong) behavior that wiped doc history every boot.
+- `<filesDir>/chat_documents_meta_v1/` — **encrypted** HXS collection holding `(id, chatId, sourceId, name, mimeType, chunkCount, sizeBytes, addedAt)`. Sealed under `HKDF(DEK, "tn.chat_documents.user_key.v1")`. `DocumentRepository.init` migrates legacy plaintext at `chat_documents/` (top-level files) into the encrypted vault on first launch. `sources/` subdirectory is preserved during migration.
+- `<filesDir>/rag_keyword_v1/` — **native HXS-encrypted** keyword index for hybrid retrieval. Sealed under `HKDF(DEK, "tn.rag_keyword.user_key.v1")`. Tokenization, inverted index construction, BM25 scoring all live in C++ (`hxs/src/main/cpp/rag_keyword.{h,cpp}`); only the wrapper class is in Kotlin. Inverted index is rebuilt in-RAM on every process start by scanning the HXS records (bounded by # of chunks).
+- `chat_documents` HXS collection — same TAG layout as before: `(1=id, 2=chatId, 3=name, 4=mimeType, 5=chunkCount, 6=sizeBytes, 7=addedAt, 8=sourceId)`. Persisted across restarts. **Do not** call `documentRepo.clearAll()` from `RagManager.init` — that's the previous (wrong) behavior that wiped doc history every boot.
 - `id` is the compound `<chatId>:<sourceId>`. Same content attached to two chats produces two records sharing one `sourceId.bin` blob.
 
-`RagManager.hydrateChat(chatId)` re-ingests persisted records into the live RAG engine on chat-open (the engine itself is rebuilt fresh per process). It tracks `ingestedDocIds: MutableSet<String>` to avoid duplicate ingests; the set clears on `engine.close()`.
+`RagManager.hydrateChat(chatId)` re-ingests persisted records into the live RAG engine on chat-open (the engine itself is rebuilt fresh per process). It tracks `ingestedDocIds: MutableSet<String>` to avoid duplicate ingests; the set clears on `engine.close()`. Hydration also re-populates the FTS5 BM25 index for text-format documents (idempotent — `keywordIndex.docCount(docId) > 0` check skips already-indexed).
 
 `RagManager.attachExisting(currentChatId, source)` is the prev-chat re-attach: builds the new compound docId, re-reads `<sourceId>.bin`, calls `engine.ingestBytes(...)`, persists the new record. Idempotent — if the chat already has the same `sourceId`, returns the existing record.
 
-`RagManager.removeDocument(docId)` removes the chunks from the engine + record from HXS, and deletes `<sourceId>.bin` only when no other record references that sourceId (`documentRepo.countWithSource(sourceId) == 0`).
+`RagManager.removeDocument(docId)` removes the chunks from the engine + the FTS5 keyword rows + record from HXS, and deletes `<sourceId>.bin` only when no other record references that sourceId (`documentRepo.countWithSource(sourceId) == 0`).
+
+### Hybrid retrieval (dense + BM25 + RRF)
+
+`RagManager.augment(chatId, query, originalPrompt, maxContextTokens)` returns `RagAugmentation(augmentedPrompt, chunks)`:
+
+1. **Optional multi-query** — if `appPrefs.ragMultiQuery`, `RagQueryRewriter` asks the loaded chat model to generate 3 alternative phrasings of the user's query. Falls back to single-query if the model isn't loaded or the rewriter times out (8s).
+2. **Per-query retrieval** — for each query (original + variants), runs the dense engine `engine.query(q)` (capped at `topN = DENSE_CANDIDATES = 20`) AND `RagKeywordIndex.query(q, chatId, KEYWORD_CANDIDATES = 20)` BM25 lookup against the FTS5 index.
+3. **RRF fusion** — `rrfFuseMany` over all 2-N rankings (`k = 60`, identity = `(docId, chunkIndex)` pair). Items appearing in multiple rankings get summed RRF scores; items in only one ranking still score. Returns `FUSED_POOL_SIZE = 12` candidates.
+4. **Optional LLM rerank** — if `appPrefs.ragSmartRerank`, `RagReranker` asks the loaded chat model to score each pooled chunk 1–5 against the query (single LLM call, 15s timeout, 256 max tokens). Returns reordered list. Falls back to RRF order if the model isn't loaded or scoring fails.
+5. **Token budget** — `InferenceCoordinator.computeRagBudget(messages)` derives `contextSize - maxTokens - approxHistoryTokens - 256` (clamped to 256–4096). `RagManager.buildAugmentedPrompt` walks ranked chunks in order, summing approx tokens (chars/4), keeping until budget exhausted. Truncates the first chunk if it alone exceeds budget. Caps at `FINAL_TOP_N = 8` chunks.
+6. **Citation contract** — the prompt instructs the LLM to cite chunks inline as `[1]`, `[2]`, etc. After generation, `RagCitationMatcher.match(response, chunks)` parses explicit `[N]` markers AND runs a 4-gram overlap check (≥3 hits = cited). Resulting `List<Citation>` is stored on the assistant `ChatMessage` via `ChatRepository.TAG_MSG_CITATIONS = 13` (JSON array). UI: `CitationStrip` renders chip per citation below the message bubble; tap opens an `AlertDialog` with the snippet, doc name, score, and cited/possibly-used label.
+
+`RagKeywordIndex` is now native — backed by `hxs::RagKeywordIndex` in `hxs/src/main/cpp/rag_keyword.{h,cpp}`. Per-chunk records are stored in HXS-encrypted collection `rag_chunks` with TAG layout `(1=docId, 2=chatId, 3=sourceId, 4=chunkIndex, 5=text)`. The C++ side maintains an in-memory `unordered_map<term, vector<Posting{record_id, term_freq}>>` rebuilt at construction by scanning the encrypted records. Tokenizer is ASCII alphanumeric + underscore + UTF-8 bytes ≥0x80 passthrough, lowercased, length 2-64. BM25 params k1=1.2, b=0.75. JNI surface: `nativeRagIngest`, `nativeRagQuery`, `nativeRagRemoveDocument`, `nativeRagClear`, `nativeRagDocCount`. Replaces the prior SQLite FTS5 implementation, which broke on devices with stripped SQLite (no `fts5` module) and lived plaintext at rest.
+
+**FTS5 limitation:** only text-format documents are indexed. The native engine doesn't expose extracted text back to Kotlin (#329 is blocked-native), so binary formats (PDF/DOCX/EPUB/etc.) bypass BM25 — they only get dense retrieval. `RagManager.isTextLike(mime, name)` decides via mime-prefix `text/`, `application/{json,xml,rtf,javascript,yaml}`, or extensions `txt|md|markdown|json|xml|csv|tsv|html|htm|rtf|yaml|yml|log|ini|toml|properties|kt|java|py|js|ts`.
+
+`RagChunker` does Kotlin-side recursive splitting for the FTS5 path (target 1024 chars, min 200, separators in priority `\n\n / \n / . / ! / ? / ; / , / space`). The native engine's chunking is independent — chunk indices from FTS5 do not align with native engine indices. RRF treats them as separate items by `(docId, chunkIndex)` identity, which is fine.
+
+### Deep Index (contextual retrieval, simplified)
+
+Per attached document, a "Deep Index" sparkles-icon affordance in the Attach tab triggers `RagManager.deepIndex(docId)`. The flow:
+1. Read source bytes from `chat_documents/sources/<sha256>.bin` (text-format docs only — `RagManager.isTextLike` mime/extension gate).
+2. `RagDocSummarizer` asks the loaded chat model to write a one-sentence document summary (≤320 chars, 30 s timeout, 200 max tokens). One LLM call per document.
+3. `RagChunker` splits the source text into ~1024-char Kotlin-side chunks.
+4. For each chunk, prepend `[Document context: <name> — <summary>]` and re-ingest into the dense engine + BM25 index using compound docId `${origDocId}::ctx<idx>`. The native engine internally re-chunks the (context + chunk) blob into multiple sub-chunks, each carrying the doc context. The original doc remains untouched.
+5. `ChatDocument.isDeepIndexed = true` is persisted (TAG 9 on the chat_documents collection); the UI shows a "Deep" badge next to the filename.
+6. `RagManager.deepIndexing: StateFlow<Set<String>>` exposes the in-flight set so the UI can show a spinner per row.
+
+Inflation factor: ~Nx storage per deep-indexed doc, where N = (Kotlin chunk size + summary length) / native chunk size. For 1024-char Kotlin chunks + native chunk_size=256, ~5x more native chunks per doc.
+
+Augment-side change: `RagManager.augment` strips `::ctx<n>` suffixes when looking up the parent ChatDocument so citations group under the original doc, not its context-pseudo-children.
+
+Cleanup: `RagManager.removeDocument` recurses through `ingestedDocIds` removing every `${origDocId}::ctx*` from the engine + BM25 index before deleting the parent record.
+
+Limitations: text-format docs only (PDFs/DOCX blocked by no native extract API). One doc-level summary per doc, NOT per-chunk Anthropic-style — simpler v1, marginally lower quality than per-chunk contextual retrieval but ~1 LLM call vs. N. Idempotent: skipped if already deep-indexed.
+
+### Retrieval debug screen
+
+`Settings → Chat & RAG → Retrieval debug` opens `RagDebugScreen` (route `NavScreens.RagDebug`). VM is `RagDebugViewModel` (injects `RagManager` + `ChatRepository`). Renders:
+
+- Status pill (ready + active embedding name).
+- Chat dropdown to scope the test query.
+- Query text field + Run button.
+- Tabs: Fused (RRF result), Dense (raw native), BM25 (raw FTS5), Context (final assembled `<context>` block + token count), Engine (raw `engine.info()` JSON).
+- Each hit card shows chunkIndex, score, docId, first 600 chars of text.
+
+Backed by `RagManager.debugQuery(chatId, query, budget)` which returns `RagDebugResult`. Multi-query is NOT applied in the debug path (single-query for clarity).
 
 ### Extension badge
 
@@ -524,6 +573,14 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't put back `documentRepo.clearAll()` in `RagManager.init`. Doc records persist across restarts; the engine re-ingests lazily through `hydrateChat(chatId)`. Wiping breaks the prev-chats picker.
 - Don't generate a UUID-based docId for chat documents. `id = "$chatId:$sourceId"` so re-attach is idempotent and `removeDocument` can reference-count the source blob.
 - Don't ingest a chat document without first writing its bytes to `<filesDir>/chat_documents/sources/<sha256>.bin`. The picker re-ingests from that file on demand.
+- Don't downgrade `DocumentRepository` back to `openPlaintext`. Metadata is sealed under HKDF(DEK, "tn.chat_documents.user_key.v1") at `chat_documents_meta_v1/`. The init's legacy migration is one-shot — re-running on already-migrated installs only deletes top-level files in `chat_documents/` (preserving `sources/`), so it's safe to leave in place.
+- Don't drop the BM25 `RagKeywordIndex` from the augment path. Pure dense retrieval is the regression we already fixed. The `RagManager.augment` flow is: optional multi-query (LLM rewriter) → per-query (dense + BM25) → `rrfFuseMany` → optional LLM rerank → token-budget trim → top-N. Keep the order; flipping rerank before fusion gives the rerank LLM nothing useful to look at.
+- Don't move the BM25 index back to Kotlin / SQLite. The tokenizer + inverted index + scoring all live in `hxs::RagKeywordIndex` (C++) and the records are encrypted via the existing HXS AEAD path. Reasons: (1) tamper resistance — index ranking logic is harder to manipulate when it's behind libhxs.so; (2) on-device portability — some Android OEMs strip the FTS5 module from system SQLite, breaking SQLite-based BM25 entirely; (3) privacy — chunk text was plaintext on disk in `databases/rag_keyword_v1.db` previously. The new vault at `<filesDir>/rag_keyword_v1/` is sealed under `HKDF(DEK, "tn.rag_keyword.user_key.v1")` like the rest of the app's data.
+- Don't bypass `appPrefs.ragSmartRerank` / `appPrefs.ragMultiQuery` toggles. Both Phase 2 features are user-opt-in (off by default) because they each cost an LLM call per query. The rerank prompt is in `RagReranker.buildPrompt`; the variants prompt is in `RagQueryRewriter.buildPrompt`. Don't strip the `withTimeoutOrNull(15s/8s)` either — the chat model can hang on bad input.
+- Don't change the Citation TAG byte. `ChatRepository.TAG_MSG_CITATIONS = 13` for assistant messages; older messages without the TAG decode with `citations = emptyList()`. JSON shape: `{sourceId, docId, chunkIndex, score, name, mimeType, snippet, cited}`. `RagCitationMatcher.match` writes them on every assistant turn that ran through RAG augmentation; `MessageBubble` renders them via `CitationStrip` (chip per citation, tap → AlertDialog).
+- Don't pass binary-format documents through the FTS5 indexer. Native engine is the only thing that can extract their text. `RagManager.isTextLike(mime, name)` is the gate — text/* mimes, structured-text mimes (json/xml/rtf/yaml/javascript), and known text extensions (txt/md/html/csv/log/code). Binary docs (pdf/docx/epub/etc.) get dense-only retrieval until a Kotlin extractor or a native API addition lands (see #329).
+- Don't change the RRF identity key. Items in the fused pool are keyed by `(docId, chunkIndex)`. Native chunks and FTS5 chunks use independent indices, so identical text from both rankers is treated as two separate hits — that's intentional, since they come from different chunk boundaries. RRF still works correctly.
+- Don't enable algorithmic darkening / unguarded toggles in the Settings → Chat & RAG section without a `prefs.<key>` write paired with a `_<flow>.value = value` update. The `combine(...)` flow has 13 inputs now; if the toggle's StateFlow doesn't update, the UI stays stale until process restart.
 - Don't drop `-Wl,-z,max-page-size=16384` in any owned native CMake target. Android 15+ / Play Store requires 0x4000 LOAD alignment on arm64 + x86_64. Verify: `unzip -p libs/ai_sherpa-release.aar jni/arm64-v8a/libai_sherpa.so > /tmp/s.so && readelf -l /tmp/s.so | awk '/LOAD/{getline;print $NF}'` → `0x4000`.
 - Don't `secureWipe` the userKey passed to `HexStorage.openEncrypted`/`createEncrypted`. `hxs.cpp` keeps a `NewGlobalRef`; zeroing turns every later AEAD op into a zero-key op (silent decrypt failure on next launch).
 - Don't zero `AppKeyStore.cachedDek` in-place inside `wipe()`. The same ByteArray is held by HXS via `NewGlobalRef` (it's the `appKey` passed into `openEncrypted`). Filling it with zeros breaks every in-flight HXS op in the running process and crashes the app immediately after panic-PIN wipe. Just null the reference and let process-kill on the WipedScreen Restart button handle physical memory clearing.
