@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screens.document
 
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -106,6 +107,7 @@ private fun DocumentBody(doc: ResearchDocument, horizontalPadding: androidx.comp
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
+                    Log.i("LOG", doc.structured.summary)
                     MarkdownText(
                         text = doc.structured.summary,
                         modifier = Modifier.padding(dimens.spacingMd),
@@ -149,6 +151,7 @@ private fun SectionBlock(section: DocSection) {
             )
             Spacer(Modifier.size(4.dp))
         }
+        Log.i("LOG", section.body)
         MarkdownText(text = section.body, typography = MarkdownTypographies.Document)
     }
 }

@@ -40,14 +40,25 @@ class ChatLlmResearchClient @Inject constructor() : ResearchModelClient {
                 options = opts,
             )
             if (digest.isBlank()) continue
-            parts.append("• [")
-            parts.append(blob.title.take(120).ifBlank { blob.url })
-            parts.append("] ")
+            val title = safeMdInline(blob.title.take(120).ifBlank { blob.url })
+            parts.append("### [")
+            parts.append(title)
+            parts.append("](")
+            parts.append(blob.url)
+            parts.append(")\n\n")
             parts.append(digest.trim())
             parts.append("\n\n")
         }
         return parts.toString().trim()
     }
+
+    private fun safeMdInline(s: String): String =
+        s.replace('\n', ' ')
+            .replace('\r', ' ')
+            .replace('[', ' ')
+            .replace(']', ' ')
+            .replace(Regex("\\s+"), " ")
+            .trim()
 
     override suspend fun finalDocument(
         allCompressed: String,
@@ -101,12 +112,22 @@ class ChatLlmResearchClient @Inject constructor() : ResearchModelClient {
         totalFetchedBytes: Long,
         durationMs: Long,
     ): StructuredDoc {
+        val uniqueSources = sources.distinctBy { it.url }
+        val syntheticSummary = if (allCompressed.isBlank()) {
+            "No findings could be extracted for *${question}*."
+        } else {
+            "Compiled extractive findings from ${uniqueSources.size} source" +
+                (if (uniqueSources.size == 1) "" else "s") +
+                " across $iterationsUsed iteration" +
+                (if (iterationsUsed == 1) "" else "s") +
+                " for the question: *${question}*."
+        }
         return StructuredDoc(
             title = question.take(80).ifBlank { "Research" },
-            summary = allCompressed.take(800).ifBlank { "No findings could be summarized." },
+            summary = syntheticSummary,
             sections = if (allCompressed.isBlank()) emptyList()
             else listOf(DocSection("Findings", allCompressed)),
-            sources = sources.distinctBy { it.url }.map {
+            sources = uniqueSources.map {
                 DocSource(it.url, it.title.ifBlank { it.url }, it.iteration)
             },
             iterationLog = emptyList(),
