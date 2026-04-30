@@ -87,6 +87,70 @@ data class InlineColors(
     val linkColor: Color,
 )
 
+@Immutable
+data class MarkdownTypography(
+    val bodyFontSize: TextUnit,
+    val bodyLineHeight: TextUnit,
+    val h1FontSize: TextUnit,
+    val h2FontSize: TextUnit,
+    val h3FontSize: TextUnit,
+    val h4FontSize: TextUnit,
+    val h5FontSize: TextUnit,
+    val h6FontSize: TextUnit,
+    val codeFontSize: TextUnit,
+    val codeLineHeight: TextUnit,
+    val inlineCodeFontSize: TextUnit,
+    val tableCellFontSize: TextUnit,
+    val tableLineHeight: TextUnit,
+    val blockSpacing: Dp,
+    val paragraphSpacing: Dp,
+    val bulletIndentBase: Dp,
+    val bulletIndentPerLevel: Dp,
+)
+
+object MarkdownTypographies {
+    val Chat = MarkdownTypography(
+        bodyFontSize = 14.sp,
+        bodyLineHeight = 20.sp,
+        h1FontSize = 24.sp,
+        h2FontSize = 20.sp,
+        h3FontSize = 17.sp,
+        h4FontSize = 15.sp,
+        h5FontSize = 14.sp,
+        h6FontSize = 13.sp,
+        codeFontSize = 12.sp,
+        codeLineHeight = 18.sp,
+        inlineCodeFontSize = 12.sp,
+        tableCellFontSize = 12.sp,
+        tableLineHeight = 17.sp,
+        blockSpacing = 4.dp,
+        paragraphSpacing = 4.dp,
+        bulletIndentBase = 4.dp,
+        bulletIndentPerLevel = 12.dp,
+    )
+    val Document = MarkdownTypography(
+        bodyFontSize = 16.sp,
+        bodyLineHeight = 26.sp,
+        h1FontSize = 30.sp,
+        h2FontSize = 24.sp,
+        h3FontSize = 20.sp,
+        h4FontSize = 17.sp,
+        h5FontSize = 15.sp,
+        h6FontSize = 14.sp,
+        codeFontSize = 13.sp,
+        codeLineHeight = 20.sp,
+        inlineCodeFontSize = 13.sp,
+        tableCellFontSize = 13.sp,
+        tableLineHeight = 19.sp,
+        blockSpacing = 10.dp,
+        paragraphSpacing = 8.dp,
+        bulletIndentBase = 8.dp,
+        bulletIndentPerLevel = 18.dp,
+    )
+}
+
+val LocalMarkdownTypography = compositionLocalOf { MarkdownTypographies.Chat }
+
 @Composable
 fun rememberMarkdownColors(): InlineColors {
     val scheme = MaterialTheme.colorScheme
@@ -101,22 +165,29 @@ fun rememberMarkdownColors(): InlineColors {
 }
 
 @Composable
-fun MarkdownText(text: String, modifier: Modifier = Modifier) {
+fun MarkdownText(
+    text: String,
+    modifier: Modifier = Modifier,
+    typography: MarkdownTypography = MarkdownTypographies.Chat,
+) {
     val dimens = LocalDimens.current
     val parsedContent = remember(text) { parseMarkdown(text) }
     val colors = rememberMarkdownColors()
-    Column(
-        modifier = modifier.padding(horizontal = dimens.spacingXs),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)
-    ) {
-        parsedContent.forEach { element -> MarkdownElementView(element, colors) }
+    CompositionLocalProvider(LocalMarkdownTypography provides typography) {
+        Column(
+            modifier = modifier.padding(horizontal = dimens.spacingXs),
+            verticalArrangement = Arrangement.spacedBy(typography.blockSpacing),
+        ) {
+            parsedContent.forEach { element -> MarkdownElementView(element, colors) }
+        }
     }
 }
 
 fun LazyListScope.lazyMarkdownItems(
     text: String,
     keyPrefix: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    typography: MarkdownTypography = MarkdownTypographies.Chat,
 ) {
     val elements = parseMarkdownCached(text)
     items(
@@ -126,36 +197,41 @@ fun LazyListScope.lazyMarkdownItems(
     ) { index ->
         val element = elements[index]
         val colors = LocalMarkdownColors.current
-        Box(modifier = modifier.padding(
-            top = element.topSpacing(),
-            bottom = element.bottomSpacing()
-        )) {
-            MarkdownElementView(element, colors)
+        CompositionLocalProvider(LocalMarkdownTypography provides typography) {
+            Box(modifier = modifier.padding(
+                top = element.topSpacing(typography),
+                bottom = element.bottomSpacing(typography),
+            )) {
+                MarkdownElementView(element, colors)
+            }
         }
     }
 }
 
-private fun MarkdownElement.topSpacing(): Dp = when (this) {
-    is MarkdownElement.Heading1 -> 14.dp
-    is MarkdownElement.Heading2 -> 12.dp
-    is MarkdownElement.Heading3 -> 10.dp
-    is MarkdownElement.Heading4, is MarkdownElement.Heading5, is MarkdownElement.Heading6 -> 8.dp
-    is MarkdownElement.CodeBlock, is MarkdownElement.Table, is MarkdownElement.MathBlock -> 6.dp
-    is MarkdownElement.Quote -> 4.dp
-    is MarkdownElement.Divider -> 8.dp
+private fun MarkdownElement.topSpacing(t: MarkdownTypography): Dp = when (this) {
+    is MarkdownElement.Heading1 -> t.blockSpacing * 3.5f
+    is MarkdownElement.Heading2 -> t.blockSpacing * 3f
+    is MarkdownElement.Heading3 -> t.blockSpacing * 2.5f
+    is MarkdownElement.Heading4, is MarkdownElement.Heading5, is MarkdownElement.Heading6 -> t.blockSpacing * 2f
+    is MarkdownElement.CodeBlock, is MarkdownElement.Table, is MarkdownElement.MathBlock -> t.blockSpacing * 1.5f
+    is MarkdownElement.Quote -> t.blockSpacing
+    is MarkdownElement.Divider -> t.blockSpacing * 2f
     is MarkdownElement.BulletPoint, is MarkdownElement.NumberedPoint -> 1.dp
-    else -> 2.dp
+    else -> t.paragraphSpacing / 2
 }
 
-private fun MarkdownElement.bottomSpacing(): Dp = when (this) {
-    is MarkdownElement.Heading1, is MarkdownElement.Heading2, is MarkdownElement.Heading3 -> 3.dp
-    is MarkdownElement.Heading4, is MarkdownElement.Heading5, is MarkdownElement.Heading6 -> 2.dp
-    is MarkdownElement.CodeBlock, is MarkdownElement.Table, is MarkdownElement.MathBlock -> 6.dp
-    is MarkdownElement.Quote -> 4.dp
-    is MarkdownElement.Divider -> 8.dp
+private fun MarkdownElement.bottomSpacing(t: MarkdownTypography): Dp = when (this) {
+    is MarkdownElement.Heading1, is MarkdownElement.Heading2, is MarkdownElement.Heading3 -> t.blockSpacing * 0.75f
+    is MarkdownElement.Heading4, is MarkdownElement.Heading5, is MarkdownElement.Heading6 -> t.blockSpacing * 0.5f
+    is MarkdownElement.CodeBlock, is MarkdownElement.Table, is MarkdownElement.MathBlock -> t.blockSpacing * 1.5f
+    is MarkdownElement.Quote -> t.blockSpacing
+    is MarkdownElement.Divider -> t.blockSpacing * 2f
     is MarkdownElement.BulletPoint, is MarkdownElement.NumberedPoint -> 1.dp
-    else -> 2.dp
+    else -> t.paragraphSpacing / 2
 }
+
+private operator fun Dp.times(f: Float): Dp = (this.value * f).dp
+private operator fun Dp.div(d: Int): Dp = (this.value / d).dp
 
 
 internal sealed class MarkdownElement {
@@ -595,13 +671,14 @@ private fun cachedInlineFormatting(text: String, colors: InlineColors): Annotate
 @Composable
 private fun MarkdownElementView(element: MarkdownElement, colors: InlineColors) {
     val dimens = LocalDimens.current
+    val typo = LocalMarkdownTypography.current
     when (element) {
-        is MarkdownElement.Heading1 -> HeadingText(element.text, colors, 24.sp, FontWeight.Bold, 4.dp)
-        is MarkdownElement.Heading2 -> HeadingText(element.text, colors, 20.sp, FontWeight.SemiBold, 3.dp)
-        is MarkdownElement.Heading3 -> HeadingText(element.text, colors, 17.sp, FontWeight.SemiBold, 2.dp)
-        is MarkdownElement.Heading4 -> HeadingText(element.text, colors, 15.sp, FontWeight.Medium, 2.dp)
-        is MarkdownElement.Heading5 -> HeadingText(element.text, colors, 14.sp, FontWeight.Medium, 1.dp)
-        is MarkdownElement.Heading6 -> HeadingText(element.text, colors, 13.sp, FontWeight.Medium, 1.dp, 0.87f)
+        is MarkdownElement.Heading1 -> HeadingText(element.text, colors, typo.h1FontSize, FontWeight.Bold, 4.dp)
+        is MarkdownElement.Heading2 -> HeadingText(element.text, colors, typo.h2FontSize, FontWeight.SemiBold, 3.dp)
+        is MarkdownElement.Heading3 -> HeadingText(element.text, colors, typo.h3FontSize, FontWeight.SemiBold, 2.dp)
+        is MarkdownElement.Heading4 -> HeadingText(element.text, colors, typo.h4FontSize, FontWeight.Medium, 2.dp)
+        is MarkdownElement.Heading5 -> HeadingText(element.text, colors, typo.h5FontSize, FontWeight.Medium, 1.dp)
+        is MarkdownElement.Heading6 -> HeadingText(element.text, colors, typo.h6FontSize, FontWeight.Medium, 1.dp, 0.87f)
         is MarkdownElement.Body -> BodyText(element.text, colors)
         is MarkdownElement.BulletPoint -> BulletPointView(element.text, element.level, colors)
         is MarkdownElement.NumberedPoint -> NumberedPointView(element.text, element.number, colors)
@@ -636,56 +713,63 @@ private fun HeadingText(
 
 @Composable
 private fun BodyText(text: String, colors: InlineColors) {
+    val typo = LocalMarkdownTypography.current
     Text(
         text = cachedInlineFormatting(text, colors),
         style = MaterialTheme.typography.bodyMedium,
+        fontSize = typo.bodyFontSize,
         color = LocalContentColor.current.copy(alpha = 0.87f),
-        lineHeight = 20.sp
+        lineHeight = typo.bodyLineHeight,
     )
 }
 
 @Composable
 private fun BulletPointView(text: String, level: Int, colors: InlineColors) {
+    val typo = LocalMarkdownTypography.current
     Row(
-        modifier = Modifier.padding(start = (4 + level * 12).dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier.padding(start = typo.bulletIndentBase + typo.bulletIndentPerLevel * level),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "\u2022",
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = typo.bodyFontSize,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 1.dp)
+            modifier = Modifier.padding(top = 1.dp),
         )
         Text(
             text = cachedInlineFormatting(text, colors),
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = typo.bodyFontSize,
             color = LocalContentColor.current.copy(alpha = 0.87f),
-            lineHeight = 20.sp,
-            modifier = Modifier.weight(1f)
+            lineHeight = typo.bodyLineHeight,
+            modifier = Modifier.weight(1f),
         )
     }
 }
 
 @Composable
 private fun NumberedPointView(text: String, number: String, colors: InlineColors) {
-    val dimens = LocalDimens.current
+    val typo = LocalMarkdownTypography.current
     Row(
-        modifier = Modifier.padding(start = dimens.spacingXs),
-        horizontalArrangement = Arrangement.spacedBy(6.dp)
+        modifier = Modifier.padding(start = typo.bulletIndentBase),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(
             text = "$number.",
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = typo.bodyFontSize,
             fontWeight = FontWeight.Medium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(top = 1.dp)
+            modifier = Modifier.padding(top = 1.dp),
         )
         Text(
             text = cachedInlineFormatting(text, colors),
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = typo.bodyFontSize,
             color = LocalContentColor.current.copy(alpha = 0.87f),
-            lineHeight = 20.sp,
-            modifier = Modifier.weight(1f)
+            lineHeight = typo.bodyLineHeight,
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -693,6 +777,7 @@ private fun NumberedPointView(text: String, number: String, colors: InlineColors
 @Composable
 private fun BlockQuoteView(text: String, level: Int, colors: InlineColors) {
     val dimens = LocalDimens.current
+    val typo = LocalMarkdownTypography.current
     val barColor = MaterialTheme.colorScheme.primary
     val barWidthPx = with(LocalDensity.current) { 2.dp.toPx() }
     Box(
@@ -704,28 +789,30 @@ private fun BlockQuoteView(text: String, level: Int, colors: InlineColors) {
             .drawBehind {
                 drawRect(color = barColor, size = Size(barWidthPx, size.height))
             }
-            .padding(start = dimens.spacingSm + 2.dp, end = dimens.spacingSm, top = dimens.spacingSm, bottom = dimens.spacingSm)
+            .padding(start = dimens.spacingSm + 2.dp, end = dimens.spacingSm, top = dimens.spacingSm, bottom = dimens.spacingSm),
     ) {
         Text(
             text = cachedInlineFormatting(text, colors),
             style = MaterialTheme.typography.bodyMedium,
+            fontSize = typo.bodyFontSize,
             color = LocalContentColor.current.copy(alpha = 0.87f),
-            lineHeight = 20.sp
+            lineHeight = typo.bodyLineHeight,
         )
     }
 }
 
 @Composable
 private fun InlineCodeView(text: String) {
+    val typo = LocalMarkdownTypography.current
     Text(
         text = text,
         fontFamily = MapleMonoFontFamily,
-        fontSize = 12.sp,
+        fontSize = typo.inlineCodeFontSize,
         color = LocalContentColor.current.copy(alpha = 0.85f),
         modifier = Modifier
             .clip(MaterialTheme.shapes.extraSmall)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-            .padding(horizontal = 5.dp, vertical = 1.dp)
+            .padding(horizontal = 5.dp, vertical = 1.dp),
     )
 }
 
@@ -737,6 +824,7 @@ private fun CodeBlockView(code: String, language: String) {
     val codeScrollState = rememberScrollState()
     val context = LocalContext.current
     val dimens = LocalDimens.current
+    val typo = LocalMarkdownTypography.current
     val isDark = MaterialTheme.colorScheme.background.luminance() < 0.5f
     val headerBg = remember(isDark) { if (isDark) Color(0xFF282C34) else Color(0xFFF5F5F5) }
     val headerFg = remember(isDark) { if (isDark) Color(0xFFABB2BF) else Color(0xFF383A42) }
@@ -810,8 +898,8 @@ private fun CodeBlockView(code: String, language: String) {
                 Text(
                     text = highlighted ?: AnnotatedString(code),
                     fontFamily = MapleMonoFontFamily,
-                    fontSize = 12.sp,
-                    lineHeight = 18.sp
+                    fontSize = typo.codeFontSize,
+                    lineHeight = typo.codeLineHeight,
                 )
             }
         }
@@ -839,9 +927,10 @@ private fun TableView(
     val cornerRadius = with(density) { 8.dp.toPx() }
     val textMeasurer = rememberTextMeasurer()
 
+    val typo = LocalMarkdownTypography.current
     val baseTypo = MaterialTheme.typography.bodySmall
-    val headerStyle = baseTypo.copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = textColor, lineHeight = 17.sp)
-    val cellStyle = baseTypo.copy(fontSize = 12.sp, color = dimTextColor, lineHeight = 17.sp)
+    val headerStyle = baseTypo.copy(fontSize = typo.tableCellFontSize, fontWeight = FontWeight.SemiBold, color = textColor, lineHeight = typo.tableLineHeight)
+    val cellStyle = baseTypo.copy(fontSize = typo.tableCellFontSize, color = dimTextColor, lineHeight = typo.tableLineHeight)
 
     // Pre-build AnnotatedStrings once (width-independent)
     val headerFormatted = remember(headers, colors) { headers.map { buildInlineFormatted(it, colors) } }

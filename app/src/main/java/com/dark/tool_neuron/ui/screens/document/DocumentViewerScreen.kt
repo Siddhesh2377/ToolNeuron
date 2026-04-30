@@ -33,6 +33,7 @@ import com.dark.tool_neuron.model.DocSource
 import com.dark.tool_neuron.model.IterationLogEntry
 import com.dark.tool_neuron.model.ResearchDocument
 import com.dark.tool_neuron.ui.components.markdown.MarkdownText
+import com.dark.tool_neuron.ui.components.markdown.MarkdownTypographies
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
@@ -108,6 +109,7 @@ private fun DocumentBody(doc: ResearchDocument, horizontalPadding: androidx.comp
                     MarkdownText(
                         text = doc.structured.summary,
                         modifier = Modifier.padding(dimens.spacingMd),
+                        typography = MarkdownTypographies.Document,
                     )
                 }
             }
@@ -147,7 +149,7 @@ private fun SectionBlock(section: DocSection) {
             )
             Spacer(Modifier.size(4.dp))
         }
-        MarkdownText(text = section.body)
+        MarkdownText(text = section.body, typography = MarkdownTypographies.Document)
     }
 }
 
