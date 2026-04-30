@@ -191,12 +191,15 @@ class ResearchCoordinator @Inject constructor(
                     previousQuestions = previousQuestions.toList(),
                     iteration = iter,
                 )
-                val followUps = client.generateQuestions(ctx, maxQuestionsPerIter)
-                emit(ResearchEvent.QuestionGen(runId, iter, maxIterations, followUps))
-                iterationLog.add(IterationLogEntry(iter, followUps))
-                if (followUps.isEmpty()) break
-                previousQuestions.addAll(followUps)
-                currentQueries = followUps
+                val raw = client.generateQuestions(ctx, maxQuestionsPerIter)
+                val effective = raw.ifEmpty {
+                    listOfNotNull(synthesizeFollowUp(question, iter, previousQuestions))
+                }
+                emit(ResearchEvent.QuestionGen(runId, iter, maxIterations, effective))
+                iterationLog.add(IterationLogEntry(iter, effective))
+                if (effective.isEmpty()) break
+                previousQuestions.addAll(effective)
+                currentQueries = effective
             }
 
             emit(ResearchEvent.FinalStart(runId))
@@ -401,6 +404,28 @@ class ResearchCoordinator @Inject constructor(
             arr.put(JSONObject().put("iteration", entry.iteration).put("questions", q))
         }
         return arr.toString()
+    }
+
+    private fun synthesizeFollowUp(
+        question: String,
+        iter: Int,
+        previous: List<String>,
+    ): String? {
+        val seen = previous.map { it.lowercase().trim() }.toSet()
+        val templates = listOf(
+            "Latest developments in: $question",
+            "Detailed examples of: $question",
+            "Background and history of: $question",
+            "Different perspectives on: $question",
+            "Specific case studies for: $question",
+            "Common criticism and limitations of: $question",
+        )
+        for (offset in 0 until templates.size) {
+            val idx = (iter - 1 + offset) % templates.size
+            val candidate = templates[idx]
+            if (candidate.lowercase().trim() !in seen) return candidate
+        }
+        return null
     }
 
     companion object {
