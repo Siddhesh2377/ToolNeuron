@@ -79,6 +79,7 @@ fun HomeScreenBottomBar(
     var text by remember { mutableStateOf("") }
 
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
+    val researchEnabled by viewModel.researchEnabled.collectAsStateWithLifecycle()
     val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
@@ -213,6 +214,8 @@ fun HomeScreenBottomBar(
                     contextUsage = contextUsage,
                     supportsThinking = supportsThinking,
                     thinkingEnabled = thinkingEnabled,
+                    researchEnabled = researchEnabled,
+                    onResearchToggle = viewModel::toggleResearch,
                     onAttachImage = {
                         if (isVlmLoaded) {
                             imagePicker.launch(
@@ -253,6 +256,8 @@ private fun InputBar(
     contextUsage: Float,
     supportsThinking: Boolean,
     thinkingEnabled: Boolean,
+    researchEnabled: Boolean,
+    onResearchToggle: () -> Unit,
     onAttachImage: () -> Unit,
     canAttachImage: Boolean,
     onMicClick: () -> Unit,
@@ -307,6 +312,10 @@ private fun InputBar(
                     supported = supportsThinking,
                     enabled = thinkingEnabled,
                     onClick = onThinkingToggle,
+                )
+                ResearchToggleButton(
+                    enabled = researchEnabled,
+                    onClick = onResearchToggle,
                 )
                 Spacer(Modifier.weight(1f))
                 ContextIndicator(
@@ -490,6 +499,26 @@ private fun DocumentChipsRow(
             }
         }
     }
+}
+
+@Composable
+private fun ResearchToggleButton(
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = if (enabled) IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary,
+        contentColor = MaterialTheme.colorScheme.onPrimary,
+    ) else IconButtonDefaults.filledIconButtonColors(
+        containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        contentColor = MaterialTheme.colorScheme.primary,
+    )
+    ActionButton(
+        onClickListener = onClick,
+        icon = TnIcons.Compass,
+        contentDescription = if (enabled) "Research mode on" else "Research mode off",
+        colors = colors,
+    )
 }
 
 @Composable

@@ -25,13 +25,10 @@ class DocumentRepository @Inject constructor(
         val secureBase = secureDir.absolutePath
 
         val dek = keyStore.unwrapOrCreateDek()
-        val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
+        val signerHash = keyStore.installSignerHash()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = signerHash, info = USER_KEY_INFO)
 
-        val opened = if (storage.exists(secureBase)) {
-            storage.openEncrypted(secureBase, dek, userKey, encryptor)
-        } else {
-            storage.createEncrypted(secureBase, dek, userKey, encryptor)
-        }
+        val opened = openOrRebuild(secureBase, dek, userKey)
         if (!opened) throw SecurityException("Failed to open encrypted chat_documents vault")
 
         storage.ensureCollection(COLLECTION)
@@ -39,6 +36,15 @@ class DocumentRepository @Inject constructor(
         storage.addIndex(COLLECTION, TAG_CHAT_ID, HexStorage.WIRE_BYTES)
 
         migrateLegacyPlaintextIfNeeded()
+    }
+
+    private fun openOrRebuild(base: String, dek: ByteArray, userKey: ByteArray): Boolean {
+        if (storage.exists(base)) {
+            if (storage.openEncrypted(base, dek, userKey, encryptor)) return true
+            File(base).deleteRecursively()
+            File(base).mkdirs()
+        }
+        return storage.createEncrypted(base, dek, userKey, encryptor)
     }
 
     private fun migrateLegacyPlaintextIfNeeded() {
@@ -129,7 +135,7 @@ class DocumentRepository @Inject constructor(
         private const val SECURE_DIR = "chat_documents_meta_v1"
         private const val LEGACY_DIR = "chat_documents"
 
-        private const val USER_KEY_INFO = "tn.chat_documents.user_key.v1"
+        private const val USER_KEY_INFO = "tn.chat_documents.user_key.v2"
 
         private const val TAG_ID = 1
         private const val TAG_CHAT_ID = 2

@@ -63,9 +63,31 @@ Modules:
 6. `AppKeyStore.wipe()` deletes `k.bin` + Keystore alias.
 7. **Legacy migration:** if `k.bin` is missing but `app_bootstrap/` has any other file, wipe `app_bootstrap/*` + `app_prefs/*` + Keystore alias, then re-bootstrap.
 
+### Signer-bound user-keys (v2)
+
+Every per-vault user-key is derived as `HKDF(ikm = DEK, salt = installSignerHash, info = "tn.<scope>.user_key.v2")`. The signer hash is `SHA-256(packageInfo.signingInfo.firstSigner.toByteArray())`, computed once per process via `AppKeyStore.installSignerHash()` and cached in `cachedSignerHash` (cleared on `wipe()`). On API < 28 it falls back to `GET_SIGNATURES`.
+
+Why salt-bind to the signer: Keystore-wrapped DEK is already device-bound (a different device cannot unwrap `k.bin`). Signer-binding closes the **same-device, replaced-APK** attack — root + repack ToolNeuron with an attacker cert + boot it on the legit device. The Keystore alias is uid-scoped, so the patched APK *can* unwrap the DEK; but its signing certificate hashes to a different value, so every user-key derived under the attacker build is wrong. AEAD records fail to decrypt. The repo's `openOrRebuild` helper detects the open failure and wipes the vault, so the attacker gets a fresh empty vault — the original encrypted bytes on disk stay sealed under the legitimate signer's user-key forever.
+
+If `getPackageInfo(... GET_SIGNING_CERTIFICATES)` returns null/empty (some weird OEM, broken install), `installSignerHash()` throws `SecurityException` and the app refuses to bootstrap. Don't add a fallback that returns zeros — that would defeat the binding.
+
+### Vault inventory
+
+| Vault dir | Sealed under | Notes |
+|---|---|---|
+| `app_bootstrap/k.bin` | Android Keystore alias `toolneuron_vault_dek_v1` (StrongBox/TEE), wrapped in XOR-masked envelope | Format: `[magic "TNDK"(4)][version(1)][iv_len(2)][iv][ct_len(2)][ct]`, byte-XOR with hardcoded 32-byte key. The XOR is obfuscation; the cryptographic protection is the Keystore-wrapped `ct`. |
+| `app_prefs/` | `tn.app_prefs.user_key.v2` | All preferences. AuthState rides a second AEAD layer keyed `tn.app_prefs.auth_key.v2`, AAD `"tn.auth_state.v1"`. |
+| `chat_store_v2/` | `tn.chats.user_key.v2` | Chats + messages. Replaces the legacy plaintext `chat_store/` (deleted on first v2 boot). |
+| `chat_documents_meta_v1/` | `tn.chat_documents.user_key.v2` | RAG document metadata (id, name, mime, chunk count, sourceId). Dir name is historical — the user-key is v2. |
+| `chat_documents/sources_v2/` | per-file AEAD via `SourceFileVault` | Each `<sourceId>.bin` is `[iv(12)][ct][tag(16)]` AEAD blob. Per-file key is `HKDF(DEK, salt=signerHash, info="tn.chat_doc_source.user_key.v2@<sourceId>")`. AAD = sourceId UTF-8 bytes (rename → decrypt fails). Replaces the legacy plaintext `chat_documents/sources/` (deleted on first v2 boot). |
+| `rag_keyword_v1/` | `tn.rag_keyword.user_key.v2` | BM25 inverted-index records. |
+| `research_v1/` | `tn.research.user_key.v2` | Research documents + run snapshots. Two collections, one vault. |
+
+**v1 → v2 migration is destructive.** Each repo's `openOrRebuild` tries `openEncrypted` with the v2 key. If that fails (existing v1 data sealed under the old non-signer-bound key), it wipes the vault dir and re-creates fresh. On first launch with a v2 build, an existing user loses their PIN, chat history, RAG attachments, and research docs — one time. The Keystore alias is preserved (so the DEK is still the same), only the per-vault user-keys change.
+
 ### AppPreferences — encrypted HXS + sealed AuthState
 
-`HexStorage.openEncrypted(path, appKey=DEK, userKey=HKDF(DEK, info="tn.app_prefs.user_key.v1"), encryptor)`. Auth-critical state rides a second AEAD layer: `writeAuthState`/`readAuthState` use key `HKDF(DEK, info="tn.app_prefs.auth_key.v1")` and AAD `"tn.auth_state.v1"`. Ordinary flags (`onboarding_complete`, `tc_accepted`, `setup_done`, server settings, etc.) are plain encrypted records.
+`HexStorage.openEncrypted(path, appKey=DEK, userKey=HKDF(DEK, salt=signerHash, info="tn.app_prefs.user_key.v2"), encryptor)`. Auth-critical state rides a second AEAD layer: `writeAuthState`/`readAuthState` use key `HKDF(DEK, salt=signerHash, info="tn.app_prefs.auth_key.v2")` and AAD `"tn.auth_state.v1"`. Ordinary flags (`onboarding_complete`, `tc_accepted`, `setup_done`, server settings, etc.) are plain encrypted records.
 
 ### AuthState v4
 
@@ -421,14 +443,39 @@ HTTPS / TLS, mDNS / Bonjour, QR-pairing, dynamic-model-load over the wire, strea
 
 ## HF Explorer
 
-Dedicated screen replacing the inline Settings search (2026-04-25 redesign).
+Rewritten 2026-04-29. All HF traffic flows through `:networking` (curl-impersonate Chrome116 + bundled CA bundle); the previous `HttpURLConnection` path is gone. Filter chips are populated dynamically from `/api/models-tags-by-type`; the README on the detail screen renders client-side from `/{author}/{repo}/raw/main/README.md`.
 
-- VM: `viewmodel/HfExplorerViewModel.kt`. Search query, results, history (persisted as JSONArray on `prefs.hfSearchHistory`, max 20). Filters: `HfSort` (RELEVANCE, DOWNLOADS, LIKES, AUTHOR_AZ), `HfFileFilter` (ALL, GGUF, MMPROJ), `HfFileSizeBucket` (ANY, UNDER_1GB, UNDER_4GB, UNDER_8GB), `HfDownloadsBucket` (ANY, 100+, 1k+, 10k+, 1M+), `authorFilter`, `hideGated`, `showGatedOnly`, `hideAdded`. `loadRepoDetail`, `visibleResults`, `visibleFiles`, `addRepository`, `resetFilters`.
-- Routes: `NavScreens.HfExplorer`, `NavScreens.HfRepoDetail("hf_repo/{repoPath}")` with `routeFor(repoPath)` URL-encoding the path.
-- `ui/screens/hf_explorer/HfExplorerScreen.kt` — hero search bar with `ImeAction.Search` + `KeyboardActions(onSearch=…)`, quick sort chips, collapsible Advanced Filters, history strip, result cards (circular author-initials avatar, downloads / likes pills, gated badge), empty state.
-- `ui/screens/hf_explorer/HfRepoDetailScreen.kt` — header (downloads / likes / total GGUF size), file filter card (type + size bucket), file rows (monospace path + size).
-- `ui/screens/model_store/RepositorySettings.kt` carries `HfExplorerLauncherCard` — primary-tinted Surface, 40 dp circular icon badge, two-line text + arrow.
-- HTTP: `repo/HuggingFaceApi.kt` — `fetchJson`, `fetchJsonArray`, `fetchJsonArrayResult`, `headStatus`; URL builders `modelInfoUrl`, `modelTreeUrl`, `resolveFileUrl`, `searchGgufUrl`. Replaced 60+ LOC of duplicate boilerplate.
+### Layers
+
+- `repo/HuggingFaceApi.kt` (Hilt `@Singleton class`) — URL builders + thin HTTP layer. Methods: `fetchJson(url): Result<JSONObject>`, `fetchJsonArray(url): Result<JSONArray>`, `fetchRaw(url): Result<String>`, `probe(url): Result<Int>`. All go through `WebNative.fetch` with `Accept: application/json` and `Accept-Encoding: gzip`. URL builders: `modelInfoUrl`, `modelTreeUrl`, `resolveFileUrl`, `rawFileUrl`, `searchUrl`, `quickSearchUrl`, `trendingUrl`, `tagsByTypeUrl`. **Failures are typed via `HfApiError`** (`RateLimited(retryAfterSeconds)`, `NotFound`, `Forbidden`, `Network`, `Parse`, `Http`).
+- `repo/hf/HfClient.kt` (Hilt `@Singleton`) — typed explorer endpoints over `HuggingFaceApi`. `searchModels`, `quickSearch`, `trending`, `modelDetail`, `readme`, `tagsCatalog` (cached 24h in encrypted `app_prefs` under keys `hf_tags_catalog_v1` + `hf_tags_catalog_v1_at`).
+- `repo/hf/HfModels.kt` — `HfModelSummary`, `HfModelDetail` (with `HfSibling`/`HfGgufMeta`/`HfCardData`), `HfTrendingItem`, `HfQuickResult`, `HfTagsCatalog`/`HfTagEntry`, `HfGated` enum (OPEN/GATED/AUTO).
+- `repo/hf/HfJsonParse.kt` — internal `org.json` parsers for each shape.
+- `repo/HuggingFaceExplorer.kt` — kept as a thin compat wrapper exposing `searchModels` / `searchGgufRepos` / `fetchRepoDetail` mapped to legacy `ExplorerRepo` / `HfRepoDetail` types for `ModelStoreViewModel`.
+
+`ModelCatalog` and `RepositoryValidator` inject `HuggingFaceApi` directly. They no longer touch `HttpURLConnection`.
+
+### VM (`viewmodel/HfExplorerViewModel.kt`)
+
+State flows: `query`, `filters: HfFilters`, `results: List<HfModelSummary>`, `isSearching`, `searchError: HfApiError?`, `tagsCatalog`, `trending`, `history`, `hideAdded`, `detailState`, `fileFilter`, `fileSizeBucket`, `existingRepoPaths`. On VM init: kicks off `tagsCatalog()` and `trending(12)` once each (cached).
+
+**Search trigger policy** (intentional, rate-limit conservative):
+- IME action / Search button → fires `client.searchModels`.
+- Any chip toggle / sort change / param-range slider release → fires fresh search via `updateAndSearch`.
+- Per-keystroke quicksearch is **deliberately not wired**.
+
+### Filter set (intentionally minimal, 2026-04-29)
+
+`HfFilters` carries only fields that map to documented HF list params: `libraries: Set<String>` (default `{"gguf"}`, multiple `filter=…`), `author: String` (`author=…`), `gated: GatedFilter` (`gated=true|false`), `paramsMinMillions/Max` (`num_parameters=min:7B,max:13B`), `sort: HfSort`. The previous "kitchen sink" filters (apps, inference_provider, languages, licenses, regions, other-tags, quant chips, trained-dataset, pipeline-tag, inference-warm) and post-filter sliders (min-downloads, min-likes, recent-days) were dropped because (a) HF rejected the speculative URL params with HTTP 400, and (b) the heavy filter UI added clutter without unlocking working searches. Tags catalog still fetched + cached for future use; just not wired to chip rows yet.
+
+### Screens
+
+- `ui/screens/hf_explorer/HfExplorerScreen.kt` — search hero (TnTextField + ActionButton submit), history strip when empty, sort row, gated/hide-added quick toggles, collapsible Filters card with: param-range slider, library chips (GGUF/Transformers/Safetensors/ONNX/MLX/Diffusers), author text. Trending strip when results empty + query empty. Result cards with author-initials avatar, downloads/likes/pipeline pills, tag chips, Gated badge variants (Gated / Gated · auto), Add/Added trailing icon. Errors render via `ErrorBanner` with rate-limit aware copy.
+- `ui/screens/hf_explorer/HfRepoDetailScreen.kt` — `HeaderCard` with stats + gated badge; `GatedNotice` block when gated (license prompt preview + sign-in CTA); `GgufCard` (architecture, context, total bytes, BOS/EOS) when GGUF; `CardDataView` (license, base model, languages, task, tag chips); file filter pills + file rows; **README rendered via `lazyMarkdownItems`** from raw markdown; failure view distinguishes rate-limit / not-found / forbidden / network / parse / http.
+
+### Tags catalog cache
+
+Sealed in encrypted `app_prefs` (under existing `tn.app_prefs.user_key.v2` HKDF key). Plaintext JSON never lands on disk. 24h TTL; `forceRefresh = true` bypasses. On every cold start the first explorer open hydrates from the cache; if expired or empty, hits `/api/models-tags-by-type` once and re-persists.
 
 ---
 
@@ -509,6 +556,88 @@ Backed by `RagManager.debugQuery(chatId, query, budget)` which returns `RagDebug
 ### PlusMenu cleanup
 
 The PlusMenu's old "Documents" button is gone — attachments live entirely in the Attach tab now. PlusMenu shows only Thinking when `supportsThinking`; if not supported, `PlusMenuCard` returns null.
+
+---
+
+## Research
+
+Multi-iteration on-device research pipeline. The user types `/research <question>` (or flips the Research toggle on the bottom action bar). The app spawns a `ResearchCard` chat-message and a `ResearchCoordinator` run on `viewModelScope`. The coordinator drives this loop, capped by `prefs.researchMaxIterations`:
+
+1. **Search** — `DdgSearch.search(query, prefs.researchResultsPerSearch)` against DuckDuckGo HTML via `:networking` (`WebNative.search`).
+2. **Fetch** — top-N URLs in parallel (concurrency 3) via `WebNative.fetch` JNI; reuses the curl-impersonate Chrome116 fingerprint and CA bundle that the rest of the networking module is configured with.
+3. **Extract** — `HtmlReadability.extract(html)` is a Kotlin Readability-lite (strip script/style/noscript/template/svg, prefer `<article>`/`<main>`/`<section>`, fall back to `<body>`, decode entities, collapse whitespace). Headless WebView is **not** used in v1.
+4. **Compress** — `ResearchModelClient.compress(blobs, question)` summarizes each fetched doc via the active chat LLM (`InferenceClient.generate(prompt, COMPRESS_MAX_TOKENS=320)`).
+5. **Generate questions** — `ResearchModelClient.generateQuestions(ctx, prefs.researchMaxQuestions)` asks the LLM for ≤ N follow-ups; empty response stops the loop.
+6. **Final** — `ResearchModelClient.finalDocument(...)` returns a `StructuredDoc` (title + summary + sections + sources + iteration log + footer). Persisted to the encrypted `research_documents` HXS vault.
+
+The ResearchCard renders states: Plan → Search → Fetch → Compress → QuestionGen → Final → Done | Cancelled | Failed. Tapping "Open document" navigates to `NavScreens.DocumentViewer.routeFor(docId)` (read-only viewer in v1). The drawer's `Docs` quick-link opens `NavScreens.Documents` (archive of every persisted research doc).
+
+### Model layer (the v1↔v2 swap point)
+
+```
+interface ResearchModelClient {
+    suspend fun generateQuestions(ctx: ResearchContext, max: Int): List<String>
+    suspend fun compress(blobs: List<FetchedDoc>, question: String): String
+    suspend fun finalDocument(allCompressed, question, sources, iterationsUsed, modelName, totalFetchedBytes, durationMs): StructuredDoc
+}
+```
+
+v1 impl is `ChatLlmResearchClient` — wraps `InferenceClient.generate(prompt, maxTokens)`, parses questions line-by-line and final-doc JSON with fence-strip + `{`-find. The bound impl, exclusive — research borrows the active chat GGUF in `:inference`. The single-research lockdown is what keeps this safe (no chat-side `sendMessage` while a run is in flight). v2 (`NativeResearchClient` + a custom `:research` process + `.rmg` engine) was prototyped on 2026-04-29 and pulled — SmolLM2-135M was below the capability threshold for instruction-following summarization. Future v2 candidates would need a 360M+ model; the architecture seam (`ResearchModelClient` interface) is intentionally preserved so the swap remains a one-line `@Binds` change.
+
+### Persistence
+
+**Single encrypted vault** at `<filesDir>/research_v1/`, sealed under `HKDF(DEK, "tn.research.user_key.v1")`. Two collections inside:
+
+- `research_documents` — tags `1=docId, 2=title, 3=originChatId, 4=originMessageId, 5=question, 6=structuredJson, 7=createdAt, 8=durationMs, 9=modelId, 10=iterationsUsed`. `structuredJson` is the `StructuredDoc.toJson()` blob.
+- `research_runs` — tags `1=runId, 2=docId, 3=question, 4=phase, 5=iterationLogJson, 6=startedAt, 7=finishedAt, 8=cancelReason`. Snapshot updated on every phase transition.
+
+The single-storage / multiple-collections layout is mandatory: hxs.cpp keeps a process-singleton `g_encryptor_ref` + `g_crypto.ctx` (lines 62, 245-259). Every `nativeOpenEncrypted` call `DeleteGlobalRef`s the previous AEAD callback's user-key jobject. If a single Kotlin repository opens two vaults back-to-back via two `HexStorage` instances, the first vault's `Collection` snapshots a now-stale jobject and the next flush on it triggers `JNI ERROR: jobject is an invalid global reference` → SIGABRT (observed on 2026-04-28). Match the existing pattern (`ChatRepository` = `chats` + `messages` in one vault).
+
+`ChatMessage.researchRunId: String?` rides on `TAG_MSG_RESEARCH_RUN = 14`; `ChatMessage.researchState: String` (JSON-serialized `ResearchUiState`) rides on `TAG_MSG_RESEARCH_STATE = 15`. Both live on the existing chat messages collection and decode with zero-fill defaults for backward compat. When `researchRunId != null`, `ChatMessageList` renders `ResearchCard` instead of `MessageBubble`, and the card derives entirely from `ResearchUiState.fromJson(message.researchState)` — there is **no** runtime-only `researchEvents` map. `HomeViewModel.handleResearchEvent` reads the owning message via `chatRepo.getMessageById(messageId)`, applies the incoming `ResearchEvent` to the persisted state, and writes the updated message back. A `runId → (chatId, messageId)` map (`HomeViewModel.researchMessages`) is populated on `startResearch` and evicted on Done/Cancelled/Failed so cross-chat updates land on the right message even when the user is viewing a different chat. Done research cards survive process restart unchanged because the terminal state is on the message.
+
+**Raw fetched HTML never touches disk.** Compressed-text intermediate lives only in the run's coroutine scope. Source URLs are persisted via `structuredJson`; bodies are not.
+
+### Cancellation & lifecycle
+
+- The ResearchCard's "Stop" button calls `HomeViewModel.cancelResearch(runId)`. ViewModel **optimistically writes `phase = PHASE_STOPPING`** to the message before delegating to `ResearchCoordinator.cancel(runId)`, so the card instantly flips to "Stopping research…" with no Stop footer. `ResearchUiState.applyEvent` is a one-way gate while in STOPPING — only Done/Cancelled/Failed can move the state out, so a late-arriving Compress event (in flight when Stop was pressed) won't bounce the card back to Compress.
+- `ChatLlmResearchClient.runInference` catches `CancellationException`, calls `InferenceClient.stopGeneration()`, then rethrows. Without this, the inference service keeps generating tokens after the coroutine is cancelled and Stop becomes effectively a no-op for the multi-second LLM phases (compress / questions / final-doc).
+- The coordinator's `catch (CancellationException)` and `catch (Throwable)` blocks **must use `_events.tryEmit(...)`** — the suspending `emit(...)` wrapper goes through `withContext(Dispatchers.Default)` which throws CancellationException immediately on a cancelled Job, so the Cancelled event never lands and the card hangs in its last in-flight phase. `_events` has `extraBufferCapacity = 128`, so tryEmit is non-blocking and always succeeds in practice. Saved snapshot writes are wrapped in `runCatching` for the same reason — sync HXS calls don't suspend, but they can hit other failure modes during teardown that we don't want to mask the original CE.
+- HTTP fetches are bounded by `FETCH_TIMEOUT_MS = 15s` per URL — JNI calls into `WebNative.fetch` aren't cooperatively cancellable, so a Stop pressed mid-fetch storm waits up to that timeout per in-flight fetch (3 in parallel). Acceptable v1 behavior.
+- `ResearchBackgroundObserver` (a `DefaultLifecycleObserver` on `ProcessLifecycleOwner`, registered from `TNApplication.onCreate` in main process) calls `coordinator.cancelAll()` on `ON_STOP` when `prefs.researchCancelOnBackground == true` (default true).
+- Cancelled runs are discarded — no resume in v1.
+
+### Single-research lockdown
+
+Only one research run at a time. `HomeViewModel.researchActive: StateFlow<Boolean>` is derived from `researchCoordinator.activeRuns.isNotEmpty()`. `startResearch` early-returns if it's already true. While a run is active, `sendMessage`, `loadModel`, and `unloadModel` all early-return so chat-side inference and model swaps cannot interfere with the run's borrowed chat LLM. `serverController.isBusy` and `_isGenerating.value` keep their existing gates; `researchActive` stacks on top.
+
+### Settings keys (encrypted `app_prefs`)
+
+- `research_max_iterations` Int default 5 (clamped 1..10)
+- `research_max_questions` Int default 4 (clamped 1..6)
+- `research_results_per_search` Int default 5 (clamped 3..10)
+- `research_ddg_locale` String default "" (empty = system; reserved, not yet plumbed into search)
+- `research_cancel_on_bg` Bool default true
+- `active_research_model` String default "" (empty = mirror active chat model)
+
+The Settings → Research section exposes each as a `SettingsItem.Choice` (max-iter, max-q, per-search, model) or `SettingsItem.Toggle` (cancel-on-bg).
+
+### File map
+
+- `model/{StructuredDoc,ResearchEvent,ResearchPhase,FetchedDoc,ResearchContext}.kt` — pipeline data classes + `ResearchDocument` aggregate.
+- `repo/ResearchRepository.kt` — encrypted CRUD over both vaults.
+- `repo/research/{ResearchModelClient,ChatLlmResearchClient,HtmlReadability,DdgSearch,ResearchPrompts,ResearchModule}.kt` — pipeline support + Hilt binding.
+- `viewmodel/{ResearchCoordinator,DocumentViewerViewModel,DocumentsViewModel}.kt`
+- `ui/screens/research/{ResearchCard,ResearchCardStates}.kt`
+- `ui/screens/document/{DocumentViewerScreen,DocumentViewerTopBar}.kt`
+- `ui/screens/documents/{DocumentsScreen,DocumentsTopBar}.kt`
+- `data/ResearchBackgroundObserver.kt`
+- Modified: `ChatMessage` (+ researchRunId), `ChatRepository` (TAG 14), `HomeViewModel` (toggle, slash parse, coordinator wiring, event mirror), `HomeScreen{Body,BottomBar}`, `NavScreens` (Documents + DocumentViewer routes), `TNavigation`, `AppTopBar`, `AppScaffold` + `ChatDrawer` (Docs quick-link), `AppPreferences` (research_* keys), `SettingsViewModel` (researchSection), `TNApplication` (background observer), `:networking/WebNative` + `net_jni.cpp` (`nativeFetch`).
+
+### v2 plan
+
+`:research_engine` is a not-yet-built native module that will house a from-scratch CPU inference engine (mmap loader, custom int4/int8 quant, KV cache, threadpool) and a custom small MoE model (~100M-500M params, two experts: question-gen + compression, ~32k BPE tokenizer, 4k ctx, English-only). Implementation studies llama.cpp's design patterns (compute-graph DAG, GGUF bundle layout, KV cache layout, quant block design) but does **not** vendor llama.cpp code. v2 swaps `bindResearchModelClient(ChatLlmResearchClient)` to `NativeResearchClient`; UX, persistence, and event flow stay unchanged.
+
+A first attempt (rm-graph engine + SmolLM2-135M-Int4) was wired and reverted on 2026-04-29 — at 135M parameters the model parroted prompt fragments instead of summarizing, returning empty question generations after iteration 1. Next attempt should target ≥360M parameters.
 
 ---
 
@@ -598,6 +727,13 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't re-add a root hard-fail. One-time `RootWarningDialog`, gated on `rootWarningShown`.
 - Don't re-add a plaintext HXS container for the bootstrap DEK. Raw XOR-masked `k.bin` only.
 - Don't skip `migrateLegacyIfNeeded()` in `AppKeyStore.init`.
+- Don't drop the signer-binding salt from any user-key derivation. Every `encryptor.deriveKey(ikm = dek, salt = ?, info = ?)` call in app code MUST use `salt = keyStore.installSignerHash()` (not `salt = dek`, not `salt = null`). Sites: `AppPreferences.init`, `AppPreferences.deriveAuthKey`, `DocumentRepository.init`, `RagKeywordIndex.init`, `ResearchRepository.init`, `ChatRepository.init`, `SourceFileVault.keyFor`. Without this salt, a same-device replaced-APK attack (root + repack with attacker's cert) can unwrap the DEK via the inherited uid-scoped Keystore alias and decrypt every vault. Salting with the signer hash means the patched APK derives a different user-key and AEAD fails — the data stays sealed.
+- Don't add a "fallback to all zeros" or "return empty bytes on failure" path in `AppKeyStore.computeSignerHash()` / `installSignerHash()`. If the platform can't read the install signer, throw `SecurityException` and let the app refuse to bootstrap. A zero-fallback collapses the binding for any device with a broken signature lookup, which is exactly the path an attacker would try to engineer.
+- Don't bump user-key info strings without bumping the version suffix (`v2` → `v3`). Bumping invalidates existing v2 vaults — the open-or-rebuild helper detects the AEAD failure on `openEncrypted` and wipes the dir. Documented loss is intentional; a silent loss because the info string was edited inline is not.
+- Don't downgrade `ChatRepository` back to `openPlaintext`. Chats and messages are sealed under `tn.chats.user_key.v2`. Plaintext on disk was the cross-device readability hole — closed in this build.
+- Don't bypass `SourceFileVault` for `chat_documents/sources_v2/` reads or writes. Every byte of every attached RAG document is AEAD-sealed per-file under a key bound to (DEK, signerHash, sourceId), with AAD = sourceId. This means: (a) cross-device read fails (no DEK unwrap), (b) cross-build read fails (different signer), (c) renaming a file breaks decryption (AAD mismatch — defends against record-substitution). Direct `File(...).readBytes()` / `writeBytes()` is forbidden for source files.
+- Don't preserve the legacy `chat_store/` (plaintext) or `chat_documents/sources/` (plaintext) directories on a v2 build. `ChatRepository.init` and `SourceFileVault.init` both `deleteRecursively()` them on first launch — this is the migration path that closes the historical leakage. Re-introducing those dirs (e.g. for a "compatibility shim") puts plaintext back on disk.
+- Don't unwrap the DEK in `:server` or `:inference`. `:server` runs in its own process and never opens HXS — token, model path, and config are pushed via AIDL `start(configJson)`. `:inference` is similar. Only `:app` (main process) holds the DEK, and only the main process derives signer-bound user-keys. Cross-process key handoff would defeat the binding.
 - Don't link `:native-server` against BoringSSL / OpenSSL / zlib. Header-only httplib + getrandom(2).
 - Don't add a new HTTP route without auth pre-routing. Only `/`, `/index.html`, `/webui`, `/health` are in `auth::is_public_path`. Never make `/v1/models` or `/v1/chat/completions` public.
 - `RemoteServerService` lives in `:server` (its own process). Don't fold it back into `:app`. `:server` MUST NOT open HXS — token / model path / config / asset HTML are passed in via AIDL `start(configJson)`. Token rotation pushes from `:app` via `rotateToken(newToken)`.
@@ -626,6 +762,33 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't drop the `com.dark.gguf_lib.**` / `com.dark.ai_sherpa.**` keep + `dontwarn` block. The prebuilt AARs are already minified and rely on specific class+method names for JNI lookup.
 - Don't strip `lockedUntilMs` and `wiped` from `PasswordScreen`. Both flow through `PasswordViewModel` from `VerifyResult.LockedOut(retryAtMs)` and `VerifyResult.Wiped`. The screen branches `wiped → WipedScreen → "Restart" → finishAffinity + Process.killProcess(myPid)` (post-`hardWipe`, `PolicyEngine.markTampered()` is latched and the process is unrecoverable in-place). `lockedUntilMs > now → LockedOutScreen` with a 500 ms-tick countdown that clears itself once the timestamp passes.
 - Don't add a "set panic PIN" path that doesn't go through `SecurityManager.setPanicPin`. It gates on `securityMode == APP_PASSWORD` (NOT `session.isAllowed(AUTH_DISABLE)` — that was a non-deterministic timing trap; see Panic PIN section) and writes the second Argon2id hash into the same encrypted `AuthState` blob. UI lives in `Settings → Privacy` and only renders when `isLockEnabled`. `SettingsViewModel._panicPinSet` mirrors `security.hasPanicPin` and must reset to false on `setPassword`, `disableLock`, and `Wiped`. Same gate change applies to `clearPanicPin` and `disableLock`.
+- Don't bypass `ResearchModelClient` from anywhere in the research pipeline. The whole point of the abstraction is the v1↔v2 swap: today `ChatLlmResearchClient` runs every prompt through `InferenceClient.generate`; tomorrow a `NativeResearchClient` will dispatch into a dedicated `:research` process for a custom engine. If you call `InferenceClient.generate` directly from `ResearchCoordinator` you've welded v1 to the chat LLM forever.
+- Don't add `ProviderType.RESEARCH` back without also adding the matching engine + service stack. The v2 attempt (rm-graph, SmolLM2-135M, `:research` process, `ai_rmg` AAR) was reverted because the model was below the capability threshold for instruction-following summarization. The enum stays at GGUF/TTS/STT/EMBEDDING until a real v2 candidate ships with a verified-good model.
+- Don't write fetched HTML or compressed-text intermediates to disk. Only the final `StructuredDoc` (sealed under `tn.research_documents.user_key.v1`) and the per-run snapshot (sealed under `tn.research_runs.user_key.v1`) are persisted. Source URLs ride in `structuredJson`; bodies are RAM-only.
+- Don't downgrade the research vault to plaintext HXS. `research_v1/` is encrypted via the same DEK + HKDF-derived user-key path that `DocumentRepository` and `AppPreferences` use.
+- Don't split the research data into a second `HexStorage` instance. hxs.cpp is process-singleton — every `openEncrypted` rebinds `g_crypto.ctx` and `g_encryptor_ref`, but Collections snapshot those at construction. The current crash mitigation is "never DeleteGlobalRef the previous refs" (`hxs.cpp:215, :246, :291`) which leaks ~64 bytes per vault open but keeps prior snapshots valid. Even with that mitigation, multiple `HexStorage` instances inside one repo is wasteful. Use `ResearchRepository`'s pattern: ONE `HexStorage()` opening ONE vault path, with two collections inside (`research_documents` and `research_runs`).
+- Don't reintroduce `DeleteGlobalRef` on `g_encryptor_ref` or `g_crypto.ctx` in `hxs/src/main/cpp/hxs.cpp`. ART recycles freed slot indices with bumped serials — the next AEAD callback on a Collection that snapshotted the old ctx hits "JNI ERROR: stale reference with serial X v. current Y" → SIGABRT. Observed crashing both `ResearchRepository.saveDocument` and `AppPreferences.putBoolean`/`flushAll` flows on 2026-04-28. The proper fix is per-instance native handles (each `HexStorage` Kotlin instance gets its own `nativeHandle` carrying its `Manifest` + `Collections` + `g_crypto` + global refs); until that lands, leaking the refs is the safe path.
+- Don't reorder or skip the research pipeline phases. The contract is Search → Fetch → Extract → Compress → QuestionGen, repeating per iteration, then Final. The card and `ResearchPhase` snapshot states depend on this order — out-of-order emit will desync the UI animation.
+- Don't bump `TAG_MSG_RESEARCH_RUN` away from `14` or `TAG_MSG_RESEARCH_STATE` away from `15`. Older messages without these tags must continue to decode with `researchRunId = null` and `researchState = ""`. Adding new chat-message fields uses TAG ≥ 16.
+- Don't reintroduce a runtime-only `researchEvents: Map<String, ResearchEvent>` in HomeViewModel. The card's state must come from `ResearchUiState.fromJson(message.researchState)` because (a) opening a different chat while a run is in flight should NOT bleed the running run's state into a completed chat's card; (b) after process restart, completed research cards must keep showing their Done state — a runtime map collapses to empty and every card regresses to "Planning research…". Persistence on the message itself is the contract. `HomeViewModel.handleResearchEvent` is the single write point: lookup `(chatId, messageId)` via `researchMessages[runId]`, read the message via `chatRepo.getMessageById`, apply the event, write back.
+- Don't drop the `try { ... } catch (CancellationException) { InferenceClient.stopGeneration(); throw }` wrapper in `ChatLlmResearchClient.runInference`. Without it, `coordinator.cancel(runId)` cancels the coroutine but the underlying `:inference` service keeps decoding tokens for the rest of the LLM call (compress / questions / final-doc — the dominant time cost), so the user's Stop press takes seconds-to-tens-of-seconds to land. The wrapper makes Stop responsive in the LLM phases; HTTP-fetch phases still wait on the per-URL timeout.
+- Don't switch the coordinator's catch-block emits back to suspending `emit(...)`. The catch fires on a cancelled Job, and `withContext(Dispatchers.Default)` throws CE immediately on a cancelled context — so the Cancelled event never reaches the SharedFlow, and the card freezes mid-flight even though native logs show "Generation stop requested". Use `_events.tryEmit(ResearchEvent.Cancelled(...))` (and likewise for `Failed`) — the SharedFlow has 128-slot buffer, tryEmit always succeeds, and the event lands. Same applies to the snapshot write — wrap in `runCatching` so a teardown-time HXS failure can't shadow the original CE.
+- Don't drop the optimistic `PHASE_STOPPING` write in `HomeViewModel.cancelResearch`. The native cancel can take 1–3s to actually wind down (interrupt point in prompt-eval), and during that window the user wants visible feedback that their tap was received. The optimistic write transitions the card to "Stopping research…" with no Stop footer instantly; the real Cancelled event overrides it when it arrives. The `applyEvent` gate ensures non-terminal events (a late-arriving Compress, etc.) can't bounce the state out of STOPPING.
+- Don't lift the single-research lockdown without thinking it through. While `researchActive.value`, `HomeViewModel.startResearch / sendMessage / loadModel / unloadModel` all early-return. The chat LLM is borrowed for the duration of the run (compress + questions + final-doc); a chat-side `sendMessage` would race the borrowed model, and a `loadModel` / `unloadModel` would yank state mid-run. The lockdown stacks on top of the existing `serverController.isBusy` and `_isGenerating.value` gates.
+- Don't move `nativeFetch` out of `:networking/WebNative`. The curl-impersonate Chrome116 fingerprint + CA bundle setup lives there; reimplementing fetch in Kotlin via `HttpURLConnection` would lose the fingerprint and leak the default Android UA on every research request. The JNI wrapper just calls `net::http_execute(...)` — same backend the DDG client uses.
+- Don't expose research from any process other than main. The coordinator depends on `:inference` AIDL via `InferenceClient`, which is bound from the main process; spawning a run from `:server` or `:inference` would deadlock on the binder.
+- Don't drop the `ResearchBackgroundObserver` registration from `TNApplication.onCreate`. Without it, the cancel-on-background pref does nothing and a half-finished run keeps churning network + LLM after the user leaves the app.
+- Don't store the active research model id by mirroring `active_chat_model`. The `active_research_model` key is intentionally separate so v2 can install a dedicated research model alongside (not in place of) the chat GGUF.
+- Don't fall back to `java.net.HttpURLConnection` for any HuggingFace API call — search, model info, tree, raw README, tags-by-type, trending, quicksearch, resolve. Every HF request goes through `:networking` (`WebNative.fetch`) so it inherits the curl-impersonate Chrome116 fingerprint + bundled `cacert.pem` + strict cert verify. The hub is `repo/HuggingFaceApi.kt` (Hilt singleton class, not an object); `repo/hf/HfClient.kt` builds typed endpoints on top. `ModelCatalog` and `RepositoryValidator` inject `HuggingFaceApi`. Same rule applies for any future HF or non-HF HTTP target — `:networking` is the only allowed pipe.
+- Don't change `WebNative.fetch` back to `Result<String>`. The contract is `Result<WebResponse>` where `WebResponse(status: Int, body: String, error: String?)`. Result.failure is reserved for transport-layer issues (DNS, TLS handshake, native call collapse). HTTP non-2xx comes back as `Result.success(WebResponse(status=4xx, ...))` — callers can react to 429 (rate limited) vs 404 (not found) vs 401/403 (auth). Old behavior of returning `null` on non-2xx silently masked HF API bugs (e.g. invalid `expand=` params returning 400) for years.
+- Don't log full URLs (with query string) to `ANDROID_LOG_WARN` from `net_jni.cpp`. Use the `host_of(url)` helper. Search queries are user PII (typed model names, sometimes sensitive). Status code + host is the maximum log surface.
+- Don't add per-keystroke quicksearch / autocomplete to the HF Explorer search bar. Search fires on the Search button, the IME `Search` action, or a filter chip touch — never on every typed character. The HF API has a 500-call/5min unauthenticated rate limit per IP; per-keystroke autocomplete burns it on a single typing session. Slider drags fire only on `onValueChangeFinished` (one call per drag). Post-filter sliders (`minDownloads`, `minLikes`, `recentDays` in `HfPostFilters`) update `visibleResults()` locally without an API call. `HfClient.quickSearch` exists for future use but the UI must not wire it to typing.
+- Don't write the HF tags catalog (`/api/models-tags-by-type` payload) anywhere outside the encrypted `app_prefs` vault. Keys are `hf_tags_catalog_v1` (JSON string) and `hf_tags_catalog_v1_at` (Long unix-millis), 24h TTL. The catalog feeds the dynamic filter chips; falling back to `HfFilterTaxonomy` constants is OK but only for the brief window before the catalog hydrates. Plaintext-on-disk is forbidden — use the encrypted prefs API only.
+- Don't pass any device-identifying value to `WebNative.fetch`'s `headers` map. The map is intended for protocol headers (`Accept`, `Accept-Encoding`, future `Authorization`). Adding `X-Install-Id`, `User-Agent` overrides with TN-identifying suffixes, or anything that would let HF (or any future server) fingerprint a specific install is a privacy regression.
+- Don't add the `expand=tags`, `expand=downloads`, etc. parameters back to `searchUrl`. Those query params are for `/api/models/{id}/tree/...`, NOT `/api/models?search=...`. HF returns 400 when they're present on the list endpoint. The minimal list response already includes `id`, `author`, `gated`, `tags`, `pipeline_tag`, `downloads`, `likes`, `lastModified`, `createdAt` — sufficient for `HfModelSummary` without `full=true`.
+- Don't snake_case the `sort` URL param. HF API wants camelCase: `trendingScore`, `lastModified`, `createdAt`, `downloads`, `likes`. The legacy code emitted `trending_score` / `last_modified` / `created_at` and HF returned 400. Source of truth is `HfSort.apiKey` in `repo/HfFilters.kt`.
+- Don't add speculative URL params to `HuggingFaceApi.searchUrl` without verifying they're documented for `/api/models`. `apps=`, `inference_provider=`, `inference=warm`, `filter=region:us` (with `region:` prefix), `filter=dataset:foo` (with `dataset:` prefix), `pipeline_tag=` — all of these were added historically and have been removed because they trigger HF 400. Only documented params are kept: `search`, `author`, `filter` (plain tag values, stackable), `gated`, `num_parameters`, `sort`, `limit`, `skip`. If you need a new filter, verify it works against a curl-built URL first; don't add it to the URL builder on the assumption that HF tolerates it.
+- Don't reintroduce post-filter sliders (`minDownloads`, `minLikes`, `recentDays`) into `HfFilters` / `HfPostFilters` / the VM. They were UI clutter without unlocking new searches — `sort=downloads` already gets the user "popular" results in the right order, and "recent" is `sort=lastModified`. The user explicitly asked to drop them; bringing them back without consent is a regression.
 
 ---
 

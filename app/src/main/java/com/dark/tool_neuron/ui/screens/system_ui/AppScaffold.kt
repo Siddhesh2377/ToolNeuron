@@ -115,6 +115,10 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.ServerScreen.route)
                     },
+                    onNavigateToDocuments = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(NavScreens.Documents.route)
+                    },
                 )
             }
         }

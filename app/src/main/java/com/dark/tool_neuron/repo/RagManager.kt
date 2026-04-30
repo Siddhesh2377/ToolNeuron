@@ -35,15 +35,13 @@ class RagManager @Inject constructor(
     private val docSummarizer: RagDocSummarizer,
     private val raptor: RagRaptor,
     private val appPrefs: AppPreferences,
+    private val sourceVault: SourceFileVault,
 ) {
     private val engine = RAGEngine()
     private val opsMutex = Mutex()
     private val readyMutex = Mutex()
     private val raptorMutex = Mutex()
     private val ingestedDocIds = mutableSetOf<String>()
-    private val sourcesDir: File by lazy {
-        File(context.filesDir, "chat_documents/sources").apply { mkdirs() }
-    }
 
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
@@ -183,9 +181,7 @@ class RagManager @Inject constructor(
         records.forEach { doc ->
             if (doc.id in ingestedDocIds) return@forEach
             if (doc.sourceId.isBlank()) return@forEach
-            val srcFile = sourceFile(doc.sourceId)
-            if (!srcFile.exists()) return@forEach
-            val bytes = runCatching { srcFile.readBytes() }.getOrNull() ?: return@forEach
+            val bytes = sourceVault.read(doc.sourceId) ?: return@forEach
             val chunks = opsMutex.withLock {
                 engine.ingestBytes(bytes, doc.mimeType, doc.name, doc.id)
             }
@@ -229,7 +225,9 @@ class RagManager @Inject constructor(
         val existing = documentRepo.getDocumentsForChat(chatId).firstOrNull { it.id == docId }
         if (existing != null) return@withContext Result.success(existing)
 
-        persistSource(sourceId, bytes)
+        if (!sourceVault.write(sourceId, bytes)) {
+            return@withContext Result.failure(IllegalStateException("Could not store document bytes"))
+        }
 
         val chunkCount = opsMutex.withLock {
             engine.ingestBytes(bytes, effectiveMime, displayName, docId)
@@ -279,15 +277,14 @@ class RagManager @Inject constructor(
                 IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store.")
             )
         }
-        val srcFile = sourceFile(source.sourceId)
-        if (!srcFile.exists()) {
+        if (!sourceVault.exists(source.sourceId)) {
             return@withContext Result.failure(IllegalStateException("Source bytes for ${source.name} are missing"))
         }
         val docId = "$currentChatId:${source.sourceId}"
         documentRepo.getDocumentsForChat(currentChatId).firstOrNull { it.id == docId }?.let {
             return@withContext Result.success(it)
         }
-        val bytes = runCatching { srcFile.readBytes() }.getOrNull()
+        val bytes = sourceVault.read(source.sourceId)
             ?: return@withContext Result.failure(IllegalStateException("Could not read stored bytes"))
 
         val chunkCount = opsMutex.withLock {
@@ -322,15 +319,14 @@ class RagManager @Inject constructor(
         if (doc.sourceId.isBlank()) {
             return@withContext Result.failure(IllegalStateException("Source bytes missing"))
         }
-        val srcFile = sourceFile(doc.sourceId)
-        if (!srcFile.exists()) {
+        if (!sourceVault.exists(doc.sourceId)) {
             return@withContext Result.failure(IllegalStateException("Source file missing on disk"))
         }
         if (!ensureReady()) {
             return@withContext Result.failure(IllegalStateException("RAG engine not ready"))
         }
 
-        val bytes = runCatching { srcFile.readBytes() }.getOrNull()
+        val bytes = sourceVault.read(doc.sourceId)
             ?: return@withContext Result.failure(IllegalStateException("Failed to read source"))
         val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() }
             ?: return@withContext Result.failure(IllegalStateException("Source contains no text"))
@@ -388,13 +384,10 @@ class RagManager @Inject constructor(
 
         _raptorBuilding.value = _raptorBuilding.value + docId
         try {
-            val srcFile = sourceFile(doc.sourceId)
-            if (!srcFile.exists()) {
-                return@withLock Result.failure(IllegalStateException("Source bytes for ${doc.name} are missing"))
-            }
-            val text = withContext(Dispatchers.IO) {
-                runCatching { String(srcFile.readBytes(), Charsets.UTF_8) }.getOrNull()
-            } ?: return@withLock Result.failure(IllegalStateException("Could not read source text"))
+            val bytes = withContext(Dispatchers.IO) { sourceVault.read(doc.sourceId) }
+                ?: return@withLock Result.failure(IllegalStateException("Source bytes for ${doc.name} are missing"))
+            val text = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull()
+                ?: return@withLock Result.failure(IllegalStateException("Could not read source text"))
 
             val tree = raptor.buildTree(text, doc.name) { _, _, _ -> }
                 ?: return@withLock Result.failure(IllegalStateException("Tree build failed (load a chat model and try again)"))
@@ -442,7 +435,7 @@ class RagManager @Inject constructor(
         documentRepo.removeDocument(docId)
         val sourceId = doc?.sourceId
         if (!sourceId.isNullOrBlank() && documentRepo.countWithSource(sourceId) == 0) {
-            sourceFile(sourceId).delete()
+            sourceVault.delete(sourceId)
         }
         saveIndexSnapshot()
     }
@@ -644,19 +637,6 @@ class RagManager @Inject constructor(
         ingestedDocIds.clear()
         _isReady.value = false
         _activeEmbeddingName.value = null
-    }
-
-    private fun sourceFile(sourceId: String): File = File(sourcesDir, "$sourceId.bin")
-
-    private fun persistSource(sourceId: String, bytes: ByteArray) {
-        val target = sourceFile(sourceId)
-        if (target.exists()) return
-        val tmp = File(sourcesDir, "$sourceId.bin.tmp")
-        tmp.outputStream().use { it.write(bytes) }
-        if (!tmp.renameTo(target)) {
-            tmp.copyTo(target, overwrite = true)
-            tmp.delete()
-        }
     }
 
     private fun indexKeywordsIfTextLike(

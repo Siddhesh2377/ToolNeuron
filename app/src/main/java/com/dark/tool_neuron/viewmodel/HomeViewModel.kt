@@ -13,6 +13,8 @@ import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.TextMetrics
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.model.ResearchEvent
+import com.dark.tool_neuron.model.ResearchUiState
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
@@ -30,12 +32,10 @@ import com.dark.tool_neuron.voice.VoiceModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -58,6 +58,7 @@ class HomeViewModel @Inject constructor(
     private val ragManager: RagManager,
     private val voiceManager: VoiceModelManager,
     private val serverController: ServerController,
+    private val researchCoordinator: ResearchCoordinator,
 ) : ViewModel() {
 
     val speakingMessageId: StateFlow<String?> = voiceManager.speakingId
@@ -157,6 +158,15 @@ class HomeViewModel @Inject constructor(
 
     private val _webSearchEnabled = MutableStateFlow(false)
     val webSearchEnabled = _webSearchEnabled.asStateFlow()
+
+    private val _researchEnabled = MutableStateFlow(false)
+    val researchEnabled: StateFlow<Boolean> = _researchEnabled.asStateFlow()
+
+    val researchActive: StateFlow<Boolean> = researchCoordinator.activeRuns
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    private val researchMessages = mutableMapOf<String, Pair<String, String>>()
 
     private val _thinkingEnabled = MutableStateFlow(false)
     val thinkingEnabled = _thinkingEnabled.asStateFlow()
@@ -258,26 +268,59 @@ class HomeViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            combine(InferenceClient.isModelLoaded, _isGenerating) { loaded, gen ->
-                loaded to gen
-            }.collectLatest { (loaded, gen) ->
-                if (!loaded) {
-                    _contextUsage.value = 0f
-                    return@collectLatest
-                }
-                _contextUsage.value = InferenceClient.getContextUsage()
-                while (gen) {
-                    delay(250)
-                    _contextUsage.value = InferenceClient.getContextUsage()
-                }
-            }
+            combine(InferenceClient.isModelLoaded, InferenceClient.contextUsage) { loaded, usage ->
+                if (loaded) usage else 0f
+            }.collect { _contextUsage.value = it }
+        }
+
+        viewModelScope.launch {
+            researchCoordinator.events.collect { event -> handleResearchEvent(event) }
+        }
+    }
+
+    private fun handleResearchEvent(event: ResearchEvent) {
+        val (chatId, messageId) = researchMessages[event.runId] ?: return
+        val msg = chatRepo.getMessageById(messageId) ?: return
+        val current = ResearchUiState.fromJson(msg.researchState)
+        val next = current.applyEvent(event)
+        chatRepo.updateMessage(msg.copy(researchState = next.toJson()))
+        if (chatId == _currentChatId.value) {
+            _messages.value = chatRepo.getMessages(chatId)
+        }
+        if (event is ResearchEvent.Done || event is ResearchEvent.Cancelled || event is ResearchEvent.Failed) {
+            researchMessages.remove(event.runId)
         }
     }
 
     fun toggleActionWindow() { _actionWindowExpanded.value = !_actionWindowExpanded.value }
     fun collapseActionWindow() { _actionWindowExpanded.value = false }
     fun toggleWebSearch() { _webSearchEnabled.value = !_webSearchEnabled.value }
+    fun toggleResearch() { _researchEnabled.value = !_researchEnabled.value }
     fun toggleThinking() { _thinkingEnabled.value = !_thinkingEnabled.value }
+
+    fun cancelResearch(runId: String) {
+        val ref = researchMessages[runId]
+        if (ref != null) {
+            val (chatId, msgId) = ref
+            val msg = chatRepo.getMessageById(msgId)
+            if (msg != null) {
+                val current = ResearchUiState.fromJson(msg.researchState)
+                if (!current.isStopping() && current.phase !in setOf(
+                        ResearchUiState.PHASE_DONE,
+                        ResearchUiState.PHASE_CANCELLED,
+                        ResearchUiState.PHASE_FAILED,
+                    )
+                ) {
+                    val stopping = current.copy(phase = ResearchUiState.PHASE_STOPPING)
+                    chatRepo.updateMessage(msg.copy(researchState = stopping.toJson()))
+                    if (chatId == _currentChatId.value) {
+                        _messages.value = chatRepo.getMessages(chatId)
+                    }
+                }
+            }
+        }
+        researchCoordinator.cancel(runId)
+    }
     fun toggleLoadModelWindow() {
         if (_isGenerating.value) {
             _loadModelWindow.value = false
@@ -437,23 +480,32 @@ class HomeViewModel @Inject constructor(
     fun loadModel(model: ModelInfo) {
         if (serverController.isBusy) return
         if (_isGenerating.value) return
+        if (researchActive.value) return
         viewModelScope.launch { modelSession.load(model) }
     }
 
     fun unloadModel() {
         if (serverController.isBusy) return
         if (_isGenerating.value) return
+        if (researchActive.value) return
         viewModelScope.launch { modelSession.unload() }
     }
 
     fun sendMessage(text: String) {
         if (serverController.isBusy) return
+        if (researchActive.value) return
         val trimmed = text.trim()
         val images = _pendingImages.value
         if (_isGenerating.value) return
         if (trimmed.isEmpty() && images.isEmpty()) return
         val active = activeModel.value ?: run {
             _loadModelWindow.value = true
+            return
+        }
+
+        val researchQuestion = parseResearchInput(trimmed)
+        if (researchQuestion != null) {
+            startResearch(active, researchQuestion)
             return
         }
 
@@ -472,6 +524,60 @@ class HomeViewModel @Inject constructor(
 
         val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
         runGeneration(chatId, isFirstTurn, trimmed)
+    }
+
+    private fun parseResearchInput(text: String): String? {
+        if (text.startsWith("/research", ignoreCase = true)) {
+            val q = text.removePrefix("/research").removePrefix("/RESEARCH").trim()
+            return q.ifBlank { null }
+        }
+        if (_researchEnabled.value) return text
+        return null
+    }
+
+    private fun startResearch(active: ModelInfo, question: String) {
+        if (researchActive.value) return
+        val chatId = ensureChat(active)
+        val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
+        val userMessage = ChatMessage(
+            id = UUID.randomUUID().toString(),
+            chatId = chatId,
+            role = ROLE_USER,
+            content = question,
+            timestamp = System.currentTimeMillis(),
+            kind = MessageKind.Text,
+        )
+        chatRepo.addMessage(userMessage)
+        _pendingImages.value = emptyList()
+
+        val cardMessageId = UUID.randomUUID().toString()
+        val placeholderRunId = "pending_$cardMessageId"
+        val cardMessage = ChatMessage(
+            id = cardMessageId,
+            chatId = chatId,
+            role = ROLE_ASSISTANT,
+            content = question,
+            timestamp = System.currentTimeMillis() + 1,
+            kind = MessageKind.Text,
+            modelName = active.name,
+            researchRunId = placeholderRunId,
+            researchState = ResearchUiState().toJson(),
+        )
+        chatRepo.addMessage(cardMessage)
+
+        val runId = researchCoordinator.start(
+            scope = viewModelScope,
+            chatId = chatId,
+            messageId = cardMessageId,
+            question = question,
+            modelId = active.id,
+            modelName = active.name,
+        )
+        researchMessages[runId] = chatId to cardMessageId
+
+        chatRepo.updateMessage(cardMessage.copy(researchRunId = runId))
+        _messages.value = chatRepo.getMessages(chatId)
+        if (isFirstTurn) chatRepo.autoTitle(chatId, question)
     }
 
     fun regenerateLast() {

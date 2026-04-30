@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -33,14 +35,20 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.download_manager.formatBytes
-import com.dark.tool_neuron.repo.ExplorerRepo
-import com.dark.tool_neuron.repo.HfRepoDetail
-import com.dark.tool_neuron.repo.RepoFile
+import com.dark.tool_neuron.repo.HfApiError
+import com.dark.tool_neuron.repo.hf.HfCardData
+import com.dark.tool_neuron.repo.hf.HfGated
+import com.dark.tool_neuron.repo.hf.HfGgufMeta
+import com.dark.tool_neuron.repo.hf.HfModelDetail
+import com.dark.tool_neuron.repo.hf.HfSibling
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.components.StandardCard
+import com.dark.tool_neuron.ui.components.markdown.LocalMarkdownColors
+import com.dark.tool_neuron.ui.components.markdown.lazyMarkdownItems
+import com.dark.tool_neuron.ui.components.markdown.rememberMarkdownColors
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
@@ -80,112 +88,176 @@ fun HfRepoDetailScreen(
                 }
             }
         }
-        is HfRepoDetailState.Failed -> {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
-                contentAlignment = Alignment.Center,
+        is HfRepoDetailState.Failed -> FailureView(
+            innerPadding = innerPadding,
+            error = s.error,
+            onRetry = { vm.loadRepoDetail(repoPath) },
+        )
+        is HfRepoDetailState.Success -> DetailContent(
+            innerPadding = innerPadding,
+            detail = s.detail,
+            readme = s.readme,
+            readmeError = s.readmeError,
+            filter = filter,
+            bucket = bucket,
+            isAdded = existing.contains(s.detail.summary.id.lowercase()),
+            visibleFiles = vm.visibleFiles(s.detail),
+            onAdd = { vm.addRepository(s.detail.summary.id, s.detail.summary.id.substringAfter("/")) },
+            onFilterChange = vm::setFileFilter,
+            onBucketChange = vm::setFileSizeBucket,
+        )
+    }
+}
+
+@Composable
+private fun FailureView(
+    innerPadding: PaddingValues,
+    error: HfApiError,
+    onRetry: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val (text, retryable) = when (error) {
+        is HfApiError.RateLimited -> {
+            val sec = error.retryAfterSeconds
+            val msg = if (sec != null) "Rate limited — try again in ${formatRetry(sec)}"
+            else "Rate limited — try again in a few minutes"
+            msg to false
+        }
+        is HfApiError.NotFound -> "Repository not found" to false
+        is HfApiError.Forbidden -> "Access denied" to false
+        is HfApiError.Network -> "Network error — check your connection" to true
+        is HfApiError.Parse -> "Couldn't read response" to true
+        is HfApiError.Http -> "HTTP ${error.status}" to true
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = tnShapes.cardSmall,
+            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                modifier = Modifier.padding(dimens.cardPadding),
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-                ) {
-                    Icon(
-                        TnIcons.AlertTriangle,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(32.dp),
-                    )
-                    CaptionText(text = s.reason, color = MaterialTheme.colorScheme.error)
+                Icon(
+                    TnIcons.AlertTriangle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                    modifier = Modifier.size(32.dp),
+                )
+                CaptionText(text = text, color = MaterialTheme.colorScheme.error)
+                if (retryable) {
                     ActionTextButton(
-                        onClickListener = { vm.loadRepoDetail(repoPath) },
+                        onClickListener = onRetry,
                         icon = TnIcons.Refresh,
                         text = "Retry",
                     )
                 }
             }
         }
-        is HfRepoDetailState.Success -> {
-            DetailContent(
-                innerPadding = innerPadding,
-                detail = s.detail,
-                filter = filter,
-                bucket = bucket,
-                isAdded = existing.contains(s.detail.id.lowercase()),
-                visibleFiles = vm.visibleFiles(s.detail),
-                onAdd = { vm.addRepository(repoFromDetail(s.detail)) },
-                onFilterChange = vm::setFileFilter,
-                onBucketChange = vm::setFileSizeBucket,
-            )
-        }
     }
 }
-
-private fun repoFromDetail(detail: HfRepoDetail) =
-    ExplorerRepo(
-        id = detail.id,
-        author = detail.author,
-        downloads = detail.downloads,
-        likes = detail.likes,
-        gated = detail.gated,
-    )
 
 @Composable
 private fun DetailContent(
     innerPadding: PaddingValues,
-    detail: HfRepoDetail,
+    detail: HfModelDetail,
+    readme: String?,
+    readmeError: String?,
     filter: HfFileFilter,
     bucket: HfFileSizeBucket,
     isAdded: Boolean,
-    visibleFiles: List<RepoFile>,
+    visibleFiles: List<HfSibling>,
     onAdd: () -> Unit,
     onFilterChange: (HfFileFilter) -> Unit,
     onBucketChange: (HfFileSizeBucket) -> Unit,
 ) {
     val dimens = LocalDimens.current
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(innerPadding),
-        contentPadding = PaddingValues(
-            horizontal = dimens.screenPadding,
-            vertical = dimens.spacingMd,
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-    ) {
-        item { HeaderCard(detail = detail, isAdded = isAdded, onAdd = onAdd) }
-        item { FilterCard(filter = filter, bucket = bucket, onFilterChange = onFilterChange, onBucketChange = onBucketChange) }
-        item {
-            SectionHeader(
-                title = "Files · ${visibleFiles.size}",
-                action = {
-                    CaptionText(
-                        text = "Total " + formatBytes(visibleFiles.sumOf { it.sizeBytes }),
-                    )
-                },
-            )
-        }
-        items(visibleFiles, key = { it.path }) { file ->
-            FileRow(file = file)
-        }
-        if (visibleFiles.isEmpty()) {
-            item { CaptionText("No files match the current filter.") }
+    val markdownColors = rememberMarkdownColors()
+    CompositionLocalProvider(LocalMarkdownColors provides markdownColors) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(
+                horizontal = dimens.screenPadding,
+                vertical = dimens.spacingMd,
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            item { HeaderCard(detail = detail, isAdded = isAdded, onAdd = onAdd) }
+            if (detail.summary.gated != HfGated.OPEN) {
+                item { GatedNotice(detail) }
+            }
+            detail.ggufMeta?.let { meta -> item { GgufCard(meta) } }
+            detail.cardData?.let { card -> item { CardDataView(card) } }
+            item {
+                FilterCard(
+                    filter = filter,
+                    bucket = bucket,
+                    onFilterChange = onFilterChange,
+                    onBucketChange = onBucketChange,
+                )
+            }
+            item {
+                SectionHeader(
+                    title = "Files · ${visibleFiles.size}",
+                    action = {
+                        CaptionText(text = "Total " + formatBytes(visibleFiles.sumOf { it.sizeBytes }))
+                    },
+                )
+            }
+            items(visibleFiles, key = { it.path }) { file ->
+                FileRow(file = file)
+            }
+            if (visibleFiles.isEmpty()) {
+                item { CaptionText("No files match the current filter.") }
+            }
+            item { SectionHeader(title = "Model card") }
+            when {
+                readme != null -> {
+                    lazyMarkdownItems(text = readme, keyPrefix = "hf_readme_${detail.summary.id}")
+                }
+                readmeError != null -> {
+                    item { CaptionText("Couldn't load README — $readmeError") }
+                }
+                else -> {
+                    item {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(14.dp),
+                                strokeWidth = 2.dp,
+                            )
+                            CaptionText(text = "Loading model card…")
+                        }
+                    }
+                }
+            }
+            item { Spacer(Modifier.size(dimens.spacingLg)) }
         }
     }
 }
 
 @Composable
 private fun HeaderCard(
-    detail: HfRepoDetail,
+    detail: HfModelDetail,
     isAdded: Boolean,
     onAdd: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     StandardCard(
-        title = detail.id,
-        description = detail.author,
+        title = detail.summary.id,
+        description = detail.summary.author,
         icon = TnIcons.Server,
         trailing = {
             if (isAdded) {
@@ -216,18 +288,24 @@ private fun HeaderCard(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
         ) {
-            Stat(label = "Downloads", value = formatCount(detail.downloads))
-            Stat(label = "Likes", value = detail.likes.toString())
-            Stat(label = "GGUF total", value = formatBytes(detail.totalGgufBytes))
-            if (detail.gated) {
+            Stat(label = "Downloads", value = formatCount(detail.summary.downloads))
+            Stat(label = "Likes", value = formatCount(detail.summary.likes))
+            if (detail.totalGgufBytes > 0) {
+                Stat(label = "GGUF total", value = formatBytes(detail.totalGgufBytes))
+            }
+            detail.summary.lastModified?.let { Stat(label = "Updated", value = isoDate(it)) }
+            if (detail.summary.gated != HfGated.OPEN) {
                 Surface(
                     shape = tnShapes.full,
                     color = MaterialTheme.colorScheme.tertiaryContainer,
                 ) {
                     Text(
-                        "Gated",
+                        if (detail.summary.gated == HfGated.AUTO) "Gated · auto" else "Gated",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onTertiaryContainer,
                         modifier = Modifier.padding(horizontal = dimens.spacingSm, vertical = dimens.spacingXxs),
@@ -235,6 +313,132 @@ private fun HeaderCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GatedNotice(detail: HfModelDetail) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val prompt = detail.cardData?.gatedPrompt
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.5f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                Icon(
+                    TnIcons.Lock,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(
+                    "Gated repository",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+            }
+            Text(
+                text = "Files require a HuggingFace account and license acceptance. " +
+                    "Sign in at huggingface.co, accept the terms, then re-attempt the download.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.85f),
+            )
+            if (!prompt.isNullOrBlank()) {
+                CaptionText(text = prompt.take(300))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GgufCard(meta: HfGgufMeta) {
+    val dimens = LocalDimens.current
+    StandardCard(
+        title = "GGUF",
+        icon = TnIcons.Cpu,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+        ) {
+            meta.architecture?.let { Stat(label = "Arch", value = it) }
+            meta.contextLength?.let { Stat(label = "Context", value = formatCount(it)) }
+            meta.totalBytes?.let { Stat(label = "Total bytes", value = formatBytes(it)) }
+            meta.bosToken?.let { Stat(label = "BOS", value = it.take(24)) }
+            meta.eosToken?.let { Stat(label = "EOS", value = it.take(24)) }
+        }
+    }
+}
+
+@Composable
+private fun CardDataView(card: HfCardData) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    StandardCard(
+        title = "Metadata",
+        icon = TnIcons.Info,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+            card.license?.let { KvRow(label = "License", value = it) }
+            if (card.baseModel.isNotEmpty()) {
+                KvRow(label = "Base model", value = card.baseModel.joinToString(", "))
+            }
+            if (card.languages.isNotEmpty()) {
+                KvRow(label = "Languages", value = card.languages.joinToString(", "))
+            }
+            card.pipelineTag?.let { KvRow(label = "Task", value = it) }
+            if (card.tags.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
+                ) {
+                    card.tags.take(12).forEach { tag ->
+                        Surface(
+                            shape = tnShapes.full,
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        ) {
+                            Text(
+                                tag,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun KvRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(LocalDimens.current.spacingSm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CaptionText(text = label, modifier = Modifier.padding(end = 4.dp))
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -260,7 +464,7 @@ private fun FilterCard(
     val dimens = LocalDimens.current
     StandardCard(
         title = "Filter files",
-        icon = TnIcons.Wrench,
+        icon = TnIcons.Sliders,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
             CaptionText("File type")
@@ -302,33 +506,7 @@ private fun FilterCard(
 }
 
 @Composable
-private fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-    val bg = if (selected) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.primary.copy(alpha = 0.10f)
-    val fg = if (selected) MaterialTheme.colorScheme.onPrimary
-    else MaterialTheme.colorScheme.primary
-    Surface(
-        shape = tnShapes.full,
-        color = bg,
-        modifier = Modifier.clickable(onClick = onClick),
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Medium,
-            color = fg,
-            modifier = Modifier.padding(
-                horizontal = dimens.spacingMd,
-                vertical = dimens.spacingXs,
-            ),
-        )
-    }
-}
-
-@Composable
-private fun FileRow(file: RepoFile) {
+private fun FileRow(file: HfSibling) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     val isGguf = file.path.endsWith(".gguf", ignoreCase = true)
@@ -347,7 +525,7 @@ private fun FileRow(file: RepoFile) {
             horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
             Icon(
-                imageVector = TnIcons.Database,
+                imageVector = if (isMmproj) TnIcons.Eye else if (isGguf) TnIcons.Database else TnIcons.FileText,
                 contentDescription = null,
                 tint = if (isMmproj) MaterialTheme.colorScheme.tertiary
                 else if (isGguf) MaterialTheme.colorScheme.primary
@@ -369,8 +547,10 @@ private fun FileRow(file: RepoFile) {
     }
 }
 
-private fun formatCount(n: Long): String = when {
-    n >= 1_000_000 -> "%.1fM".format(n / 1_000_000.0)
-    n >= 1_000 -> "%.1fk".format(n / 1_000.0)
-    else -> n.toString()
+private fun isoDate(iso: String): String =
+    iso.take(10).ifBlank { iso }
+
+private fun formatRetry(sec: Int): String = when {
+    sec >= 60 -> "${sec / 60}m"
+    else -> "${sec}s"
 }

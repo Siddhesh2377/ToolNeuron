@@ -1,15 +1,18 @@
 package com.dark.tool_neuron.repo
 
+import android.content.Context
+import com.dark.networking.WebNative
+import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.net.HttpURLConnection
-import java.net.URL
 import java.net.URLEncoder
+import javax.inject.Inject
+import javax.inject.Singleton
 
-object HuggingFaceApi {
-    private const val BASE = "https://huggingface.co"
-    private const val CONNECT_TIMEOUT_MS = 15_000
-    private const val READ_TIMEOUT_MS = 15_000
+@Singleton
+class HuggingFaceApi @Inject constructor(
+    @param:ApplicationContext private val context: Context,
+) {
 
     fun modelInfoUrl(repoPath: String): String =
         "$BASE/api/models/$repoPath"
@@ -20,40 +23,21 @@ object HuggingFaceApi {
     fun resolveFileUrl(repoPath: String, filePath: String): String =
         "$BASE/$repoPath/resolve/main/$filePath"
 
+    fun rawFileUrl(repoPath: String, filePath: String, branch: String = "main"): String =
+        "$BASE/$repoPath/raw/$branch/$filePath"
+
     fun searchUrl(query: String, filters: HfFilters, limit: Int): String {
         val params = mutableListOf<String>()
         if (query.isNotBlank()) params += "search=${enc(query.trim())}"
         if (filters.author.isNotBlank()) params += "author=${enc(filters.author.trim())}"
 
-        filters.pipelineTag?.takeIf { it.isNotBlank() }?.let {
-            params += "pipeline_tag=${enc(it)}"
-        }
-
-        val tagFilters = mutableListOf<String>()
-        tagFilters += filters.libraries
-        tagFilters += filters.languages
-        tagFilters += filters.licenses
-        tagFilters += filters.otherTags
-        tagFilters += filters.quantTags
-        filters.regions.forEach { tagFilters += "region:$it" }
-        if (filters.trainedDataset.isNotBlank()) {
-            tagFilters += "dataset:${filters.trainedDataset.trim()}"
-        }
-        tagFilters.forEach { params += "filter=${enc(it)}" }
-
-        if (filters.apps.isNotEmpty()) {
-            params += "apps=${filters.apps.joinToString(",") { enc(it) }}"
-        }
-        if (filters.providers.isNotEmpty()) {
-            params += "inference_provider=${filters.providers.joinToString(",") { enc(it) }}"
-        }
+        filters.libraries.forEach { params += "filter=${enc(it)}" }
 
         when (filters.gated) {
             GatedFilter.ONLY_GATED -> params += "gated=true"
             GatedFilter.ONLY_OPEN -> params += "gated=false"
             GatedFilter.ANY -> {}
         }
-        if (filters.inferenceWarm) params += "inference=warm"
 
         val pmin = filters.paramsMinMillions
         val pmax = filters.paramsMaxMillions
@@ -66,53 +50,48 @@ object HuggingFaceApi {
 
         params += "sort=${filters.sort.apiKey}"
         params += "limit=$limit"
-        params += "expand=tags"
-        params += "expand=downloads"
-        params += "expand=likes"
-        params += "expand=gated"
-        params += "expand=author"
-        params += "expand=lastModified"
-        params += "expand=pipeline_tag"
 
         return "$BASE/api/models?${params.joinToString("&")}"
     }
 
-    fun fetchJson(urlStr: String): JSONObject? = withConnection(urlStr) { conn ->
-        if (conn.responseCode != 200) null
-        else JSONObject(conn.inputStream.bufferedReader().use { it.readText() })
+    fun quickSearchUrl(query: String, type: String = "model", limit: Int = 20): String =
+        "$BASE/api/quicksearch?q=${enc(query)}&type=${enc(type)}&limit=$limit"
+
+    fun trendingUrl(type: String = "model", limit: Int = 20): String =
+        "$BASE/api/trending?type=${enc(type)}&limit=$limit"
+
+    fun tagsByTypeUrl(): String = "$BASE/api/models-tags-by-type"
+
+    suspend fun fetchJson(url: String): Result<JSONObject> = runFetch(url).mapCatching { resp ->
+        if (!resp.isSuccess) throw HfApiError.fromResponse(resp, url)
+        runCatching { JSONObject(resp.body) }
+            .getOrElse { throw HfApiError.Parse(it.message ?: "json object parse failed") }
     }
 
-    fun fetchJsonArray(urlStr: String): JSONArray? = withConnection(urlStr) { conn ->
-        if (conn.responseCode != 200) null
-        else JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
+    suspend fun fetchJsonArray(url: String): Result<JSONArray> = runFetch(url).mapCatching { resp ->
+        android.util.Log.i("HfApi", "fetchJsonArray status=${resp.status} bodyLen=${resp.body.length} err=${resp.error ?: "none"}")
+        if (!resp.isSuccess) throw HfApiError.fromResponse(resp, url)
+        runCatching { JSONArray(resp.body) }
+            .getOrElse {
+                android.util.Log.e("HfApi", "JSONArray parse failed: ${it.message}; bodyHead=${resp.body.take(200)}")
+                throw HfApiError.Parse(it.message ?: "json array parse failed")
+            }
     }
 
-    fun fetchJsonArrayResult(urlStr: String): Result<JSONArray> = runCatching {
-        val conn = openConnection(urlStr)
-        try {
-            if (conn.responseCode != 200) error("HTTP ${conn.responseCode}")
-            JSONArray(conn.inputStream.bufferedReader().use { it.readText() })
-        } finally { conn.disconnect() }
+    suspend fun fetchRaw(url: String): Result<String> = runFetch(url).mapCatching { resp ->
+        if (!resp.isSuccess) throw HfApiError.fromResponse(resp, url)
+        resp.body
     }
 
-    fun headStatus(urlStr: String): Int? = withConnection(urlStr, accept = false) { conn ->
-        try { conn.responseCode } catch (_: Exception) { null }
-    }
+    suspend fun probe(url: String): Result<Int> = runFetch(url).map { it.status }
 
-    private fun openConnection(urlStr: String, accept: Boolean = true): HttpURLConnection =
-        (URL(urlStr).openConnection() as HttpURLConnection).apply {
-            connectTimeout = CONNECT_TIMEOUT_MS
-            readTimeout = READ_TIMEOUT_MS
-            if (accept) setRequestProperty("Accept", "application/json")
-        }
-
-    private inline fun <T> withConnection(
-        urlStr: String,
-        accept: Boolean = true,
-        block: (HttpURLConnection) -> T,
-    ): T? {
-        val conn = openConnection(urlStr, accept)
-        return try { block(conn) } catch (_: Exception) { null } finally { conn.disconnect() }
+    private suspend fun runFetch(url: String): Result<com.dark.networking.WebResponse> {
+        WebNative.ensureReady(context)
+        return WebNative.fetch(
+            url = url,
+            timeoutMs = TIMEOUT_MS,
+            headers = JSON_HEADERS,
+        )
     }
 
     private fun enc(s: String): String = URLEncoder.encode(s, "UTF-8")
@@ -120,5 +99,15 @@ object HuggingFaceApi {
     private fun formatParams(millions: Long): String = when {
         millions >= 1_000L -> "${millions / 1_000L}B"
         else -> "${millions}M"
+    }
+
+    companion object {
+        const val BASE = "https://huggingface.co"
+        private const val TIMEOUT_MS = 15_000
+
+        private val JSON_HEADERS = mapOf(
+            "Accept" to "application/json",
+            "Accept-Encoding" to "gzip",
+        )
     }
 }

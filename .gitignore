@@ -18,5 +18,5 @@ local.properties
 /docs/
 /.kotlin/
 /app/release/
-/NEW-FEATURE.txt
 /.claude/
+/feats/

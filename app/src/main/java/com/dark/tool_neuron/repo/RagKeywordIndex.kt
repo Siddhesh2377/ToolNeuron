@@ -27,21 +27,29 @@ class RagKeywordIndex @Inject constructor(
 
     private val storage = HexStorage()
 
+    private val encryptorRef = encryptor
+
     init {
         val dir = File(context.filesDir, SECURE_DIR).apply { mkdirs() }
         val basePath = dir.absolutePath
 
         val dek = keyStore.unwrapOrCreateDek()
-        val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
+        val signerHash = keyStore.installSignerHash()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = signerHash, info = USER_KEY_INFO)
 
-        val opened = if (storage.exists(basePath)) {
-            storage.openEncrypted(basePath, dek, userKey, encryptor)
-        } else {
-            storage.createEncrypted(basePath, dek, userKey, encryptor)
-        }
+        val opened = openOrRebuild(basePath, dek, userKey)
         if (!opened) throw SecurityException("Failed to open encrypted rag_keyword vault")
 
         storage.ensureCollection(COLLECTION)
+    }
+
+    private fun openOrRebuild(base: String, dek: ByteArray, userKey: ByteArray): Boolean {
+        if (storage.exists(base)) {
+            if (storage.openEncrypted(base, dek, userKey, encryptorRef)) return true
+            File(base).deleteRecursively()
+            File(base).mkdirs()
+        }
+        return storage.createEncrypted(base, dek, userKey, encryptorRef)
     }
 
     fun ingest(
@@ -98,7 +106,7 @@ class RagKeywordIndex @Inject constructor(
     companion object {
         private const val SECURE_DIR = "rag_keyword_v1"
         private const val COLLECTION = "rag_chunks"
-        private const val USER_KEY_INFO = "tn.rag_keyword.user_key.v1"
+        private const val USER_KEY_INFO = "tn.rag_keyword.user_key.v2"
 
         private const val TAG_DOC_ID = 1
         private const val TAG_CHAT_ID = 2

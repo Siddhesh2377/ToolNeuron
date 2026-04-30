@@ -17,7 +17,8 @@ import javax.inject.Singleton
 
 @Singleton
 class ModelCatalog @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val hfApi: HuggingFaceApi,
 ) {
     private val cacheFile = File(context.filesDir, "cache/model_catalog.json")
     private var memoryCache: List<HuggingFaceModel>? = null
@@ -47,9 +48,9 @@ class ModelCatalog @Inject constructor(
 
     private suspend fun fetchRepo(repo: HFRepository): List<HuggingFaceModel> =
         withContext(Dispatchers.IO) {
-            val meta = HuggingFaceApi.fetchJson(HuggingFaceApi.modelInfoUrl(repo.repoPath))
+            val meta = hfApi.fetchJson(hfApi.modelInfoUrl(repo.repoPath)).getOrNull()
                 ?: return@withContext emptyList()
-            val tree = HuggingFaceApi.fetchJsonArray(HuggingFaceApi.modelTreeUrl(repo.repoPath))
+            val tree = hfApi.fetchJsonArray(hfApi.modelTreeUrl(repo.repoPath)).getOrNull()
                 ?: return@withContext emptyList()
 
             val author = meta.optString("author", repo.repoPath.substringBefore("/"))
@@ -78,7 +79,7 @@ class ModelCatalog @Inject constructor(
                     id = "${repo.id}__$path",
                     name = if (isMmproj) "${repo.name} · Projector" else buildDisplayName(repo.name, quant, path),
                     fileName = path,
-                    fileUri = HuggingFaceApi.resolveFileUrl(repo.repoPath, path),
+                    fileUri = hfApi.resolveFileUrl(repo.repoPath, path),
                     approximateSize = if (size > 0) formatBytes(size) else "Unknown",
                     sizeBytes = size,
                     repoId = repo.id,
@@ -96,7 +97,7 @@ class ModelCatalog @Inject constructor(
                     isMmproj = isMmproj,
                     mmprojFileName = mmprojFile?.first.orEmpty(),
                     mmprojFileUri = mmprojFile?.let {
-                        HuggingFaceApi.resolveFileUrl(repo.repoPath, it.first)
+                        hfApi.resolveFileUrl(repo.repoPath, it.first)
                     }.orEmpty(),
                     mmprojSizeBytes = mmprojFile?.second ?: 0L,
                 ))
@@ -210,7 +211,7 @@ class ModelCatalog @Inject constructor(
                 id = "nomic-embed-text-v1.5-q4_k_m",
                 name = "Nomic Embed Text v1.5 (Q4)",
                 fileName = "nomic-embed-text-v1.5.Q4_K_M.gguf",
-                fileUri = HuggingFaceApi.resolveFileUrl("nomic-ai/nomic-embed-text-v1.5-GGUF", "nomic-embed-text-v1.5.Q4_K_M.gguf"),
+                fileUri = "${HuggingFaceApi.BASE}/nomic-ai/nomic-embed-text-v1.5-GGUF/resolve/main/nomic-embed-text-v1.5.Q4_K_M.gguf",
                 approximateSize = "~84 MB",
                 sizeBytes = 84_106_624L,
                 repoId = "embedding-built-in",

@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,7 +35,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -50,11 +49,13 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.dark.tool_neuron.model.NavScreens
-import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.GatedFilter
+import com.dark.tool_neuron.repo.HfApiError
 import com.dark.tool_neuron.repo.HfFilterTaxonomy
 import com.dark.tool_neuron.repo.HfFilters
 import com.dark.tool_neuron.repo.HfSort
+import com.dark.tool_neuron.repo.hf.HfModelSummary
+import com.dark.tool_neuron.repo.hf.HfTrendingItem
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CaptionText
@@ -75,152 +76,151 @@ fun HfExplorerScreen(
     val dimens = LocalDimens.current
     val keyboard = LocalSoftwareKeyboardController.current
 
-    val query by vm.query.collectAsStateWithLifecycle()
     val isSearching by vm.isSearching.collectAsStateWithLifecycle()
     val searchError by vm.searchError.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val results by vm.results.collectAsStateWithLifecycle()
     val filters by vm.filters.collectAsStateWithLifecycle()
-    val hideAdded by vm.hideAdded.collectAsStateWithLifecycle()
+    val trending by vm.trending.collectAsStateWithLifecycle()
+    val trendingLoading by vm.trendingLoading.collectAsStateWithLifecycle()
     val existingPaths by vm.existingRepoPaths.collectAsStateWithLifecycle()
+    val queryIsBlank by vm.queryIsBlank.collectAsStateWithLifecycle()
 
     var advancedOpen by remember { mutableStateOf(false) }
-    val visible = vm.visibleResults()
-    val totalRaw = results.size
-    val filteredOut = totalRaw - visible.size
 
-    val onSubmit: () -> Unit = {
-        keyboard?.hide()
-        vm.search()
+    val onSubmit: () -> Unit = remember(vm, keyboard) {
+        {
+            keyboard?.hide()
+            vm.search()
+        }
     }
 
-    LazyColumn(
+    val onOpenRepo: (String) -> Unit = remember(navController) {
+        { id -> navController.navigate(NavScreens.HfRepoDetail.routeFor(id)) }
+    }
+
+    val onAddRepo: (HfModelSummary) -> Unit = remember(vm) {
+        { repo -> vm.addRepository(repo.id, repo.nameOnly) }
+    }
+
+    Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding),
-        contentPadding = PaddingValues(
-            horizontal = dimens.screenPadding,
-            vertical = dimens.spacingMd,
-        ),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
     ) {
-        item {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimens.screenPadding)
+                .padding(top = dimens.spacingMd),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
             SearchHero(
-                query = query,
+                queryFlow = vm.query,
                 isSearching = isSearching,
                 onQueryChange = vm::setQuery,
                 onSubmit = onSubmit,
             )
-        }
-
-        if (history.isNotEmpty() && results.isEmpty() && !isSearching) {
-            item {
-                HistoryStrip(
-                    history = history,
-                    onPick = { entry ->
-                        vm.searchHistoryEntry(entry)
-                        keyboard?.hide()
-                    },
-                    onRemove = vm::removeHistoryEntry,
-                    onClear = vm::clearHistory,
-                )
-            }
-        }
-
-        item {
             SortRow(sort = filters.sort, onChange = vm::setSort)
-        }
-
-        item {
             QuickToggleRow(
                 gated = filters.gated,
-                inferenceWarm = filters.inferenceWarm,
-                hideAdded = hideAdded,
                 onGatedChange = vm::setGated,
-                onInferenceWarmChange = vm::setInferenceWarm,
-                onHideAddedChange = vm::setHideAdded,
             )
-        }
-
-        item {
-            AdvancedFiltersSection(
+            FiltersCard(
                 expanded = advancedOpen,
                 filters = filters,
                 onToggle = { advancedOpen = !advancedOpen },
-                onPipelineTagChange = vm::setPipelineTag,
                 onLibraryToggle = vm::toggleLibrary,
-                onAppToggle = vm::toggleApp,
-                onProviderToggle = vm::toggleProvider,
-                onLanguageToggle = vm::toggleLanguage,
-                onLicenseToggle = vm::toggleLicense,
-                onRegionToggle = vm::toggleRegion,
-                onOtherTagToggle = vm::toggleOtherTag,
-                onQuantToggle = vm::toggleQuantTag,
                 onAuthorChange = vm::setAuthor,
-                onTrainedDatasetChange = vm::setTrainedDataset,
                 onParamsRangeChange = vm::setParamsRange,
                 onReset = vm::resetFilters,
             )
         }
 
-        if (searchError != null && !isSearching) {
-            item { ErrorBanner(message = searchError!!) }
-        }
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
+            contentPadding = PaddingValues(
+                horizontal = dimens.screenPadding,
+                vertical = dimens.spacingSm,
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            searchError?.let { error ->
+                if (!isSearching) item("error") { ErrorBanner(error) }
+            }
 
-        if (isSearching) {
-            item { LoadingRow() }
-        }
+            if (isSearching) item("loading") { LoadingRow() }
 
-        if (visible.isNotEmpty()) {
-            item {
-                SectionHeader(
-                    title = "Results · ${visible.size}",
-                    action = {
-                        if (filteredOut > 0) {
-                            CaptionText(text = "$filteredOut hidden")
-                        }
-                    },
-                )
+            if (history.isNotEmpty() && results.isEmpty() && !isSearching && queryIsBlank) {
+                item("history") {
+                    HistoryStrip(
+                        history = history,
+                        onPick = { entry -> vm.searchHistoryEntry(entry); keyboard?.hide() },
+                        onRemove = vm::removeHistoryEntry,
+                        onClear = vm::clearHistory,
+                    )
+                }
             }
-            items(visible, key = { it.id }) { repo ->
-                ExplorerCard(
-                    repo = repo,
-                    isAdded = existingPaths.contains(repo.id.lowercase()),
-                    onOpen = {
-                        navController.navigate(NavScreens.HfRepoDetail.routeFor(repo.id))
-                    },
-                    onAdd = { vm.addRepository(repo) },
-                )
+
+            if (results.isEmpty() && !isSearching && queryIsBlank && trending.isNotEmpty()) {
+                item("trending-header") { SectionHeader(title = "Trending") }
+                item("trending-strip") {
+                    TrendingStrip(
+                        items = trending,
+                        onOpen = onOpenRepo,
+                    )
+                }
+            } else if (results.isEmpty() && !isSearching && queryIsBlank && trendingLoading) {
+                item("trending-loading") { LoadingRow(label = "Loading trending…") }
             }
-        } else if (!isSearching && query.isNotBlank() && searchError == null && results.isEmpty()) {
-            item { CaptionText("No results yet — tap Search.") }
-        } else if (!isSearching && results.isNotEmpty() && visible.isEmpty()) {
-            item {
-                EmptyState(
-                    title = "All filtered out",
-                    detail = "Adjust filters in Advanced or tap Reset.",
-                    actionLabel = "Reset filters",
-                    onAction = vm::resetFilters,
-                )
+
+            if (results.isNotEmpty()) {
+                item("results-header") {
+                    SectionHeader(title = "Results · ${results.size}")
+                }
+                items(results, key = { it.id }) { repo ->
+                    ResultCard(
+                        repo = repo,
+                        isAdded = existingPaths.contains(repo.idLowercase),
+                        onOpen = onOpenRepo,
+                        onAdd = onAddRepo,
+                    )
+                }
+            } else if (!isSearching && searchError == null && !queryIsBlank) {
+                item("empty-no-results") {
+                    EmptyState(
+                        icon = TnIcons.SearchOff,
+                        title = "No models matched",
+                        detail = "Try a different keyword, change the sort, or relax the filters.",
+                        actionLabel = "Reset filters",
+                        onAction = vm::resetFilters,
+                    )
+                }
+            } else if (!isSearching && history.isEmpty() && queryIsBlank && trending.isEmpty() && !trendingLoading) {
+                item("empty-landing") {
+                    EmptyState(
+                        icon = TnIcons.Search,
+                        title = "Find any model on HuggingFace",
+                        detail = "Type a model family, author, or quant — press Enter or tap Search.",
+                    )
+                }
             }
-        } else if (!isSearching && results.isEmpty() && history.isEmpty() && query.isBlank()) {
-            item {
-                EmptyState(
-                    title = "Find any model on HuggingFace",
-                    detail = "Type a model family, author, or quant — press Enter or tap Search.",
-                )
-            }
+
+            item("spacer") { Spacer(Modifier.size(dimens.spacingLg)) }
         }
     }
 }
 
 @Composable
 private fun SearchHero(
-    query: String,
+    queryFlow: kotlinx.coroutines.flow.StateFlow<String>,
     isSearching: Boolean,
     onQueryChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
+    val query by queryFlow.collectAsStateWithLifecycle()
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     Surface(
@@ -260,7 +260,7 @@ private fun SearchHero(
                     TnTextField(
                         value = query,
                         onValueChange = onQueryChange,
-                        placeholder = "qwen, mistral, deepseek, coder…",
+                        placeholder = "qwen, mistral, llama, deepseek…",
                         singleLine = true,
                         maxLines = 1,
                         modifier = Modifier.weight(1f),
@@ -385,15 +385,11 @@ private fun SortRow(sort: HfSort, onChange: (HfSort) -> Unit) {
 @Composable
 private fun QuickToggleRow(
     gated: GatedFilter,
-    inferenceWarm: Boolean,
-    hideAdded: Boolean,
     onGatedChange: (GatedFilter) -> Unit,
-    onInferenceWarmChange: (Boolean) -> Unit,
-    onHideAddedChange: (Boolean) -> Unit,
 ) {
     val dimens = LocalDimens.current
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
-        SectionHeader(title = "Quick filters")
+        SectionHeader(title = "Gated")
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -402,49 +398,30 @@ private fun QuickToggleRow(
         ) {
             GatedFilter.entries.forEach { g ->
                 Pill(
-                    text = "Gated · ${g.label}",
+                    text = g.label,
                     selected = gated == g,
                     onClick = { onGatedChange(g) },
                 )
             }
-            Pill(
-                text = "Inference warm",
-                selected = inferenceWarm,
-                onClick = { onInferenceWarmChange(!inferenceWarm) },
-            )
-            Pill(
-                text = "Hide added",
-                selected = hideAdded,
-                onClick = { onHideAddedChange(!hideAdded) },
-            )
         }
     }
 }
 
 @Composable
-private fun AdvancedFiltersSection(
+private fun FiltersCard(
     expanded: Boolean,
     filters: HfFilters,
     onToggle: () -> Unit,
-    onPipelineTagChange: (String?) -> Unit,
     onLibraryToggle: (String) -> Unit,
-    onAppToggle: (String) -> Unit,
-    onProviderToggle: (String) -> Unit,
-    onLanguageToggle: (String) -> Unit,
-    onLicenseToggle: (String) -> Unit,
-    onRegionToggle: (String) -> Unit,
-    onOtherTagToggle: (String) -> Unit,
-    onQuantToggle: (String) -> Unit,
     onAuthorChange: (String) -> Unit,
-    onTrainedDatasetChange: (String) -> Unit,
     onParamsRangeChange: (Long, Long) -> Unit,
     onReset: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val activeCount = filters.activeCount
     StandardCard(
-        title = if (activeCount == 0) "Advanced filters" else "Advanced filters · $activeCount active",
-        icon = TnIcons.Wrench,
+        title = if (activeCount == 0) "Filters" else "Filters · $activeCount active",
+        icon = TnIcons.Sliders,
         trailing = {
             ActionButton(
                 onClickListener = onToggle,
@@ -467,100 +444,28 @@ private fun AdvancedFiltersSection(
                     onChange = onParamsRangeChange,
                 )
 
-                FilterGroupHeader("Task")
-                ChipFlow(
-                    values = HfFilterTaxonomy.PIPELINE_TAGS_TOP,
-                    moreValues = HfFilterTaxonomy.PIPELINE_TAGS_ALL.minus(HfFilterTaxonomy.PIPELINE_TAGS_TOP.toSet()),
-                    isSelected = { it == filters.pipelineTag },
-                    onToggle = { tag ->
-                        onPipelineTagChange(if (filters.pipelineTag == tag) null else tag)
-                    },
-                    label = HfFilterTaxonomy::pipelineTagLabel,
-                )
+                FilterGroupHeader("Format")
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                ) {
+                    LIBRARY_OPTIONS.forEach { (id, label) ->
+                        Pill(
+                            text = label,
+                            selected = filters.libraries.contains(id),
+                            onClick = { onLibraryToggle(id) },
+                        )
+                    }
+                }
 
-                FilterGroupHeader("Libraries")
-                ChipFlow(
-                    values = HfFilterTaxonomy.LIBRARIES_TOP,
-                    moreValues = HfFilterTaxonomy.LIBRARIES_ALL.minus(HfFilterTaxonomy.LIBRARIES_TOP.toSet()),
-                    isSelected = { filters.libraries.contains(it) },
-                    onToggle = onLibraryToggle,
-                )
-
-                FilterGroupHeader("Quantization")
-                ChipFlow(
-                    values = HfFilterTaxonomy.QUANT_TAGS,
-                    moreValues = emptyList(),
-                    isSelected = { filters.quantTags.contains(it) },
-                    onToggle = onQuantToggle,
-                )
-
-                FilterGroupHeader("Apps")
-                ChipFlow(
-                    values = HfFilterTaxonomy.APPS,
-                    moreValues = emptyList(),
-                    isSelected = { filters.apps.contains(it) },
-                    onToggle = onAppToggle,
-                )
-
-                FilterGroupHeader("Inference providers")
-                ChipFlow(
-                    values = HfFilterTaxonomy.INFERENCE_PROVIDERS,
-                    moreValues = emptyList(),
-                    isSelected = { filters.providers.contains(it) },
-                    onToggle = onProviderToggle,
-                )
-
-                FilterGroupHeader("Languages")
-                ChipFlow(
-                    values = HfFilterTaxonomy.LANGUAGES_TOP,
-                    moreValues = HfFilterTaxonomy.LANGUAGES_ALL.minus(HfFilterTaxonomy.LANGUAGES_TOP.toSet()),
-                    isSelected = { filters.languages.contains(it) },
-                    onToggle = onLanguageToggle,
-                    label = HfFilterTaxonomy::languageLabel,
-                )
-
-                FilterGroupHeader("Licenses")
-                ChipFlow(
-                    values = HfFilterTaxonomy.LICENSES_TOP,
-                    moreValues = HfFilterTaxonomy.LICENSES_ALL.minus(HfFilterTaxonomy.LICENSES_TOP.toSet()),
-                    isSelected = { filters.licenses.contains(it) },
-                    onToggle = onLicenseToggle,
-                )
-
-                FilterGroupHeader("Regions")
-                ChipFlow(
-                    values = HfFilterTaxonomy.REGIONS,
-                    moreValues = emptyList(),
-                    isSelected = { filters.regions.contains(it) },
-                    onToggle = onRegionToggle,
-                    label = { if (it == "us") "🇺🇸 US" else if (it == "eu") "🇪🇺 EU" else it },
-                )
-
-                FilterGroupHeader("Other tags")
-                ChipFlow(
-                    values = HfFilterTaxonomy.OTHER_TAGS,
-                    moreValues = emptyList(),
-                    isSelected = { filters.otherTags.contains(it) },
-                    onToggle = onOtherTagToggle,
-                )
-
-                FilterGroupHeader("Author contains")
+                FilterGroupHeader("Author")
                 LightInputBox {
                     TnTextField(
                         value = filters.author,
                         onValueChange = onAuthorChange,
                         placeholder = "bartowski, ggml-org, meta-llama…",
-                        singleLine = true,
-                        maxLines = 1,
-                    )
-                }
-
-                FilterGroupHeader("Trained on dataset")
-                LightInputBox {
-                    TnTextField(
-                        value = filters.trainedDataset,
-                        onValueChange = onTrainedDatasetChange,
-                        placeholder = "imagenet, common-voice, glue…",
                         singleLine = true,
                         maxLines = 1,
                     )
@@ -573,7 +478,7 @@ private fun AdvancedFiltersSection(
                     ActionTextButton(
                         onClickListener = onReset,
                         icon = TnIcons.Refresh,
-                        text = "Reset filters",
+                        text = "Reset",
                     )
                 }
             }
@@ -600,46 +505,6 @@ private fun LightInputBox(content: @Composable () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
     ) {
         content()
-    }
-}
-
-@Composable
-private fun ChipFlow(
-    values: List<String>,
-    moreValues: List<String>,
-    isSelected: (String) -> Boolean,
-    onToggle: (String) -> Unit,
-    label: (String) -> String = { it },
-) {
-    val dimens = LocalDimens.current
-    var expanded by remember { mutableStateOf(false) }
-    val all = if (expanded) values + moreValues else values
-    Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
-                all.forEach { v ->
-                    Pill(text = label(v), selected = isSelected(v), onClick = { onToggle(v) })
-                }
-                if (!expanded && moreValues.isNotEmpty()) {
-                    Pill(
-                        text = "+${moreValues.size} more",
-                        selected = false,
-                        onClick = { expanded = true },
-                    )
-                }
-                if (expanded && moreValues.isNotEmpty()) {
-                    Pill(
-                        text = "Less",
-                        selected = false,
-                        onClick = { expanded = false },
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -712,7 +577,141 @@ private fun ParamRangeSlider(
 }
 
 @Composable
-private fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun TrendingStrip(
+    items: List<HfTrendingItem>,
+    onOpen: (String) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+    ) {
+        items(items, key = { it.id }) { item ->
+            TrendingCard(item = item, onOpen = { onOpen(item.id) })
+        }
+    }
+}
+
+@Composable
+private fun TrendingCard(item: HfTrendingItem, onOpen: () -> Unit) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        modifier = Modifier
+            .width(220.dp)
+            .clickable(onClick = onOpen),
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    TnIcons.Sparkles,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(14.dp),
+                )
+                CaptionText(text = item.author)
+            }
+            Text(
+                text = item.id.substringAfter("/"),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                StatPill(label = "↓", value = formatCount(item.downloads))
+                StatPill(label = "♥", value = formatCount(item.likes))
+                if (item.numParameters != null) {
+                    StatPill(label = "•", value = formatParams(item.numParameters))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ResultCard(
+    repo: HfModelSummary,
+    isAdded: Boolean,
+    onOpen: (String) -> Unit,
+    onAdd: (HfModelSummary) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val cardColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+    val subtitle = remember(repo) { buildSubtitle(repo) }
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = cardColor,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpen(repo.id) },
+    ) {
+        Row(
+            modifier = Modifier.padding(
+                horizontal = dimens.cardPadding,
+                vertical = dimens.spacingSm,
+            ),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    repo.nameOnly,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            if (isAdded) {
+                Icon(
+                    TnIcons.Check,
+                    contentDescription = "Added",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp),
+                )
+            } else {
+                Icon(
+                    TnIcons.Plus,
+                    contentDescription = "Add",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clickable { onAdd(repo) },
+                )
+            }
+        }
+    }
+}
+
+private fun buildSubtitle(repo: HfModelSummary): String {
+    val sb = StringBuilder(repo.author)
+    sb.append(" · ↓").append(formatCount(repo.downloads))
+    sb.append(" · ♥").append(formatCount(repo.likes))
+    if (repo.gated != com.dark.tool_neuron.repo.hf.HfGated.OPEN) sb.append(" · Gated")
+    return sb.toString()
+}
+
+@Composable
+internal fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     val bg = if (selected) MaterialTheme.colorScheme.primary
@@ -738,221 +737,7 @@ private fun Pill(text: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun ErrorBanner(message: String) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-    Surface(
-        shape = tnShapes.cardSmall,
-        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-        ) {
-            Icon(
-                imageVector = TnIcons.AlertTriangle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(18.dp),
-            )
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
-    }
-}
-
-@Composable
-private fun LoadingRow() {
-    val dimens = LocalDimens.current
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-        modifier = Modifier.padding(horizontal = dimens.spacingSm),
-    ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(16.dp),
-            strokeWidth = 2.dp,
-        )
-        CaptionText(text = "Searching HuggingFace…")
-    }
-}
-
-@Composable
-private fun EmptyState(
-    title: String,
-    detail: String,
-    actionLabel: String? = null,
-    onAction: (() -> Unit)? = null,
-) {
-    val dimens = LocalDimens.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = dimens.spacingLg),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-    ) {
-        Icon(
-            imageVector = TnIcons.Search,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.size(40.dp),
-        )
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            fontWeight = FontWeight.SemiBold,
-        )
-        CaptionText(text = detail)
-        if (actionLabel != null && onAction != null) {
-            Spacer(Modifier.size(dimens.spacingXxs))
-            ActionTextButton(
-                onClickListener = onAction,
-                icon = TnIcons.Refresh,
-                text = actionLabel,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ExplorerCard(
-    repo: ExplorerRepo,
-    isAdded: Boolean,
-    onOpen: () -> Unit,
-    onAdd: () -> Unit,
-) {
-    val dimens = LocalDimens.current
-    val tnShapes = LocalTnShapes.current
-    Surface(
-        shape = tnShapes.cardSmall,
-        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onOpen),
-    ) {
-        Column(
-            modifier = Modifier.padding(dimens.cardPadding),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(
-                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                            shape = RoundedCornerShape(50),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = repo.author.take(2).uppercase().ifBlank { "??" },
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        repo.id,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-                    ) {
-                        CaptionText(text = repo.author)
-                        if (repo.gated) {
-                            Surface(
-                                shape = tnShapes.full,
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                            ) {
-                                Text(
-                                    "Gated",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                )
-                            }
-                        }
-                    }
-                }
-                if (isAdded) {
-                    Box(
-                        modifier = Modifier
-                            .size(dimens.actionIconSize)
-                            .background(
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                                RoundedCornerShape(50),
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Icon(
-                            TnIcons.Check,
-                            contentDescription = "Added",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp),
-                        )
-                    }
-                } else {
-                    ActionButton(
-                        onClickListener = onAdd,
-                        icon = TnIcons.Plus,
-                        contentDescription = "Add to repositories",
-                    )
-                }
-            }
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                StatPill(label = "↓", value = formatCount(repo.downloads))
-                StatPill(label = "♥", value = repo.likes.toString())
-                if (repo.pipelineTag != null) {
-                    StatPill(label = "•", value = HfFilterTaxonomy.pipelineTagLabel(repo.pipelineTag))
-                }
-                Spacer(Modifier.weight(1f))
-                CaptionText(text = "Inspect →")
-            }
-            if (repo.tags.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXxs),
-                ) {
-                    repo.tags.take(8).forEach { tag ->
-                        Surface(
-                            shape = tnShapes.full,
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-                        ) {
-                            Text(
-                                tag,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatPill(label: String, value: String) {
+internal fun StatPill(label: String, value: String) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     Surface(
@@ -982,8 +767,129 @@ private fun StatPill(label: String, value: String) {
     }
 }
 
-private fun formatCount(n: Long): String = when {
+@Composable
+private fun ErrorBanner(error: HfApiError) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    val (text, icon) = when (error) {
+        is HfApiError.RateLimited -> {
+            val sec = error.retryAfterSeconds
+            val msg = if (sec != null) "Rate limited — try again in ${formatRetry(sec)}"
+            else "Rate limited — try again in a few minutes"
+            msg to TnIcons.AlertTriangle
+        }
+        is HfApiError.NotFound -> "Not found" to TnIcons.SearchOff
+        is HfApiError.Forbidden -> "Access denied" to TnIcons.AlertTriangle
+        is HfApiError.Network -> "Network error — check your connection" to TnIcons.AlertTriangle
+        is HfApiError.Parse -> "Couldn't read response" to TnIcons.AlertTriangle
+        is HfApiError.Http -> when (error.status) {
+            204 -> "No repositories matched" to TnIcons.SearchOff
+            else -> "HTTP ${error.status}" to TnIcons.AlertTriangle
+        }
+    }
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.error,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+    }
+}
+
+@Composable
+private fun LoadingRow(label: String = "Searching HuggingFace…") {
+    val dimens = LocalDimens.current
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        modifier = Modifier.padding(horizontal = dimens.spacingSm),
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(16.dp),
+            strokeWidth = 2.dp,
+        )
+        CaptionText(text = label)
+    }
+}
+
+@Composable
+private fun EmptyState(
+    title: String,
+    detail: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector = TnIcons.Search,
+    actionLabel: String? = null,
+    onAction: (() -> Unit)? = null,
+) {
+    val dimens = LocalDimens.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = dimens.spacingLg),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+            modifier = Modifier.size(40.dp),
+        )
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+        CaptionText(text = detail)
+        if (actionLabel != null && onAction != null) {
+            Spacer(Modifier.size(dimens.spacingXxs))
+            ActionTextButton(
+                onClickListener = onAction,
+                icon = TnIcons.Refresh,
+                text = actionLabel,
+            )
+        }
+    }
+}
+
+internal fun formatCount(n: Long): String = when {
+    n >= 1_000_000_000 -> "%.1fB".format(n / 1_000_000_000.0)
     n >= 1_000_000 -> "%.1fM".format(n / 1_000_000.0)
     n >= 1_000 -> "%.1fk".format(n / 1_000.0)
     else -> n.toString()
 }
+
+private fun formatParams(n: Long): String = when {
+    n >= 1_000_000_000 -> "%.1fB".format(n / 1_000_000_000.0)
+    n >= 1_000_000 -> "%.0fM".format(n / 1_000_000.0)
+    else -> n.toString()
+}
+
+private fun formatRetry(sec: Int): String = when {
+    sec >= 60 -> "${sec / 60}m"
+    else -> "${sec}s"
+}
+
+private val LIBRARY_OPTIONS = listOf(
+    "gguf" to "GGUF",
+    "transformers" to "Transformers",
+    "safetensors" to "Safetensors",
+    "onnx" to "ONNX",
+    "mlx" to "MLX",
+    "diffusers" to "Diffusers",
+)

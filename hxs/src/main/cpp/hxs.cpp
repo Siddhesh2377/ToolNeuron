@@ -24,6 +24,19 @@ static std::string g_base_dir;
 static bool g_open = false;
 static hxs::CryptoCallbacks g_crypto;
 
+// Per-vault Collections snapshot the encryptor jobject + user-key jobject
+// at construction time. If a later openEncrypted DeleteGlobalRefs the
+// previous slots, ART can recycle the slot index with a bumped serial,
+// turning every prior snapshot into a stale ref and SIGABRT-ing the next
+// AEAD callback. We sidestep the slot-reuse trap by NEVER deleting the
+// global refs — each open allocates fresh ones, the previous remain
+// rooted forever, and snapshotted Collections keep reading their own
+// stable slot. The leak is ~32 bytes per ref times the small handful of
+// encrypted vaults the app opens (app_prefs, chat_documents_meta_v1,
+// rag_keyword_v1, research_v1) — bounded and negligible. The proper fix
+// is per-instance native handles in HexStorage; until that lands, this
+// keeps multi-vault opens safe.
+
 // ── JNI helpers ──
 
 struct JniBytes {
@@ -205,9 +218,9 @@ Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
     std::lock_guard lock(g_mtx);
     g_base_dir = jstring_to_string(env, basePath);
 
-    // Set up crypto callbacks via HxsEncryptor
-    if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
-    if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
+    // Set up crypto callbacks via HxsEncryptor.
+    // Previous g_encryptor_ref / g_crypto.ctx are intentionally NOT deleted
+    // (see comment at g_pinned note) — prior Collections still snapshot them.
     if (encryptor) {
         g_encryptor_ref = env->NewGlobalRef(encryptor);
         jclass cls = env->GetObjectClass(encryptor);
@@ -225,8 +238,6 @@ Java_com_dark_hxs_HexStorage_nativeCreateEncrypted(
 
     g_manifest = std::make_unique<hxs::Manifest>(g_base_dir + "/manifest.hxs");
     if (!g_manifest->create(ak.data(), ak.size(), uk.data(), uk.size(), g_crypto)) {
-        if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
-        if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
         return JNI_FALSE;
     }
 
@@ -242,8 +253,9 @@ Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
     std::lock_guard lock(g_mtx);
     g_base_dir = jstring_to_string(env, basePath);
 
-    if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
-    if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
+    // Previous g_encryptor_ref / g_crypto.ctx are intentionally NOT deleted —
+    // prior Collections still snapshot them; ART would reuse the freed slot
+    // and turn every snapshot into a stale ref.
     if (encryptor) {
         g_encryptor_ref = env->NewGlobalRef(encryptor);
         jclass cls = env->GetObjectClass(encryptor);
@@ -260,8 +272,6 @@ Java_com_dark_hxs_HexStorage_nativeOpenEncrypted(
 
     g_manifest = std::make_unique<hxs::Manifest>(g_base_dir + "/manifest.hxs");
     if (!g_manifest->open(ak.data(), ak.size(), uk.data(), uk.size(), g_crypto)) {
-        if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
-        if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
         return JNI_FALSE;
     }
 
@@ -291,8 +301,10 @@ Java_com_dark_hxs_HexStorage_nativeClose(JNIEnv* env, jobject) {
     g_collections.clear();
     g_manifest.reset();
 
-    if (g_encryptor_ref) { env->DeleteGlobalRef(g_encryptor_ref); g_encryptor_ref = nullptr; }
-    if (g_crypto.ctx) { env->DeleteGlobalRef(static_cast<jobject>(g_crypto.ctx)); g_crypto.ctx = nullptr; }
+    // Don't delete global refs here — Collections from this vault may still
+    // be reachable via the static maps in other call paths if any remain.
+    // The refs leak ~64 bytes total per close cycle; bounded over app
+    // lifetime since we don't reuse close()ed Storage instances.
 
     g_open = false;
 }

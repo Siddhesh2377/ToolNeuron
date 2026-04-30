@@ -3,322 +3,386 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Tool-Neuron · API Docs</title>
+<meta name="color-scheme" content="dark light" />
+<meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
+<title>ToolNeuron · API Docs</title>
 <style>
+:root {
+  color-scheme: dark light;
+  --bg:#0A0A0A; --bg-soft:#141414; --surface:#181818; --surface-2:#1F1F1F;
+  --fg:#F5F5F4; --fg-dim:#D4D4D8; --muted:#A1A1AA;
+  --border:#27272A; --border-2:#3F3F46;
+  --accent:#3FE08C; --accent-on:#0A0A0A;
+  --accent-soft:rgba(63,224,140,0.10); --accent-edge:rgba(63,224,140,0.28);
+  --warn:#F59E0B; --warn-soft:rgba(245,158,11,0.12);
+  --kw:#FF7AB2; --str:#6BDF95; --num:#FF8866; --comment:#71717A;
+  --code-bg:#161616;
+  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+@media (prefers-color-scheme: light) {
   :root {
-    color-scheme: light dark;
-    --fg:        #1c1c1e;
-    --fg-muted:  #6b6b70;
-    --bg:        #ffffff;
-    --bg-soft:   #f6f6f8;
-    --bg-card:   #ffffff;
-    --border:    #e5e5ea;
-    --primary:   #0a84ff;
-    --primary-soft: rgba(10,132,255,0.10);
-    --code-bg:   #f4f4f6;
-    --code-fg:   #1c1c1e;
-    --kw:        #ad3da4;
-    --str:       #0e7c3f;
-    --num:       #aa3731;
-    --comment:   #707074;
-    --shadow:    0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px rgba(0,0,0,0.03);
-    --radius:    12px;
-    --radius-sm: 8px;
-    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --bg:#FAFAF9; --bg-soft:#F4F4F5; --surface:#FFFFFF; --surface-2:#F8F8F8;
+    --fg:#0A0A0A; --fg-dim:#27272A; --muted:#71717A;
+    --border:#E4E4E7; --border-2:#D4D4D8;
+    --accent:#10A656; --accent-on:#FFFFFF;
+    --accent-soft:rgba(16,166,86,0.10); --accent-edge:rgba(16,166,86,0.30);
+    --warn-soft:rgba(245,158,11,0.10);
+    --kw:#AD3DA4; --str:#0E7C3F; --num:#AA3731; --comment:#71717A;
+    --code-bg:#F4F4F6;
   }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --fg:        #f2f2f7;
-      --fg-muted:  #98989f;
-      --bg:        #000000;
-      --bg-soft:   #1c1c1e;
-      --bg-card:   #1c1c1e;
-      --border:    #2c2c2e;
-      --primary:   #0a84ff;
-      --primary-soft: rgba(10,132,255,0.18);
-      --code-bg:   #2c2c2e;
-      --code-fg:   #f2f2f7;
-      --kw:        #ff7ab2;
-      --str:       #6bdf95;
-      --num:       #ff8866;
-      --comment:   #8e8e93;
-      --shadow:    0 1px 2px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
-    }
-  }
+}
 
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+*:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
+*:focus:not(:focus-visible) { outline: none; }
 
-  html, body {
-    margin: 0;
-    padding: 0;
-    height: 100%;
-    background: var(--bg);
-    color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "SF Pro Text",
-      Roboto, "Helvetica Neue", Arial, sans-serif;
-    font-size: 15px;
-    line-height: 1.55;
-    text-rendering: optimizeLegibility;
-    -webkit-font-smoothing: antialiased;
-  }
+html, body {
+  margin: 0; padding: 0; min-height: 100%;
+  background: var(--bg); color: var(--fg);
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px; line-height: 1.6;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  letter-spacing: -0.005em;
+}
+body { padding-top: var(--safe-top); }
+::selection { background: var(--accent); color: var(--accent-on); }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 
-  .app {
-    display: grid;
-    grid-template-columns: 280px 1fr;
-    min-height: 100vh;
-  }
-  @media (max-width: 880px) {
-    .app { grid-template-columns: 1fr; }
-    .sidebar { position: fixed; inset: 0 auto 0 0; transform: translateX(-100%); z-index: 30; transition: transform 200ms ease-out; }
-    .sidebar.open { transform: translateX(0); }
-    .scrim { position: fixed; inset: 0; background: rgba(0,0,0,0.32); z-index: 20; opacity: 0; pointer-events: none; transition: opacity 200ms ease-out; }
-    .scrim.open { opacity: 1; pointer-events: auto; }
-    .topbar-mobile-only { display: flex !important; }
-  }
+button, input { font: inherit; color: inherit; }
+a { color: var(--accent); text-underline-offset: 3px; }
 
+.app {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  min-height: 100vh;
+}
+@media (max-width: 880px) {
+  .app { grid-template-columns: 1fr; }
   .sidebar {
-    background: var(--bg-soft);
-    border-right: 1px solid var(--border);
-    padding: 20px 14px;
-    overflow-y: auto;
-    width: 280px;
+    position: fixed; inset: 0 auto 0 0;
+    width: min(86vw, 320px);
+    transform: translateX(-100%);
+    z-index: 30;
+    transition: transform 220ms cubic-bezier(.22,1,.36,1);
+    box-shadow: 0 0 0 1px var(--border), 24px 0 60px -20px rgba(0,0,0,0.5);
   }
-  .sidebar h1 {
-    font-size: 14px;
-    font-weight: 700;
-    margin: 0 8px 6px;
-    letter-spacing: -0.01em;
+  .sidebar.open { transform: translateX(0); }
+  .scrim {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.42);
+    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
+    z-index: 20; opacity: 0; pointer-events: none;
+    transition: opacity 200ms;
   }
-  .sidebar .sub {
-    font-size: 12px;
-    color: var(--fg-muted);
-    margin: 0 8px 18px;
-  }
-  .sidebar .group {
-    margin-top: 18px;
-    padding: 0 8px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--fg-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .sidebar a {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 10px;
-    margin: 1px 0;
-    border-radius: var(--radius-sm);
-    color: var(--fg);
-    text-decoration: none;
-    font-size: 14px;
-    cursor: pointer;
-    transition: background-color 100ms;
-  }
-  .sidebar a:hover { background: rgba(127,127,127,0.08); }
-  .sidebar a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
-  .sidebar a .dot {
-    width: 6px; height: 6px; border-radius: 50%;
-    background: var(--fg-muted);
-    flex-shrink: 0;
-  }
-  .sidebar a.active .dot { background: var(--primary); }
+  .scrim.open { opacity: 1; pointer-events: auto; }
+  .topbar-mobile-only { display: flex !important; }
+}
 
-  .main { min-width: 0; padding: 24px 28px 96px; }
-  @media (max-width: 880px) { .main { padding: 16px 18px 96px; } }
-  .topbar-mobile-only {
-    display: none;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-bottom: 1px solid var(--border);
-    margin: -16px -18px 16px;
-    background: var(--bg);
-    position: sticky;
-    top: 0;
-    z-index: 10;
-    backdrop-filter: saturate(180%) blur(10px);
-    -webkit-backdrop-filter: saturate(180%) blur(10px);
-  }
-  .menu-btn {
-    width: 36px; height: 36px;
-    border-radius: 50%;
-    border: 1px solid var(--border);
-    background: var(--bg-card);
-    color: var(--fg);
-    cursor: pointer;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-  }
-  .menu-btn:hover { background: var(--bg-soft); }
-  .topbar-title { font-weight: 600; }
+.sidebar {
+  background: var(--bg-soft);
+  border-right: 1px solid var(--border);
+  padding: 18px 12px 16px;
+  overflow-y: auto;
+  height: 100vh;
+  position: sticky; top: 0;
+}
+.brand {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0 8px 12px;
+}
+.brand-row { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
+.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.brand-meta {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
+  text-transform: uppercase; margin-left: 16px;
+}
 
-  .page { display: none; max-width: 800px; }
-  .page.active { display: block; animation: fadein 180ms ease-out; }
-  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+.sidebar .group {
+  margin-top: 20px;
+  padding: 0 8px 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
 
-  h1.title {
-    margin: 0 0 4px;
-    font-size: 28px;
-    line-height: 1.2;
-    font-weight: 700;
-    letter-spacing: -0.015em;
-  }
-  .lead {
-    color: var(--fg-muted);
-    margin: 0 0 28px;
-    font-size: 16px;
-  }
-  h2 {
-    margin: 36px 0 12px;
-    font-size: 20px;
-    font-weight: 700;
-    letter-spacing: -0.01em;
-  }
-  h3 {
-    margin: 22px 0 10px;
-    font-size: 16px;
-    font-weight: 600;
-  }
-  p { margin: 0 0 12px; }
-  a { color: var(--primary); }
-  ul, ol { margin: 0 0 14px; padding-left: 22px; }
-  li { margin: 4px 0; }
-  hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+.sidebar a {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  margin: 1px 0;
+  border-radius: var(--r-sm);
+  color: var(--fg-dim);
+  text-decoration: none;
+  font-size: 14px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 100ms, color 100ms, border-color 100ms;
+}
+.sidebar a:hover { background: var(--surface); color: var(--fg); }
+.sidebar a.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-edge);
+  color: var(--fg);
+  font-weight: 600;
+}
+.sidebar a .dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background-color 100ms, box-shadow 100ms;
+}
+.sidebar a.active .dot {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
 
-  code {
-    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
-    font-size: 13px;
-    background: var(--code-bg);
-    color: var(--code-fg);
-    padding: 1.5px 5px;
-    border-radius: 5px;
-  }
-  pre {
-    margin: 12px 0 16px;
-    padding: 14px 16px;
-    background: var(--code-bg);
-    color: var(--code-fg);
-    border-radius: var(--radius);
-    overflow-x: auto;
-    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
-    font-size: 13px;
-    line-height: 1.55;
-    position: relative;
-    box-shadow: var(--shadow);
-  }
-  pre code { background: transparent; padding: 0; }
-  .copy-btn {
-    position: absolute; top: 8px; right: 8px;
-    border: 1px solid var(--border); background: var(--bg-card);
-    color: var(--fg-muted);
-    font-size: 11px; padding: 4px 8px;
-    border-radius: 6px; cursor: pointer;
-    opacity: 0;
-    transition: opacity 120ms;
-  }
-  pre:hover .copy-btn { opacity: 1; }
-  .copy-btn.copied { color: var(--primary); border-color: var(--primary); }
+.main { min-width: 0; padding: 28px 32px 96px; }
+@media (max-width: 880px) { .main { padding: 16px 18px 96px; } }
 
-  .kw { color: var(--kw); }
-  .str { color: var(--str); }
-  .num { color: var(--num); }
-  .comment { color: var(--comment); font-style: italic; }
+.topbar-mobile-only {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  margin: -16px -18px 18px;
+  background: color-mix(in oklab, var(--bg) 85%, transparent);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+}
+.menu-btn {
+  width: 36px; height: 36px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  background: var(--surface); color: var(--fg);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: border-color 120ms, background-color 120ms;
+}
+.menu-btn:hover { background: var(--surface-2); border-color: var(--border-2); }
+.topbar-title { font-weight: 600; }
 
-  .endpoint {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin: 0 0 12px;
-    font-family: ui-monospace, "SF Mono", Menlo, Monaco, Consolas, monospace;
-    font-size: 14px;
-    background: var(--bg-soft);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    padding: 8px 12px;
-  }
-  .method {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 5px;
-    font-weight: 700;
-    font-size: 11px;
-    color: #fff;
-  }
-  .method.get { background: #2bb673; }
-  .method.post { background: #ff8c1a; }
+.page { display: none; max-width: 820px; }
+.page.active { display: block; animation: fadein 200ms cubic-bezier(.22,1,.36,1); }
+@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
-  .table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 14px;
-    margin: 6px 0 16px;
-  }
-  .table th, .table td {
-    text-align: left;
-    padding: 10px 12px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  .table th {
-    font-weight: 600;
-    color: var(--fg-muted);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-  .table tr:last-child td { border-bottom: none; }
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px; letter-spacing: 0.16em;
+  color: var(--accent);
+  text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-edge);
+  margin-bottom: 12px;
+}
 
-  .callout {
-    border-left: 3px solid var(--primary);
-    background: var(--primary-soft);
-    padding: 10px 14px;
-    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-    margin: 14px 0;
-    font-size: 14px;
-  }
-  .callout.warn { border-left-color: #ff9500; background: rgba(255,149,0,0.10); }
+h1.title {
+  margin: 0 0 6px;
+  font-size: clamp(28px, 4.5vw, 36px);
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+}
+.lead {
+  color: var(--muted);
+  margin: 0 0 28px;
+  font-size: clamp(15px, 2vw, 17px);
+  line-height: 1.55;
+  max-width: 60ch;
+}
+h2 {
+  margin: 36px 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.018em;
+}
+h3 {
+  margin: 24px 0 10px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+p { margin: 0 0 12px; }
+ul, ol { margin: 0 0 14px; padding-left: 22px; }
+li { margin: 4px 0; }
+hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
 
-  .pager {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    margin-top: 40px;
-    padding-top: 24px;
-    border-top: 1px solid var(--border);
-  }
-  .pager a {
-    flex: 1;
-    text-decoration: none;
-    color: var(--fg);
-    background: var(--bg-soft);
-    border: 1px solid var(--border);
-    border-radius: var(--radius);
-    padding: 14px 16px;
-    transition: border-color 100ms, background-color 100ms;
-    cursor: pointer;
-  }
-  .pager a:hover { background: var(--primary-soft); border-color: var(--primary); }
-  .pager a.right { text-align: right; }
-  .pager a .label { font-size: 11px; color: var(--fg-muted); text-transform: uppercase; letter-spacing: 0.04em; }
-  .pager a .target { font-weight: 600; margin-top: 2px; }
-  .pager .empty { visibility: hidden; }
+code {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  background: var(--code-bg);
+  color: var(--fg);
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+}
+pre {
+  margin: 12px 0 16px;
+  padding: 14px 16px;
+  background: var(--code-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow-x: auto;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  position: relative;
+}
+pre code { background: transparent; padding: 0; border: none; }
+.copy-btn {
+  position: absolute; top: 8px; right: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--muted);
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  letter-spacing: 0.02em;
+  transition: opacity 120ms, color 120ms, border-color 120ms;
+}
+pre:hover .copy-btn, pre:focus-within .copy-btn { opacity: 1; }
+.copy-btn.copied { color: var(--accent); border-color: var(--accent-edge); }
 
-  ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: rgba(127,127,127,0.3); border-radius: 5px; }
-  ::-webkit-scrollbar-track { background: transparent; }
+.kw { color: var(--kw); }
+.str { color: var(--str); }
+.num { color: var(--num); }
+.comment { color: var(--comment); font-style: italic; }
+
+.endpoint {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 12px;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 13px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px 12px;
+}
+.method {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: var(--accent-on);
+}
+.method.get { background: var(--accent); }
+.method.post { background: var(--warn); color: #0A0A0A; }
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  margin: 6px 0 16px;
+}
+.table th, .table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.table th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.table tr:last-child td { border-bottom: none; }
+
+.callout {
+  border: 1px solid var(--accent-edge);
+  background: var(--accent-soft);
+  padding: 12px 14px;
+  border-radius: var(--r-sm);
+  margin: 14px 0;
+  font-size: 14px;
+  line-height: 1.55;
+}
+.callout.warn {
+  border-color: rgba(245,158,11,0.32);
+  background: var(--warn-soft);
+}
+
+.pager {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 44px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+}
+.pager a {
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  transition: border-color 120ms, background-color 120ms, transform 120ms;
+  cursor: pointer;
+  display: flex; flex-direction: column; gap: 4px;
+}
+.pager a:hover {
+  background: var(--surface-2);
+  border-color: var(--accent-edge);
+  transform: translateY(-1px);
+}
+.pager a.right { text-align: right; }
+.pager a .label {
+  font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.pager a .target { font-weight: 600; }
+.pager .empty { visibility: hidden; }
+
+@media (max-width: 540px) {
+  .pager { grid-template-columns: 1fr; }
+  .pager .empty { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
 </style>
 </head>
 <body>
-
 <div class="scrim" id="scrim" onclick="closeNav()"></div>
 <div class="app">
-  <aside class="sidebar" id="sidebar">
-    <h1>Tool-Neuron</h1>
-    <div class="sub">OpenAI-compatible local API · v1</div>
+  <aside class="sidebar" id="sidebar" aria-label="Documentation">
+    <div class="brand">
+      <div class="brand-row">
+        <span class="brand-dot" aria-hidden="true"></span>
+        <span>ToolNeuron</span>
+      </div>
+      <div class="brand-meta">OpenAI-compatible · v1</div>
+    </div>
 
     <div class="group">Getting started</div>
     <a data-page="overview"><span class="dot"></span>Overview</a>
@@ -337,21 +401,24 @@
     <a data-page="security"><span class="dot"></span>Security notes</a>
 
     <div class="group">App</div>
-    <a href="/" target="_blank">↗ Open Web UI</a>
+    <a href="/" target="_blank" rel="noopener"><span class="dot"></span>↗ Open Web UI</a>
   </aside>
 
   <main class="main">
     <div class="topbar-mobile-only">
-      <button class="menu-btn" onclick="toggleNav()" aria-label="Open menu">☰</button>
+      <button class="menu-btn" onclick="toggleNav()" type="button" aria-label="Open menu">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
       <span class="topbar-title" id="mobileTitle">Overview</span>
     </div>
 
     <section class="page" data-page="overview">
-      <h1 class="title">Overview</h1>
-      <p class="lead">A local, OpenAI-compatible HTTP API running entirely on your device. No cloud, no telemetry — just the model you loaded in the app, exposed over your LAN.</p>
+      <span class="eyebrow">Overview</span>
+      <h1 class="title">Local OpenAI-compatible API</h1>
+      <p class="lead">An HTTP API running entirely on your device. No cloud, no telemetry — just the model you loaded in the app, exposed over your LAN.</p>
 
       <h2>Base URL</h2>
-      <p>The base URL is whatever the server screen shows in the app. Two URLs are presented:</p>
+      <p>The server screen in the app shows two URLs:</p>
       <ul>
         <li><strong>From this device:</strong> <code>http://127.0.0.1:&lt;port&gt;</code> — always reachable from the phone's own browser, regardless of Wi-Fi state.</li>
         <li><strong>From LAN:</strong> <code>http://&lt;wifi-ip&gt;:&lt;port&gt;</code> — visible to any device on the same Wi-Fi network when the bind mode is <code>ALL_INTERFACES</code> or <code>WIFI_ONLY</code>.</li>
@@ -374,13 +441,14 @@
     </section>
 
     <section class="page" data-page="auth">
-      <h1 class="title">Authentication</h1>
+      <span class="eyebrow">Authentication</span>
+      <h1 class="title">Bearer token auth</h1>
       <p class="lead">All non-public endpoints require a bearer token. The token is generated on the device and never leaves it.</p>
 
       <h2>Where to get the token</h2>
       <ol>
-        <li>Open the Tool-Neuron app on the device running the server.</li>
-        <li>Go to <strong>Server</strong> screen.</li>
+        <li>Open the ToolNeuron app on the device running the server.</li>
+        <li>Go to the <strong>Server</strong> screen.</li>
         <li>Tap the eye icon on the token card to reveal the token (requires the app to be unlocked).</li>
         <li>Tap the copy icon, or rotate to generate a new one.</li>
       </ol>
@@ -388,7 +456,7 @@
       <h2>Sending the token</h2>
       <p>Include it as a standard <code>Authorization: Bearer &lt;token&gt;</code> header on every request.</p>
       <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn">Copy</button></pre>
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>What happens if it's missing</h2>
       <p>The server replies <code>401 Unauthorized</code> with body <code>{ "error": { "code": 401, "message": "missing or invalid bearer token" } }</code> and a <code>WWW-Authenticate: Bearer</code> header.</p>
@@ -405,6 +473,7 @@
     </section>
 
     <section class="page" data-page="models">
+      <span class="eyebrow">Endpoints</span>
       <h1 class="title">List models</h1>
       <p class="lead">Returns the catalog of models currently loaded by the server.</p>
 
@@ -412,7 +481,7 @@
 
       <h2>Request</h2>
       <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn">Copy</button></pre>
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>Response</h2>
       <pre><code>{
@@ -425,7 +494,7 @@
       <span class="str">"owned_by"</span>: <span class="str">"tool-neuron"</span>
     }
   ]
-}</code><button class="copy-btn">Copy</button></pre>
+}</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <div class="callout">The catalog only contains the model the server currently has loaded. Switch models from inside the app before starting the server — dynamic load over the wire is intentionally not exposed.</div>
 
@@ -436,6 +505,7 @@
     </section>
 
     <section class="page" data-page="chat">
+      <span class="eyebrow">Endpoints</span>
       <h1 class="title">Chat completions</h1>
       <p class="lead">Send a list of messages, get the assistant's response.</p>
 
@@ -465,7 +535,7 @@
     "messages": [
       { "role": "user", "content": "Hello!" }
     ]
-  }'</span></code><button class="copy-btn">Copy</button></pre>
+  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>Response</h2>
       <pre><code>{
@@ -478,7 +548,7 @@
     <span class="str">"message"</span>: { <span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: <span class="str">"Hi!"</span> },
     <span class="str">"finish_reason"</span>: <span class="str">"stop"</span>
   }]
-}</code><button class="copy-btn">Copy</button></pre>
+}</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <div class="pager">
         <a data-page="models"><div class="label">Previous</div><div class="target">← List models</div></a>
@@ -487,6 +557,7 @@
     </section>
 
     <section class="page" data-page="streaming">
+      <span class="eyebrow">Endpoints</span>
       <h1 class="title">Streaming (SSE)</h1>
       <p class="lead">Set <code>"stream": true</code> to receive tokens as they're generated.</p>
 
@@ -502,7 +573,7 @@ data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<sp
 
 <span class="comment">// Final chunk includes finish_reason and an empty delta</span>
 data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{},<span class="str">"finish_reason"</span>:<span class="str">"stop"</span>}]}
-data: [DONE]</code><button class="copy-btn">Copy</button></pre>
+data: [DONE]</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>JavaScript example</h2>
       <pre><code><span class="kw">const</span> r = <span class="kw">await</span> fetch(<span class="str">"/v1/chat/completions"</span>, {
@@ -527,7 +598,7 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     <span class="kw">const</span> chunk = <span class="kw">JSON</span>.parse(json);
     onDelta(chunk.choices[<span class="num">0</span>]?.delta?.content ?? <span class="str">""</span>);
   }
-}</code><button class="copy-btn">Copy</button></pre>
+}</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <div class="callout">Streaming chunks intentionally omit <code>usage</code> per OpenAI's spec. Token counts are not reported on the wire.</div>
 
@@ -538,15 +609,16 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     </section>
 
     <section class="page" data-page="health">
+      <span class="eyebrow">Endpoints</span>
       <h1 class="title">Health</h1>
       <p class="lead">Cheap public ping. No auth needed, returns immediately.</p>
 
       <div class="endpoint"><span class="method get">GET</span><code>/health</code></div>
 
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/health</code><button class="copy-btn">Copy</button></pre>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/health</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>Response</h2>
-      <pre><code>{ <span class="str">"status"</span>: <span class="str">"ok"</span>, <span class="str">"service"</span>: <span class="str">"tool-neuron"</span>, <span class="str">"version"</span>: <span class="str">"0.18.5"</span> }</code><button class="copy-btn">Copy</button></pre>
+      <pre><code>{ <span class="str">"status"</span>: <span class="str">"ok"</span>, <span class="str">"service"</span>: <span class="str">"tool-neuron"</span>, <span class="str">"version"</span>: <span class="str">"0.18.5"</span> }</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <p>The bundled web UI uses this as a connection probe — it polls every 30 seconds and shows a green dot when the server is reachable.</p>
 
@@ -557,6 +629,7 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     </section>
 
     <section class="page" data-page="errors">
+      <span class="eyebrow">Reference</span>
       <h1 class="title">Errors</h1>
       <p class="lead">All errors return a JSON envelope with <code>error.code</code>, <code>error.message</code>, and (where applicable) <code>error.type</code>.</p>
 
@@ -582,7 +655,7 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     <span class="str">"message"</span>: <span class="str">"missing or invalid bearer token"</span>,
     <span class="str">"type"</span>: <span class="str">"authentication_error"</span>
   }
-}</code><button class="copy-btn">Copy</button></pre>
+}</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <div class="pager">
         <a data-page="health"><div class="label">Previous</div><div class="target">← Health</div></a>
@@ -591,6 +664,7 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     </section>
 
     <section class="page" data-page="ratelimits">
+      <span class="eyebrow">Reference</span>
       <h1 class="title">Rate limits &amp; bans</h1>
       <p class="lead">Defaults are conservative for a phone serving a LAN; tune them in app code if you control the build.</p>
 
@@ -621,6 +695,7 @@ data: [DONE]</code><button class="copy-btn">Copy</button></pre>
     </section>
 
     <section class="page" data-page="examples">
+      <span class="eyebrow">Reference</span>
       <h1 class="title">Examples</h1>
       <p class="lead">Drop-in snippets for common clients.</p>
 
@@ -636,7 +711,7 @@ resp = client.chat.completions.create(
     model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
     messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
 )
-<span class="kw">print</span>(resp.choices[<span class="num">0</span>].message.content)</code><button class="copy-btn">Copy</button></pre>
+<span class="kw">print</span>(resp.choices[<span class="num">0</span>].message.content)</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>OpenWebUI</h2>
       <p>In OpenWebUI's <strong>Settings → Connections → OpenAI</strong>, set the base URL to <code>http://&lt;phone-lan-ip&gt;:11434/v1</code> and paste the bearer token. The connected chat dropdown auto-detects the loaded model.</p>
@@ -654,7 +729,7 @@ resp = client.chat.completions.create(
   }),
 });
 <span class="kw">const</span> data = <span class="kw">await</span> r.json();
-console.log(data.choices[<span class="num">0</span>].message.content);</code><button class="copy-btn">Copy</button></pre>
+console.log(data.choices[<span class="num">0</span>].message.content);</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <h2>llama-index</h2>
       <pre><code><span class="kw">from</span> llama_index.llms.openai_like <span class="kw">import</span> OpenAILike
@@ -664,7 +739,7 @@ llm = OpenAILike(
     api_key=<span class="str">"tn_sk_..."</span>,
     model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
 )
-<span class="kw">print</span>(llm.complete(<span class="str">"Hi"</span>).text)</code><button class="copy-btn">Copy</button></pre>
+<span class="kw">print</span>(llm.complete(<span class="str">"Hi"</span>).text)</code><button class="copy-btn" type="button">Copy</button></pre>
 
       <div class="pager">
         <a data-page="ratelimits"><div class="label">Previous</div><div class="target">← Rate limits</div></a>
@@ -673,6 +748,7 @@ llm = OpenAILike(
     </section>
 
     <section class="page" data-page="security">
+      <span class="eyebrow">Reference</span>
       <h1 class="title">Security notes</h1>
       <p class="lead">What you can rely on, and what's intentionally not in scope yet.</p>
 
@@ -707,55 +783,54 @@ llm = OpenAILike(
 </div>
 
 <script>
-  const pages = document.querySelectorAll('section.page');
-  const links = document.querySelectorAll('.sidebar a[data-page]');
-  const mobileTitle = document.getElementById('mobileTitle');
-  const sidebar = document.getElementById('sidebar');
-  const scrim = document.getElementById('scrim');
+  var pages = document.querySelectorAll('section.page');
+  var mobileTitle = document.getElementById('mobileTitle');
+  var sidebar = document.getElementById('sidebar');
+  var scrim = document.getElementById('scrim');
 
   function setPage(name, push) {
-    let title = name;
-    pages.forEach(p => {
-      const m = p.getAttribute('data-page') === name;
-      p.classList.toggle('active', m);
-      if (m) {
-        const h = p.querySelector('h1.title');
+    var title = name;
+    pages.forEach(function(p) {
+      var match = p.getAttribute('data-page') === name;
+      p.classList.toggle('active', match);
+      if (match) {
+        var h = p.querySelector('h1.title');
         if (h) title = h.textContent;
       }
     });
-    document.querySelectorAll('.sidebar a').forEach(a => {
+    document.querySelectorAll('.sidebar a[data-page]').forEach(function(a) {
       a.classList.toggle('active', a.getAttribute('data-page') === name);
     });
     mobileTitle.textContent = title;
-    document.title = 'Tool-Neuron · ' + title;
+    document.title = 'ToolNeuron · ' + title;
     closeNav();
     window.scrollTo(0, 0);
     if (push !== false) history.replaceState(null, '', '#/' + name);
   }
 
   function readHash() {
-    const m = (location.hash || '').match(/^#\/(\w+)/);
+    var m = (location.hash || '').match(/^#\/(\w+)/);
     return m ? m[1] : 'overview';
   }
 
-  document.querySelectorAll('a[data-page]').forEach(a => {
-    a.addEventListener('click', e => {
+  document.querySelectorAll('a[data-page]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
       e.preventDefault();
       setPage(a.getAttribute('data-page'));
     });
   });
-  window.addEventListener('hashchange', () => setPage(readHash(), false));
+  window.addEventListener('hashchange', function() { setPage(readHash(), false); });
 
-  document.querySelectorAll('.copy-btn').forEach(btn => {
-    btn.addEventListener('click', e => {
-      const pre = btn.closest('pre');
-      const code = pre.querySelector('code');
-      const text = code.innerText;
-      navigator.clipboard.writeText(text).then(() => {
+  document.querySelectorAll('.copy-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var pre = btn.closest('pre');
+      var code = pre.querySelector('code');
+      var text = code.innerText;
+      navigator.clipboard.writeText(text).then(function() {
         btn.classList.add('copied');
-        const orig = btn.textContent;
+        var orig = btn.textContent;
         btn.textContent = 'Copied';
-        setTimeout(() => {
+        setTimeout(function() {
           btn.classList.remove('copied');
           btn.textContent = orig;
         }, 1200);
@@ -771,11 +846,13 @@ llm = OpenAILike(
     sidebar.classList.remove('open');
     scrim.classList.remove('open');
   }
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && sidebar.classList.contains('open')) closeNav();
+  });
   window.toggleNav = toggleNav;
   window.closeNav = closeNav;
 
   setPage(readHash(), false);
 </script>
-
 </body>
 </html>

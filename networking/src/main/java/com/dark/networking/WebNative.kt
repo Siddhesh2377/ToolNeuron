@@ -25,6 +25,14 @@ object WebNative {
 
     @JvmStatic private external fun nativeSetProfile(profile: String)
 
+    @JvmStatic private external fun nativeFetch(
+        url: String,
+        userAgent: String,
+        timeoutMs: Int,
+        headerKeys: Array<String>,
+        headerVals: Array<String>,
+    ): Array<String>?
+
     val isReady: Boolean by lazy { nativeHasBackend() }
 
     val backend: String by lazy { nativeBackendName() }
@@ -51,6 +59,25 @@ object WebNative {
         }
     }
 
+    suspend fun fetch(
+        url: String,
+        userAgent: String = DefaultUserAgent,
+        timeoutMs: Int = 15000,
+        headers: Map<String, String> = emptyMap(),
+    ): Result<WebResponse> = withContext(Dispatchers.IO) {
+        runCatching {
+            val keys = if (headers.isEmpty()) EmptyStrArr else headers.keys.toTypedArray()
+            val vals = if (headers.isEmpty()) EmptyStrArr else headers.values.toTypedArray()
+            val arr = nativeFetch(url, userAgent, timeoutMs, keys, vals)
+                ?: throw IllegalStateException("native fetch returned null: $url")
+            require(arr.size == 3) { "malformed native response size=${arr.size}" }
+            val status = arr[0].toIntOrNull() ?: 0
+            val body = arr[1]
+            val err = arr[2].takeIf { it.isNotEmpty() }
+            WebResponse(status = status, body = body, error = err)
+        }
+    }
+
     suspend fun search(
         query: String,
         userAgent: String = DefaultUserAgent,
@@ -70,6 +97,8 @@ object WebNative {
             }
         }
     }
+
+    private val EmptyStrArr = emptyArray<String>()
 
     const val DefaultUserAgent: String =
         "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"

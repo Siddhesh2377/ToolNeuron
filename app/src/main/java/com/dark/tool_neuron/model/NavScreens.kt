@@ -21,6 +21,7 @@ sealed class NavScreens(val route: String) {
     object GuideSecurity : NavScreens("guide_security")
     object GuideThemes : NavScreens("guide_themes")
     object GuideServer : NavScreens("guide_server")
+    object GuideResearch : NavScreens("guide_research")
     object PluginHub : NavScreens("plugin_hub")
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
@@ -28,6 +29,11 @@ sealed class NavScreens(val route: String) {
     object RagDebug : NavScreens("rag_debug")
     object ServerScreen : NavScreens("server_screen")
     object HfExplorer : NavScreens("hf_explorer")
+    object Documents : NavScreens("documents")
+    object DocumentViewer : NavScreens("document/{docId}") {
+        const val ARG_DOC_ID = "docId"
+        fun routeFor(docId: String) = "document/$docId"
+    }
     object HfRepoDetail : NavScreens("hf_repo/{repoPath}") {
         const val ARG_REPO_PATH = "repoPath"
         fun routeFor(repoPath: String) = "hf_repo/${URLEncoder.encode(repoPath, "UTF-8")}"

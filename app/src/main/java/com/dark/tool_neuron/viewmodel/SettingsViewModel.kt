@@ -62,6 +62,11 @@ class SettingsViewModel @Inject constructor(
     private val _ragSmartRerank = MutableStateFlow(prefs.ragSmartRerank)
     private val _ragMultiQuery = MutableStateFlow(prefs.ragMultiQuery)
     private val _ragDeepResearch = MutableStateFlow(prefs.ragDeepResearch)
+    private val _researchMaxIter = MutableStateFlow(prefs.researchMaxIterations)
+    private val _researchMaxQ = MutableStateFlow(prefs.researchMaxQuestions)
+    private val _researchPerSearch = MutableStateFlow(prefs.researchResultsPerSearch)
+    private val _researchCancelBg = MutableStateFlow(prefs.researchCancelOnBackground)
+    private val _researchActiveModel = MutableStateFlow(prefs.activeResearchModelId)
     private val appVersion: String = resolveVersion()
 
     val state: StateFlow<SettingsState> = combine(
@@ -79,6 +84,11 @@ class SettingsViewModel @Inject constructor(
         _ragSmartRerank,
         _ragMultiQuery,
         _ragDeepResearch,
+        _researchMaxIter,
+        _researchMaxQ,
+        _researchPerSearch,
+        _researchCancelBg,
+        _researchActiveModel,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -95,6 +105,11 @@ class SettingsViewModel @Inject constructor(
         val rerank = values[11] as Boolean
         val multiQuery = values[12] as Boolean
         val deepResearch = values[13] as Boolean
+        val researchMaxIter = values[14] as Int
+        val researchMaxQ = values[15] as Int
+        val researchPerSearch = values[16] as Int
+        val researchCancelBg = values[17] as Boolean
+        val researchActiveModel = values[18] as String
 
         SettingsState(
             sections = buildSections(
@@ -110,6 +125,11 @@ class SettingsViewModel @Inject constructor(
                 ragSmartRerank = rerank,
                 ragMultiQuery = multiQuery,
                 ragDeepResearch = deepResearch,
+                researchMaxIter = researchMaxIter,
+                researchMaxQ = researchMaxQ,
+                researchPerSearch = researchPerSearch,
+                researchCancelBg = researchCancelBg,
+                researchActiveModel = researchActiveModel,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -151,14 +171,110 @@ class SettingsViewModel @Inject constructor(
         ragSmartRerank: Boolean,
         ragMultiQuery: Boolean,
         ragDeepResearch: Boolean,
+        researchMaxIter: Int,
+        researchMaxQ: Int,
+        researchPerSearch: Int,
+        researchCancelBg: Boolean,
+        researchActiveModel: String,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
+        researchSection(models, researchMaxIter, researchMaxQ, researchPerSearch, researchCancelBg, researchActiveModel),
         voiceSection(models, activeTts, activeStt),
         appearanceSection(themeMode, palette),
         privacySection(lockEnabled, panicPinSet),
         storageSection(diskUsage),
         aboutSection(),
     )
+
+    private fun researchSection(
+        models: List<ModelInfo>,
+        maxIter: Int,
+        maxQ: Int,
+        perSearch: Int,
+        cancelBg: Boolean,
+        activeModelId: String,
+    ): SettingsSection {
+        val ggufModels = models.filter { it.providerType == ProviderType.GGUF }
+        val modelOptions = ggufModels.map {
+            SettingsChoiceOption(key = it.id, label = it.name, description = formatBytes(it.fileSize))
+        }
+        val resolvedModel = activeModelId.takeIf { it.isNotBlank() && ggufModels.any { m -> m.id == it } }
+        return SettingsSection(
+            id = "research",
+            title = "Research",
+            description = "Multi-iteration web research pipeline.",
+            icon = TnIcons.Compass,
+            items = listOf(
+                SettingsItem.Choice(
+                    id = ID_RESEARCH_MAX_ITER,
+                    title = "Max iterations",
+                    subtitle = "Search → fetch → ask follow-ups, repeated up to this many times.",
+                    icon = TnIcons.Compass,
+                    selectedKey = maxIter.toString(),
+                    options = (1..10).map { SettingsChoiceOption(it.toString(), "$it") },
+                    onSelect = { key ->
+                        val v = key?.toIntOrNull() ?: AppPreferences.DEFAULT_RESEARCH_MAX_ITERATIONS
+                        prefs.researchMaxIterations = v
+                        _researchMaxIter.value = prefs.researchMaxIterations
+                        _dialog.value = null
+                    },
+                ),
+                SettingsItem.Choice(
+                    id = ID_RESEARCH_MAX_Q,
+                    title = "Follow-up questions per iteration",
+                    subtitle = "Upper bound on new questions generated each round.",
+                    icon = TnIcons.MessageCircle,
+                    selectedKey = maxQ.toString(),
+                    options = (1..6).map { SettingsChoiceOption(it.toString(), "$it") },
+                    onSelect = { key ->
+                        val v = key?.toIntOrNull() ?: AppPreferences.DEFAULT_RESEARCH_MAX_QUESTIONS
+                        prefs.researchMaxQuestions = v
+                        _researchMaxQ.value = prefs.researchMaxQuestions
+                        _dialog.value = null
+                    },
+                ),
+                SettingsItem.Choice(
+                    id = ID_RESEARCH_PER_SEARCH,
+                    title = "Results per search",
+                    subtitle = "How many DuckDuckGo hits to fetch per query.",
+                    icon = TnIcons.Search,
+                    selectedKey = perSearch.toString(),
+                    options = (3..10).map { SettingsChoiceOption(it.toString(), "$it") },
+                    onSelect = { key ->
+                        val v = key?.toIntOrNull() ?: AppPreferences.DEFAULT_RESEARCH_RESULTS_PER_SEARCH
+                        prefs.researchResultsPerSearch = v
+                        _researchPerSearch.value = prefs.researchResultsPerSearch
+                        _dialog.value = null
+                    },
+                ),
+                SettingsItem.Toggle(
+                    id = ID_RESEARCH_CANCEL_BG,
+                    title = "Cancel on background",
+                    subtitle = "Stop in-flight research when the app is backgrounded.",
+                    icon = TnIcons.PlayerStop,
+                    checked = cancelBg,
+                    onToggle = { value ->
+                        prefs.researchCancelOnBackground = value
+                        _researchCancelBg.value = value
+                    },
+                ),
+                SettingsItem.Choice(
+                    id = ID_RESEARCH_ACTIVE_MODEL,
+                    title = "Research model",
+                    subtitle = "Defaults to the active chat model when unset.",
+                    icon = TnIcons.Sparkles,
+                    selectedKey = resolvedModel,
+                    options = modelOptions,
+                    emptyMessage = if (modelOptions.isEmpty()) "Install a chat model first" else "Use active chat model",
+                    onSelect = { key ->
+                        prefs.activeResearchModelId = key.orEmpty()
+                        _researchActiveModel.value = prefs.activeResearchModelId
+                        _dialog.value = null
+                    },
+                ),
+            ),
+        )
+    }
 
     private fun chatAndRagSection(
         models: List<ModelInfo>,
@@ -568,10 +684,16 @@ class SettingsViewModel @Inject constructor(
         private const val ID_RAG_RERANK = "rag_smart_rerank"
         private const val ID_RAG_MULTI_QUERY = "rag_multi_query"
         private const val ID_RAG_DEEP_RESEARCH = "rag_deep_research"
+        private const val ID_RESEARCH_MAX_ITER = "research_max_iter"
+        private const val ID_RESEARCH_MAX_Q = "research_max_q"
+        private const val ID_RESEARCH_PER_SEARCH = "research_per_search"
+        private const val ID_RESEARCH_CANCEL_BG = "research_cancel_bg"
+        private const val ID_RESEARCH_ACTIVE_MODEL = "research_active_model"
         private val CLEARABLE_CHOICE_IDS = setOf(
             ID_DEFAULT_EMBEDDING,
             ID_DEFAULT_TTS,
             ID_DEFAULT_STT,
+            ID_RESEARCH_ACTIVE_MODEL,
         )
     }
 }

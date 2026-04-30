@@ -55,4 +55,6 @@ data class ChatMessage(
     val textMetrics: TextMetrics? = null,
     val memoryMetrics: MemoryMetrics? = null,
     val citations: List<Citation> = emptyList(),
+    val researchRunId: String? = null,
+    val researchState: String = "",
 )

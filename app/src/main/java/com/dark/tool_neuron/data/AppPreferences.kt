@@ -5,6 +5,7 @@ import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
 import com.dark.hxs_encryptor.HxsEncryptor
 import dagger.hilt.android.qualifiers.ApplicationContext
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,14 +25,10 @@ class AppPreferences @Inject constructor(
         basePath = dir.absolutePath
 
         val dek = keyStore.unwrapOrCreateDek()
-        val userKey = encryptor.deriveKey(ikm = dek, salt = dek, info = USER_KEY_INFO)
+        val signerHash = keyStore.installSignerHash()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = signerHash, info = USER_KEY_INFO)
 
-        val existed = storage.exists(basePath)
-        val opened = if (existed) {
-            storage.openEncrypted(basePath, dek, userKey, encryptor)
-        } else {
-            storage.createEncrypted(basePath, dek, userKey, encryptor)
-        }
+        val opened = openOrRebuild(dek, userKey)
         if (!opened) throw SecurityException("Failed to open encrypted app_prefs vault")
 
         // userKey is NOT wiped: hxs.cpp holds a GlobalRef to this ByteArray for every encrypt/decrypt callback. Zeroing it would make every AEAD op use a zero key.
@@ -166,6 +163,14 @@ class AppPreferences @Inject constructor(
         get() = getString(KEY_HF_SEARCH_HISTORY)
         set(value) = putString(KEY_HF_SEARCH_HISTORY, value)
 
+    var hfTagsCatalogJson: String
+        get() = getString(KEY_HF_TAGS_CATALOG)
+        set(value) = putString(KEY_HF_TAGS_CATALOG, value)
+
+    var hfTagsCatalogSavedAt: Long
+        get() = getString(KEY_HF_TAGS_CATALOG_AT).toLongOrNull() ?: 0L
+        set(value) = putString(KEY_HF_TAGS_CATALOG_AT, value.toString())
+
     var activeTtsModelId: String
         get() = getString(KEY_ACTIVE_TTS_MODEL)
         set(value) = putString(KEY_ACTIVE_TTS_MODEL, value)
@@ -185,6 +190,33 @@ class AppPreferences @Inject constructor(
     var ragDeepResearch: Boolean
         get() = getBoolean(KEY_RAG_DEEP_RESEARCH)
         set(value) = putBoolean(KEY_RAG_DEEP_RESEARCH, value)
+
+    var researchMaxIterations: Int
+        get() = getString(KEY_RESEARCH_MAX_ITERATIONS).toIntOrNull()?.coerceIn(1, 10)
+            ?: DEFAULT_RESEARCH_MAX_ITERATIONS
+        set(value) = putString(KEY_RESEARCH_MAX_ITERATIONS, value.coerceIn(1, 10).toString())
+
+    var researchMaxQuestions: Int
+        get() = getString(KEY_RESEARCH_MAX_QUESTIONS).toIntOrNull()?.coerceIn(1, 6)
+            ?: DEFAULT_RESEARCH_MAX_QUESTIONS
+        set(value) = putString(KEY_RESEARCH_MAX_QUESTIONS, value.coerceIn(1, 6).toString())
+
+    var researchResultsPerSearch: Int
+        get() = getString(KEY_RESEARCH_RESULTS_PER_SEARCH).toIntOrNull()?.coerceIn(3, 10)
+            ?: DEFAULT_RESEARCH_RESULTS_PER_SEARCH
+        set(value) = putString(KEY_RESEARCH_RESULTS_PER_SEARCH, value.coerceIn(3, 10).toString())
+
+    var researchDdgLocale: String
+        get() = getString(KEY_RESEARCH_DDG_LOCALE)
+        set(value) = putString(KEY_RESEARCH_DDG_LOCALE, value)
+
+    var researchCancelOnBackground: Boolean
+        get() = getBoolean(KEY_RESEARCH_CANCEL_ON_BG, default = true)
+        set(value) = putBoolean(KEY_RESEARCH_CANCEL_ON_BG, value)
+
+    var activeResearchModelId: String
+        get() = getString(KEY_ACTIVE_RESEARCH_MODEL)
+        set(value) = putString(KEY_ACTIVE_RESEARCH_MODEL, value)
 
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
@@ -216,7 +248,17 @@ class AppPreferences @Inject constructor(
 
     private fun deriveAuthKey(): ByteArray {
         val dek = keyStore.unwrapOrCreateDek()
-        return encryptor.deriveKey(ikm = dek, salt = dek, info = AUTH_KEY_INFO)
+        val signerHash = keyStore.installSignerHash()
+        return encryptor.deriveKey(ikm = dek, salt = signerHash, info = AUTH_KEY_INFO)
+    }
+
+    private fun openOrRebuild(dek: ByteArray, userKey: ByteArray): Boolean {
+        if (storage.exists(basePath)) {
+            if (storage.openEncrypted(basePath, dek, userKey, encryptor)) return true
+            File(basePath).deleteRecursively()
+            File(basePath).mkdirs()
+        }
+        return storage.createEncrypted(basePath, dek, userKey, encryptor)
     }
 
     companion object {
@@ -240,11 +282,22 @@ class AppPreferences @Inject constructor(
         const val KEY_SERVER_CONFIGURED = "server_configured"
         const val KEY_SERVER_SELECTED_MODEL = "server_selected_model"
         const val KEY_HF_SEARCH_HISTORY = "hf_search_history"
+        const val KEY_HF_TAGS_CATALOG = "hf_tags_catalog_v1"
+        const val KEY_HF_TAGS_CATALOG_AT = "hf_tags_catalog_v1_at"
         const val KEY_ACTIVE_TTS_MODEL = "active_tts_model"
         const val KEY_ACTIVE_STT_MODEL = "active_stt_model"
         const val KEY_RAG_SMART_RERANK = "rag_smart_rerank"
         const val KEY_RAG_MULTI_QUERY = "rag_multi_query"
         const val KEY_RAG_DEEP_RESEARCH = "rag_deep_research"
+        const val KEY_RESEARCH_MAX_ITERATIONS = "research_max_iterations"
+        const val KEY_RESEARCH_MAX_QUESTIONS = "research_max_questions"
+        const val KEY_RESEARCH_RESULTS_PER_SEARCH = "research_results_per_search"
+        const val KEY_RESEARCH_DDG_LOCALE = "research_ddg_locale"
+        const val KEY_RESEARCH_CANCEL_ON_BG = "research_cancel_on_bg"
+        const val KEY_ACTIVE_RESEARCH_MODEL = "active_research_model"
+        const val DEFAULT_RESEARCH_MAX_ITERATIONS = 5
+        const val DEFAULT_RESEARCH_MAX_QUESTIONS = 4
+        const val DEFAULT_RESEARCH_RESULTS_PER_SEARCH = 5
         const val DEFAULT_SERVER_PORT = 11434
         const val DEFAULT_BIND_MODE = "ALL_INTERFACES"
         private const val KEY_AUTH_STATE = "auth_state_v1"
@@ -252,8 +305,8 @@ class AppPreferences @Inject constructor(
         const val SECURITY_NONE = "none"
         const val SECURITY_APP_PASSWORD = "app_password"
 
-        private const val USER_KEY_INFO = "tn.app_prefs.user_key.v1"
-        private const val AUTH_KEY_INFO = "tn.app_prefs.auth_key.v1"
+        private const val USER_KEY_INFO = "tn.app_prefs.user_key.v2"
+        private const val AUTH_KEY_INFO = "tn.app_prefs.auth_key.v2"
         private val AUTH_AAD = "tn.auth_state.v1".toByteArray(Charsets.UTF_8)
     }
 }

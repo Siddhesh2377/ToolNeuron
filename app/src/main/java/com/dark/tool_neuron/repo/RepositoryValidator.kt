@@ -13,21 +13,24 @@ sealed class ValidationResult {
 }
 
 @Singleton
-class RepositoryValidator @Inject constructor() {
+class RepositoryValidator @Inject constructor(
+    private val hfApi: HuggingFaceApi,
+) {
 
     suspend fun validate(repo: HFRepository): ValidationResult = withContext(Dispatchers.IO) {
         try {
-            val infoStatus = HuggingFaceApi.headStatus(HuggingFaceApi.modelInfoUrl(repo.repoPath))
+            val infoStatus = hfApi.probe(hfApi.modelInfoUrl(repo.repoPath)).getOrNull()
                 ?: return@withContext ValidationResult.Invalid("Network error")
             if (infoStatus != 200) {
                 return@withContext when (infoStatus) {
                     404 -> ValidationResult.Invalid("Repository not found")
                     401, 403 -> ValidationResult.Invalid("Access denied")
+                    429 -> ValidationResult.Invalid("Rate limited — try again later")
                     else -> ValidationResult.Invalid("HTTP $infoStatus")
                 }
             }
 
-            val tree = HuggingFaceApi.fetchJsonArray(HuggingFaceApi.modelTreeUrl(repo.repoPath))
+            val tree = hfApi.fetchJsonArray(hfApi.modelTreeUrl(repo.repoPath)).getOrNull()
                 ?: return@withContext ValidationResult.Invalid("Failed to list files")
 
             var ggufCount = 0

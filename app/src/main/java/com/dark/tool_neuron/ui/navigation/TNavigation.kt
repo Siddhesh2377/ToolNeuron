@@ -9,6 +9,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -19,6 +21,8 @@ import com.dark.tool_neuron.model.NavScreens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
+import com.dark.tool_neuron.ui.screens.document.DocumentViewerScreen
+import com.dark.tool_neuron.ui.screens.documents.DocumentsScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
@@ -32,6 +36,7 @@ import com.dark.tool_neuron.ui.screens.guide.GuideChatScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideEntryKeys
 import com.dark.tool_neuron.ui.screens.guide.GuideModelsScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideRagScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideResearchScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideSecurityScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideServerScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideThemesScreen
@@ -56,7 +61,6 @@ import com.dark.tool_neuron.viewmodel.RagDebugViewModel
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import com.dark.tool_neuron.viewmodel.StorageViewModel
-import kotlinx.coroutines.delay
 
 @Composable
 fun TNavigation(
@@ -73,13 +77,6 @@ fun TNavigation(
 ) {
     val transitions = rememberNavTransitions()
 
-    LaunchedEffect(Unit) {
-        delay(2000)
-        navController.navigate(nextDestination) {
-            popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
-        }
-    }
-
     NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -88,8 +85,18 @@ fun TNavigation(
         popEnterTransition = transitions.popEnter,
         popExitTransition = transitions.popExit,
     ) {
-        composable(NavScreens.IntroScreen.route) {
-            IntroScreen(innerPadding)
+        composable(
+            route = NavScreens.IntroScreen.route,
+            exitTransition = { fadeOut(tween(durationMillis = 800)) },
+        ) {
+            IntroScreen(
+                innerPadding = innerPadding,
+                onFinish = {
+                    navController.navigate(nextDestination) {
+                        popUpTo(NavScreens.IntroScreen.route) { inclusive = true }
+                    }
+                },
+            )
         }
         composable(NavScreens.HomeScreen.route) {
             val activity = LocalContext.current as ComponentActivity
@@ -99,7 +106,28 @@ fun TNavigation(
                 actionWindowExpanded = actionWindowExpanded,
                 onActionWindowDismiss = onActionWindowDismiss,
                 onOpenModelManager = { navController.navigate(NavScreens.ModelManager.route) },
+                onOpenResearchDocument = { docId ->
+                    navController.navigate(NavScreens.DocumentViewer.routeFor(docId))
+                },
                 viewModel = homeViewModel,
+            )
+        }
+        composable(NavScreens.Documents.route) {
+            DocumentsScreen(
+                innerPadding = innerPadding,
+                onOpenDocument = { docId ->
+                    navController.navigate(NavScreens.DocumentViewer.routeFor(docId))
+                },
+            )
+        }
+        composable(
+            route = NavScreens.DocumentViewer.route,
+            arguments = listOf(navArgument(NavScreens.DocumentViewer.ARG_DOC_ID) { type = NavType.StringType }),
+        ) { backStack ->
+            val docId = backStack.arguments?.getString(NavScreens.DocumentViewer.ARG_DOC_ID).orEmpty()
+            DocumentViewerScreen(
+                docId = docId,
+                innerPadding = innerPadding,
             )
         }
         composable(NavScreens.DevNotes.route) {
@@ -188,6 +216,7 @@ fun TNavigation(
                         GuideEntryKeys.SECURITY -> NavScreens.GuideSecurity.route
                         GuideEntryKeys.THEMES -> NavScreens.GuideThemes.route
                         GuideEntryKeys.SERVER -> NavScreens.GuideServer.route
+                        GuideEntryKeys.RESEARCH -> NavScreens.GuideResearch.route
                         else -> null
                     }
                     route?.let { navController.navigate(it) }
@@ -202,6 +231,7 @@ fun TNavigation(
         composable(NavScreens.GuideSecurity.route) { GuideSecurityScreen(innerPadding) }
         composable(NavScreens.GuideThemes.route) { GuideThemesScreen(innerPadding) }
         composable(NavScreens.GuideServer.route) { GuideServerScreen(innerPadding) }
+        composable(NavScreens.GuideResearch.route) { GuideResearchScreen(innerPadding) }
         composable(NavScreens.PluginHub.route) {
             PluginHubScreen(
                 onClose = { navController.popBackStack() }

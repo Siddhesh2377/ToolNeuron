@@ -3,6 +3,8 @@ package com.dark.tool_neuron.repo
 import android.content.Context
 import com.dark.hxs.HexStorage
 import com.dark.hxs.HxsRecord
+import com.dark.hxs_encryptor.HxsEncryptor
+import com.dark.tool_neuron.data.AppKeyStore
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.Citation
@@ -22,27 +24,42 @@ import javax.inject.Singleton
 
 @Singleton
 class ChatRepository @Inject constructor(
-    @ApplicationContext private val context: Context
+    @param:ApplicationContext private val context: Context,
+    private val keyStore: AppKeyStore,
+    private val encryptor: HxsEncryptor,
 ) {
     private val storage = HexStorage()
     private val _chats = MutableStateFlow<List<Chat>>(emptyList())
     val chats: StateFlow<List<Chat>> = _chats.asStateFlow()
 
     init {
-        val dir = File(context.filesDir, "chat_store")
-        dir.mkdirs()
+        File(context.filesDir, LEGACY_PLAINTEXT_DIR).deleteRecursively()
+
+        val dir = File(context.filesDir, SECURE_DIR).apply { mkdirs() }
         val path = dir.absolutePath
-        if (storage.exists(path)) {
-            storage.openPlaintext(path)
-        } else {
-            storage.createPlaintext(path)
-        }
+
+        val dek = keyStore.unwrapOrCreateDek()
+        val signerHash = keyStore.installSignerHash()
+        val userKey = encryptor.deriveKey(ikm = dek, salt = signerHash, info = USER_KEY_INFO)
+
+        val opened = openOrRebuild(path, dek, userKey)
+        if (!opened) throw SecurityException("Failed to open encrypted chat_store vault")
+
         storage.ensureCollection(COL_CHATS)
         storage.ensureCollection(COL_MESSAGES)
         storage.addIndex(COL_CHATS, TAG_ID, HexStorage.WIRE_BYTES)
         storage.addIndex(COL_MESSAGES, TAG_MSG_ID, HexStorage.WIRE_BYTES)
         storage.addIndex(COL_MESSAGES, TAG_MSG_CHAT_ID, HexStorage.WIRE_BYTES)
         refresh()
+    }
+
+    private fun openOrRebuild(base: String, dek: ByteArray, userKey: ByteArray): Boolean {
+        if (storage.exists(base)) {
+            if (storage.openEncrypted(base, dek, userKey, encryptor)) return true
+            File(base).deleteRecursively()
+            File(base).mkdirs()
+        }
+        return storage.createEncrypted(base, dek, userKey, encryptor)
     }
 
     fun refresh() {
@@ -118,6 +135,11 @@ class ChatRepository @Inject constructor(
         storage.flush(COL_MESSAGES)
     }
 
+    fun getMessageById(messageId: String): ChatMessage? {
+        return storage.queryString(COL_MESSAGES, TAG_MSG_ID, messageId)
+            .firstOrNull()?.toChatMessage()
+    }
+
     fun getChatById(chatId: String): Chat? {
         return storage.queryString(COL_CHATS, TAG_ID, chatId)
             .firstOrNull()?.toChat()
@@ -171,6 +193,10 @@ class ChatRepository @Inject constructor(
     }
 
     companion object {
+        private const val SECURE_DIR = "chat_store_v2"
+        private const val LEGACY_PLAINTEXT_DIR = "chat_store"
+        private const val USER_KEY_INFO = "tn.chats.user_key.v2"
+
         private const val COL_CHATS = "chats"
         private const val COL_MESSAGES = "messages"
 
@@ -197,6 +223,8 @@ class ChatRepository @Inject constructor(
         private const val TAG_MSG_TEXT_METRICS = 11
         private const val TAG_MSG_MEMORY_METRICS = 12
         private const val TAG_MSG_CITATIONS = 13
+        private const val TAG_MSG_RESEARCH_RUN = 14
+        private const val TAG_MSG_RESEARCH_STATE = 15
     }
 
     private fun Chat.toRecord(): HxsRecord {
@@ -242,6 +270,8 @@ class ChatRepository @Inject constructor(
             m.textMetrics?.let { putString(TAG_MSG_TEXT_METRICS, it.toJson()) }
             m.memoryMetrics?.let { putString(TAG_MSG_MEMORY_METRICS, it.toJson()) }
             if (m.citations.isNotEmpty()) putString(TAG_MSG_CITATIONS, m.citations.toJson())
+            m.researchRunId?.takeIf { it.isNotBlank() }?.let { putString(TAG_MSG_RESEARCH_RUN, it) }
+            if (m.researchState.isNotBlank()) putString(TAG_MSG_RESEARCH_STATE, m.researchState)
         }
     }
 
@@ -270,6 +300,8 @@ class ChatRepository @Inject constructor(
             textMetrics = textJson.takeIf { it.isNotEmpty() }?.let { TextMetrics.fromJson(it) },
             memoryMetrics = memoryJson.takeIf { it.isNotEmpty() }?.let { MemoryMetrics.fromJson(it) },
             citations = citationsJson.takeIf { it.isNotEmpty() }?.let { citationsFromJson(it) }.orEmpty(),
+            researchRunId = getString(TAG_MSG_RESEARCH_RUN).takeIf { it.isNotEmpty() },
+            researchState = getString(TAG_MSG_RESEARCH_STATE),
         )
     }
 

@@ -250,6 +250,12 @@ private fun guideCategories(): List<GuideCategory> = listOf(
                 blurb = "Expose the loaded model on your LAN over an OpenAI-compatible API + Web UI.",
                 icon = TnIcons.Server,
             ),
+            GuideEntry(
+                key = GuideEntryKeys.RESEARCH,
+                title = "Research",
+                blurb = "Multi-iteration web research — slash command or toggle button. Searches, fetches, summarises, cites.",
+                icon = TnIcons.Compass,
+            ),
         ),
     ),
     GuideCategory(
@@ -280,4 +286,5 @@ internal object GuideEntryKeys {
     const val SECURITY = "security"
     const val THEMES = "themes"
     const val SERVER = "server"
+    const val RESEARCH = "research"
 }

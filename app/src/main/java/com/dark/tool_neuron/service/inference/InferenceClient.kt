@@ -64,6 +64,9 @@ object InferenceClient {
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: StateFlow<Boolean> = _isModelLoaded.asStateFlow()
 
+    private val _contextUsage = MutableStateFlow(0f)
+    val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
+
     private val _isTtsLoaded = MutableStateFlow(false)
     val isTtsLoaded: StateFlow<Boolean> = _isTtsLoaded.asStateFlow()
 
@@ -485,15 +488,24 @@ object InferenceClient {
 
     private fun generationCallback(emit: (InferenceEvent) -> Unit) =
         object : IGenerationCallback.Stub() {
-            override fun onToken(token: String) { emit(InferenceEvent.Token(token)) }
+            override fun onToken(token: String) {
+                emit(InferenceEvent.Token(token))
+                _contextUsage.value = getContextUsage()
+            }
             override fun onToolCall(name: String, argsJson: String) { emit(InferenceEvent.ToolCall(name, argsJson)) }
-            override fun onDone() { emit(InferenceEvent.Done) }
+            override fun onDone() {
+                emit(InferenceEvent.Done)
+                _contextUsage.value = getContextUsage()
+            }
             override fun onError(message: String) {
                 emit(InferenceEvent.Error(message))
                 reportLiveError()
             }
             override fun onMetrics(metricsJson: String) { emit(InferenceEvent.Metrics(metricsJson)) }
-            override fun onProgress(progress: Float) { emit(InferenceEvent.Progress(progress)) }
+            override fun onProgress(progress: Float) {
+                emit(InferenceEvent.Progress(progress))
+                _contextUsage.value = getContextUsage()
+            }
             override fun onVlmStageMetrics(vlmEncodeMs: Float, vlmDecodeMs: Float, imageTokens: Int) {
                 emit(InferenceEvent.VlmStageMetrics(vlmEncodeMs, vlmDecodeMs, imageTokens))
             }

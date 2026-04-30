@@ -9,6 +9,7 @@ import com.dark.hxs_encryptor.BootIntegrity
 import com.dark.tool_neuron.data.AccessibilityGuard
 import com.dark.tool_neuron.data.AppLockObserver
 import com.dark.tool_neuron.data.NativeIntegrity
+import com.dark.tool_neuron.data.ResearchBackgroundObserver
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -19,6 +20,7 @@ class TNApplication : Application() {
     @Inject lateinit var integrityLazy: Lazy<NativeIntegrity>
     @Inject lateinit var appLockObserverLazy: Lazy<AppLockObserver>
     @Inject lateinit var accessibilityGuardLazy: Lazy<AccessibilityGuard>
+    @Inject lateinit var researchBackgroundObserverLazy: Lazy<ResearchBackgroundObserver>
 
     override fun onCreate() {
         super.onCreate()
@@ -64,6 +66,7 @@ class TNApplication : Application() {
         }
 
         appLockObserver.register()
+        researchBackgroundObserverLazy.get().register()
     }
 
     private fun isMainProcess(): Boolean = currentProcessName() == packageName

@@ -45,8 +45,8 @@ class StorageInspector @Inject constructor(
         val modelsDir = File(files, "models")
         val vlmDir = File(modelsDir, "vlm")
         val voiceDir = File(files, "voice")
-        val sourcesDir = File(files, "chat_documents/sources")
-        val chatStoreDir = File(files, "chat_store")
+        val sourcesDir = File(files, "chat_documents/sources_v2")
+        val chatStoreDir = File(files, "chat_store_v2")
 
         val chatModelsBytes = dirSize(modelsDir) - dirSize(vlmDir)
         val vlmBytes = dirSize(vlmDir)
@@ -153,6 +153,7 @@ class StorageInspector @Inject constructor(
     private suspend fun clearDocuments() {
         documentRepo.clearAll()
         ragManager.release()
+        File(context.filesDir, "chat_documents/sources_v2").deleteRecursively()
         File(context.filesDir, "chat_documents/sources").deleteRecursively()
     }
 

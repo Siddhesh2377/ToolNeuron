@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.data
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
@@ -12,6 +13,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyStore
+import java.security.MessageDigest
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -29,6 +31,7 @@ class AppKeyStore @Inject constructor(
     private val bootstrapDir: File
     private val bootstrapFile: File
     @Volatile private var cachedDek: ByteArray? = null
+    @Volatile private var cachedSignerHash: ByteArray? = null
 
     enum class Backing { STRONGBOX, TEE, SOFTWARE_FALLBACK, UNKNOWN }
 
@@ -57,8 +60,39 @@ class AppKeyStore @Inject constructor(
         return dek
     }
 
+    fun installSignerHash(): ByteArray {
+        cachedSignerHash?.let { return it }
+        val computed = computeSignerHash()
+            ?: throw SecurityException("Failed to read install signing certificate")
+        cachedSignerHash = computed
+        return computed
+    }
+
+    private fun computeSignerHash(): ByteArray? {
+        val pkg = context.packageName
+        val pm = context.packageManager
+        val sigBytes: ByteArray = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNING_CERTIFICATES)
+                val si = info.signingInfo ?: return null
+                val pick = if (si.hasMultipleSigners()) si.apkContentsSigners else si.signingCertificateHistory
+                pick?.firstOrNull()?.toByteArray() ?: return null
+            } else {
+                @Suppress("DEPRECATION")
+                val info = pm.getPackageInfo(pkg, PackageManager.GET_SIGNATURES)
+                @Suppress("DEPRECATION")
+                info.signatures?.firstOrNull()?.toByteArray() ?: return null
+            }
+        } catch (_: Throwable) {
+            return null
+        }
+        if (sigBytes.size < 16) return null
+        return MessageDigest.getInstance("SHA-256").digest(sigBytes)
+    }
+
     fun wipe() {
         cachedDek = null
+        cachedSignerHash = null
         context.filesDir.listFiles()?.forEach { it.deleteRecursively() }
         context.cacheDir.listFiles()?.forEach { it.deleteRecursively() }
         try {

@@ -31,7 +31,7 @@ android {
 
     defaultConfig {
         applicationId = "com.dark.tool_neuron"
-        minSdk = 29
+        minSdk = 31
         targetSdk = 36
         versionCode = (rootProject.findProperty("tn.versionCode") as String).toInt()
         versionName = rootProject.findProperty("tn.versionName") as String

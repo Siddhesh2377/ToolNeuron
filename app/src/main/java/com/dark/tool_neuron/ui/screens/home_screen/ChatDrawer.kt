@@ -56,6 +56,7 @@ fun ChatDrawerContent(
     onNavigateToDevNotes: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
     onNavigateToServer: () -> Unit = {},
+    onNavigateToDocuments: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val pinnedChats = remember(chats) { chats.filter { it.isPinned } }
@@ -159,8 +160,9 @@ fun ChatDrawerContent(
         ) {
             DrawerQuickLink(icon = TnIcons.Download, label = "Store", onClick = onNavigateToStore)
             DrawerQuickLink(icon = TnIcons.BookOpen, label = "Guide", onClick = onNavigateToGuide)
-            DrawerQuickLink(icon = TnIcons.Info, label = "Dev Notes", onClick = onNavigateToDevNotes)
+            DrawerQuickLink(icon = TnIcons.FileText, label = "Docs", onClick = onNavigateToDocuments)
             DrawerQuickLink(icon = TnIcons.Server, label = "Server", onClick = onNavigateToServer)
+            DrawerQuickLink(icon = TnIcons.Info, label = "Dev Notes", onClick = onNavigateToDevNotes)
             DrawerQuickLink(icon = TnIcons.Settings, label = "Settings", onClick = onNavigateToSettings)
         }
     }

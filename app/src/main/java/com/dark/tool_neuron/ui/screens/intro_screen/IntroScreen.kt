@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screens.intro_screen
 
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -29,25 +30,63 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.dark.tool_neuron.ui.components.TnProgressBar
 import com.dark.tool_neuron.ui.icons.TnIcons
+import kotlinx.coroutines.delay
+import kotlin.math.sqrt
 
 @Composable
-fun IntroScreen(innerPadding: PaddingValues) {
-    var target by remember { mutableFloatStateOf(0f) }
+fun IntroScreen(
+    innerPadding: PaddingValues,
+    onFinish: () -> Unit = {},
+) {
+    var progressTarget by remember { mutableFloatStateOf(0f) }
     val progress by animateFloatAsState(
-        targetValue = target,
-        animationSpec = tween(durationMillis = 1800, easing = LinearEasing),
+        targetValue = progressTarget,
+        animationSpec = tween(durationMillis = PROGRESS_DURATION_MS, easing = LinearEasing),
         label = "introProgress",
     )
 
-    LaunchedEffect(Unit) { target = 1f }
+    var revealTarget by remember { mutableFloatStateOf(0f) }
+    val reveal by animateFloatAsState(
+        targetValue = revealTarget,
+        animationSpec = tween(durationMillis = REVEAL_DURATION_MS, easing = FastOutSlowInEasing),
+        label = "introReveal",
+    )
+
+    LaunchedEffect(Unit) { progressTarget = 1f }
+
+    LaunchedEffect(progress) {
+        if (progress >= 1f && revealTarget < 1f) {
+            delay(PROGRESS_TO_REVEAL_PAUSE_MS)
+            revealTarget = 1f
+            delay(REVEAL_DURATION_MS.toLong() + REVEAL_HOLD_MS)
+            onFinish()
+        }
+    }
+
+    val accent = MaterialTheme.colorScheme.primary
 
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .drawWithContent {
+                drawContent()
+                if (reveal > 0f) {
+                    val cx = size.width / 2f
+                    val cy = size.height / 2f
+                    val maxRadius = sqrt(cx * cx + cy * cy)
+                    drawCircle(
+                        color = accent,
+                        radius = maxRadius * reveal,
+                        center = Offset(cx, cy),
+                    )
+                }
+            }
             .padding(innerPadding),
         contentAlignment = Alignment.Center,
     ) {
@@ -88,3 +127,8 @@ fun IntroScreen(innerPadding: PaddingValues) {
         }
     }
 }
+
+private const val PROGRESS_DURATION_MS = 1800
+private const val PROGRESS_TO_REVEAL_PAUSE_MS = 150L
+private const val REVEAL_DURATION_MS = 600
+private const val REVEAL_HOLD_MS = 350L

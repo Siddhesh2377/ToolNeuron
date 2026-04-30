@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
+import com.dark.tool_neuron.ui.screens.document.DocumentViewerTopBar
+import com.dark.tool_neuron.ui.screens.documents.DocumentsTopBar
 import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
@@ -50,6 +52,7 @@ fun AppTopBar(
         NavScreens.GuideSecurity.route -> GuideTopBar(title = "Privacy and lock", onBack = onBack)
         NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
         NavScreens.GuideServer.route -> GuideTopBar(title = "Remote Server", onBack = onBack)
+        NavScreens.GuideResearch.route -> GuideTopBar(title = "Research", onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.SetupRag.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
@@ -57,9 +60,12 @@ fun AppTopBar(
         NavScreens.Storage.route -> StorageTopBar(onBack = onBack)
         NavScreens.ServerScreen.route -> ServerTopBar()
         NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)
+        NavScreens.Documents.route -> DocumentsTopBar(onBack = onBack)
         else -> {
             if (currentRoute?.startsWith("hf_repo/") == true) {
                 GuideTopBar(title = "Repository", onBack = onBack)
+            } else if (currentRoute?.startsWith("document/") == true) {
+                DocumentViewerTopBar(title = "Document", onBack = onBack)
             } else if (currentRoute?.startsWith("model_config/") == true) Unit
             else Unit
         }
