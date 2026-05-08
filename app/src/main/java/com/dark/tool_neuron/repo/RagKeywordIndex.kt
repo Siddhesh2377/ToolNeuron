@@ -1,7 +1,6 @@
 package com.dark.tool_neuron.repo
 
 import android.content.Context
-import android.util.Log
 import com.dark.hxs.HexStorage
 import com.dark.hxs_encryptor.HxsEncryptor
 import com.dark.tool_neuron.data.AppKeyStore
@@ -12,6 +11,7 @@ import javax.inject.Singleton
 
 data class KeywordHit(
     val docId: String,
+    val chatId: String,
     val sourceId: String,
     val chunkIndex: Int,
     val text: String,
@@ -41,8 +41,6 @@ class RagKeywordIndex @Inject constructor(
         if (!opened) throw SecurityException("Failed to open encrypted rag_keyword vault")
 
         storage.ensureCollection(COLLECTION)
-        runCatching { wipeIfLegacySchema() }
-            .onFailure { Log.w(TAG, "legacy schema wipe failed", it) }
     }
 
     private fun openOrRebuild(base: String, dek: ByteArray, userKey: ByteArray): Boolean {
@@ -54,22 +52,9 @@ class RagKeywordIndex @Inject constructor(
         return storage.createEncrypted(base, dek, userKey, encryptorRef)
     }
 
-    private fun wipeIfLegacySchema() {
-        val sample = runCatching { storage.getAll(COLLECTION) }.getOrNull().orEmpty()
-        if (sample.isEmpty()) return
-        val hasLegacyChatScope = sample.any { rec ->
-            val docId = rec.getString(TAG_DOC_ID, "")
-            val chatField = rec.getString(TAG_CHAT_ID, "")
-            docId.contains(':') || chatField.isNotBlank()
-        }
-        if (!hasLegacyChatScope) return
-        Log.i(TAG, "wiping legacy chat-scoped BM25 records (${sample.size})")
-        storage.ragClear(COLLECTION)
-        storage.flush(COLLECTION)
-    }
-
     fun ingest(
         docId: String,
+        chatId: String,
         sourceId: String,
         chunks: List<String>,
     ): Int {
@@ -77,19 +62,20 @@ class RagKeywordIndex @Inject constructor(
         var inserted = 0
         chunks.forEachIndexed { idx, text ->
             if (text.isBlank()) return@forEachIndexed
-            val r = storage.ragIngest(COLLECTION, docId, "", sourceId, idx, text)
+            val r = storage.ragIngest(COLLECTION, docId, chatId, sourceId, idx, text)
             if (r > 0) inserted++
         }
         if (inserted > 0) storage.flush(COLLECTION)
         return inserted
     }
 
-    fun query(query: String, topK: Int): List<KeywordHit> {
+    fun query(query: String, chatId: String, topK: Int): List<KeywordHit> {
         if (query.isBlank() || topK <= 0) return emptyList()
-        val records = storage.ragQuery(COLLECTION, query, "", topK)
+        val records = storage.ragQuery(COLLECTION, query, chatId, topK)
         return records.map { rec ->
             KeywordHit(
                 docId = rec.getString(TAG_DOC_ID),
+                chatId = rec.getString(TAG_CHAT_ID),
                 sourceId = rec.getString(TAG_SOURCE_ID),
                 chunkIndex = rec.getInt(TAG_CHUNK_INDEX, 0).toInt(),
                 text = rec.getString(TAG_TEXT),
@@ -103,6 +89,13 @@ class RagKeywordIndex @Inject constructor(
         if (n > 0) storage.flush(COLLECTION)
     }
 
+    fun removeChat(chatId: String) {
+        val records = storage.queryString(COLLECTION, TAG_CHAT_ID, chatId)
+        val docIds = records.map { it.getString(TAG_DOC_ID) }.toSet()
+        docIds.forEach { storage.ragRemoveDocument(COLLECTION, it) }
+        if (docIds.isNotEmpty()) storage.flush(COLLECTION)
+    }
+
     fun clearAll() {
         storage.ragClear(COLLECTION)
         storage.flush(COLLECTION)
@@ -111,7 +104,6 @@ class RagKeywordIndex @Inject constructor(
     fun docCount(docId: String): Int = storage.ragDocCount(COLLECTION, docId)
 
     companion object {
-        private const val TAG = "RagKeywordIndex"
         private const val SECURE_DIR = "rag_keyword_v1"
         private const val COLLECTION = "rag_chunks"
         private const val USER_KEY_INFO = "tn.rag_keyword.user_key.v2"

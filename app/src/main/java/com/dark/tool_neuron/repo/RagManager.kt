@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,16 +36,12 @@ class RagManager @Inject constructor(
     private val raptor: RagRaptor,
     private val appPrefs: AppPreferences,
     private val sourceVault: SourceFileVault,
-    private val cache: RagCacheRepository,
 ) {
     private val engine = RAGEngine()
     private val opsMutex = Mutex()
     private val readyMutex = Mutex()
     private val raptorMutex = Mutex()
     private val ingestedDocIds = mutableSetOf<String>()
-
-    @Volatile private var activeFingerprint: String = ""
-    @Volatile private var loadedSources: Set<String> = emptySet()
 
     private val _isReady = MutableStateFlow(false)
     val isReady: StateFlow<Boolean> = _isReady.asStateFlow()
@@ -114,14 +111,59 @@ class RagManager @Inject constructor(
             return@withLock false
         }
 
-        activeFingerprint = model.id.ifBlank { model.path }
-        runCatching { cache.invalidateForeign(activeFingerprint) }
-            .onFailure { Log.w(TAG, "cache invalidate failed", it) }
-
         _activeEmbeddingName.value = model.name
         _isReady.value = true
-        Log.i(TAG, "RAG ready with model: ${model.name} (fp=$activeFingerprint)")
+
+        runCatching { restoreIndexSnapshot() }.onFailure { err ->
+            Log.w(TAG, "vector snapshot restore failed", err)
+        }
+
+        Log.i(TAG, "RAG ready with model: ${model.name}")
         true
+    }
+
+    private val snapshotFile: File by lazy {
+        File(context.filesDir, "rag_vector_snapshot_v1.bin")
+    }
+
+    private suspend fun restoreIndexSnapshot() = withContext(Dispatchers.IO) {
+        val f = snapshotFile
+        if (!f.exists() || f.length() <= 0) return@withContext
+        val bytes = runCatching { f.readBytes() }.getOrNull() ?: return@withContext
+        val rc = opsMutex.withLock { engine.importIndex(bytes) }
+        if (rc == 0) {
+            documentRepo.getAllDocuments().forEach { doc ->
+                ingestedDocIds += doc.id
+                if (doc.isRaptorIndexed) {
+                    documentRepo.updateDocument(doc.copy(isRaptorIndexed = false))
+                }
+            }
+            Log.i(TAG, "vector snapshot restored: ${bytes.size / 1024} KB, ${ingestedDocIds.size} docs")
+        } else {
+            Log.w(TAG, "vector snapshot import failed (rc=$rc) — deleting and re-embedding on demand")
+            runCatching { f.delete() }
+        }
+    }
+
+    suspend fun saveIndexSnapshot() = withContext(Dispatchers.IO) {
+        if (!_isReady.value) return@withContext
+        val bytes = opsMutex.withLock { engine.exportIndex() } ?: return@withContext
+        val tmp = File(snapshotFile.parentFile, snapshotFile.name + ".tmp")
+        runCatching {
+            tmp.outputStream().use { it.write(bytes) }
+            if (!tmp.renameTo(snapshotFile)) {
+                tmp.copyTo(snapshotFile, overwrite = true)
+                tmp.delete()
+            }
+            Log.i(TAG, "vector snapshot saved: ${bytes.size / 1024} KB")
+        }.onFailure { err ->
+            Log.w(TAG, "vector snapshot save failed", err)
+            runCatching { tmp.delete() }
+        }
+    }
+
+    private fun deleteIndexSnapshot() {
+        runCatching { snapshotFile.delete() }
     }
 
     private fun pickEmbeddingModel(): ModelInfo? {
@@ -133,99 +175,27 @@ class RagManager @Inject constructor(
 
     suspend fun hydrateChat(chatId: String): List<ChatDocument> = withContext(Dispatchers.IO) {
         val records = documentRepo.getDocumentsForChat(chatId)
-        if (records.isEmpty()) {
-            opsMutex.withLock { swapEngineSources(emptySet()) }
-            return@withContext emptyList()
-        }
+        if (records.isEmpty()) return@withContext emptyList()
         if (!ensureReady()) return@withContext records
 
-        val target = records.mapNotNull { it.sourceId.takeIf { id -> id.isNotBlank() } }.toSet()
-
-        opsMutex.withLock { swapEngineSources(target, records) }
-        records
-    }
-
-    private suspend fun swapEngineSources(
-        target: Set<String>,
-        records: List<ChatDocument> = emptyList(),
-    ) {
-        val current = loadedSources
-        val toRemove = current - target
-        val toAdd = target - current
-
-        toRemove.forEach { sourceId ->
-            removeSourceFromEngine(sourceId)
-        }
-        toAdd.forEach { sourceId ->
-            val record = records.firstOrNull { it.sourceId == sourceId }
-            ensureSourceInEngine(sourceId, record)
-        }
-
-        loadedSources = target
-    }
-
-    private fun removeSourceFromEngine(sourceId: String) {
-        if (sourceId.isBlank()) return
-        val toDrop = ingestedDocIds.filter { it == sourceId || it.startsWith("$sourceId::") }
-        toDrop.forEach { engine.removeDocument(it) }
-        ingestedDocIds -= toDrop.toSet()
-    }
-
-    private suspend fun ensureSourceInEngine(sourceId: String, record: ChatDocument?) {
-        if (sourceId.isBlank()) return
-        if (sourceId in ingestedDocIds) return
-
-        val cached = runCatching { cache.readBySource(sourceId) }.getOrNull().orEmpty()
-        if (cached.isNotEmpty()) {
-            var anyImported = false
-            cached.forEach { entry ->
-                if (entry.fingerprint != activeFingerprint) return@forEach
-                val rc = engine.importDoc(entry.blob)
-                if (rc == 0) {
-                    ingestedDocIds += entry.docId
-                    anyImported = true
-                } else {
-                    Log.w(TAG, "cache importDoc rc=$rc for ${entry.docId}; will fall back to re-embed")
-                }
+        records.forEach { doc ->
+            if (doc.id in ingestedDocIds) return@forEach
+            if (doc.sourceId.isBlank()) return@forEach
+            val bytes = sourceVault.read(doc.sourceId) ?: return@forEach
+            val chunks = opsMutex.withLock {
+                engine.ingestBytes(bytes, doc.mimeType, doc.name, doc.id)
             }
-            if (anyImported) return
-            cache.removeBySource(sourceId)
+            if (chunks >= 0) {
+                ingestedDocIds += doc.id
+                indexKeywordsIfTextLike(doc.id, chatId, doc.sourceId, doc.name, doc.mimeType, bytes)
+                if (doc.isRaptorIndexed) {
+                    documentRepo.updateDocument(doc.copy(isRaptorIndexed = false))
+                }
+            } else {
+                Log.w(TAG, "hydrate failed for ${doc.id}: code=$chunks")
+            }
         }
-
-        if (record == null) {
-            Log.w(TAG, "ensureSourceInEngine($sourceId): no metadata record, cannot re-embed")
-            return
-        }
-        reembedSource(sourceId, record)
-    }
-
-    private suspend fun reembedSource(sourceId: String, record: ChatDocument) {
-        val bytes = sourceVault.read(sourceId) ?: run {
-            Log.w(TAG, "source $sourceId missing on disk")
-            return
-        }
-        val n = engine.ingestBytes(bytes, record.mimeType, record.name, sourceId)
-        if (n < 0) {
-            Log.w(TAG, "re-embed failed for $sourceId: rc=$n")
-            return
-        }
-        ingestedDocIds += sourceId
-        cacheCurrentDoc(sourceId, sourceId)
-        indexKeywordsIfTextLike(sourceId, record.name, record.mimeType, bytes)
-    }
-
-    private fun cacheCurrentDoc(docId: String, sourceId: String) {
-        val blob = engine.exportDoc(docId) ?: return
-        runCatching {
-            cache.write(
-                RagCacheEntry(
-                    docId = docId,
-                    sourceId = sourceId,
-                    fingerprint = activeFingerprint,
-                    blob = blob,
-                ),
-            )
-        }.onFailure { Log.w(TAG, "cache write failed for $docId", it) }
+        records
     }
 
     suspend fun ingestDocument(
@@ -237,7 +207,7 @@ class RagManager @Inject constructor(
     ): Result<ChatDocument> = withContext(Dispatchers.IO) {
         if (!ensureReady()) {
             return@withContext Result.failure(
-                IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store."),
+                IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store.")
             )
         }
 
@@ -245,64 +215,44 @@ class RagManager @Inject constructor(
             context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
         }.getOrNull()
             ?: return@withContext Result.failure(IllegalStateException("Could not read document"))
+
         if (bytes.isEmpty()) return@withContext Result.failure(IllegalStateException("Document is empty"))
 
         val effectiveMime = mimeType ?: context.contentResolver.getType(uri)
         val sourceId = sha256Hex(bytes)
-        val docMetaId = "$chatId:$sourceId"
+        val docId = "$chatId:$sourceId"
 
-        val existing = documentRepo.getDocumentsForChat(chatId).firstOrNull { it.id == docMetaId }
+        val existing = documentRepo.getDocumentsForChat(chatId).firstOrNull { it.id == docId }
         if (existing != null) return@withContext Result.success(existing)
 
         if (!sourceVault.write(sourceId, bytes)) {
             return@withContext Result.failure(IllegalStateException("Could not store document bytes"))
         }
 
-        val resolvedMime = effectiveMime ?: "application/octet-stream"
-
         val chunkCount = opsMutex.withLock {
-            if (sourceId in ingestedDocIds) {
-                engine.exportDoc(sourceId)?.let { /* already loaded; fall through to meta write */ }
-                keywordIndex.docCount(sourceId)
-            } else {
-                val cached = runCatching { cache.readBySource(sourceId) }.getOrNull().orEmpty()
-                val importedCount = if (cached.isNotEmpty()) {
-                    var ok = 0
-                    cached.forEach { entry ->
-                        if (entry.fingerprint != activeFingerprint) return@forEach
-                        if (engine.importDoc(entry.blob) == 0) {
-                            ingestedDocIds += entry.docId
-                            ok++
-                        }
-                    }
-                    if (ok > 0) keywordIndex.docCount(sourceId).coerceAtLeast(1) else -1
-                } else -1
-
-                if (importedCount < 0) {
-                    val n = engine.ingestBytes(bytes, resolvedMime, displayName, sourceId)
-                    if (n < 0) {
-                        return@withLock n
-                    }
-                    ingestedDocIds += sourceId
-                    cacheCurrentDoc(sourceId, sourceId)
-                    indexKeywordsIfTextLike(sourceId, displayName, resolvedMime, bytes)
-                    n
-                } else {
-                    importedCount
-                }
-            }
+            engine.ingestBytes(bytes, effectiveMime, displayName, docId)
         }
 
         when {
-            chunkCount == -1 -> return@withContext Result.failure(IllegalStateException("Unsupported document format"))
-            chunkCount == -2 -> return@withContext Result.failure(IllegalStateException("Could not parse document"))
-            chunkCount == -3 -> return@withContext Result.failure(IllegalStateException("Document contains no readable text"))
-            chunkCount < 0 -> return@withContext Result.failure(IllegalStateException("Indexing failed (code $chunkCount)"))
+            chunkCount == -1 -> return@withContext Result.failure(
+                IllegalStateException("Unsupported document format")
+            )
+            chunkCount == -2 -> return@withContext Result.failure(
+                IllegalStateException("Could not parse document")
+            )
+            chunkCount == -3 -> return@withContext Result.failure(
+                IllegalStateException("Document contains no readable text")
+            )
+            chunkCount < 0 -> return@withContext Result.failure(
+                IllegalStateException("Indexing failed (code $chunkCount)")
+            )
         }
 
-        loadedSources = loadedSources + sourceId
+        ingestedDocIds += docId
+        val resolvedMime = effectiveMime ?: "application/octet-stream"
+        indexKeywordsIfTextLike(docId, chatId, sourceId, displayName, resolvedMime, bytes)
         val doc = ChatDocument(
-            id = docMetaId,
+            id = docId,
             chatId = chatId,
             sourceId = sourceId,
             name = displayName,
@@ -311,6 +261,7 @@ class RagManager @Inject constructor(
             sizeBytes = size,
         )
         documentRepo.addDocument(doc)
+        saveIndexSnapshot()
         Result.success(doc)
     }
 
@@ -321,40 +272,45 @@ class RagManager @Inject constructor(
         if (source.sourceId.isBlank()) {
             return@withContext Result.failure(IllegalStateException("Source document is unavailable"))
         }
+        if (!ensureReady()) {
+            return@withContext Result.failure(
+                IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store.")
+            )
+        }
         if (!sourceVault.exists(source.sourceId)) {
             return@withContext Result.failure(IllegalStateException("Source bytes for ${source.name} are missing"))
         }
-        val docMetaId = "$currentChatId:${source.sourceId}"
-        documentRepo.getDocumentsForChat(currentChatId).firstOrNull { it.id == docMetaId }?.let {
+        val docId = "$currentChatId:${source.sourceId}"
+        documentRepo.getDocumentsForChat(currentChatId).firstOrNull { it.id == docId }?.let {
             return@withContext Result.success(it)
         }
+        val bytes = sourceVault.read(source.sourceId)
+            ?: return@withContext Result.failure(IllegalStateException("Could not read stored bytes"))
 
-        if (ensureReady()) {
-            opsMutex.withLock {
-                if (source.sourceId !in ingestedDocIds) {
-                    ensureSourceInEngine(source.sourceId, source)
-                }
-            }
-            loadedSources = loadedSources + source.sourceId
+        val chunkCount = opsMutex.withLock {
+            engine.ingestBytes(bytes, source.mimeType, source.name, docId)
         }
-
+        if (chunkCount < 0) {
+            return@withContext Result.failure(IllegalStateException("Indexing failed (code $chunkCount)"))
+        }
+        ingestedDocIds += docId
+        indexKeywordsIfTextLike(docId, currentChatId, source.sourceId, source.name, source.mimeType, bytes)
         val doc = ChatDocument(
-            id = docMetaId,
+            id = docId,
             chatId = currentChatId,
             sourceId = source.sourceId,
             name = source.name,
             mimeType = source.mimeType,
-            chunkCount = source.chunkCount,
+            chunkCount = chunkCount,
             sizeBytes = source.sizeBytes,
-            isDeepIndexed = source.isDeepIndexed,
-            isRaptorIndexed = source.isRaptorIndexed,
         )
         documentRepo.addDocument(doc)
+        saveIndexSnapshot()
         Result.success(doc)
     }
 
-    suspend fun deepIndex(docMetaId: String): Result<ChatDocument> = withContext(Dispatchers.IO) {
-        val doc = documentRepo.getDocument(docMetaId)
+    suspend fun deepIndex(docId: String): Result<ChatDocument> = withContext(Dispatchers.IO) {
+        val doc = documentRepo.getDocument(docId)
             ?: return@withContext Result.failure(IllegalStateException("Document not found"))
         if (doc.isDeepIndexed) return@withContext Result.success(doc)
         if (!isTextLike(doc.mimeType, doc.name)) {
@@ -375,7 +331,7 @@ class RagManager @Inject constructor(
         val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() }
             ?: return@withContext Result.failure(IllegalStateException("Source contains no text"))
 
-        _deepIndexing.value = _deepIndexing.value + docMetaId
+        _deepIndexing.value = _deepIndexing.value + docId
         try {
             val summary = docSummarizer.summarize(doc.name, doc.mimeType, text)
                 ?: return@withContext Result.failure(IllegalStateException("Could not generate summary — chat model may be busy"))
@@ -394,31 +350,28 @@ class RagManager @Inject constructor(
             }
 
             chunks.forEachIndexed { idx, chunk ->
-                val subDocId = "${doc.sourceId}::ctx$idx"
+                val subDocId = "$docId::ctx$idx"
                 val combined = ctxPrefix + chunk
                 val combinedBytes = combined.toByteArray(Charsets.UTF_8)
                 val n = opsMutex.withLock {
                     engine.ingestBytes(combinedBytes, "text/plain", "${doc.name} (ctx$idx)", subDocId)
                 }
-                if (n >= 0) {
-                    ingestedDocIds += subDocId
-                    cacheCurrentDoc(subDocId, doc.sourceId)
-                }
-                keywordIndex.ingest(subDocId, doc.sourceId, listOf(combined))
+                if (n >= 0) ingestedDocIds += subDocId
+                keywordIndex.ingest(subDocId, doc.chatId.orEmpty(), doc.sourceId, listOf(combined))
             }
 
-            documentRepo.getAllDocuments()
-                .filter { it.sourceId == doc.sourceId && !it.isDeepIndexed }
-                .forEach { documentRepo.updateDocument(it.copy(isDeepIndexed = true, chunkCount = it.chunkCount + chunks.size)) }
+            val updated = doc.copy(isDeepIndexed = true, chunkCount = doc.chunkCount + chunks.size)
+            documentRepo.updateDocument(updated)
+            saveIndexSnapshot()
             Log.i(TAG, "deepIndex ${doc.name}: ${chunks.size} contextual chunks added")
-            Result.success(doc.copy(isDeepIndexed = true, chunkCount = doc.chunkCount + chunks.size))
+            Result.success(updated)
         } finally {
-            _deepIndexing.value = _deepIndexing.value - docMetaId
+            _deepIndexing.value = _deepIndexing.value - docId
         }
     }
 
-    suspend fun buildRaptorTree(docMetaId: String): Result<ChatDocument> = raptorMutex.withLock {
-        val doc = documentRepo.getDocument(docMetaId)
+    suspend fun buildRaptorTree(docId: String): Result<ChatDocument> = raptorMutex.withLock {
+        val doc = documentRepo.getDocument(docId)
             ?: return@withLock Result.failure(IllegalStateException("Document not found"))
         if (doc.isRaptorIndexed) return@withLock Result.success(doc)
         if (doc.sourceId.isBlank()) return@withLock Result.failure(IllegalStateException("Document source unavailable"))
@@ -429,7 +382,7 @@ class RagManager @Inject constructor(
             return@withLock Result.failure(IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store."))
         }
 
-        _raptorBuilding.value = _raptorBuilding.value + docMetaId
+        _raptorBuilding.value = _raptorBuilding.value + docId
         try {
             val bytes = withContext(Dispatchers.IO) { sourceVault.read(doc.sourceId) }
                 ?: return@withLock Result.failure(IllegalStateException("Source bytes for ${doc.name} are missing"))
@@ -442,49 +395,49 @@ class RagManager @Inject constructor(
             tree.levels.forEachIndexed { levelIdx, nodes ->
                 if (levelIdx == 0) return@forEachIndexed
                 nodes.forEachIndexed { clusterIdx, summary ->
-                    val subDocId = "${doc.sourceId}::raptor:lvl$levelIdx:cluster$clusterIdx"
-                    val summaryBytes = summary.toByteArray(Charsets.UTF_8)
-                    val n = opsMutex.withLock {
-                        engine.ingestBytes(summaryBytes, "text/plain", "${doc.name} (lvl$levelIdx)", subDocId)
+                    val subDocId = "$docId::raptor:lvl$levelIdx:cluster$clusterIdx"
+                    val bytes = summary.toByteArray(Charsets.UTF_8)
+                    val chunks = opsMutex.withLock {
+                        engine.ingestBytes(bytes, "text/plain", "${doc.name} (lvl$levelIdx)", subDocId)
                     }
-                    if (n >= 0) {
+                    if (chunks >= 0) {
                         ingestedDocIds += subDocId
-                        cacheCurrentDoc(subDocId, doc.sourceId)
-                        keywordIndex.ingest(subDocId, doc.sourceId, listOf(summary))
+                        keywordIndex.ingest(subDocId, doc.chatId.orEmpty(), doc.sourceId, listOf(summary))
                     } else {
-                        Log.w(TAG, "raptor ingest failed for $subDocId: code=$n")
+                        Log.w(TAG, "raptor ingest failed for $subDocId: code=$chunks")
                     }
                 }
             }
 
-            documentRepo.getAllDocuments()
-                .filter { it.sourceId == doc.sourceId && !it.isRaptorIndexed }
-                .forEach { documentRepo.updateDocument(it.copy(isRaptorIndexed = true)) }
+            val updated = doc.copy(isRaptorIndexed = true)
+            documentRepo.updateDocument(updated)
+            saveIndexSnapshot()
             Log.i(TAG, "raptor ${doc.name}: ${tree.levels.size - 1} summary level(s) built")
-            Result.success(doc.copy(isRaptorIndexed = true))
+            Result.success(updated)
         } finally {
-            _raptorBuilding.value = _raptorBuilding.value - docMetaId
+            _raptorBuilding.value = _raptorBuilding.value - docId
         }
     }
 
-    suspend fun removeDocument(docMetaId: String) = withContext(Dispatchers.IO) {
-        val doc = documentRepo.getAllDocuments().firstOrNull { it.id == docMetaId }
-        documentRepo.removeDocument(docMetaId)
-        val sourceId = doc?.sourceId
-        if (sourceId.isNullOrBlank()) return@withContext
-
-        val stillReferenced = documentRepo.countWithSource(sourceId) > 0
-        if (stillReferenced) return@withContext
-
-        opsMutex.withLock { removeSourceFromEngine(sourceId) }
-        loadedSources = loadedSources - sourceId
-        keywordIndex.removeDocument(sourceId)
-        ingestedDocIds.filter { it.startsWith("$sourceId::") }.forEach { sub ->
+    suspend fun removeDocument(docId: String) = withContext(Dispatchers.IO) {
+        opsMutex.withLock { engine.removeDocument(docId) }
+        ingestedDocIds -= docId
+        keywordIndex.removeDocument(docId)
+        val subIds = ingestedDocIds.filter {
+            it.startsWith("$docId::ctx") || it.startsWith("$docId::raptor")
+        }.toList()
+        subIds.forEach { sub ->
+            opsMutex.withLock { engine.removeDocument(sub) }
+            ingestedDocIds -= sub
             keywordIndex.removeDocument(sub)
         }
-        runCatching { cache.removeBySource(sourceId) }
-            .onFailure { Log.w(TAG, "cache remove failed for $sourceId", it) }
-        sourceVault.delete(sourceId)
+        val doc = documentRepo.getAllDocuments().firstOrNull { it.id == docId }
+        documentRepo.removeDocument(docId)
+        val sourceId = doc?.sourceId
+        if (!sourceId.isNullOrBlank() && documentRepo.countWithSource(sourceId) == 0) {
+            sourceVault.delete(sourceId)
+        }
+        saveIndexSnapshot()
     }
 
     suspend fun buildAugmentedPrompt(
@@ -503,11 +456,6 @@ class RagManager @Inject constructor(
     ): RagAugmentation = withContext(Dispatchers.IO) {
         if (!_isReady.value) return@withContext RagAugmentation.NONE
 
-        val sourceIds = documentRepo.getDocumentsForChat(chatId)
-            .mapNotNull { it.sourceId.takeIf { s -> s.isNotBlank() } }
-            .toSet()
-        if (sourceIds.isEmpty()) return@withContext RagAugmentation.NONE
-
         try {
             val variants = if (appPrefs.ragMultiQuery) {
                 _retrievalStatus.value = RetrievalStatus.RewritingQuery
@@ -519,12 +467,11 @@ class RagManager @Inject constructor(
             val rankings = mutableListOf<List<Pair<Pair<String, Int>, String>>>()
             var totalDense = 0
             var totalBm25 = 0
+            val chatPrefix = "$chatId:"
             for (q in queries) {
-                val dense = opsMutex.withLock { engine.queryFiltered(q, "") }
-                    .filter { hit -> hit.docId.parentSourceId() in sourceIds }
-                val bm25 = runCatching { keywordIndex.query(q, topK = KEYWORD_CANDIDATES) }
+                val dense = opsMutex.withLock { engine.queryFiltered(q, chatPrefix) }
+                val bm25 = runCatching { keywordIndex.query(q, chatId, topK = KEYWORD_CANDIDATES) }
                     .getOrElse { emptyList() }
-                    .filter { it.sourceId in sourceIds || it.docId.parentSourceId() in sourceIds }
                 totalDense += dense.size
                 totalBm25 += bm25.size
                 if (dense.isNotEmpty()) rankings += dense.map { (it.docId to it.chunkIndex) to it.text }
@@ -536,16 +483,15 @@ class RagManager @Inject constructor(
             val fused = rrfFuseMany(rankings)
             if (fused.isEmpty()) return@withContext RagAugmentation.NONE
 
-            val chatDocs = documentRepo.getDocumentsForChat(chatId)
-            val docsBySourceId = chatDocs.associateBy { it.sourceId }
+            val docsByDocId = documentRepo.getDocumentsForChat(chatId).associateBy { it.id }
             val pooled = fused.mapNotNull { hit ->
                 val text = hit.text.trim()
                 if (text.isEmpty()) return@mapNotNull null
-                val parentSource = hit.docId.parentSourceId()
-                val doc = docsBySourceId[parentSource]
+                val parentId = hit.docId.substringBefore("::ctx").substringBefore("::raptor")
+                val doc = docsByDocId[parentId] ?: docsByDocId[hit.docId]
                 RagChunk(
-                    docId = parentSource,
-                    sourceId = parentSource,
+                    docId = parentId,
+                    sourceId = doc?.sourceId ?: parentId.substringAfter(':', missingDelimiterValue = ""),
                     chunkIndex = hit.chunkIndex,
                     score = hit.rrfScore,
                     text = text,
@@ -604,9 +550,6 @@ class RagManager @Inject constructor(
         }
     }
 
-    private fun String.parentSourceId(): String =
-        substringBefore("::")
-
     private data class FusedHit(
         val docId: String,
         val chunkIndex: Int,
@@ -656,10 +599,7 @@ class RagManager @Inject constructor(
         budget: Int = DEFAULT_RAG_BUDGET_TOKENS,
     ): RagDebugResult = withContext(Dispatchers.IO) {
         val info = runCatching { engine.info() }.getOrNull() ?: "{}"
-        val sourceIds = documentRepo.getDocumentsForChat(chatId)
-            .mapNotNull { it.sourceId.takeIf { s -> s.isNotBlank() } }
-            .toSet()
-        if (!_isReady.value || query.isBlank() || sourceIds.isEmpty()) {
+        if (!_isReady.value || query.isBlank()) {
             return@withContext RagDebugResult(
                 query = query,
                 isReady = _isReady.value,
@@ -673,11 +613,9 @@ class RagManager @Inject constructor(
             )
         }
 
-        val dense = opsMutex.withLock { engine.queryFiltered(query, "") }
-            .filter { it.docId.parentSourceId() in sourceIds }
-        val bm25 = runCatching { keywordIndex.query(query, KEYWORD_CANDIDATES) }
+        val dense = opsMutex.withLock { engine.queryFiltered(query, "$chatId:") }
+        val bm25 = runCatching { keywordIndex.query(query, chatId, KEYWORD_CANDIDATES) }
             .getOrElse { emptyList() }
-            .filter { it.sourceId in sourceIds || it.docId.parentSourceId() in sourceIds }
         val fused = rrfFuse(dense, bm25)
 
         val aug = augment(chatId, query, query, budget)
@@ -697,25 +635,26 @@ class RagManager @Inject constructor(
     suspend fun release() = opsMutex.withLock {
         engine.close()
         ingestedDocIds.clear()
-        loadedSources = emptySet()
         _isReady.value = false
         _activeEmbeddingName.value = null
     }
 
     private fun indexKeywordsIfTextLike(
+        docId: String,
+        chatId: String,
         sourceId: String,
         name: String,
         mime: String,
         bytes: ByteArray,
     ) {
         if (!isTextLike(mime, name)) return
-        if (keywordIndex.docCount(sourceId) > 0) return
+        if (keywordIndex.docCount(docId) > 0) return
         val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() } ?: return
         if (text.contains('�') && text.count { it == '�' }.toFloat() / text.length > 0.05f) return
         val chunks = RagChunker.chunk(text)
         if (chunks.isEmpty()) return
-        val n = keywordIndex.ingest(sourceId, sourceId, chunks)
-        Log.i(TAG, "BM25 indexed $n chunks for $sourceId (mime=$mime)")
+        val n = keywordIndex.ingest(docId, chatId, sourceId, chunks)
+        Log.i(TAG, "FTS5 indexed $n chunks for $docId (mime=$mime)")
     }
 
     private fun isTextLike(mime: String?, name: String?): Boolean {
