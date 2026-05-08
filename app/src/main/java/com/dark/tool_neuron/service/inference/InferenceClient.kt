@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -177,8 +178,14 @@ object InferenceClient {
         }
 
         override fun onNullBinding(name: ComponentName?) {
+            _service.value = null
+            _isModelLoaded.value = false
+            _isTtsLoaded.value = false
+            _isSttLoaded.value = false
+            _isVlmLoaded.value = false
             _state.value = ServiceState.Crashed("Service returned null binding")
             isBinding = false
+            failPendingLoads("Inference service returned null binding")
         }
     }
 
@@ -203,7 +210,7 @@ object InferenceClient {
             isBinding = true
             _state.value = ServiceState.Connecting
             val intent = Intent(ctx, InferenceService::class.java)
-            ctx.bindService(intent, connection, Context.BIND_AUTO_CREATE or Context.BIND_IMPORTANT)
+            ctx.bindService(intent, connection, Context.BIND_AUTO_CREATE)
         }
     }
 
@@ -261,7 +268,12 @@ object InferenceClient {
 
     fun generateMultiTurn(messagesJson: String, maxTokens: Int): Flow<InferenceEvent> =
         callbackFlow {
-            val svc = _service.first { it != null }!!
+            val svc = withTimeoutOrNull(BIND_TIMEOUT_MS) { _service.first { it != null } }
+            if (svc == null) {
+                trySend(InferenceEvent.Error("Inference service unavailable"))
+                close()
+                return@callbackFlow
+            }
             val cb = generationCallback { event -> trySend(event) }
             try {
                 svc.generateMultiTurn(messagesJson, maxTokens, cb)
@@ -274,7 +286,12 @@ object InferenceClient {
 
     fun generate(prompt: String, maxTokens: Int): Flow<InferenceEvent> =
         callbackFlow {
-            val svc = _service.first { it != null }!!
+            val svc = withTimeoutOrNull(BIND_TIMEOUT_MS) { _service.first { it != null } }
+            if (svc == null) {
+                trySend(InferenceEvent.Error("Inference service unavailable"))
+                close()
+                return@callbackFlow
+            }
             val cb = generationCallback { event -> trySend(event) }
             try {
                 svc.generate(prompt, maxTokens, cb)
@@ -323,7 +340,12 @@ object InferenceClient {
         imageUris: List<Uri>,
         maxTokens: Int,
     ): Flow<InferenceEvent> = callbackFlow {
-        val svc = _service.first { it != null }!!
+        val svc = withTimeoutOrNull(BIND_TIMEOUT_MS) { _service.first { it != null } }
+        if (svc == null) {
+            trySend(InferenceEvent.Error("Inference service unavailable"))
+            close()
+            return@callbackFlow
+        }
         val pfds: Array<ParcelFileDescriptor> = try {
             imageUris.map { uri ->
                 context.contentResolver.openFileDescriptor(uri, "r")

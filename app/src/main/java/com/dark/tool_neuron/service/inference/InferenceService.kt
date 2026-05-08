@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
+import android.os.Build
 import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.ParcelFileDescriptor
@@ -111,6 +112,18 @@ class InferenceService : Service() {
         override fun loadModel(modelPath: String, configJson: String, callback: IModelLoadCallback) {
             scope.launch {
                 try {
+                    logDeviceProfile()
+                    val modelSize = File(modelPath).length()
+                    val memAvail = readMemAvailableBytes()
+                    Log.i(TAG, "loadModel path=$modelPath sizeMb=${modelSize / (1024 * 1024)} memAvailMb=${memAvail / (1024 * 1024)}")
+                    if (memAvail in 1 until (modelSize * 6 / 5)) {
+                        val msg = "Not enough free memory: model needs ~${modelSize / (1024 * 1024)} MB, " +
+                            "device has ~${memAvail / (1024 * 1024)} MB free. Close other apps or pick a smaller quant."
+                        captureKt("loadModel", "path=$modelPath", "InsufficientRam", msg)
+                        safeCallback(callback) { it.onError(msg) }
+                        return@launch
+                    }
+
                     if (engine.isLoaded) engine.unload()
                     val config = parseConfig(configJson)
                     val success = engine.load(
@@ -610,6 +623,52 @@ class InferenceService : Service() {
     private fun updateNotification(text: String) {
         getSystemService(NotificationManager::class.java)
             .notify(NOTIFICATION_ID, buildNotification(text))
+    }
+
+    @Volatile private var deviceProfileLogged = false
+
+    private fun logDeviceProfile() {
+        if (deviceProfileLogged) return
+        deviceProfileLogged = true
+        try {
+            val abis = Build.SUPPORTED_ABIS.joinToString(",")
+            val features = readCpuFeatures()
+            val totalMb = readMemTotalBytes() / (1024 * 1024)
+            Log.i(TAG, "device profile: model=${Build.MODEL} soc=${Build.SOC_MODEL} abis=$abis ramMb=$totalMb features=$features")
+        } catch (t: Throwable) {
+            Log.w(TAG, "logDeviceProfile failed: ${t.message}")
+        }
+    }
+
+    private fun readCpuFeatures(): String {
+        return try {
+            File("/proc/cpuinfo").bufferedReader().useLines { lines ->
+                lines.firstOrNull { it.startsWith("Features") }
+                    ?.substringAfter(':')
+                    ?.trim()
+                    ?: ""
+            }
+        } catch (_: Throwable) {
+            ""
+        }
+    }
+
+    private fun readMemAvailableBytes(): Long = readMemKey("MemAvailable:")
+
+    private fun readMemTotalBytes(): Long = readMemKey("MemTotal:")
+
+    private fun readMemKey(prefix: String): Long {
+        return try {
+            File("/proc/meminfo").bufferedReader().useLines { lines ->
+                lines.firstOrNull { it.startsWith(prefix) }
+                    ?.let { line ->
+                        val kb = line.substringAfter(':').trim().substringBefore(' ').toLongOrNull()
+                        if (kb != null) kb * 1024L else -1L
+                    } ?: -1L
+            }
+        } catch (_: Throwable) {
+            -1L
+        }
     }
 
     companion object {

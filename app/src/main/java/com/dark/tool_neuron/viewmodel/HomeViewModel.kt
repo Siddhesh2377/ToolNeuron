@@ -2,6 +2,7 @@ package com.dark.tool_neuron.viewmodel
 
 import android.app.Application
 import android.net.Uri
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.model.Chat
@@ -498,10 +499,12 @@ class HomeViewModel @Inject constructor(
         val images = _pendingImages.value
         if (_isGenerating.value) return
         if (trimmed.isEmpty() && images.isEmpty()) return
-        val active = activeModel.value ?: run {
-            _loadModelWindow.value = true
-            return
-        }
+        val active = activeModel.value
+            ?: chatModels.value.firstOrNull()?.also { modelRepo.setActive(it.id) }
+            ?: run {
+                _loadModelWindow.value = true
+                return
+            }
 
         val researchQuestion = parseResearchInput(trimmed)
         if (researchQuestion != null) {
@@ -523,7 +526,22 @@ class HomeViewModel @Inject constructor(
         _pendingImages.value = emptyList()
 
         val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
-        runGeneration(chatId, isFirstTurn, trimmed)
+
+        if (InferenceClient.isModelLoaded.value) {
+            runGeneration(chatId, isFirstTurn, trimmed)
+        } else {
+            viewModelScope.launch {
+                try {
+                    modelSession.load(active)
+                } catch (e: Exception) {
+                    Log.w("HomeViewModel", "auto-load failed: ${e.message}")
+                    return@launch
+                }
+                if (modelSession.loadState.value is ModelLoadState.Active) {
+                    runGeneration(chatId, isFirstTurn, trimmed)
+                }
+            }
+        }
     }
 
     private fun parseResearchInput(text: String): String? {
