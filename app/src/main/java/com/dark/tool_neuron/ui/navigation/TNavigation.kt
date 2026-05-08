@@ -20,6 +20,7 @@ import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.NavScreens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.dark.tool_neuron.ui.screens.credits.CreditsScreen
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.document.DocumentViewerScreen
 import com.dark.tool_neuron.ui.screens.documents.DocumentsScreen
@@ -29,6 +30,8 @@ import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
 import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
 import com.dark.tool_neuron.ui.screens.rag_debug.RagDebugScreen
 import com.dark.tool_neuron.ui.screens.settings.SettingsScreen
+import com.dark.tool_neuron.ui.screens.settings.SettingsSectionScreen
+import com.dark.tool_neuron.ui.screens.settings.SettingsThemingScreen
 import com.dark.tool_neuron.ui.screens.storage.StorageScreen
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreen
 import com.dark.tool_neuron.ui.screens.guide.AppGuideScreen
@@ -53,12 +56,14 @@ import com.dark.tool_neuron.ui.screens.setup_screen.SetupPasswordScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupRagScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreen
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupThemeScreen
+import com.dark.tool_neuron.ui.screens.terms_conditions.TermsConditionsScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
 import com.dark.tool_neuron.viewmodel.HomeViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
 import com.dark.tool_neuron.viewmodel.RagDebugViewModel
 import com.dark.tool_neuron.viewmodel.SettingsViewModel
+import com.dark.tool_neuron.viewmodel.ThemingViewModel
 import com.dark.tool_neuron.viewmodel.SetupViewModel
 import com.dark.tool_neuron.viewmodel.StorageViewModel
 
@@ -130,8 +135,20 @@ fun TNavigation(
                 innerPadding = innerPadding,
             )
         }
+        composable(NavScreens.TermsConditions.route) {
+            TermsConditionsScreen(
+                innerPadding = innerPadding,
+                onAccept = {},
+            )
+        }
         composable(NavScreens.DevNotes.route) {
             DevNotesScreen(innerPadding = innerPadding)
+        }
+        composable(NavScreens.Credits.route) {
+            CreditsScreen(
+                innerPadding = innerPadding,
+                onExit = { navController.popBackStack() },
+            )
         }
         composable(NavScreens.SetupScreen.route) {
             val viewModel: SetupViewModel = hiltViewModel()
@@ -191,8 +208,8 @@ fun TNavigation(
 
             ModelSetupScreen(
                 innerPadding = innerPadding,
-                onModelSelected = { modelId ->
-                    storeVm.downloadByQuickStartId(modelId)
+                onPackSelected = { packId ->
+                    storeVm.downloadPack(packId)
                     onModelSetupComplete()
                 },
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
@@ -238,10 +255,60 @@ fun TNavigation(
             )
         }
         composable(NavScreens.Settings.route) {
-            val viewModel: SettingsViewModel = hiltViewModel()
             SettingsScreen(
+                innerPadding = innerPadding,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsChatRag.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_CHAT_RAG,
                 viewModel = viewModel,
-                onBack = { navController.popBackStack() },
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsResearch.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_RESEARCH,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsVoice.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_VOICE,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsTheming.route) {
+            val viewModel: ThemingViewModel = hiltViewModel()
+            SettingsThemingScreen(
+                innerPadding = innerPadding,
+                viewModel = viewModel,
+            )
+        }
+        composable(NavScreens.SettingsPrivacy.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_PRIVACY,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsAbout.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_ABOUT,
+                viewModel = viewModel,
                 onNavigate = { route -> navController.navigate(route) },
             )
         }

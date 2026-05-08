@@ -10,8 +10,10 @@ import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.server.ServerTopBar
+import com.dark.tool_neuron.ui.screens.settings.SettingsTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
 import com.dark.tool_neuron.ui.screens.storage.StorageTopBar
+import com.dark.tool_neuron.ui.screens.terms_conditions.TermsConditionsTopBar
 import com.dark.tool_neuron.viewmodel.home_vm.PillState
 
 @Composable
@@ -38,6 +40,7 @@ fun AppTopBar(
             onGuideClick = onNavigateToGuide,
             onModelManagerClick = onNavigateToModelManager,
         )
+        NavScreens.TermsConditions.route -> TermsConditionsTopBar()
         NavScreens.DevNotes.route -> DevNotesTopBar()
         NavScreens.PasswordScreen.route -> PasswordScreenTopBar()
         NavScreens.SetupScreen.route -> SetupScreenTopBar()
@@ -56,7 +59,37 @@ fun AppTopBar(
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.SetupRag.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit
-        NavScreens.Settings.route -> Unit
+        NavScreens.Settings.route -> SettingsTopBar(onBack = onBack)
+        NavScreens.SettingsChatRag.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Chat & RAG",
+            subtitle = "Defaults for indexing and retrieval",
+        )
+        NavScreens.SettingsResearch.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Research",
+            subtitle = "Multi-iteration web research",
+        )
+        NavScreens.SettingsVoice.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Voice",
+            subtitle = "Text-to-speech and speech-to-text defaults",
+        )
+        NavScreens.SettingsTheming.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Theming",
+            subtitle = "Mode and color palette",
+        )
+        NavScreens.SettingsPrivacy.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Privacy",
+            subtitle = "App lock and panic PIN",
+        )
+        NavScreens.SettingsAbout.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "About",
+            subtitle = "App info and legal",
+        )
         NavScreens.Storage.route -> StorageTopBar(onBack = onBack)
         NavScreens.ServerScreen.route -> ServerTopBar()
         NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)

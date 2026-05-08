@@ -5,14 +5,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.SecurityManager
-import com.dark.tool_neuron.data.ThemeController
 import com.dark.tool_neuron.data.VerifyResult
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
-import com.dark.tool_neuron.repo.StorageInspector
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.voice.VoiceModelManager
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
@@ -20,7 +18,6 @@ import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsItem
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsSection
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsState
-import com.dark.tool_neuron.ui.theme.ColorPalette
 import com.dark.download_manager.formatBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,11 +37,9 @@ import javax.inject.Inject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @param:ApplicationContext private val context: Context,
-    private val themeController: ThemeController,
     private val security: SecurityManager,
     private val ragManager: RagManager,
     private val modelRepo: ModelRepository,
-    private val storageInspector: StorageInspector,
     private val prefs: AppPreferences,
     private val voiceManager: VoiceModelManager,
 ) : ViewModel() {
@@ -54,7 +49,6 @@ class SettingsViewModel @Inject constructor(
 
     private val _dialog = MutableStateFlow<SettingsDialog?>(null)
     private val _snackbar = MutableStateFlow<String?>(null)
-    private val _diskUsage = MutableStateFlow("")
     private val _lockEnabled = MutableStateFlow(security.isLockEnabled)
     private val _panicPinSet = MutableStateFlow(security.hasPanicPin)
     private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
@@ -72,9 +66,6 @@ class SettingsViewModel @Inject constructor(
     val state: StateFlow<SettingsState> = combine(
         modelRepo.models,
         ragManager.defaultEmbeddingModelId,
-        themeController.mode,
-        themeController.palette,
-        _diskUsage,
         _lockEnabled,
         _dialog,
         _snackbar,
@@ -93,31 +84,25 @@ class SettingsViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
         val defaultEmbedding = values[1] as String?
-        val themeMode = values[2] as ThemeController.Mode
-        val palette = values[3] as ColorPalette
-        val disk = values[4] as String
-        val lockOn = values[5] as Boolean
-        val dialog = values[6] as SettingsDialog?
-        val snackbar = values[7] as String?
-        val activeTts = values[8] as String
-        val activeStt = values[9] as String
-        val panicSet = values[10] as Boolean
-        val rerank = values[11] as Boolean
-        val multiQuery = values[12] as Boolean
-        val deepResearch = values[13] as Boolean
-        val researchMaxIter = values[14] as Int
-        val researchMaxQ = values[15] as Int
-        val researchPerSearch = values[16] as Int
-        val researchCancelBg = values[17] as Boolean
-        val researchActiveModel = values[18] as String
+        val lockOn = values[2] as Boolean
+        val dialog = values[3] as SettingsDialog?
+        val snackbar = values[4] as String?
+        val activeTts = values[5] as String
+        val activeStt = values[6] as String
+        val panicSet = values[7] as Boolean
+        val rerank = values[8] as Boolean
+        val multiQuery = values[9] as Boolean
+        val deepResearch = values[10] as Boolean
+        val researchMaxIter = values[11] as Int
+        val researchMaxQ = values[12] as Int
+        val researchPerSearch = values[13] as Int
+        val researchCancelBg = values[14] as Boolean
+        val researchActiveModel = values[15] as String
 
         SettingsState(
             sections = buildSections(
                 models = models,
                 defaultEmbedding = defaultEmbedding,
-                themeMode = themeMode,
-                palette = palette,
-                diskUsage = disk,
                 lockEnabled = lockOn,
                 activeTts = activeTts,
                 activeStt = activeStt,
@@ -141,8 +126,6 @@ class SettingsViewModel @Inject constructor(
         initialValue = SettingsState(appVersion = appVersion),
     )
 
-    init { refreshDiskUsage() }
-
     fun dismissDialog() { _dialog.value = null }
 
     fun clearSnackbar() { _snackbar.value = null }
@@ -161,9 +144,6 @@ class SettingsViewModel @Inject constructor(
     private fun buildSections(
         models: List<ModelInfo>,
         defaultEmbedding: String?,
-        themeMode: ThemeController.Mode,
-        palette: ColorPalette,
-        diskUsage: String,
         lockEnabled: Boolean,
         activeTts: String,
         activeStt: String,
@@ -180,9 +160,7 @@ class SettingsViewModel @Inject constructor(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
         researchSection(models, researchMaxIter, researchMaxQ, researchPerSearch, researchCancelBg, researchActiveModel),
         voiceSection(models, activeTts, activeStt),
-        appearanceSection(themeMode, palette),
         privacySection(lockEnabled, panicPinSet),
-        storageSection(diskUsage),
         aboutSection(),
     )
 
@@ -411,52 +389,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { voiceManager.unloadStt() }
     }
 
-    private fun appearanceSection(
-        themeMode: ThemeController.Mode,
-        palette: ColorPalette,
-    ): SettingsSection {
-        val modeOptions = listOf(
-            SettingsChoiceOption(ThemeController.Mode.SYSTEM.name, "Follow system"),
-            SettingsChoiceOption(ThemeController.Mode.LIGHT.name, "Light"),
-            SettingsChoiceOption(ThemeController.Mode.DARK.name, "Dark"),
-        )
-        val paletteOptions = ColorPalette.entries.map {
-            SettingsChoiceOption(it.name, it.displayName)
-        }
-        return SettingsSection(
-            id = "appearance",
-            title = "Appearance",
-            description = "Theme and accent colors.",
-            icon = TnIcons.Sparkles,
-            items = listOf(
-                SettingsItem.Choice(
-                    id = "theme_mode",
-                    title = "Theme",
-                    subtitle = "Pick light, dark, or follow system.",
-                    icon = TnIcons.Sparkles,
-                    selectedKey = themeMode.name,
-                    options = modeOptions,
-                    onSelect = { key ->
-                        if (key != null) themeController.setMode(ThemeController.Mode.valueOf(key))
-                        _dialog.value = null
-                    },
-                ),
-                SettingsItem.Choice(
-                    id = "color_palette",
-                    title = "Color palette",
-                    subtitle = "Dynamic pulls from your wallpaper; presets use hand-tuned colors.",
-                    icon = TnIcons.Star,
-                    selectedKey = palette.name,
-                    options = paletteOptions,
-                    onSelect = { key ->
-                        if (key != null) themeController.setPalette(ColorPalette.valueOf(key))
-                        _dialog.value = null
-                    },
-                ),
-            ),
-        )
-    }
-
     private fun privacySection(lockEnabled: Boolean, panicPinSet: Boolean): SettingsSection {
         val statusLabel = if (lockEnabled) "Enabled (PIN)" else "Disabled"
         val items = mutableListOf<SettingsItem>(
@@ -625,23 +557,6 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
-    private fun storageSection(diskUsage: String): SettingsSection = SettingsSection(
-        id = "storage",
-        title = "Storage",
-        description = "What ToolNeuron is using on this device.",
-        icon = TnIcons.HardDrive,
-        items = listOf(
-            SettingsItem.Action(
-                id = "size_on_device",
-                title = "Size on device",
-                subtitle = "Models, voice, documents, chats, and cache.",
-                icon = TnIcons.HardDrive,
-                trailingText = diskUsage.ifBlank { "Calculating…" },
-                onClick = { _navEvents.tryEmit(NavScreens.Storage.route) },
-            ),
-        ),
-    )
-
     private fun aboutSection(): SettingsSection = SettingsSection(
         id = "about",
         title = "About",
@@ -661,15 +576,22 @@ class SettingsViewModel @Inject constructor(
                 icon = TnIcons.BookOpen,
                 value = "MIT",
             ),
+            SettingsItem.Action(
+                id = "terms",
+                title = "Terms of use",
+                subtitle = "How this app handles your data.",
+                icon = TnIcons.Shield,
+                onClick = { _navEvents.tryEmit(NavScreens.TermsConditions.route) },
+            ),
+            SettingsItem.Action(
+                id = "credits",
+                title = "Roll the credits",
+                subtitle = "See who built this and what it runs on.",
+                icon = TnIcons.Star,
+                onClick = { _navEvents.tryEmit(NavScreens.Credits.route) },
+            ),
         ),
     )
-
-    private fun refreshDiskUsage() {
-        viewModelScope.launch {
-            val snap = storageInspector.snapshot()
-            _diskUsage.value = formatBytes(snap.totalBytes)
-        }
-    }
 
     private fun resolveVersion(): String = runCatching {
         val info = context.packageManager.getPackageInfo(context.packageName, 0)
@@ -677,6 +599,12 @@ class SettingsViewModel @Inject constructor(
     }.getOrDefault("1.0")
 
     companion object {
+        const val SECTION_CHAT_RAG = "chat_rag"
+        const val SECTION_RESEARCH = "research"
+        const val SECTION_VOICE = "voice"
+        const val SECTION_PRIVACY = "privacy"
+        const val SECTION_ABOUT = "about"
+
         private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
         private const val ID_DEFAULT_TTS = "default_tts_model"
         private const val ID_DEFAULT_STT = "default_stt_model"

@@ -419,18 +419,18 @@ fun <T> ActionToggleGroup(
     onItemSelected: (T) -> Unit,
     itemLabel: (T) -> String,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    height: androidx.compose.ui.unit.Dp = LocalDimens.current.actionIconSize,
 ) {
     if (items.isEmpty()) return
 
-    val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
     val selectedIndex = items.indexOf(selectedItem).coerceAtLeast(0)
 
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(dimens.actionIconSize),
+            .height(height),
         color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
         shape = tnShapes.actionIcon
     ) {
@@ -448,14 +448,14 @@ fun <T> ActionToggleGroup(
                     .offset(x = indicatorOffset + 2.dp)
                     .padding(vertical = 2.dp)
                     .width(itemWidth - 4.dp)
-                    .height(dimens.actionIconSize - 4.dp)
+                    .height(height - 4.dp)
                     .background(MaterialTheme.colorScheme.primary, tnShapes.actionIcon)
             )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(dimens.actionIconSize),
+                    .height(height),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEachIndexed { index, item ->
@@ -473,7 +473,7 @@ fun <T> ActionToggleGroup(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .height(dimens.actionIconSize)
+                            .height(height)
                             .clip(tnShapes.actionIcon)
                             .clickable(
                                 enabled = enabled,
