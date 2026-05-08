@@ -51,17 +51,46 @@ import com.dark.tool_neuron.ui.screens.model_store.ModelImportTypePicker
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.ui.theme.Motion
+import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import kotlinx.coroutines.delay
 
 private enum class SetupPath(val label: String) {
-    QuickStart("Quick Start"),
-    PowerUser("Power User")
+    Packs("Packs"),
+    Custom("Custom")
 }
+
+private data class SetupPack(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+)
+
+private val SETUP_PACKS = listOf(
+    SetupPack(
+        id = ModelStoreViewModel.PACK_CHAT_ONLY,
+        title = "Chat only",
+        subtitle = "LFM2 350M. Around 200 MB. Works on low-RAM phones.",
+        icon = TnIcons.Leaf,
+    ),
+    SetupPack(
+        id = ModelStoreViewModel.PACK_CHAT_VOICE,
+        title = "Chat with voice",
+        subtitle = "LFM2 350M plus speech in and out. Around 310 MB.",
+        icon = TnIcons.Mic,
+    ),
+    SetupPack(
+        id = ModelStoreViewModel.PACK_LARGE_CHAT_VOICE,
+        title = "Larger chat with voice",
+        subtitle = "Qwen3 0.6B plus speech in and out. Around 530 MB.",
+        icon = TnIcons.Sparkles,
+    ),
+)
 
 @Composable
 fun ModelSetupScreen(
     innerPadding: PaddingValues,
-    onModelSelected: (modelId: String) -> Unit,
+    onPackSelected: (packId: String) -> Unit,
     onOpenStore: () -> Unit,
     onLocalImport: (uri: Uri, name: String, size: Long, type: ProviderType) -> Unit,
     onSkip: () -> Unit,
@@ -69,8 +98,8 @@ fun ModelSetupScreen(
     val dimens = LocalDimens.current
     val context = LocalContext.current
     var visible by remember { mutableStateOf(false) }
-    var selectedPath by remember { mutableStateOf(SetupPath.QuickStart) }
-    var selectedModel by remember { mutableStateOf<String?>(null) }
+    var selectedPath by remember { mutableStateOf(SetupPath.Packs) }
+    var selectedPack by remember { mutableStateOf<String?>(null) }
     var pendingImport by remember { mutableStateOf<Triple<Uri, String, Long>?>(null) }
 
     val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -103,144 +132,94 @@ fun ModelSetupScreen(
             .padding(horizontal = dimens.screenPadding),
         contentAlignment = Alignment.TopCenter
     ) {
-    Column(
-        modifier = Modifier
-            .widthIn(max = 480.dp)
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.Center
-    ) {
-        Spacer(Modifier.weight(1f))
-
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 4 }
+        Column(
+            modifier = Modifier
+                .widthIn(max = 480.dp)
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.Center
         ) {
-            Column {
-                Icon(
-                    imageVector = TnIcons.Rocket,
-                    contentDescription = null,
-                    modifier = Modifier.size(dimens.iconLg),
-                    tint = MaterialTheme.colorScheme.primary
-                )
+            Spacer(Modifier.weight(1f))
 
-                Spacer(Modifier.height(dimens.spacingLg))
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 4 }
+            ) {
+                Column {
+                    Icon(
+                        imageVector = TnIcons.Package,
+                        contentDescription = null,
+                        modifier = Modifier.size(dimens.iconLg),
+                        tint = MaterialTheme.colorScheme.primary
+                    )
 
-                Text(
-                    text = "Get your first model",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.SemiBold
-                )
+                    Spacer(Modifier.height(dimens.spacingLg))
 
-                Spacer(Modifier.height(dimens.spacingXs))
+                    Text(
+                        text = "Pick a pack",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
 
-                Text(
-                    text = "Choose a path that fits you",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                    Spacer(Modifier.height(dimens.spacingXs))
+
+                    Text(
+                        text = "Each one bundles what you need to start.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-        }
 
-        Spacer(Modifier.height(dimens.spacingXl))
+            Spacer(Modifier.height(dimens.spacingXl))
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 3 }
-        ) {
-            Column {
-                ActionToggleGroup(
-                    items = SetupPath.entries,
-                    selectedItem = selectedPath,
-                    onItemSelected = { selectedPath = it },
-                    itemLabel = { it.label }
-                )
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 3 }
+            ) {
+                Column {
+                    ActionToggleGroup(
+                        items = SetupPath.entries,
+                        selectedItem = selectedPath,
+                        onItemSelected = { selectedPath = it },
+                        itemLabel = { it.label }
+                    )
 
-                Spacer(Modifier.height(dimens.spacingXl))
+                    Spacer(Modifier.height(dimens.spacingXl))
 
-                when (selectedPath) {
-                    SetupPath.QuickStart -> {
-                        ModelCard(
-                            icon = TnIcons.Zap,
-                            title = "Tiny & Fast",
-                            subtitle = "LFM2 350M · Q4_K_M · ~200MB · Best for low-RAM",
-                            selected = selectedModel == "lfm25-350m",
-                            onClick = { selectedModel = "lfm25-350m" }
+                    when (selectedPath) {
+                        SetupPath.Packs -> PacksSection(
+                            selectedPack = selectedPack,
+                            onPackChange = { selectedPack = it },
+                            onContinue = { selectedPack?.let(onPackSelected) },
                         )
 
-                        Spacer(Modifier.height(dimens.spacingSm))
-
-                        ModelCard(
-                            icon = TnIcons.Leaf,
-                            title = "Balanced",
-                            subtitle = "Qwen3 0.6B · Q4_K_M · ~400MB · Good all-rounder",
-                            selected = selectedModel == "qwen3-0.6b",
-                            onClick = { selectedModel = "qwen3-0.6b" }
-                        )
-
-                        Spacer(Modifier.height(dimens.spacingSm))
-
-                        ModelCard(
-                            icon = TnIcons.Download,
-                            title = "Bring Your Own",
-                            subtitle = "Import a local .gguf file",
-                            selected = selectedModel == "import",
-                            onClick = { selectedModel = "import" }
-                        )
-
-                        Spacer(Modifier.height(dimens.spacingXl))
-
-                        ActionTextButton(
-                            onClickListener = {
-                                when (selectedModel) {
-                                    "import" -> filePicker.launch(arrayOf("application/octet-stream", "*/*"))
-                                    null -> {}
-                                    else -> onModelSelected(selectedModel!!)
-                                }
-                            },
-                            icon = TnIcons.ArrowRight,
-                            text = "Continue",
-                            enabled = selectedModel != null
-                        )
-                    }
-
-                    SetupPath.PowerUser -> {
-                        Text(
-                            text = "Head to the Model Store to browse hundreds of models, configure repos, and pick exactly what you need.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Spacer(Modifier.height(dimens.spacingLg))
-
-                        ActionTextButton(
-                            onClickListener = onOpenStore,
-                            icon = TnIcons.Rocket,
-                            text = "Open Model Store"
+                        SetupPath.Custom -> CustomSection(
+                            onOpenStore = onOpenStore,
+                            onPickFile = { filePicker.launch(arrayOf("application/octet-stream", "*/*")) },
                         )
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.weight(1f))
+            Spacer(Modifier.weight(1f))
 
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 2 }
-        ) {
-            Text(
-                text = "Skip for now",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(onClick = onSkip)
-                    .padding(vertical = dimens.spacingLg)
-            )
+            AnimatedVisibility(
+                visible = visible,
+                enter = fadeIn(Motion.entrance()) + slideInVertically(Motion.entrance()) { it / 2 }
+            ) {
+                Text(
+                    text = "Skip for now",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onSkip)
+                        .padding(vertical = dimens.spacingLg)
+                )
+            }
         }
-    }
     }
 
     pendingImport?.let { (uri, name, size) ->
@@ -256,7 +235,70 @@ fun ModelSetupScreen(
 }
 
 @Composable
-private fun ModelCard(
+private fun PacksSection(
+    selectedPack: String?,
+    onPackChange: (String) -> Unit,
+    onContinue: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Column {
+        SETUP_PACKS.forEachIndexed { index, pack ->
+            PackCard(
+                icon = pack.icon,
+                title = pack.title,
+                subtitle = pack.subtitle,
+                selected = selectedPack == pack.id,
+                onClick = { onPackChange(pack.id) },
+            )
+            if (index != SETUP_PACKS.lastIndex) {
+                Spacer(Modifier.height(dimens.spacingSm))
+            }
+        }
+
+        Spacer(Modifier.height(dimens.spacingXl))
+
+        ActionTextButton(
+            onClickListener = onContinue,
+            icon = TnIcons.ArrowRight,
+            text = "Continue",
+            enabled = selectedPack != null,
+        )
+    }
+}
+
+@Composable
+private fun CustomSection(
+    onOpenStore: () -> Unit,
+    onPickFile: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Column {
+        Text(
+            text = "Browse the full catalog or load a model file you already have.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(dimens.spacingLg))
+
+        ActionTextButton(
+            onClickListener = onOpenStore,
+            icon = TnIcons.Compass,
+            text = "Browse all models",
+        )
+
+        Spacer(Modifier.height(dimens.spacingSm))
+
+        ActionTextButton(
+            onClickListener = onPickFile,
+            icon = TnIcons.FileText,
+            text = "Pick a local file",
+        )
+    }
+}
+
+@Composable
+private fun PackCard(
     icon: ImageVector,
     title: String,
     subtitle: String,
@@ -270,14 +312,14 @@ private fun ModelCard(
         targetValue = if (selected) MaterialTheme.colorScheme.primary
         else MaterialTheme.colorScheme.outlineVariant,
         animationSpec = Motion.state(),
-        label = "modelBorder"
+        label = "packBorder"
     )
 
     val containerColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
         else MaterialTheme.colorScheme.surface,
         animationSpec = Motion.state(),
-        label = "modelBg"
+        label = "packBg"
     )
 
     Surface(

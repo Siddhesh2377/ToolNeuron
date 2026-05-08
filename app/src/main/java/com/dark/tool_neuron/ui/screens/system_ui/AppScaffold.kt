@@ -53,7 +53,9 @@ fun AppScaffold() {
 
     rootWarning?.let { warning ->
         RootWarningDialog(
-            evidence = warning.evidence,
+            rootEvidence = warning.rootEvidence,
+            tamperEvidence = warning.tamperEvidence,
+            a11yPackages = warning.a11yPackages,
             onAcknowledge = scaffoldViewModel::acknowledgeRootWarning,
         )
     }
@@ -72,6 +74,7 @@ fun AppScaffold() {
 
     val isFullscreen = currentRoute == NavScreens.IntroScreen.route
             || currentRoute == NavScreens.PasswordScreen.route
+            || currentRoute == NavScreens.Credits.route
 
     val showDrawer = currentRoute == NavScreens.HomeScreen.route && !serverRunning
     val drawerState = rememberDrawerState(DrawerValue.Closed)
@@ -119,6 +122,10 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.Documents.route)
                     },
+                    onNavigateToCredits = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(NavScreens.Credits.route)
+                    },
                 )
             }
         }
@@ -153,6 +160,17 @@ fun AppScaffold() {
                         scaffoldViewModel.markModelSetupDone()
                         navController.navigate(NavScreens.HomeScreen.route) {
                             popUpTo(NavScreens.SetupRag.route) { inclusive = true }
+                        }
+                    },
+                    onTermsAccepted = {
+                        val cameFromOnboarding = navController.previousBackStackEntry == null
+                        scaffoldViewModel.markTermsAccepted()
+                        if (cameFromOnboarding) {
+                            navController.navigate(NavScreens.DevNotes.route) {
+                                popUpTo(NavScreens.TermsConditions.route) { inclusive = true }
+                            }
+                        } else {
+                            navController.popBackStack()
                         }
                     },
                 )

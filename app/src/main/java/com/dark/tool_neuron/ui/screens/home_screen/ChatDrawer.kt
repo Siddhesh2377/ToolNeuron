@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import com.dark.tool_neuron.BuildConfig
 import com.dark.tool_neuron.model.Chat
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
@@ -57,6 +58,7 @@ fun ChatDrawerContent(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToServer: () -> Unit = {},
     onNavigateToDocuments: () -> Unit = {},
+    onNavigateToCredits: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val pinnedChats = remember(chats) { chats.filter { it.isPinned } }
@@ -84,8 +86,14 @@ fun ChatDrawerContent(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
-                InfoBadge(text = "v2")
+                InfoBadge(text = "v${BuildConfig.VERSION_NAME}")
             }
+
+            ActionButton(
+                onClickListener = onNavigateToSettings,
+                icon = TnIcons.Settings,
+                contentDescription = "Settings",
+            )
         }
 
         Spacer(Modifier.height(dimens.spacingMd))
@@ -97,6 +105,18 @@ fun ChatDrawerContent(
             contentDescription = "New Chat",
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(Modifier.height(dimens.spacingMd))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            DrawerQuickLink(icon = TnIcons.Download, label = "Store", onClick = onNavigateToStore)
+            DrawerQuickLink(icon = TnIcons.FileText, label = "Docs", onClick = onNavigateToDocuments)
+            DrawerQuickLink(icon = TnIcons.Server, label = "Server", onClick = onNavigateToServer)
+        }
 
         Spacer(Modifier.height(dimens.spacingLg))
 
@@ -158,12 +178,9 @@ fun ChatDrawerContent(
             horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            DrawerQuickLink(icon = TnIcons.Download, label = "Store", onClick = onNavigateToStore)
             DrawerQuickLink(icon = TnIcons.BookOpen, label = "Guide", onClick = onNavigateToGuide)
-            DrawerQuickLink(icon = TnIcons.FileText, label = "Docs", onClick = onNavigateToDocuments)
-            DrawerQuickLink(icon = TnIcons.Server, label = "Server", onClick = onNavigateToServer)
             DrawerQuickLink(icon = TnIcons.Info, label = "Dev Notes", onClick = onNavigateToDevNotes)
-            DrawerQuickLink(icon = TnIcons.Settings, label = "Settings", onClick = onNavigateToSettings)
+            DrawerQuickLink(icon = TnIcons.Star, label = "Credits", onClick = onNavigateToCredits)
         }
     }
 }
