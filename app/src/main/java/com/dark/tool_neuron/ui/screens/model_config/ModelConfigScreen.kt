@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -199,6 +200,9 @@ fun ModelConfigScreen(
                 copyJson(loadingJson, loading)
                 loading.put("numThreads", sttThreads)
             }
+            ProviderType.IMAGE_GEN, ProviderType.IMAGE_UPSCALER -> {
+                copyJson(loadingJson, loading)
+            }
         }
         return ModelConfig(
             id = initialConfig?.id ?: modelInfo.id,
@@ -234,6 +238,7 @@ fun ModelConfigScreen(
                         icon = TnIcons.Refresh,
                         contentDescription = "Reset to defaults"
                     )
+                    Spacer(Modifier.width(dimens.spacingSm))
                     ActionButton(
                         onClickListener = { onSave(buildConfig()) },
                         icon = TnIcons.Check,
@@ -254,6 +259,19 @@ fun ModelConfigScreen(
             verticalArrangement = Arrangement.spacedBy(dimens.itemSpacing)
         ) {
             when (modelInfo.providerType) {
+                ProviderType.IMAGE_GEN, ProviderType.IMAGE_UPSCALER -> {
+                    item {
+                        Spacer(Modifier.height(dimens.spacingSm))
+                        StandardCard(title = "Image model") {
+                            Text(
+                                text = "This model is configured from the Image Task screen. " +
+                                    "There are no per-model knobs here yet.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
                 ProviderType.GGUF -> {
                     item {
                         Spacer(Modifier.height(dimens.spacingSm))

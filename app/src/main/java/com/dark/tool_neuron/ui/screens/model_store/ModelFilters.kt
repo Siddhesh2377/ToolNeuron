@@ -115,7 +115,13 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                 onClick = { viewModel.filterByModelType(null) },
                 label = { Text("All") }
             )
-            listOf("Text (GGUF)" to "gguf", "TTS" to "tts", "STT" to "stt").forEach { (label, type) ->
+            listOf(
+                "Text (GGUF)" to "gguf",
+                "Image" to "image_gen",
+                "Upscaler" to "image_upscaler",
+                "TTS" to "tts",
+                "STT" to "stt",
+            ).forEach { (label, type) ->
                 FilterChip(
                     selected = selectedModelType == type,
                     onClick = { viewModel.filterByModelType(if (selectedModelType == type) null else type) },

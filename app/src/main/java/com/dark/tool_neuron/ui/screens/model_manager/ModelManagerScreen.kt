@@ -192,6 +192,8 @@ private fun ModelManagerCard(
                     ProviderType.TTS -> "Text-to-Speech"
                     ProviderType.STT -> "Speech-to-Text"
                     ProviderType.EMBEDDING -> "Embedding (RAG)"
+                    ProviderType.IMAGE_GEN -> "Image Generation"
+                    ProviderType.IMAGE_UPSCALER -> "Upscale 4×"
                 }
                 val sourceLabel = if (model.pathType == PathType.CONTENT_URI) "Local" else "Downloaded"
                 CaptionText(

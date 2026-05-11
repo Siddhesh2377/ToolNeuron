@@ -74,11 +74,15 @@ fun CatalogModelCard(
                     val typeLabel = when (model.modelType) {
                         "tts" -> "TTS"
                         "stt" -> "STT"
+                        "image_gen" -> if (model.isSdxl) "SDXL" else "IMAGE"
+                        "image_upscaler" -> "UPSCALE"
+                        "embedding" -> "EMBED"
                         else -> "LLM"
                     }
                     val typeColor = when (model.modelType) {
                         "tts" -> MaterialTheme.colorScheme.secondary
                         "stt" -> MaterialTheme.colorScheme.tertiary
+                        "image_gen", "image_upscaler" -> MaterialTheme.colorScheme.tertiary
                         else -> MaterialTheme.colorScheme.primary
                     }
                     Text(
