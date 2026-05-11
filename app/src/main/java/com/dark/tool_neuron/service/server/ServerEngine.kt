@@ -8,10 +8,12 @@ import org.json.JSONObject
 class ServerEngine {
 
     private val engine = GGMLEngine()
+    @Volatile private var loadedModelId: String = ""
 
     val isLoaded: Boolean get() = engine.isLoaded
+    fun loadedId(): String = loadedModelId
 
-    suspend fun load(path: String, configJson: String): Boolean {
+    suspend fun load(modelId: String, path: String, configJson: String): Boolean {
         if (engine.isLoaded) engine.unload()
         val cfg = parseConfig(configJson)
         val ok = engine.load(
@@ -24,12 +26,14 @@ class ServerEngine {
         if (ok) {
             engine.setThreadMode(cfg.optInt("threadMode", 1))
             applySamplingFromConfig(cfg)
+            loadedModelId = modelId
         }
         return ok
     }
 
     suspend fun unload() {
         if (engine.isLoaded) engine.unload()
+        loadedModelId = ""
     }
 
     fun stopGeneration() = engine.stopGeneration()

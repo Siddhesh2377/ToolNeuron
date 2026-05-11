@@ -43,6 +43,10 @@ class ServerViewModel @Inject constructor(
         .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
+    val anyEngineInstalled: StateFlow<Boolean> = modelRepo.models
+        .map { it.isNotEmpty() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     private val _selectedModelId = MutableStateFlow(controller.selectedModelId().ifBlank { null })
     val selectedModelId: StateFlow<String?> = _selectedModelId.asStateFlow()
 

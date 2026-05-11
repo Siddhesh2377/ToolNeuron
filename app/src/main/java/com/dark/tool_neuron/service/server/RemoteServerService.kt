@@ -25,15 +25,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 
 class RemoteServerService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
-    private val engine = ServerEngine()
-    private val bridge by lazy {
-        ServerInferenceBridge(engine, ::pushRequestEvent)
-    }
+    private val registry by lazy { ServerEngineRegistry(applicationContext) }
+    private val bridge by lazy { ServerInferenceBridge(registry, ::pushRequestEvent) }
     private val callbacks = RemoteCallbackList<IRemoteServerCallback>()
 
     @Volatile private var snapshot: ServerSnapshot = ServerSnapshot.STOPPED
@@ -83,6 +82,7 @@ class RemoteServerService : Service() {
     override fun onCreate() {
         super.onCreate()
         ensureNotificationChannel(this)
+        configureStagingDir()
     }
 
     override fun onBind(intent: Intent?): IBinder = binder
@@ -96,9 +96,16 @@ class RemoteServerService : Service() {
 
     override fun onDestroy() {
         runBlocking { handleStop("service destroyed") }
+        bridge.shutdown()
         callbacks.kill()
         scope.cancel()
         super.onDestroy()
+    }
+
+    private fun configureStagingDir() {
+        val dir = File(cacheDir, STAGING_SUBDIR)
+        dir.mkdirs()
+        try { NativeServer.nativeSetStagingDir(dir.absolutePath) } catch (_: Exception) {}
     }
 
     private suspend fun handleStart(cfg: JSONObject) {
@@ -106,23 +113,26 @@ class RemoteServerService : Service() {
             return
         }
 
-        val modelId    = cfg.optString("modelId")
-        val modelName  = cfg.optString("modelName")
-        val modelPath  = cfg.optString("modelPath")
-        val modelCfg   = cfg.optString("modelConfigJson", "{}")
         val token      = cfg.optString("token")
         val port       = cfg.optInt("port", DEFAULT_PORT).coerceIn(1024, 65535)
         val bindModeS  = cfg.optString("bindMode", BindMode.ALL_INTERFACES.name)
         val bindMode   = runCatching { BindMode.valueOf(bindModeS) }.getOrDefault(BindMode.ALL_INTERFACES)
         val webUiHtml  = cfg.optString("webUiHtml", "")
         val docsHtml   = cfg.optString("docsHtml", "")
+        val engines    = cfg.optJSONArray("engines") ?: JSONArray()
 
-        if (modelId.isBlank() || modelPath.isBlank()) {
-            pushFailure("missing model selection")
-            return
-        }
         if (token.isBlank()) {
             pushFailure("missing bearer token")
+            return
+        }
+        if (engines.length() == 0) {
+            pushFailure("no engines enabled in start config")
+            return
+        }
+
+        val catalog = ServerCatalog.fromJsonArray(engines)
+        if (catalog.all.isEmpty()) {
+            pushFailure("no valid engine entries in start config")
             return
         }
 
@@ -131,10 +141,14 @@ class RemoteServerService : Service() {
             return
         }
 
+        val primary = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+            ?: catalog.firstOf(ServerEngineKind.VLM)
+            ?: catalog.all.first()
+
         publish(snapshot.copy(
             phase = "loading_model",
-            modelId = modelId,
-            modelName = modelName,
+            modelId = primary.id,
+            modelName = primary.name,
             bindModeName = bindMode.name,
         ))
 
@@ -142,33 +156,35 @@ class RemoteServerService : Service() {
             Log.w(TAG, "self-start failed", e)
         }
 
-        val notif = buildNotification(this, info(resolution, port, bindMode), modelName)
+        val notif = buildNotification(this, info(resolution, port, bindMode), primary.name)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
             startForeground(NOTIFICATION_ID, notif)
         }
 
-        val loaded = try { engine.load(modelPath, modelCfg) }
-        catch (e: Exception) {
-            Log.e(TAG, "model load failed", e)
-            false
-        }
-        if (!loaded) {
-            pushFailure("model load failed")
-            stopForegroundSafe()
-            return
+        configureStagingDir()
+        registry.setCatalog(catalog)
+
+        val preloadChat = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+        val preloadVlm  = catalog.firstOf(ServerEngineKind.VLM)
+        if (preloadChat != null) {
+            val loaded = registry.chatFor(preloadChat.id)
+            if (loaded == null) {
+                pushFailure("primary chat model failed to load")
+                stopForegroundSafe()
+                return
+            }
+        } else if (preloadVlm != null) {
+            val loaded = registry.vlmFor(preloadVlm.id)
+            if (loaded == null) {
+                pushFailure("primary VLM model failed to load")
+                stopForegroundSafe()
+                return
+            }
         }
 
         publish(snapshot.copy(phase = "starting"))
-
-        val catalog = JSONArray().apply {
-            put(JSONObject().apply {
-                put("id", modelId)
-                put("name", modelName)
-                put("created", System.currentTimeMillis() / 1000)
-            })
-        }.toString()
 
         NativeServer.nativeConfigureRateLimit(
             capacity = 30.0,
@@ -178,7 +194,7 @@ class RemoteServerService : Service() {
         )
         NativeServer.nativeAttachBridge(bridge)
         NativeServer.nativeSetToken(token)
-        NativeServer.nativeSetModelsCatalog(catalog)
+        NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString())
         if (webUiHtml.isNotBlank()) NativeServer.nativeSetWebUiHtml(webUiHtml)
         if (docsHtml.isNotBlank()) NativeServer.nativeSetDocsHtml(docsHtml)
 
@@ -194,8 +210,8 @@ class RemoteServerService : Service() {
 
         publish(ServerSnapshot(
             phase = "running",
-            modelId = modelId,
-            modelName = modelName,
+            modelId = primary.id,
+            modelName = primary.name,
             host = resolution.host,
             displayHost = resolution.displayHost,
             lanHost = resolution.lanHost,
@@ -205,7 +221,7 @@ class RemoteServerService : Service() {
             reason = null,
         ))
 
-        Log.i(TAG, "server up host=${resolution.host} port=$effective model=$modelId")
+        Log.i(TAG, "server up host=${resolution.host} port=$effective primary=${primary.id} engines=${catalog.all.size}")
     }
 
     private suspend fun handleStop(reason: String) {
@@ -215,7 +231,7 @@ class RemoteServerService : Service() {
             return
         }
         tearDownNative()
-        try { engine.unload() } catch (e: Exception) { Log.w(TAG, "engine unload failed", e) }
+        try { registry.shutdownAll() } catch (e: Exception) { Log.w(TAG, "registry shutdown failed", e) }
         publish(ServerSnapshot.STOPPED.copy(reason = reason))
         stopForegroundSafe()
         stopSelf()
@@ -231,6 +247,7 @@ class RemoteServerService : Service() {
         try { NativeServer.nativeClearDocs() } catch (_: Exception) {}
         try { NativeServer.nativeClearAuditLog() } catch (_: Exception) {}
         try { NativeServer.nativeResetRateLimit() } catch (_: Exception) {}
+        try { NativeServer.nativePurgeStaging() } catch (_: Exception) {}
     }
 
     private fun stopForegroundSafe() {
@@ -294,6 +311,7 @@ class RemoteServerService : Service() {
         private const val CHANNEL_NAME = "Tool-Neuron Remote Server"
         private const val NOTIFICATION_ID = 0xA1CE
         private const val DEFAULT_PORT = 11434
+        private const val STAGING_SUBDIR = "server-staging"
 
         fun ensureNotificationChannel(ctx: Context) {
             if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

@@ -124,7 +124,7 @@ fun ServerScreen(
 
         StartStopBar(
             state = state,
-            startEnabled = !busy && !selectedModelId.isNullOrBlank(),
+            startEnabled = !busy && (vm.anyEngineInstalled.collectAsStateWithLifecycle().value || !selectedModelId.isNullOrBlank()),
             onStart = vm::start,
             onStop = vm::stop,
         )

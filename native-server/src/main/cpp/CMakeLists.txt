@@ -36,7 +36,10 @@ add_library(${CMAKE_PROJECT_NAME} SHARED
     server_webui.cpp
     server_docs.cpp
     server_rate_limit.cpp
+    server_staging.cpp
     gen_session.cpp
+    reply_session.cpp
+    wav_codec.cpp
     openai_schema.cpp
     jvm_bridge.cpp
     server_core.cpp

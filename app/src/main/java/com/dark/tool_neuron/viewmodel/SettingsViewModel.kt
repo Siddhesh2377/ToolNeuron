@@ -181,30 +181,30 @@ class SettingsViewModel @Inject constructor(
     private fun performanceSection(mode: Int): SettingsSection = SettingsSection(
         id = SECTION_PERFORMANCE,
         title = "Performance",
-        description = "CPU thread allocation for inference. Applies to currently loaded model and persists.",
+        description = "CPU placement and priority for inference. Persists across model loads.",
         icon = TnIcons.Cpu,
         items = listOf(
             SettingsItem.Choice(
                 id = ID_THREAD_MODE,
                 title = "Thread mode",
-                subtitle = "Balanced is the safe default. Performance only helps on long prompts.",
+                subtitle = "Balanced is the safe default. Performance pins to perf cluster with higher priority.",
                 icon = TnIcons.Cpu,
                 selectedKey = mode.toString(),
                 options = listOf(
                     SettingsChoiceOption(
                         AppPreferences.THREAD_MODE_POWER_SAVING.toString(),
                         "Power-saving",
-                        "1 thread, runs on efficiency cores. Slow but cool.",
+                        "1 decode thread pinned to efficiency cluster. Cool & low draw; ~30-40% slower.",
                     ),
                     SettingsChoiceOption(
                         AppPreferences.THREAD_MODE_BALANCED.toString(),
                         "Balanced",
-                        "Up to 4 threads on perf cores. Default.",
+                        "2 decode threads pinned to perf cluster, normal priority. Default.",
                     ),
                     SettingsChoiceOption(
                         AppPreferences.THREAD_MODE_PERFORMANCE.toString(),
                         "Performance",
-                        "Up to 4 threads on perf cores + larger batch (1024). Best for long prompts.",
+                        "3 decode threads pinned to perf cluster, high priority, n_batch=1024.",
                     ),
                 ),
                 onSelect = { key ->

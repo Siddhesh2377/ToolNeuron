@@ -24,7 +24,6 @@ import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.RepositoryDataStore
 import com.dark.tool_neuron.service.server.ServerController
-import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
 import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
@@ -743,12 +742,9 @@ class ModelStoreViewModel @Inject constructor(
 
     fun saveModelConfig(config: ModelConfig) {
         modelRepo.updateConfig(config)
-        // If the edited model is currently loaded, reload it so the new
-        // contextSize / threadMode / cacheType / etc. take effect immediately.
-        // Otherwise the user has to manually unload+reload to see any change.
-        val active = modelSession.loadState.value as? ModelLoadState.Active ?: return
-        if (active.modelId != config.modelId) return
         val info = installedModels.value.firstOrNull { it.id == config.modelId } ?: return
+        if (info.providerType != ProviderType.GGUF) return
+        if (serverController.isBusy) return
         viewModelScope.launch { modelSession.load(info) }
     }
 

@@ -391,6 +391,11 @@ pre:hover .copy-btn, pre:focus-within .copy-btn { opacity: 1; }
     <div class="group">Endpoints</div>
     <a data-page="models"><span class="dot"></span>List models</a>
     <a data-page="chat"><span class="dot"></span>Chat completions</a>
+    <a data-page="vlm"><span class="dot"></span>Vision (chat + images)</a>
+    <a data-page="embeddings"><span class="dot"></span>Embeddings</a>
+    <a data-page="speech"><span class="dot"></span>Speech (TTS)</a>
+    <a data-page="transcriptions"><span class="dot"></span>Transcriptions (STT)</a>
+    <a data-page="images"><span class="dot"></span>Images (gen / edit / upscale)</a>
     <a data-page="streaming"><span class="dot"></span>Streaming (SSE)</a>
     <a data-page="health"><span class="dot"></span>Health</a>
 
@@ -552,6 +557,121 @@ pre:hover .copy-btn, pre:focus-within .copy-btn { opacity: 1; }
 
       <div class="pager">
         <a data-page="models"><div class="label">Previous</div><div class="target">← List models</div></a>
+        <a class="right" data-page="vlm"><div class="label">Next</div><div class="target">Vision →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="vlm">
+      <span class="eyebrow">Endpoints</span>
+      <h1 class="title">Vision (chat + images)</h1>
+      <p class="lead">The same <code>/v1/chat/completions</code> endpoint accepts <code>image_url</code> message parts. The server auto-routes to a VLM model when any user message contains an image.</p>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
+      <h2>Image parts (base64 data URLs only — offline)</h2>
+      <p>Network URLs are rejected. Encode images as <code>data:image/png;base64,...</code> (or jpeg / webp).</p>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/chat/completions \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "model": "qwen3-vl-2b",
+    "messages": [{
+      "role": "user",
+      "content": [
+        {"type": "text", "text": "What is in this picture?"},
+        {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo..."}}
+      ]
+    }]
+  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <p>Use <code>"stream": true</code> for token streaming. Mmproj is auto-loaded.</p>
+      <div class="pager">
+        <a data-page="chat"><div class="label">Previous</div><div class="target">← Chat completions</div></a>
+        <a class="right" data-page="embeddings"><div class="label">Next</div><div class="target">Embeddings →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="embeddings">
+      <span class="eyebrow">Endpoints</span>
+      <h1 class="title">Embeddings</h1>
+      <p class="lead">Dense vector embeddings from a loaded embedding GGUF.</p>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/embeddings</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/embeddings \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{ "model": "nomic-embed-text", "input": ["hello world", "foo"] }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <p>Response is the standard OpenAI shape: <code>{ object: "list", data: [{embedding: [...]}], model, usage }</code>.</p>
+      <div class="pager">
+        <a data-page="vlm"><div class="label">Previous</div><div class="target">← Vision</div></a>
+        <a class="right" data-page="speech"><div class="label">Next</div><div class="target">Speech →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="speech">
+      <span class="eyebrow">Endpoints</span>
+      <h1 class="title">Speech (TTS)</h1>
+      <p class="lead">Text to speech via sherpa-onnx VITS. Returns a WAV body (audio/wav).</p>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/audio/speech</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/audio/speech \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{ "model": "vits-piper-amy", "input": "Hello world", "voice": 0, "speed": 1.0 }'</span> \
+  --output speech.wav</code><button class="copy-btn" type="button">Copy</button></pre>
+      <p><code>voice</code> is a speaker id (integer); <code>speed</code> is 0.5–2.0.</p>
+      <div class="pager">
+        <a data-page="embeddings"><div class="label">Previous</div><div class="target">← Embeddings</div></a>
+        <a class="right" data-page="transcriptions"><div class="label">Next</div><div class="target">Transcriptions →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="transcriptions">
+      <span class="eyebrow">Endpoints</span>
+      <h1 class="title">Transcriptions (STT)</h1>
+      <p class="lead">Speech to text via sherpa-onnx Whisper. WAV PCM input only (16-bit or 32-bit float).</p>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/audio/transcriptions</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/audio/transcriptions \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -F <span class="str">model=whisper-tiny-en</span> \
+  -F <span class="str">file=@audio.wav</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <p>Response: <code>{ "text": "..." }</code>.</p>
+      <div class="pager">
+        <a data-page="speech"><div class="label">Previous</div><div class="target">← Speech</div></a>
+        <a class="right" data-page="images"><div class="label">Next</div><div class="target">Images →</div></a>
+      </div>
+    </section>
+
+    <section class="page" data-page="images">
+      <span class="eyebrow">Endpoints</span>
+      <h1 class="title">Images</h1>
+      <p class="lead">Stable Diffusion via the on-device QNN / MNN backend. Base64 PNG output.</p>
+      <h2>Generate (txt2img)</h2>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/generations</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/generations \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{
+    "model": "anything-v5",
+    "prompt": "a city skyline at sunset",
+    "negative_prompt": "blurry",
+    "steps": 20, "cfg": 7, "width": 512, "height": 512
+  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <h2>Edit (img2img) / Inpaint</h2>
+      <p>Multipart form. Include a <code>mask</code> part for inpaint.</p>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/edits</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/edits \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -F <span class="str">model=anything-v5</span> \
+  -F <span class="str">image=@input.png</span> \
+  -F <span class="str">mask=@mask.png</span> \
+  -F <span class="str">prompt=replace masked area with grass</span> \
+  -F <span class="str">denoise=0.7</span> \
+  -F <span class="str">steps=20</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <h2>Upscale 4×</h2>
+      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/upscale</code></div>
+      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/upscale \
+  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
+  -F <span class="str">model=real-esrgan-x4</span> \
+  -F <span class="str">image=@input.png</span></code><button class="copy-btn" type="button">Copy</button></pre>
+      <p>Response: <code>{ "created": ..., "data": [{ "b64_json": "..." }] }</code>.</p>
+      <div class="pager">
+        <a data-page="transcriptions"><div class="label">Previous</div><div class="target">← Transcriptions</div></a>
         <a class="right" data-page="streaming"><div class="label">Next</div><div class="target">Streaming →</div></a>
       </div>
     </section>
@@ -603,7 +723,7 @@ data: [DONE]</code><button class="copy-btn" type="button">Copy</button></pre>
       <div class="callout">Streaming chunks intentionally omit <code>usage</code> per OpenAI's spec. Token counts are not reported on the wire.</div>
 
       <div class="pager">
-        <a data-page="chat"><div class="label">Previous</div><div class="target">← Chat completions</div></a>
+        <a data-page="images"><div class="label">Previous</div><div class="target">← Images</div></a>
         <a class="right" data-page="health"><div class="label">Next</div><div class="target">Health →</div></a>
       </div>
     </section>

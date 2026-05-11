@@ -10,8 +10,10 @@ import android.util.Log
 import com.dark.native_server.BindMode
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.util.VlmPaths
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -107,22 +110,22 @@ class ServerController @Inject constructor(
 
     fun start() {
         if (isBusy) return
-        val modelId = prefs.serverSelectedModelId
-        val model: ModelInfo? = modelId.takeIf { it.isNotBlank() }
-            ?.let { modelRepo.getModelById(it) }
-            ?.takeIf { it.providerType == ProviderType.GGUF }
-        if (model == null) {
-            _state.value = ServerState.Failed("select a chat model in Server settings before starting")
+        val installed = modelRepo.models.value
+        val selectedChat = prefs.serverSelectedModelId.takeIf { it.isNotBlank() }
+            ?.let { id -> installed.firstOrNull { it.id == id && it.providerType == ProviderType.GGUF } }
+        val anyChat = installed.firstOrNull { it.providerType == ProviderType.GGUF }
+        val primaryChat = selectedChat ?: anyChat
+
+        val engines = buildEnginesCatalog(installed, primaryChat)
+        if (engines.length() == 0) {
+            _state.value = ServerState.Failed("install at least one chat / VLM / embedding / voice / image model before starting the server")
             return
         }
 
         _state.value = ServerState.Starting
         ensureBoundThen { s ->
             val cfg = JSONObject().apply {
-                put("modelId", model.id)
-                put("modelName", model.name)
-                put("modelPath", model.path)
-                put("modelConfigJson", buildModelConfigJson(model.id))
+                put("engines", engines)
                 put("token", ensureToken())
                 put("port", prefs.serverPort)
                 put("bindMode", prefs.serverBindMode)
@@ -174,6 +177,56 @@ class ServerController @Inject constructor(
 
     fun markConfigured() { prefs.serverConfigured = true }
     val isConfigured: Boolean get() = prefs.serverConfigured
+
+    private fun buildEnginesCatalog(installed: List<ModelInfo>, primaryChat: ModelInfo?): JSONArray {
+        val out = JSONArray()
+        val modelsRoot = modelRepo.getModelsDir()
+        val now = System.currentTimeMillis() / 1000
+
+        installed.forEach { m ->
+            if (m.pathType != PathType.FILE) return@forEach
+            if (m.path.isBlank()) return@forEach
+            when (m.providerType) {
+                ProviderType.GGUF -> {
+                    if (VlmPaths.isInsideVlmFolder(m.path, modelsRoot)) {
+                        val mmproj = VlmPaths.colocatedMmproj(File(m.path))
+                        if (mmproj != null) {
+                            out.put(makeEntry(m, "vlm", now, mmprojPath = mmproj.absolutePath))
+                            return@forEach
+                        }
+                    }
+                    out.put(makeEntry(m, "gguf", now))
+                }
+                ProviderType.EMBEDDING -> out.put(makeEntry(m, "embedding", now))
+                ProviderType.TTS -> out.put(makeEntry(m, "tts", now))
+                ProviderType.STT -> out.put(makeEntry(m, "stt", now))
+                ProviderType.IMAGE_GEN -> out.put(makeEntry(m, "image_gen", now))
+                ProviderType.IMAGE_UPSCALER -> out.put(makeEntry(m, "image_upscaler", now))
+            }
+        }
+
+        if (primaryChat != null) {
+            for (i in 0 until out.length()) {
+                val e = out.getJSONObject(i)
+                if (e.optString("id") == primaryChat.id) {
+                    e.put("primary", true)
+                    break
+                }
+            }
+        }
+        return out
+    }
+
+    private fun makeEntry(model: ModelInfo, type: String, createdUnix: Long, mmprojPath: String? = null): JSONObject =
+        JSONObject().apply {
+            put("id", model.id)
+            put("name", model.name)
+            put("path", model.path)
+            if (!mmprojPath.isNullOrBlank()) put("mmproj_path", mmprojPath)
+            put("config_json", buildModelConfigJson(model.id))
+            put("type", type)
+            put("created", createdUnix)
+        }
 
     private fun ensureBoundThen(block: (IRemoteServerService) -> Unit) {
         val s = stub

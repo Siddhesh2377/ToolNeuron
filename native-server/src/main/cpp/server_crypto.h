@@ -16,6 +16,11 @@ namespace tn::server::crypto {
     std::string to_base64url(const uint8_t* data, size_t len);
     std::string to_base64url(const std::vector<uint8_t>& data);
 
+    std::string to_base64_std(const uint8_t* data, size_t len);
+    std::string to_base64_std(const std::vector<uint8_t>& data);
+
+    bool from_base64_any(const std::string& input, std::vector<uint8_t>& out);
+
     void secure_zero(void* ptr, size_t len);
 
 }

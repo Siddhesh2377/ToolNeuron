@@ -4,6 +4,7 @@
 
 #include "gen_session.h"
 #include "jvm_bridge.h"
+#include "reply_session.h"
 #include "server_audit.h"
 #include "server_auth.h"
 #include "server_core.h"
@@ -11,6 +12,7 @@
 #include "server_docs.h"
 #include "server_models.h"
 #include "server_rate_limit.h"
+#include "server_staging.h"
 #include "server_webui.h"
 
 namespace {
@@ -103,6 +105,13 @@ Java_com_dark_native_1server_NativeServer_nativeClearModelsCatalog(
     tn::server::models::clear_catalog();
 }
 
+JNIEXPORT jstring JNICALL
+Java_com_dark_native_1server_NativeServer_nativeModelsCatalogJson(
+        JNIEnv* env, jobject) {
+    std::string payload = tn::server::models::build_list_response();
+    return env->NewStringUTF(payload.c_str());
+}
+
 JNIEXPORT void JNICALL
 Java_com_dark_native_1server_NativeServer_nativeAttachBridge(
         JNIEnv* env, jobject, jobject bridge) {
@@ -140,6 +149,49 @@ Java_com_dark_native_1server_NativeServer_nativeFeedError(
     if (!session) return;
     std::string m = jstringToStd(env, message);
     session->push_error(std::move(m));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativeFeedReplyText(
+        JNIEnv* env, jobject, jlong replyId, jstring body, jstring mime) {
+    auto session = tn::server::reply::registry().get(static_cast<int64_t>(replyId));
+    if (!session) return;
+    std::string b = jstringToStd(env, body);
+    std::string m = mime ? jstringToStd(env, mime) : std::string("application/json");
+    session->push_text(std::move(b), std::move(m));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativeFeedReplyBinary(
+        JNIEnv* env, jobject, jlong replyId, jstring path, jstring mime) {
+    auto session = tn::server::reply::registry().get(static_cast<int64_t>(replyId));
+    if (!session) return;
+    std::string p = jstringToStd(env, path);
+    std::string m = jstringToStd(env, mime);
+    session->push_binary_path(std::move(p), std::move(m));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativeFeedReplyError(
+        JNIEnv* env, jobject, jlong replyId, jstring message) {
+    auto session = tn::server::reply::registry().get(static_cast<int64_t>(replyId));
+    if (!session) return;
+    std::string m = jstringToStd(env, message);
+    session->push_error(std::move(m));
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativeSetStagingDir(
+        JNIEnv* env, jobject, jstring path) {
+    std::string p = jstringToStd(env, path);
+    tn::server::staging::set_dir(p);
+    tn::server::staging::purge_all();
+}
+
+JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativePurgeStaging(
+        JNIEnv*, jobject) {
+    tn::server::staging::purge_all();
 }
 
 JNIEXPORT jstring JNICALL

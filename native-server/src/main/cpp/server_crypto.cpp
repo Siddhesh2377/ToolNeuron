@@ -88,6 +88,62 @@ namespace tn::server::crypto {
         return to_base64url(data.data(), data.size());
     }
 
+    static constexpr char kStdAlpha[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    std::string to_base64_std(const uint8_t* data, size_t len) {
+        std::string out;
+        out.reserve(((len + 2) / 3) * 4);
+        size_t i = 0;
+        while (i + 3 <= len) {
+            uint32_t v = (static_cast<uint32_t>(data[i]) << 16) |
+                         (static_cast<uint32_t>(data[i + 1]) << 8) |
+                         static_cast<uint32_t>(data[i + 2]);
+            out.push_back(kStdAlpha[(v >> 18) & 0x3F]);
+            out.push_back(kStdAlpha[(v >> 12) & 0x3F]);
+            out.push_back(kStdAlpha[(v >> 6) & 0x3F]);
+            out.push_back(kStdAlpha[v & 0x3F]);
+            i += 3;
+        }
+        if (i < len) {
+            uint32_t v = static_cast<uint32_t>(data[i]) << 16;
+            if (i + 1 < len) v |= static_cast<uint32_t>(data[i + 1]) << 8;
+            out.push_back(kStdAlpha[(v >> 18) & 0x3F]);
+            out.push_back(kStdAlpha[(v >> 12) & 0x3F]);
+            out.push_back(i + 1 < len ? kStdAlpha[(v >> 6) & 0x3F] : '=');
+            out.push_back('=');
+        }
+        return out;
+    }
+
+    std::string to_base64_std(const std::vector<uint8_t>& data) {
+        return to_base64_std(data.data(), data.size());
+    }
+
+    bool from_base64_any(const std::string& input, std::vector<uint8_t>& out) {
+        out.clear();
+        out.reserve((input.size() / 4) * 3);
+        int buf = 0;
+        int bits = 0;
+        for (char ch : input) {
+            if (ch == '=' || ch == '\r' || ch == '\n' || ch == ' ' || ch == '\t') continue;
+            int v;
+            if (ch >= 'A' && ch <= 'Z') v = ch - 'A';
+            else if (ch >= 'a' && ch <= 'z') v = ch - 'a' + 26;
+            else if (ch >= '0' && ch <= '9') v = ch - '0' + 52;
+            else if (ch == '+' || ch == '-') v = 62;
+            else if (ch == '/' || ch == '_') v = 63;
+            else return false;
+            buf = (buf << 6) | v;
+            bits += 6;
+            if (bits >= 8) {
+                bits -= 8;
+                out.push_back(static_cast<uint8_t>((buf >> bits) & 0xFF));
+            }
+        }
+        return true;
+    }
+
     void secure_zero(void* ptr, size_t len) {
         volatile uint8_t* p = static_cast<volatile uint8_t*>(ptr);
         while (len--) *p++ = 0;

@@ -60,6 +60,21 @@ namespace tn::server::oai {
         }
         out.request.messages = *mIt;
 
+        for (const auto& msg : *mIt) {
+            if (!msg.is_object()) continue;
+            auto cIt = msg.find("content");
+            if (cIt == msg.end() || !cIt->is_array()) continue;
+            for (const auto& part : *cIt) {
+                if (!part.is_object()) continue;
+                auto tIt = part.find("type");
+                if (tIt != part.end() && tIt->is_string() && tIt->get<std::string>() == "image_url") {
+                    out.request.has_images = true;
+                    break;
+                }
+            }
+            if (out.request.has_images) break;
+        }
+
         get_opt<bool>(j, "stream", out.request.stream);
 
         {
@@ -102,6 +117,81 @@ namespace tn::server::oai {
 
         out.ok = true;
         return out;
+    }
+
+    bool extract_images_from_messages(const json& messages,
+                                      std::vector<InlineImage>& out,
+                                      json& sanitized_messages,
+                                      std::string& parse_error) {
+        sanitized_messages = json::array();
+        out.clear();
+        for (const auto& msg : messages) {
+            if (!msg.is_object()) {
+                sanitized_messages.push_back(msg);
+                continue;
+            }
+            auto cIt = msg.find("content");
+            if (cIt == msg.end() || !cIt->is_array()) {
+                sanitized_messages.push_back(msg);
+                continue;
+            }
+
+            json new_msg = msg;
+            std::string flat_text;
+            for (const auto& part : *cIt) {
+                if (!part.is_object()) continue;
+                auto tIt = part.find("type");
+                if (tIt == part.end() || !tIt->is_string()) continue;
+                const std::string type = tIt->get<std::string>();
+                if (type == "text") {
+                    auto vIt = part.find("text");
+                    if (vIt != part.end() && vIt->is_string()) {
+                        if (!flat_text.empty()) flat_text.push_back('\n');
+                        flat_text += vIt->get<std::string>();
+                    }
+                } else if (type == "image_url") {
+                    auto urlObj = part.find("image_url");
+                    if (urlObj == part.end()) continue;
+                    std::string url;
+                    if (urlObj->is_string()) {
+                        url = urlObj->get<std::string>();
+                    } else if (urlObj->is_object()) {
+                        auto uu = urlObj->find("url");
+                        if (uu != urlObj->end() && uu->is_string()) url = uu->get<std::string>();
+                    }
+                    if (url.empty()) continue;
+
+                    const std::string prefix = "data:";
+                    if (url.compare(0, prefix.size(), prefix) != 0) {
+                        parse_error = "image_url must be data:image/...;base64,... (network URLs are not supported on this offline server)";
+                        return false;
+                    }
+                    auto semi = url.find(';', prefix.size());
+                    auto comma = url.find(',', prefix.size());
+                    if (semi == std::string::npos || comma == std::string::npos || comma < semi) {
+                        parse_error = "malformed data URL";
+                        return false;
+                    }
+                    std::string mime = url.substr(prefix.size(), semi - prefix.size());
+                    std::string enc_marker = url.substr(semi + 1, comma - semi - 1);
+                    if (enc_marker != "base64") {
+                        parse_error = "only base64-encoded data URLs are supported";
+                        return false;
+                    }
+                    std::string b64 = url.substr(comma + 1);
+                    InlineImage img;
+                    img.mime = mime;
+                    if (!tn::server::crypto::from_base64_any(b64, img.bytes) || img.bytes.empty()) {
+                        parse_error = "invalid base64 in image_url";
+                        return false;
+                    }
+                    out.push_back(std::move(img));
+                }
+            }
+            new_msg["content"] = flat_text;
+            sanitized_messages.push_back(new_msg);
+        }
+        return true;
     }
 
     std::string build_chat_response_nonstream(
@@ -177,6 +267,48 @@ namespace tn::server::oai {
         j["frequency_penalty"]  = req.frequency_penalty;
         if (!req.stop.is_null()) j["stop"]         = req.stop;
         return j.dump();
+    }
+
+    std::string build_embedding_response(const std::string& model_id,
+                                         const std::vector<std::vector<float>>& vectors,
+                                         int prompt_tokens) {
+        json root;
+        root["object"] = "list";
+        json data = json::array();
+        for (size_t i = 0; i < vectors.size(); ++i) {
+            json entry;
+            entry["object"] = "embedding";
+            entry["index"]  = static_cast<int>(i);
+            entry["embedding"] = vectors[i];
+            data.push_back(std::move(entry));
+        }
+        root["data"]  = std::move(data);
+        root["model"] = model_id;
+        json usage;
+        usage["prompt_tokens"] = prompt_tokens;
+        usage["total_tokens"]  = prompt_tokens;
+        root["usage"] = std::move(usage);
+        return root.dump();
+    }
+
+    std::string build_audio_transcription_response(const std::string& text) {
+        json root;
+        root["text"] = text;
+        return root.dump();
+    }
+
+    std::string build_image_response(const std::vector<std::string>& b64_pngs,
+                                     long long created_unix) {
+        json root;
+        root["created"] = created_unix;
+        json data = json::array();
+        for (const auto& b64 : b64_pngs) {
+            json entry;
+            entry["b64_json"] = b64;
+            data.push_back(std::move(entry));
+        }
+        root["data"] = std::move(data);
+        return root.dump();
     }
 
 }

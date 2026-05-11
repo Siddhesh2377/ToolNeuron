@@ -24,6 +24,7 @@ object NativeServer {
 
     external fun nativeSetModelsCatalog(dataArrayJson: String)
     external fun nativeClearModelsCatalog()
+    external fun nativeModelsCatalogJson(): String
 
     external fun nativeAttachBridge(bridge: InferenceBridge)
     external fun nativeDetachBridge()
@@ -31,6 +32,13 @@ object NativeServer {
     external fun nativeFeedToken(genId: Long, token: String)
     external fun nativeFeedDone(genId: Long, finishReason: String)
     external fun nativeFeedError(genId: Long, message: String)
+
+    external fun nativeFeedReplyText(replyId: Long, body: String, mime: String)
+    external fun nativeFeedReplyBinary(replyId: Long, path: String, mime: String)
+    external fun nativeFeedReplyError(replyId: Long, message: String)
+
+    external fun nativeSetStagingDir(path: String)
+    external fun nativePurgeStaging()
 
     external fun nativeRecentRequestsJson(max: Int): String
     external fun nativeClearAuditLog()

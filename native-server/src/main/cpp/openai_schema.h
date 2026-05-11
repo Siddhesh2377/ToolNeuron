@@ -3,6 +3,7 @@
 #include <nlohmann/json.hpp>
 
 #include <string>
+#include <vector>
 
 namespace tn::server::oai {
 
@@ -19,6 +20,7 @@ namespace tn::server::oai {
         bool               has_temperature  = false;
         bool               has_top_p        = false;
         bool               has_max_tokens   = false;
+        bool               has_images       = false;
     };
 
     struct ParseResult {
@@ -29,7 +31,17 @@ namespace tn::server::oai {
         ChatRequest request;
     };
 
+    struct InlineImage {
+        std::string mime;
+        std::vector<uint8_t> bytes;
+    };
+
     ParseResult parse_chat_request(const std::string& body);
+
+    bool extract_images_from_messages(const nlohmann::json& messages,
+                                      std::vector<InlineImage>& out,
+                                      nlohmann::json& sanitized_messages,
+                                      std::string& parse_error);
 
     std::string build_chat_response_nonstream(
         const std::string& model_id,
@@ -54,5 +66,14 @@ namespace tn::server::oai {
                                const std::string& type);
 
     std::string serialize_params(const ChatRequest& req);
+
+    std::string build_embedding_response(const std::string& model_id,
+                                         const std::vector<std::vector<float>>& vectors,
+                                         int prompt_tokens);
+
+    std::string build_audio_transcription_response(const std::string& text);
+
+    std::string build_image_response(const std::vector<std::string>& b64_pngs,
+                                     long long created_unix);
 
 }
