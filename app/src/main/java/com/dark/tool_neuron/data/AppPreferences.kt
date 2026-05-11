@@ -218,6 +218,15 @@ class AppPreferences @Inject constructor(
         get() = getString(KEY_ACTIVE_RESEARCH_MODEL)
         set(value) = putString(KEY_ACTIVE_RESEARCH_MODEL, value)
 
+    var vlmImageQuality: String
+        get() = getString(KEY_VLM_IMAGE_QUALITY, DEFAULT_VLM_IMAGE_QUALITY)
+        set(value) = putString(KEY_VLM_IMAGE_QUALITY, value)
+
+    var threadMode: Int
+        get() = getString(KEY_THREAD_MODE, DEFAULT_THREAD_MODE.toString()).toIntOrNull()?.coerceIn(0, 2)
+            ?: DEFAULT_THREAD_MODE
+        set(value) = putString(KEY_THREAD_MODE, value.coerceIn(0, 2).toString())
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -295,6 +304,13 @@ class AppPreferences @Inject constructor(
         const val KEY_RESEARCH_DDG_LOCALE = "research_ddg_locale"
         const val KEY_RESEARCH_CANCEL_ON_BG = "research_cancel_on_bg"
         const val KEY_ACTIVE_RESEARCH_MODEL = "active_research_model"
+        const val KEY_VLM_IMAGE_QUALITY = "vlm_image_quality"
+        const val DEFAULT_VLM_IMAGE_QUALITY = "MEDIUM"
+        const val KEY_THREAD_MODE = "thread_mode"
+        const val DEFAULT_THREAD_MODE = 1
+        const val THREAD_MODE_POWER_SAVING = 0
+        const val THREAD_MODE_BALANCED = 1
+        const val THREAD_MODE_PERFORMANCE = 2
         const val DEFAULT_RESEARCH_MAX_ITERATIONS = 5
         const val DEFAULT_RESEARCH_MAX_QUESTIONS = 4
         const val DEFAULT_RESEARCH_RESULTS_PER_SEARCH = 5
