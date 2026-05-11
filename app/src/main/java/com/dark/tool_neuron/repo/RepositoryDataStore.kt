@@ -81,11 +81,24 @@ class RepositoryDataStore @Inject constructor(
 
     companion object {
         val DEFAULT_REPOSITORIES = listOf(
+            // LFM (text)
             HFRepository("lfm25-350m", "LFM 2.5 350M", "LiquidAI/LFM2.5-350M-GGUF"),
+            // LFM (vision) — kept; small enough to be a default VLM
             HFRepository("lfm2-vl-450m", "LFM2-VL 450M", "LiquidAI/LFM2-VL-450M-GGUF"),
+            // Qwen (text) — small, tool-calling tested
             HFRepository("qwen3-0.6b", "Qwen3 0.6B", "Qwen/Qwen3-0.6B-GGUF"),
             HFRepository("unsloth-qwen3_5-0_8b", "Qwen3.5 0.8B", "unsloth/Qwen3.5-0.8B-GGUF"),
             HFRepository("unsloth-qwen3_5-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF"),
+            // Qwen (vision)
+            HFRepository("qwen3-vl-2b", "Qwen3-VL 2B Instruct", "Qwen/Qwen3-VL-2B-Instruct-GGUF"),
+            // Mistral
+            HFRepository("mistral-7b-v03", "Mistral 7B Instruct v0.3", "bartowski/Mistral-7B-Instruct-v0.3-GGUF"),
+            // Gemma
+            HFRepository("gemma3-1b-it", "Gemma 3 1B IT", "unsloth/gemma-3-1b-it-GGUF"),
+            // Tool-calling champion (per project memory)
+            HFRepository("smollm3-3b", "SmolLM3 3B", "HuggingFaceTB/SmolLM3-3B-GGUF"),
+            // General-purpose pick
+            HFRepository("phi35-mini", "Phi 3.5 Mini Instruct", "unsloth/Phi-3.5-mini-instruct-GGUF"),
         )
 
         private val REMOVED_IDS = setOf("sd-qnn", "sd-mnn", "sd-cyberrealistic-qnn")
