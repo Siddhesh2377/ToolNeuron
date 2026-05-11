@@ -130,6 +130,10 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.ImageTask.route)
                     },
+                    onNavigateToPlugins = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(NavScreens.PluginInstall.route)
+                    },
                 )
             }
         }

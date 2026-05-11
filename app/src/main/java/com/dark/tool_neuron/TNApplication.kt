@@ -10,6 +10,7 @@ import com.dark.tool_neuron.data.AccessibilityGuard
 import com.dark.tool_neuron.data.AppLockObserver
 import com.dark.tool_neuron.data.NativeIntegrity
 import com.dark.tool_neuron.data.ResearchBackgroundObserver
+import com.dark.tool_neuron.plugin_host.PluginContainerHost
 import dagger.Lazy
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
@@ -21,6 +22,7 @@ class TNApplication : Application() {
     @Inject lateinit var appLockObserverLazy: Lazy<AppLockObserver>
     @Inject lateinit var accessibilityGuardLazy: Lazy<AccessibilityGuard>
     @Inject lateinit var researchBackgroundObserverLazy: Lazy<ResearchBackgroundObserver>
+    @Inject lateinit var pluginContainerHostLazy: Lazy<PluginContainerHost>
 
     override fun onCreate() {
         super.onCreate()
@@ -68,6 +70,7 @@ class TNApplication : Application() {
 
         appLockObserver.register()
         researchBackgroundObserverLazy.get().register()
+        pluginContainerHostLazy.get()
     }
 
     private fun isMainProcess(): Boolean = currentProcessName() == packageName

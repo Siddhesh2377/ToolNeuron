@@ -11,6 +11,7 @@ import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskTopBar
 import com.dark.tool_neuron.ui.screens.password_screen.PasswordScreenTopBar
 import com.dark.tool_neuron.ui.screens.server.ServerTopBar
+import com.dark.tool_neuron.ui.screens.plugin_install.PluginInstallTopBar
 import com.dark.tool_neuron.ui.screens.settings.SettingsTopBar
 import com.dark.tool_neuron.ui.screens.setup_screen.SetupScreenTopBar
 import com.dark.tool_neuron.ui.screens.storage.StorageTopBar
@@ -94,6 +95,7 @@ fun AppTopBar(
         NavScreens.Storage.route -> StorageTopBar(onBack = onBack)
         NavScreens.ImageTask.route -> ImageTaskTopBar(onBack = onBack)
         NavScreens.ServerScreen.route -> ServerTopBar()
+        NavScreens.PluginInstall.route -> PluginInstallTopBar(onBack = onBack)
         NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)
         NavScreens.Documents.route -> DocumentsTopBar(onBack = onBack)
         else -> {

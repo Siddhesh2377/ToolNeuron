@@ -48,6 +48,7 @@ import com.dark.tool_neuron.ui.screens.guide.GuideVlmScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideVoiceScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screens.plugin_hub.PluginHubScreen
+import com.dark.tool_neuron.ui.screens.plugin_install.PluginInstallScreen
 import com.dark.tool_neuron.ui.screens.hf_explorer.HfExplorerScreen
 import com.dark.tool_neuron.ui.screens.hf_explorer.HfRepoDetailScreen
 import com.dark.tool_neuron.ui.screens.server.ServerScreen
@@ -390,6 +391,9 @@ fun TNavigation(
         }
         composable(NavScreens.ServerScreen.route) {
             ServerScreen(innerPadding)
+        }
+        composable(NavScreens.PluginInstall.route) {
+            PluginInstallScreen(innerPadding = innerPadding)
         }
         composable(NavScreens.HfExplorer.route) {
             HfExplorerScreen(innerPadding = innerPadding, navController = navController)

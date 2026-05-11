@@ -25,6 +25,7 @@ sealed class NavScreens(val route: String) {
     object GuideServer : NavScreens("guide_server")
     object GuideResearch : NavScreens("guide_research")
     object PluginHub : NavScreens("plugin_hub")
+    object PluginInstall : NavScreens("plugin_install")
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
     object SettingsChatRag : NavScreens("settings_chat_rag")
