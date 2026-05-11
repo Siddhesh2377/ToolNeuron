@@ -25,6 +25,7 @@ import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
 import com.dark.tool_neuron.ui.screens.document.DocumentViewerScreen
 import com.dark.tool_neuron.ui.screens.documents.DocumentsScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
+import com.dark.tool_neuron.ui.screens.image_task.ImageTaskScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
 import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
@@ -59,6 +60,7 @@ import com.dark.tool_neuron.ui.screens.setup_screen.SetupThemeScreen
 import com.dark.tool_neuron.ui.screens.terms_conditions.TermsConditionsScreen
 import com.dark.tool_neuron.ui.theme.rememberNavTransitions
 import com.dark.tool_neuron.viewmodel.HomeViewModel
+import com.dark.tool_neuron.viewmodel.ImageTaskViewModel
 import com.dark.tool_neuron.viewmodel.ModelStoreViewModel
 import com.dark.tool_neuron.viewmodel.PasswordViewModel
 import com.dark.tool_neuron.viewmodel.RagDebugViewModel
@@ -317,6 +319,14 @@ fun TNavigation(
             RagDebugScreen(
                 viewModel = viewModel,
                 onBack = { navController.popBackStack() },
+            )
+        }
+        composable(NavScreens.ImageTask.route) {
+            val viewModel: ImageTaskViewModel = hiltViewModel()
+            ImageTaskScreen(
+                innerPadding = innerPadding,
+                viewModel = viewModel,
+                onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
             )
         }
         composable(NavScreens.Storage.route) {

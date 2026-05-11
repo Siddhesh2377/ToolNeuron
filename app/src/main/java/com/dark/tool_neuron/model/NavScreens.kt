@@ -34,6 +34,7 @@ sealed class NavScreens(val route: String) {
     object SettingsPrivacy : NavScreens("settings_privacy")
     object SettingsAbout : NavScreens("settings_about")
     object Storage : NavScreens("storage")
+    object ImageTask : NavScreens("image_task")
     object RagDebug : NavScreens("rag_debug")
     object ServerScreen : NavScreens("server_screen")
     object HfExplorer : NavScreens("hf_explorer")

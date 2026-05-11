@@ -126,6 +126,10 @@ fun AppScaffold() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.Credits.route)
                     },
+                    onNavigateToImageTask = {
+                        scope.launch { drawerState.close() }
+                        navController.navigate(NavScreens.ImageTask.route)
+                    },
                 )
             }
         }
