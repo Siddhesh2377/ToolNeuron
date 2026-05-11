@@ -117,9 +117,16 @@ object InferenceClient {
     private val pendingLoads = mutableSetOf<CancellableContinuation<Result<String>>>()
     private val pendingLoadsLock = Any()
 
-    private fun trackLoad(cont: CancellableContinuation<Result<String>>) {
+    private fun trackLoad(
+        cont: CancellableContinuation<Result<String>>,
+        onCancel: (() -> Unit)? = null,
+    ) {
         synchronized(pendingLoadsLock) { pendingLoads.add(cont) }
+        // CancellableContinuation accepts exactly one cancellation handler — additional
+        // resources (e.g. the pfd in loadModelFromUri) must be closed here, not via
+        // a second invokeOnCancellation call (which throws IllegalStateException).
         cont.invokeOnCancellation {
+            try { onCancel?.invoke() } catch (_: Throwable) {}
             synchronized(pendingLoadsLock) { pendingLoads.remove(cont) }
         }
     }
@@ -238,8 +245,7 @@ object InferenceClient {
         val pfd = context.contentResolver.openFileDescriptor(uri, "r")
             ?: return Result.failure(IllegalArgumentException("Cannot open URI: $uri"))
         return suspendCancellableCoroutine { cont ->
-            trackLoad(cont)
-            cont.invokeOnCancellation { pfd.close() }
+            trackLoad(cont) { pfd.close() }
             svc.loadModelFromFd(pfd, configJson, object : IModelLoadCallback.Stub() {
                 override fun onSuccess(modelInfoJson: String) {
                     pfd.close()
