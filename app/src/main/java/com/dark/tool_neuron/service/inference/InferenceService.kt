@@ -21,8 +21,9 @@ import com.dark.ai_sherpa.OfflineTtsModelConfig
 import com.dark.ai_sherpa.OfflineTtsVitsModelConfig
 import com.dark.ai_sherpa.OfflineWhisperModelConfig
 import com.dark.ai_sherpa.SherpaLib
+import com.dark.gguf_lib.ErrorTracker
 import com.dark.gguf_lib.GGMLEngine
-import com.dark.gguf_lib.GGUFNativeLib
+import com.dark.gguf_lib.ImageQuality
 import com.dark.gguf_lib.models.GenerationEvent
 import java.io.File
 import com.dark.tool_neuron.R
@@ -58,6 +59,13 @@ class InferenceService : Service() {
     private val ktErrorLock = Any()
     @Volatile private var ktLastErrorJson: String? = null
 
+    @Volatile private var loadedProjectorPath: String? = null
+    @Volatile private var loadedImageMaxTokens: Int = -1
+
+    private val vtCacheDir: File by lazy {
+        File(filesDir, "vlm_vt_cache").also { it.mkdirs() }
+    }
+
     override fun onCreate() {
         super.onCreate()
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND)
@@ -65,8 +73,8 @@ class InferenceService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification("Inference ready"))
         engine.setTokenBatchSize(STREAMING_TOKEN_BATCH_BYTES)
         try {
-            GGUFNativeLib.nativeErrorInit()
-            GGUFNativeLib.nativeErrorSetCrashLogPath(crashLogFile.absolutePath)
+            ErrorTracker.init()
+            ErrorTracker.setCrashLogPath(crashLogFile.absolutePath)
         } catch (t: Throwable) {
             Log.e(TAG, "gguf error tracker init failed", t)
         }
@@ -75,6 +83,11 @@ class InferenceService : Service() {
             SherpaLib.nativeErrorSetCrashLogPath(sherpaCrashLogFile.absolutePath)
         } catch (t: Throwable) {
             Log.e(TAG, "sherpa error tracker init failed", t)
+        }
+        try {
+            engine.vtCacheInit(vtCacheDir.absolutePath, VT_CACHE_BUDGET_BYTES)
+        } catch (t: Throwable) {
+            Log.e(TAG, "vt cache init failed", t)
         }
     }
 
@@ -129,12 +142,12 @@ class InferenceService : Service() {
                     val success = engine.load(
                         path = modelPath,
                         contextSize = config.optInt("contextSize", 4096),
-                        threadMode = config.optInt("threadMode", 1),
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
+                        engine.setThreadMode(config.optInt("threadMode", 1))
                         applySamplingFromConfig(config)
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
@@ -164,12 +177,12 @@ class InferenceService : Service() {
                     val success = engine.loadFromFd(
                         fd = fd,
                         contextSize = config.optInt("contextSize", 4096),
-                        threadMode = config.optInt("threadMode", 1),
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
+                        engine.setThreadMode(config.optInt("threadMode", 1))
                         applySamplingFromConfig(config)
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
@@ -220,24 +233,23 @@ class InferenceService : Service() {
             engine.setChatTemplate(template)
         }
 
-        override fun isToolCallingSupported(): Boolean =
-            engine.isLoaded && engine.isToolCallingSupported()
+        override fun isToolCallingSupported(): Boolean = false
 
-        override fun setToolsJson(toolsJson: String) {
-            engine.setToolsJson(toolsJson)
-        }
+        override fun setToolsJson(toolsJson: String) {}
 
-        override fun enableToolCalling(toolsJson: String, grammarMode: Int, useTypedGrammar: Boolean) {
-            engine.enableToolCalling(toolsJson, grammarMode, useTypedGrammar)
-        }
+        override fun enableToolCalling(toolsJson: String, grammarMode: Int, useTypedGrammar: Boolean) {}
 
-        override fun clearTools() {
-            engine.clearTools()
-        }
+        override fun clearTools() {}
 
         override fun getContextUsage(): Float = engine.getContextUsage()
 
         override fun getContextInfo(prompt: String?): String? = null
+
+        override fun getMemoryStatsJson(): String? = engine.getMemoryStatsJson()
+
+        override fun getVtCacheStatsJson(): String = engine.vtCacheStatsJson()
+
+        override fun getVlmKvCacheStatsJson(): String = engine.vlmKvCacheStatsJson()
 
         override fun supportsThinking(): Boolean =
             engine.isLoaded && engine.supportsThinking()
@@ -252,7 +264,9 @@ class InferenceService : Service() {
 
         override fun warmUp(): Boolean = engine.warmUp()
 
-        override fun setThreadMode(mode: Int) {}
+        override fun setThreadMode(mode: Int) {
+            engine.setThreadMode(mode)
+        }
 
         override fun getStateSize(): Long = engine.getStateSize()
 
@@ -260,16 +274,33 @@ class InferenceService : Service() {
 
         override fun stateLoadFromFile(path: String): Boolean = engine.stateLoadFromFile(path)
 
-        override fun loadVlmProjector(path: String, threads: Int, imageMinTokens: Int, imageMaxTokens: Int): Boolean =
-            engine.loadVlmProjector(path, threads, imageMinTokens, imageMaxTokens)
+        override fun loadVlmProjector(path: String, threads: Int, imageMinTokens: Int, imageMaxTokens: Int): Boolean {
+            val ok = runBlocking(Dispatchers.IO) {
+                engine.loadVlmProjector(path, threads, imageMinTokens, imageMaxTokens)
+            }
+            if (ok) {
+                loadedProjectorPath = path
+                loadedImageMaxTokens = imageMaxTokens
+            }
+            return ok
+        }
 
         override fun loadVlmProjectorFromFd(pfd: ParcelFileDescriptor, threads: Int, imageMinTokens: Int, imageMaxTokens: Int): Boolean {
             val fd = pfd.detachFd()
-            return engine.loadVlmProjectorFromFd(fd, threads, imageMinTokens, imageMaxTokens)
+            val ok = runBlocking(Dispatchers.IO) {
+                engine.loadVlmProjectorFromFd(fd, threads, imageMinTokens, imageMaxTokens)
+            }
+            if (ok) {
+                loadedProjectorPath = "fd:$fd"
+                loadedImageMaxTokens = imageMaxTokens
+            }
+            return ok
         }
 
         override fun releaseVlmProjector() {
             engine.releaseVlmProjector()
+            loadedProjectorPath = null
+            loadedImageMaxTokens = -1
         }
 
         override fun isVlmLoaded(): Boolean = engine.isVlmLoaded
@@ -282,6 +313,7 @@ class InferenceService : Service() {
             messagesJson: String,
             imageFds: Array<ParcelFileDescriptor>?,
             maxTokens: Int,
+            imageQuality: Int,
             callback: IGenerationCallback,
         ) {
             val images: List<ByteArray> = try {
@@ -295,7 +327,42 @@ class InferenceService : Service() {
                 safeCallback(callback) { it.onError("Failed to read image bytes: ${e.message}") }
                 return
             }
-            collectFlow(engine.generateVlmFlow(messagesJson, images, maxTokens), callback)
+            val quality = ImageQuality.entries.getOrNull(imageQuality) ?: ImageQuality.MEDIUM
+            val projector = loadedProjectorPath
+            val maxImageTokens = loadedImageMaxTokens
+            val vtKeys: List<ByteArray?>? = if (projector != null) {
+                images.map { engine.computeVtKey(it, projector, maxImageTokens) }
+            } else null
+            collectFlow(
+                engine.generateVlmFlow(
+                    messagesJson = messagesJson,
+                    imageData = images,
+                    maxTokens = maxTokens,
+                    vtKeys = vtKeys,
+                    imageQuality = quality,
+                ),
+                callback,
+            )
+        }
+
+        override fun precomputeVlmVision(pfd: ParcelFileDescriptor, imageQuality: Int): Boolean {
+            val projector = loadedProjectorPath ?: return false
+            val maxImageTokens = loadedImageMaxTokens
+            val bytes = try {
+                ParcelFileDescriptor.AutoCloseInputStream(pfd).use { it.readBytes() }
+            } catch (e: Exception) {
+                Log.e(TAG, "precomputeVlmVision: read failed", e)
+                return false
+            }
+            val quality = ImageQuality.entries.getOrNull(imageQuality) ?: ImageQuality.MEDIUM
+            return runBlocking(Dispatchers.IO) {
+                try {
+                    engine.precomputeVisionEmbeddings(bytes, projector, maxImageTokens, quality)
+                } catch (e: Exception) {
+                    Log.e(TAG, "precomputeVlmVision: encode failed", e)
+                    false
+                }
+            }
         }
 
         override fun loadTtsModel(configJson: String): Boolean {
@@ -444,7 +511,7 @@ class InferenceService : Service() {
 
         override fun clearLastError() {
             synchronized(ktErrorLock) { ktLastErrorJson = null }
-            try { GGUFNativeLib.nativeErrorClear() } catch (_: Throwable) {}
+            try { ErrorTracker.clear() } catch (_: Throwable) {}
         }
 
         override fun drainCrashLogJson(): String {
@@ -491,7 +558,6 @@ class InferenceService : Service() {
                     try {
                         when (event) {
                             is GenerationEvent.Token -> callback.onToken(event.text)
-                            is GenerationEvent.ToolCall -> callback.onToolCall(event.name, event.argsJson)
                             is GenerationEvent.Done -> callback.onDone()
                             is GenerationEvent.Error -> callback.onError(event.message)
                             is GenerationEvent.Metrics -> {
@@ -512,6 +578,8 @@ class InferenceService : Service() {
                             is GenerationEvent.Progress -> callback.onProgress(event.progress)
                             is GenerationEvent.VlmStageMetrics ->
                                 callback.onVlmStageMetrics(event.vlmEncodeMs, event.vlmDecodeMs, event.imageTokens)
+                            is GenerationEvent.VlmKvCacheStatus -> Unit
+                            is GenerationEvent.VtCacheStatus -> Unit
                         }
                     } catch (_: DeadObjectException) {
                         engine.stopGeneration()
@@ -570,7 +638,7 @@ class InferenceService : Service() {
 
     private fun nativeErrorOrFallback(fallback: String): String {
         return try {
-            val j = JSONObject(GGUFNativeLib.nativeErrorGetLastJson())
+            val j = JSONObject(ErrorTracker.getLastErrorJson())
             j.optString("message").takeIf { it.isNotBlank() } ?: fallback
         } catch (_: Throwable) { fallback }
     }
@@ -591,7 +659,7 @@ class InferenceService : Service() {
         val kt = synchronized(ktErrorLock) { ktLastErrorJson }
         if (!kt.isNullOrBlank()) return kt
         return try {
-            val native = GGUFNativeLib.nativeErrorGetLastJson()
+            val native = ErrorTracker.getLastErrorJson()
             if (native == "{}" || native.isBlank()) "" else native
         } catch (_: Throwable) { "" }
     }
@@ -678,6 +746,7 @@ class InferenceService : Service() {
         private const val CHANNEL_ID = "tn_inference"
         private const val NOTIFICATION_ID = 0x544E4953 // TNIS
         private const val STREAMING_TOKEN_BATCH_BYTES = 8
+        private const val VT_CACHE_BUDGET_BYTES = 500L * 1024L * 1024L
 
         private val ADVANCED_SAMPLING_KEYS = arrayOf(
             "repeatPenalty", "frequencyPenalty", "presencePenalty", "penaltyLastN",

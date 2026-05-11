@@ -31,6 +31,9 @@ interface IInferenceService {
     // Context
     float getContextUsage();
     String getContextInfo(String prompt);
+    String getMemoryStatsJson();
+    String getVtCacheStatsJson();
+    String getVlmKvCacheStatsJson();
 
     // Thinking
     boolean supportsThinking();
@@ -53,7 +56,8 @@ interface IInferenceService {
     boolean isVlmLoaded();
     String getVlmInfo();
     String getVlmDefaultMarker();
-    void generateVlm(String messagesJson, in ParcelFileDescriptor[] imageFds, int maxTokens, IGenerationCallback callback);
+    void generateVlm(String messagesJson, in ParcelFileDescriptor[] imageFds, int maxTokens, int imageQuality, IGenerationCallback callback);
+    boolean precomputeVlmVision(in ParcelFileDescriptor pfd, int imageQuality);
 
     // TTS
     boolean loadTtsModel(String configJson);
