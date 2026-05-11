@@ -52,6 +52,7 @@ fun ChatDrawerContent(
     onNewChat: () -> Unit,
     onDeleteChat: (String) -> Unit,
     onPinChat: (String, Boolean) -> Unit,
+    onExportChat: (String, com.dark.tool_neuron.util.ExportFormat) -> Unit,
     onNavigateToStore: () -> Unit,
     onNavigateToGuide: () -> Unit,
     onNavigateToDevNotes: () -> Unit = {},
@@ -62,6 +63,7 @@ fun ChatDrawerContent(
     onNavigateToImageTask: () -> Unit = {},
     onNavigateToPlugins: () -> Unit = {},
 ) {
+    var exportPickerChat by remember { mutableStateOf<Chat?>(null) }
     val dimens = LocalDimens.current
     val pinnedChats = remember(chats) { chats.filter { it.isPinned } }
     val recentChats = remember(chats) { chats.filter { !it.isPinned } }
@@ -136,7 +138,8 @@ fun ChatDrawerContent(
                         isSelected = chat.id == currentChatId,
                         onSelect = { onChatSelected(chat.id) },
                         onDelete = { onDeleteChat(chat.id) },
-                        onPin = { onPinChat(chat.id, !chat.isPinned) }
+                        onPin = { onPinChat(chat.id, !chat.isPinned) },
+                        onShare = { exportPickerChat = chat },
                     )
                 }
                 item { Spacer(Modifier.height(dimens.spacingSm)) }
@@ -150,7 +153,8 @@ fun ChatDrawerContent(
                         isSelected = chat.id == currentChatId,
                         onSelect = { onChatSelected(chat.id) },
                         onDelete = { onDeleteChat(chat.id) },
-                        onPin = { onPinChat(chat.id, !chat.isPinned) }
+                        onPin = { onPinChat(chat.id, !chat.isPinned) },
+                        onShare = { exportPickerChat = chat },
                     )
                 }
             }
@@ -187,6 +191,66 @@ fun ChatDrawerContent(
             DrawerQuickLink(icon = TnIcons.Star, label = "Credits", onClick = onNavigateToCredits)
         }
     }
+
+    exportPickerChat?.let { chat ->
+        ExportFormatDialog(
+            chatTitle = chat.title,
+            onPick = { format ->
+                onExportChat(chat.id, format)
+                exportPickerChat = null
+            },
+            onDismiss = { exportPickerChat = null },
+        )
+    }
+}
+
+@Composable
+private fun ExportFormatDialog(
+    chatTitle: String,
+    onPick: (com.dark.tool_neuron.util.ExportFormat) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    androidx.compose.material3.AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Export chat",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+                Text(
+                    text = chatTitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = "Markdown keeps the formatting. Plain text strips code fences, LaTeX, and styling for a clean readable copy.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = {
+            ActionTextButton(
+                onClickListener = { onPick(com.dark.tool_neuron.util.ExportFormat.Markdown) },
+                icon = TnIcons.FileText,
+                text = "Markdown",
+            )
+        },
+        dismissButton = {
+            ActionTextButton(
+                onClickListener = { onPick(com.dark.tool_neuron.util.ExportFormat.PlainText) },
+                icon = TnIcons.FileText,
+                text = "Plain text",
+            )
+        },
+    )
 }
 
 @Composable
@@ -197,6 +261,7 @@ private fun ChatItem(
     onSelect: () -> Unit,
     onDelete: () -> Unit,
     onPin: () -> Unit,
+    onShare: () -> Unit,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -302,6 +367,16 @@ private fun ChatItem(
                 },
                 leadingIcon = {
                     Icon(TnIcons.Sparkles, contentDescription = null, modifier = Modifier.size(dimens.iconMd))
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Share / Export") },
+                onClick = {
+                    showMenu = false
+                    onShare()
+                },
+                leadingIcon = {
+                    Icon(TnIcons.Download, contentDescription = null, modifier = Modifier.size(dimens.iconMd))
                 }
             )
             DropdownMenuItem(

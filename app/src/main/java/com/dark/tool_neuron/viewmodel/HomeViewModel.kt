@@ -48,6 +48,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.dark.tool_neuron.util.ChatExporter
+import com.dark.tool_neuron.util.ChatShareHelper
+import com.dark.tool_neuron.util.ExportFormat
 import java.util.UUID
 import javax.inject.Inject
 
@@ -598,6 +601,23 @@ class HomeViewModel @Inject constructor(
 
     fun pinChat(chatId: String, pinned: Boolean) {
         chatRepo.pinChat(chatId, pinned)
+    }
+
+    fun exportChat(chatId: String, format: ExportFormat) {
+        val chat = chatRepo.getChatById(chatId) ?: return
+        val messages = chatRepo.getMessages(chatId)
+        if (messages.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val body = ChatExporter.format(chat, messages, format)
+            val filename = ChatExporter.suggestedFilename(chat, format)
+            ChatShareHelper.writeAndShare(
+                context = app,
+                filename = filename,
+                body = body,
+                mimeType = format.mimeType,
+                title = chat.title,
+            )
+        }
     }
 
     fun loadModel(model: ModelInfo) {
