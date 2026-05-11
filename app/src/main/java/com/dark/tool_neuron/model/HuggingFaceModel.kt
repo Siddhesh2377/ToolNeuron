@@ -17,6 +17,15 @@ data class HuggingFaceModel(
     val mmprojFileName: String = "",
     val mmprojFileUri: String = "",
     val mmprojSizeBytes: Long = 0,
+
+    // Image-gen / upscaler fields. modelType in {"image_gen", "image_upscaler"}.
+    val isSdxl: Boolean = false,
+    val requiresNpu: Boolean = false,
+    val isUpscaler: Boolean = false,
+    val featureLabel: String = "",
+    val defaultPrompt: String = "",
+    val defaultNegativePrompt: String = "",
+    val generationSize: Int = 512,
 )
 
 data class HFRepository(
