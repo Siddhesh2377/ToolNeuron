@@ -24,6 +24,8 @@ import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.RepositoryDataStore
 import com.dark.tool_neuron.service.server.ServerController
+import com.dark.tool_neuron.viewmodel.home_vm.ModelLoadState
+import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.data.AppPreferences
@@ -68,6 +70,7 @@ class ModelStoreViewModel @Inject constructor(
     private val prefs: AppPreferences,
     private val serverController: ServerController,
     private val installProgress: InstallProgressTracker,
+    private val modelSession: ModelSessionManager,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
@@ -407,6 +410,10 @@ class ModelStoreViewModel @Inject constructor(
                 modelRepo.voiceArchiveFile("tts", model.id, model.fileName)
             model.modelType == "stt" ->
                 modelRepo.voiceArchiveFile("stt", model.id, model.fileName)
+            model.modelType == "image_gen" ->
+                modelRepo.imageModelArchive(model.id, model.fileName)
+            model.modelType == "image_upscaler" ->
+                modelRepo.imageUpscalerFile(model.id, model.fileName)
             else ->
                 modelRepo.modelFile(model.id, model.fileName)
         }
@@ -431,6 +438,10 @@ class ModelStoreViewModel @Inject constructor(
                             finalizeVlmDownload(model, destFile, mmprojFile)
                         } else if (model.modelType == "tts" || model.modelType == "stt") {
                             finalizeVoiceDownload(model, destFile)
+                        } else if (model.modelType == "image_gen") {
+                            finalizeImageGenDownload(model, destFile)
+                        } else if (model.modelType == "image_upscaler") {
+                            finalizeImageUpscalerDownload(model, destFile)
                         } else {
                             finalizeNonVlmDownload(model, destFile)
                         }
@@ -520,6 +531,124 @@ class ModelStoreViewModel @Inject constructor(
                 installProgress.extractFinished(model.id)
             }
         }
+    }
+
+    private fun finalizeImageGenDownload(model: HuggingFaceModel, archive: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _extractingIds.value = _extractingIds.value + model.id
+            installProgress.extractStarted(model.id)
+            try {
+                if (!archive.exists()) {
+                    _error.value = "Downloaded archive missing for ${model.name}"
+                    return@launch
+                }
+                val targetDir = modelRepo.imageModelDir(model.id)
+                targetDir.listFiles()?.forEach { it.deleteRecursively() }
+                val ok = unzipInto(archive, targetDir) { entryName ->
+                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                }
+                if (!ok) {
+                    _error.value = "Extraction failed for ${model.name}"
+                    targetDir.deleteRecursively()
+                    return@launch
+                }
+                archive.delete()
+                // Walk down through any chain of single-subdir wrappers (xororz/sd-qnn ZIPs
+                // wrap their contents in `output_<size>/qnn_models_<bucket>/`) until we find
+                // the dir that actually contains unet.bin / clip*.mnn / tokenizer.json.
+                val effectiveDir = liftToModelDir(targetDir)
+                val folderSize = effectiveDir.walkTopDown()
+                    .filter { it.isFile }
+                    .sumOf { it.length() }
+                modelRepo.insert(
+                    ModelInfo(
+                        id = model.id, name = model.name,
+                        path = effectiveDir.absolutePath, pathType = PathType.FILE,
+                        providerType = ProviderType.IMAGE_GEN,
+                        fileSize = folderSize,
+                    ),
+                )
+            } catch (t: Throwable) {
+                android.util.Log.e("ModelStoreVM", "finalizeImageGenDownload threw", t)
+                _error.value = "Extraction error: ${t.message}"
+            } finally {
+                _extractingIds.value = _extractingIds.value - model.id
+                _extractingFile.value = _extractingFile.value - model.id
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+                installProgress.extractFinished(model.id)
+            }
+        }
+    }
+
+    private fun finalizeImageUpscalerDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!destFile.exists()) {
+                    _error.value = "Downloaded file missing for ${model.name}"
+                    return@launch
+                }
+                modelRepo.insert(
+                    ModelInfo(
+                        id = model.id, name = model.name,
+                        path = destFile.absolutePath, pathType = PathType.FILE,
+                        providerType = ProviderType.IMAGE_UPSCALER,
+                        fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
+                    ),
+                )
+            } finally {
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+            }
+        }
+    }
+
+    private fun liftToModelDir(root: java.io.File): java.io.File {
+        val signals = setOf(
+            "unet.bin", "unet.mnn", "clip.mnn", "clip_v2.mnn",
+            "vae_decoder.bin", "vae_decoder.mnn", "tokenizer.json",
+        )
+        var cur = root
+        repeat(6) {
+            val files = cur.listFiles()?.toList().orEmpty()
+            val hasModelFile = files.any { it.isFile && it.name in signals }
+            if (hasModelFile) return cur
+            val onlyDir = files.singleOrNull { it.isDirectory && !it.name.startsWith(".") }
+                ?: return cur
+            cur = onlyDir
+        }
+        return cur
+    }
+
+    private fun unzipInto(
+        archive: java.io.File,
+        target: java.io.File,
+        onEntry: (String) -> Unit,
+    ): Boolean {
+        val targetCanonical = target.canonicalPath + java.io.File.separator
+        java.util.zip.ZipFile(archive).use { zip ->
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val e = entries.nextElement()
+                val raw = e.name
+                if (raw.contains("..")) continue
+                val outFile = java.io.File(target, raw)
+                val canonical = outFile.canonicalPath
+                if (!canonical.startsWith(targetCanonical) && canonical != target.canonicalPath) {
+                    return false
+                }
+                if (e.isDirectory) {
+                    outFile.mkdirs()
+                    continue
+                }
+                outFile.parentFile?.mkdirs()
+                onEntry(raw.substringAfterLast('/'))
+                zip.getInputStream(e).use { input ->
+                    outFile.outputStream().use { out -> input.copyTo(out) }
+                }
+            }
+        }
+        return true
     }
 
     private fun finalizeNonVlmDownload(model: HuggingFaceModel, destFile: java.io.File) {
@@ -614,6 +743,13 @@ class ModelStoreViewModel @Inject constructor(
 
     fun saveModelConfig(config: ModelConfig) {
         modelRepo.updateConfig(config)
+        // If the edited model is currently loaded, reload it so the new
+        // contextSize / threadMode / cacheType / etc. take effect immediately.
+        // Otherwise the user has to manually unload+reload to see any change.
+        val active = modelSession.loadState.value as? ModelLoadState.Active ?: return
+        if (active.modelId != config.modelId) return
+        val info = installedModels.value.firstOrNull { it.id == config.modelId } ?: return
+        viewModelScope.launch { modelSession.load(info) }
     }
 
 
