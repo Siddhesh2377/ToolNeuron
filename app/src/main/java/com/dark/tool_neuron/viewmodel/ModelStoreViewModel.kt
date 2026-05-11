@@ -1,0 +1,836 @@
+package com.dark.tool_neuron.viewmodel
+
+import android.content.Context
+import android.net.Uri
+import android.os.Build
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.dark.download_manager.HxdManager
+import com.dark.download_manager.HxdState
+import com.dark.download_manager.HxdStatus
+import com.dark.tool_neuron.model.HFRepository
+import com.dark.tool_neuron.model.HuggingFaceModel
+import com.dark.tool_neuron.model.ModelCategory
+import com.dark.tool_neuron.model.ModelConfig
+import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.SizeCategory
+import com.dark.tool_neuron.model.enums.PathType
+import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.repo.ExplorerRepo
+import com.dark.tool_neuron.repo.HuggingFaceExplorer
+import com.dark.tool_neuron.repo.InstallProgressTracker
+import com.dark.tool_neuron.repo.ModelCatalog
+import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.repo.RepositoryDataStore
+import com.dark.tool_neuron.service.server.ServerController
+import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
+import com.dark.tool_neuron.repo.RepositoryValidator
+import com.dark.tool_neuron.repo.ValidationResult
+import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.service.inference.InferenceClient
+import com.dark.tool_neuron.util.extractParameterCount
+import com.dark.tool_neuron.util.extractQuantization
+import com.dark.tool_neuron.voice.VoiceArchive
+import com.dark.tool_neuron.voice.VoiceKind
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import java.security.MessageDigest
+import javax.inject.Inject
+
+enum class StoreTab { MODELS, INSTALLED, SETTINGS }
+
+enum class SortOption { NAME, SIZE, RECENTLY_ADDED }
+
+data class RepoGroupInfo(
+    val displayName: String,
+    val author: String,
+    val modelCount: Int,
+)
+
+@HiltViewModel
+class ModelStoreViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val modelRepo: ModelRepository,
+    private val catalog: ModelCatalog,
+    private val repoDataStore: RepositoryDataStore,
+    private val explorer: HuggingFaceExplorer,
+    private val validator: RepositoryValidator,
+    private val ragManager: RagManager,
+    private val prefs: AppPreferences,
+    private val serverController: ServerController,
+    private val installProgress: InstallProgressTracker,
+    private val modelSession: ModelSessionManager,
+) : ViewModel() {
+
+    val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
+    val repositories: StateFlow<List<HFRepository>> = repoDataStore.repositories
+    val defaultEmbeddingModelId: StateFlow<String?> = ragManager.defaultEmbeddingModelId
+
+    fun setDefaultEmbeddingModel(modelId: String?) {
+        ragManager.setDefaultEmbeddingModelId(modelId)
+    }
+
+    private val _selectedTab = MutableStateFlow(StoreTab.MODELS)
+    val selectedTab: StateFlow<StoreTab> = _selectedTab.asStateFlow()
+
+    private val _models = MutableStateFlow<List<HuggingFaceModel>>(emptyList())
+    val models: StateFlow<List<HuggingFaceModel>> = _models.asStateFlow()
+
+    private val _filteredModels = MutableStateFlow<List<HuggingFaceModel>>(emptyList())
+    val filteredModels: StateFlow<List<HuggingFaceModel>> = _filteredModels.asStateFlow()
+
+    private val _isLoading = MutableStateFlow(false)
+    val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _error = MutableStateFlow<String?>(null)
+    val error: StateFlow<String?> = _error.asStateFlow()
+
+    private val _deleteInProgress = MutableStateFlow<String?>(null)
+    val deleteInProgress: StateFlow<String?> = _deleteInProgress.asStateFlow()
+
+    private val _deviceInfo = MutableStateFlow<Map<String, String>>(emptyMap())
+    val deviceInfo: StateFlow<Map<String, String>> = _deviceInfo.asStateFlow()
+
+    private val _downloadIds = MutableStateFlow<Map<String, Int>>(emptyMap())
+    private val _downloadStates = MutableStateFlow<Map<String, HxdState>>(emptyMap())
+    val downloadStates: StateFlow<Map<String, HxdState>> = _downloadStates.asStateFlow()
+
+    private val _installedMmprojIds = MutableStateFlow<Set<String>>(emptySet())
+    val installedMmprojIds: StateFlow<Set<String>> = _installedMmprojIds.asStateFlow()
+
+    private val _extractingIds = MutableStateFlow<Set<String>>(emptySet())
+    val extractingIds: StateFlow<Set<String>> = _extractingIds.asStateFlow()
+
+    private val _extractingFile = MutableStateFlow<Map<String, String>>(emptyMap())
+    val extractingFile: StateFlow<Map<String, String>> = _extractingFile.asStateFlow()
+
+    val isModelLoaded = InferenceClient.isModelLoaded
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
+
+    // Filter states
+    private val _selectedModelType = MutableStateFlow<String?>(null)
+    val selectedModelType: StateFlow<String?> = _selectedModelType.asStateFlow()
+
+    private val _selectedCategory = MutableStateFlow<ModelCategory?>(null)
+    val selectedCategory: StateFlow<ModelCategory?> = _selectedCategory.asStateFlow()
+
+    private val _selectedParameters = MutableStateFlow<Set<String>>(emptySet())
+    val selectedParameters: StateFlow<Set<String>> = _selectedParameters.asStateFlow()
+
+    private val _selectedQuantizations = MutableStateFlow<Set<String>>(emptySet())
+    val selectedQuantizations: StateFlow<Set<String>> = _selectedQuantizations.asStateFlow()
+
+    private val _selectedSizeCategory = MutableStateFlow<SizeCategory?>(null)
+    val selectedSizeCategory: StateFlow<SizeCategory?> = _selectedSizeCategory.asStateFlow()
+
+    private val _selectedTags = MutableStateFlow<Set<String>>(emptySet())
+    val selectedTags: StateFlow<Set<String>> = _selectedTags.asStateFlow()
+
+    private val _showNsfw = MutableStateFlow(true)
+    val showNsfw: StateFlow<Boolean> = _showNsfw.asStateFlow()
+
+    private val _executionTarget = MutableStateFlow<String?>(null)
+    val executionTarget: StateFlow<String?> = _executionTarget.asStateFlow()
+
+    private val _sortBy = MutableStateFlow(SortOption.NAME)
+    val sortBy: StateFlow<SortOption> = _sortBy.asStateFlow()
+
+    private val _searchQuery = MutableStateFlow("")
+
+    private val _selectedRepository = MutableStateFlow<String?>(null)
+    val selectedRepository: StateFlow<String?> = _selectedRepository.asStateFlow()
+
+    // Validation
+    private val _validationResults = MutableStateFlow<Map<String, ValidationResult>>(emptyMap())
+    val validationResults: StateFlow<Map<String, ValidationResult>> = _validationResults.asStateFlow()
+
+    // Explorer
+    private val _explorerQuery = MutableStateFlow("")
+    val explorerQuery: StateFlow<String> = _explorerQuery.asStateFlow()
+
+    private val _explorerResults = MutableStateFlow<List<ExplorerRepo>>(emptyList())
+    val explorerResults: StateFlow<List<ExplorerRepo>> = _explorerResults.asStateFlow()
+
+    private val _isExplorerLoading = MutableStateFlow(false)
+    val isExplorerLoading: StateFlow<Boolean> = _isExplorerLoading.asStateFlow()
+
+    private val _explorerError = MutableStateFlow<String?>(null)
+    val explorerError: StateFlow<String?> = _explorerError.asStateFlow()
+
+    private var explorerSearchJob: Job? = null
+
+    init {
+        loadDeviceInfo()
+        loadModels()
+    }
+
+    fun selectTab(tab: StoreTab) { _selectedTab.value = tab }
+
+    fun selectRepository(repoKey: String?) { _selectedRepository.value = repoKey }
+
+    fun loadModels() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                val repos = repoDataStore.repositories.value
+                _models.value = catalog.getModels(repos)
+                applyAllFilters()
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to load models"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    fun refreshModels() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _isLoading.value = true
+            _error.value = null
+            try {
+                catalog.clearCache()
+                val repos = repoDataStore.repositories.value
+                _models.value = catalog.getModels(repos, forceRefresh = true)
+                applyAllFilters()
+            } catch (e: Exception) {
+                _error.value = e.message ?: "Failed to refresh"
+            }
+            _isLoading.value = false
+        }
+    }
+
+    private fun loadDeviceInfo() {
+        val soc = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) Build.SOC_MODEL else "Unknown"
+        _deviceInfo.value = mapOf(
+            "device" to "${Build.MANUFACTURER} ${Build.MODEL}",
+            "soc" to soc,
+            "arch" to (Build.SUPPORTED_ABIS.firstOrNull() ?: "unknown"),
+            "sdk" to "${Build.VERSION.SDK_INT}",
+        )
+    }
+
+
+    private fun applyAllFilters() {
+        var filtered = _models.value
+
+        _selectedCategory.value?.let { cat ->
+            val repos = repoDataStore.repositories.value
+            val matching = repos.filter { it.category == cat && it.isEnabled }.map { it.id }.toSet()
+            filtered = filtered.filter { model -> matching.any { model.id.startsWith(it) } }
+        }
+
+        if (_selectedParameters.value.isNotEmpty()) {
+            filtered = filtered.filter { model ->
+                val params = extractParameterCount(model.name)
+                params != null && params in _selectedParameters.value
+            }
+        }
+
+        if (_selectedQuantizations.value.isNotEmpty()) {
+            filtered = filtered.filter { model ->
+                val quant = extractQuantization(model.name)
+                quant != null && quant in _selectedQuantizations.value
+            }
+        }
+
+        _selectedSizeCategory.value?.let { size ->
+            filtered = filtered.filter { SizeCategory.fromSize(it.approximateSize) == size }
+        }
+
+        if (_selectedTags.value.isNotEmpty()) {
+            filtered = filtered.filter { model ->
+                _selectedTags.value.all { tag -> tag in model.tags }
+            }
+        }
+
+        if (!_showNsfw.value) {
+            filtered = filtered.filter { "NSFW" !in it.tags }
+        }
+
+        _selectedModelType.value?.let { type ->
+            filtered = filtered.filter { it.modelType == type }
+        }
+
+        _executionTarget.value?.let { target ->
+            filtered = filtered.filter { target in it.tags }
+        }
+
+        if (_searchQuery.value.isNotBlank()) {
+            val q = _searchQuery.value
+            filtered = filtered.filter {
+                it.name.contains(q, ignoreCase = true) ||
+                it.tags.any { t -> t.contains(q, ignoreCase = true) }
+            }
+        }
+
+        filtered = when (_sortBy.value) {
+            SortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
+            SortOption.SIZE -> filtered.sortedBy { SizeCategory.parseSizeToBytes(it.approximateSize) }
+            SortOption.RECENTLY_ADDED -> filtered.reversed()
+        }
+
+        _filteredModels.value = filtered
+        refreshInstalledMmproj()
+    }
+
+    fun filterModels(query: String) { _searchQuery.value = query; applyAllFilters() }
+    fun filterByModelType(type: String?) { _selectedModelType.value = type; applyAllFilters() }
+    fun filterByCategory(cat: ModelCategory?) { _selectedCategory.value = cat; applyAllFilters() }
+    fun toggleParameterFilter(p: String) {
+        _selectedParameters.value = if (p in _selectedParameters.value) _selectedParameters.value - p else _selectedParameters.value + p
+        applyAllFilters()
+    }
+    fun toggleQuantizationFilter(q: String) {
+        _selectedQuantizations.value = if (q in _selectedQuantizations.value) _selectedQuantizations.value - q else _selectedQuantizations.value + q
+        applyAllFilters()
+    }
+    fun filterBySizeCategory(s: SizeCategory?) { _selectedSizeCategory.value = s; applyAllFilters() }
+    fun setSortOption(o: SortOption) { _sortBy.value = o; applyAllFilters() }
+    fun toggleTagFilter(tag: String) {
+        _selectedTags.value = if (tag in _selectedTags.value) _selectedTags.value - tag else _selectedTags.value + tag
+        applyAllFilters()
+    }
+    fun setShowNsfw(show: Boolean) { _showNsfw.value = show; applyAllFilters() }
+    fun setExecutionTarget(t: String?) { _executionTarget.value = t; applyAllFilters() }
+    fun clearAllFilters() {
+        _selectedModelType.value = null; _selectedCategory.value = null
+        _selectedParameters.value = emptySet(); _selectedQuantizations.value = emptySet()
+        _selectedSizeCategory.value = null; _selectedTags.value = emptySet()
+        _showNsfw.value = true; _executionTarget.value = null
+        _sortBy.value = SortOption.NAME; _searchQuery.value = ""
+        applyAllFilters()
+    }
+
+    fun getAvailableTags(): List<String> =
+        _models.value.flatMap { it.tags }.distinct()
+            .filter { it !in listOf("GGUF") && !it.matches(Regex("Q\\d.*")) }
+            .sorted()
+
+    fun getGroupedRepos(): Map<String, RepoGroupInfo> {
+        val repos = repoDataStore.repositories.value
+        val repoNameLookup = repos.associate { it.repoPath to it.name }
+        val grouped = mutableMapOf<String, RepoGroupInfo>()
+
+        _filteredModels.value.groupBy { it.repoId }.forEach { (repoId, models) ->
+            val repoPath = repos.find { it.id == repoId }?.repoPath ?: repoId
+            val displayName = repoNameLookup[repoPath] ?: repoId.substringAfterLast("/")
+            val author = if (repoPath.contains("/")) repoPath.substringBefore("/") else ""
+            grouped[repoId] = RepoGroupInfo(displayName, author, models.size)
+        }
+        return grouped
+    }
+
+    fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
+        _filteredModels.value.filter { it.repoId == repoKey }
+
+
+    fun downloadByQuickStartId(modelId: String) {
+        viewModelScope.launch {
+            val pool = _filteredModels.value.takeIf { it.isNotEmpty() }
+                ?: _filteredModels.first { it.isNotEmpty() }
+            enqueueChatModel(pool, modelId)
+        }
+    }
+
+    fun downloadPack(packId: String) {
+        val ids = PACK_CONTENTS[packId] ?: return
+        viewModelScope.launch {
+            val pool = _models.value.takeIf { it.isNotEmpty() }
+                ?: _models.first { it.isNotEmpty() }
+            ids.forEach { entry ->
+                when (entry.kind) {
+                    PackEntryKind.Chat -> enqueueChatModel(pool, entry.id)
+                    PackEntryKind.Voice -> enqueueVoiceModel(pool, entry.id)
+                }
+            }
+        }
+    }
+
+    private fun enqueueChatModel(pool: List<HuggingFaceModel>, modelId: String) {
+        val candidates = pool.filter { it.repoId == modelId || it.id.startsWith(modelId) }
+        val preferred = QUICK_START_QUANT_PRIORITY.firstNotNullOfOrNull { q ->
+            candidates.firstOrNull { it.quantization.equals(q, ignoreCase = true) }
+        } ?: candidates.filter { it.sizeBytes > 0 }.minByOrNull { it.sizeBytes }
+            ?: candidates.firstOrNull()
+        if (preferred != null) downloadModel(preferred)
+    }
+
+    private fun enqueueVoiceModel(pool: List<HuggingFaceModel>, modelId: String) {
+        val match = pool.firstOrNull { it.id == modelId } ?: return
+        downloadModel(match)
+    }
+
+    companion object {
+        val QUICK_START_QUANT_PRIORITY = listOf("Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q5_K_S", "Q8_0")
+
+        const val PACK_CHAT_ONLY = "pack_chat_only"
+        const val PACK_CHAT_VOICE = "pack_chat_voice"
+        const val PACK_LARGE_CHAT_VOICE = "pack_large_chat_voice"
+
+        private val PACK_CONTENTS: Map<String, List<PackEntry>> = mapOf(
+            PACK_CHAT_ONLY to listOf(
+                PackEntry("lfm25-350m", PackEntryKind.Chat),
+            ),
+            PACK_CHAT_VOICE to listOf(
+                PackEntry("lfm25-350m", PackEntryKind.Chat),
+                PackEntry("sherpa-onnx-whisper-tiny-en", PackEntryKind.Voice),
+                PackEntry("vits-piper-en_US-amy-low", PackEntryKind.Voice),
+            ),
+            PACK_LARGE_CHAT_VOICE to listOf(
+                PackEntry("qwen3-0.6b", PackEntryKind.Chat),
+                PackEntry("sherpa-onnx-whisper-tiny-en", PackEntryKind.Voice),
+                PackEntry("vits-piper-en_US-amy-low", PackEntryKind.Voice),
+            ),
+        )
+    }
+
+    private enum class PackEntryKind { Chat, Voice }
+    private data class PackEntry(val id: String, val kind: PackEntryKind)
+
+    fun downloadModel(model: HuggingFaceModel) {
+        if (_downloadIds.value.containsKey(model.id)) return
+
+        val destFile = when {
+            model.isMmproj && model.repoPath.isNotBlank() ->
+                modelRepo.vlmMmprojFile(model.repoPath, model.fileName)
+            model.isVlm && model.repoPath.isNotBlank() ->
+                modelRepo.vlmModelFile(model.repoPath, model.fileName)
+            model.modelType == "tts" ->
+                modelRepo.voiceArchiveFile("tts", model.id, model.fileName)
+            model.modelType == "stt" ->
+                modelRepo.voiceArchiveFile("stt", model.id, model.fileName)
+            model.modelType == "image_gen" ->
+                modelRepo.imageModelArchive(model.id, model.fileName)
+            model.modelType == "image_upscaler" ->
+                modelRepo.imageUpscalerFile(model.id, model.fileName)
+            else ->
+                modelRepo.modelFile(model.id, model.fileName)
+        }
+        destFile.parentFile?.mkdirs()
+
+        val hxdId = HxdManager.enqueue(context, model.fileUri, destFile.absolutePath)
+        _downloadIds.value = _downloadIds.value + (model.id to hxdId)
+        _downloadStates.value = _downloadStates.value + (model.id to
+            HxdState(hxdId, model.fileUri, destFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
+
+        viewModelScope.launch(Dispatchers.IO) {
+            HxdManager.observe(hxdId).collect { state ->
+                if (state == null) return@collect
+                _downloadStates.value = _downloadStates.value + (model.id to state)
+
+                when (state.status) {
+                    HxdStatus.COMPLETED -> {
+                        if (model.isMmproj) {
+                            finalizeMmprojDownload(model, destFile)
+                        } else if (model.isVlm && model.mmprojFileUri.isNotBlank()) {
+                            val mmprojFile = modelRepo.vlmMmprojFile(model.repoPath, model.mmprojFileName)
+                            finalizeVlmDownload(model, destFile, mmprojFile)
+                        } else if (model.modelType == "tts" || model.modelType == "stt") {
+                            finalizeVoiceDownload(model, destFile)
+                        } else if (model.modelType == "image_gen") {
+                            finalizeImageGenDownload(model, destFile)
+                        } else if (model.modelType == "image_upscaler") {
+                            finalizeImageUpscalerDownload(model, destFile)
+                        } else {
+                            finalizeNonVlmDownload(model, destFile)
+                        }
+                    }
+                    HxdStatus.FAILED -> {
+                        _downloadIds.value = _downloadIds.value - model.id
+                    }
+                    HxdStatus.CANCELLED -> {
+                        _downloadIds.value = _downloadIds.value - model.id
+                        _downloadStates.value = _downloadStates.value - model.id
+                    }
+                    else -> {}
+                }
+            }
+        }
+    }
+
+    private fun finalizeMmprojDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+        _installedMmprojIds.value = _installedMmprojIds.value + model.id
+    }
+
+    fun refreshInstalledMmproj() {
+        val catalog = _filteredModels.value
+        val installed = catalog.asSequence()
+            .filter { it.isMmproj && it.repoPath.isNotBlank() }
+            .filter { modelRepo.vlmMmprojFile(it.repoPath, it.fileName).exists() }
+            .map { it.id }
+            .toSet()
+        _installedMmprojIds.value = installed
+    }
+
+    private fun finalizeVoiceDownload(model: HuggingFaceModel, archive: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _extractingIds.value = _extractingIds.value + model.id
+            installProgress.extractStarted(model.id)
+            try {
+                if (!archive.exists()) {
+                    _error.value = "Downloaded archive missing for ${model.name}"
+                    return@launch
+                }
+                val kind = if (model.modelType == "tts") VoiceKind.TTS else VoiceKind.STT
+                val parent = modelRepo.voiceDir(if (kind == VoiceKind.TTS) "tts" else "stt")
+                val result = VoiceArchive.extractAndBuildConfig(archive, parent, kind) { entryName ->
+                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                }
+                when (result) {
+                    is VoiceArchive.ExtractResult.Success -> {
+                        archive.delete()
+                        val provider = if (kind == VoiceKind.TTS) ProviderType.TTS else ProviderType.STT
+                        val folderSize = result.folder.walkTopDown()
+                            .filter { it.isFile }
+                            .sumOf { it.length() }
+                        modelRepo.insert(
+                            ModelInfo(
+                                id = model.id, name = model.name,
+                                path = result.folder.absolutePath, pathType = PathType.FILE,
+                                providerType = provider, fileSize = folderSize,
+                            ),
+                            ModelConfig(
+                                id = model.id, modelId = model.id,
+                                loadingParamsJson = result.configJson,
+                                inferenceParamsJson = "{}",
+                            ),
+                        )
+                        if (kind == VoiceKind.TTS && prefs.activeTtsModelId.isBlank()) {
+                            prefs.activeTtsModelId = model.id
+                        }
+                        if (kind == VoiceKind.STT && prefs.activeSttModelId.isBlank()) {
+                            prefs.activeSttModelId = model.id
+                        }
+                    }
+                    is VoiceArchive.ExtractResult.Failure -> {
+                        android.util.Log.e("ModelStoreVM", "Voice extract failed: ${result.reason}")
+                        _error.value = "Extraction failed: ${result.reason}"
+                    }
+                }
+            } catch (t: Throwable) {
+                android.util.Log.e("ModelStoreVM", "finalizeVoiceDownload threw", t)
+                _error.value = "Extraction error: ${t.message}"
+            } finally {
+                _extractingIds.value = _extractingIds.value - model.id
+                _extractingFile.value = _extractingFile.value - model.id
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+                installProgress.extractFinished(model.id)
+            }
+        }
+    }
+
+    private fun finalizeImageGenDownload(model: HuggingFaceModel, archive: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _extractingIds.value = _extractingIds.value + model.id
+            installProgress.extractStarted(model.id)
+            try {
+                if (!archive.exists()) {
+                    _error.value = "Downloaded archive missing for ${model.name}"
+                    return@launch
+                }
+                val targetDir = modelRepo.imageModelDir(model.id)
+                targetDir.listFiles()?.forEach { it.deleteRecursively() }
+                val ok = unzipInto(archive, targetDir) { entryName ->
+                    _extractingFile.value = _extractingFile.value + (model.id to entryName)
+                }
+                if (!ok) {
+                    _error.value = "Extraction failed for ${model.name}"
+                    targetDir.deleteRecursively()
+                    return@launch
+                }
+                archive.delete()
+                // Walk down through any chain of single-subdir wrappers (xororz/sd-qnn ZIPs
+                // wrap their contents in `output_<size>/qnn_models_<bucket>/`) until we find
+                // the dir that actually contains unet.bin / clip*.mnn / tokenizer.json.
+                val effectiveDir = liftToModelDir(targetDir)
+                val folderSize = effectiveDir.walkTopDown()
+                    .filter { it.isFile }
+                    .sumOf { it.length() }
+                modelRepo.insert(
+                    ModelInfo(
+                        id = model.id, name = model.name,
+                        path = effectiveDir.absolutePath, pathType = PathType.FILE,
+                        providerType = ProviderType.IMAGE_GEN,
+                        fileSize = folderSize,
+                    ),
+                )
+            } catch (t: Throwable) {
+                android.util.Log.e("ModelStoreVM", "finalizeImageGenDownload threw", t)
+                _error.value = "Extraction error: ${t.message}"
+            } finally {
+                _extractingIds.value = _extractingIds.value - model.id
+                _extractingFile.value = _extractingFile.value - model.id
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+                installProgress.extractFinished(model.id)
+            }
+        }
+    }
+
+    private fun finalizeImageUpscalerDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                if (!destFile.exists()) {
+                    _error.value = "Downloaded file missing for ${model.name}"
+                    return@launch
+                }
+                modelRepo.insert(
+                    ModelInfo(
+                        id = model.id, name = model.name,
+                        path = destFile.absolutePath, pathType = PathType.FILE,
+                        providerType = ProviderType.IMAGE_UPSCALER,
+                        fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
+                    ),
+                )
+            } finally {
+                _downloadIds.value = _downloadIds.value - model.id
+                _downloadStates.value = _downloadStates.value - model.id
+            }
+        }
+    }
+
+    private fun liftToModelDir(root: java.io.File): java.io.File {
+        val signals = setOf(
+            "unet.bin", "unet.mnn", "clip.mnn", "clip_v2.mnn",
+            "vae_decoder.bin", "vae_decoder.mnn", "tokenizer.json",
+        )
+        var cur = root
+        repeat(6) {
+            val files = cur.listFiles()?.toList().orEmpty()
+            val hasModelFile = files.any { it.isFile && it.name in signals }
+            if (hasModelFile) return cur
+            val onlyDir = files.singleOrNull { it.isDirectory && !it.name.startsWith(".") }
+                ?: return cur
+            cur = onlyDir
+        }
+        return cur
+    }
+
+    private fun unzipInto(
+        archive: java.io.File,
+        target: java.io.File,
+        onEntry: (String) -> Unit,
+    ): Boolean {
+        val targetCanonical = target.canonicalPath + java.io.File.separator
+        java.util.zip.ZipFile(archive).use { zip ->
+            val entries = zip.entries()
+            while (entries.hasMoreElements()) {
+                val e = entries.nextElement()
+                val raw = e.name
+                if (raw.contains("..")) continue
+                val outFile = java.io.File(target, raw)
+                val canonical = outFile.canonicalPath
+                if (!canonical.startsWith(targetCanonical) && canonical != target.canonicalPath) {
+                    return false
+                }
+                if (e.isDirectory) {
+                    outFile.mkdirs()
+                    continue
+                }
+                outFile.parentFile?.mkdirs()
+                onEntry(raw.substringAfterLast('/'))
+                zip.getInputStream(e).use { input ->
+                    outFile.outputStream().use { out -> input.copyTo(out) }
+                }
+            }
+        }
+        return true
+    }
+
+    private fun finalizeNonVlmDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        val provider = when (model.modelType) {
+            "tts" -> ProviderType.TTS
+            "stt" -> ProviderType.STT
+            "embedding" -> ProviderType.EMBEDDING
+            else -> ProviderType.GGUF
+        }
+        modelRepo.insert(ModelInfo(
+            id = model.id, name = model.name,
+            path = destFile.absolutePath, pathType = PathType.FILE,
+            providerType = provider,
+            fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
+        ))
+        if (provider == ProviderType.GGUF &&
+            modelRepo.models.value.none { it.providerType == ProviderType.GGUF && it.isActive && it.id != model.id }
+        ) {
+            modelRepo.setActive(model.id)
+        }
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+    }
+
+    private fun finalizeVlmDownload(
+        model: HuggingFaceModel,
+        baseFile: java.io.File,
+        mmprojFile: java.io.File,
+    ) {
+        modelRepo.insert(ModelInfo(
+            id = model.id, name = model.name,
+            path = baseFile.absolutePath, pathType = PathType.FILE,
+            providerType = ProviderType.GGUF,
+            fileSize = if (model.sizeBytes > 0) model.sizeBytes else baseFile.length(),
+        ))
+        _downloadIds.value = _downloadIds.value - model.id
+        _downloadStates.value = _downloadStates.value - model.id
+    }
+
+    fun cancelDownload(modelId: String) {
+        _downloadIds.value[modelId]?.let { HxdManager.cancel(it) }
+        _downloadIds.value = _downloadIds.value - modelId
+        _downloadStates.value = _downloadStates.value - modelId
+    }
+
+
+    fun deleteModel(model: ModelInfo) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _deleteInProgress.value = model.id
+            try {
+                if (model.pathType == PathType.FILE) java.io.File(model.path).delete()
+                modelRepo.delete(model.id)
+            } finally {
+                _deleteInProgress.value = null
+            }
+        }
+    }
+
+    fun loadModel(model: ModelInfo) {
+        if (serverController.isBusy) return
+        viewModelScope.launch {
+            val config = modelRepo.getConfig(model.id)
+            val configJson = buildConfigJson(config)
+            when (model.pathType) {
+                PathType.FILE -> InferenceClient.loadModel(model.path, configJson)
+                PathType.CONTENT_URI -> InferenceClient.loadModelFromUri(context, Uri.parse(model.path), configJson)
+            }
+            modelRepo.setActive(model.id)
+        }
+    }
+
+    fun unloadModel() {
+        if (serverController.isBusy) return
+        viewModelScope.launch { InferenceClient.unloadModel() }
+    }
+
+    fun importLocalModel(
+        uri: Uri,
+        fileName: String,
+        fileSize: Long,
+        providerType: ProviderType = ProviderType.GGUF,
+    ) {
+        modelRepo.insert(ModelInfo(
+            id = checksumId(uri.toString(), fileName, fileSize),
+            name = fileName.removeSuffix(".gguf"),
+            path = uri.toString(), pathType = PathType.CONTENT_URI,
+            providerType = providerType, fileSize = fileSize,
+        ))
+    }
+
+    suspend fun getModelConfig(modelId: String): ModelConfig? = modelRepo.getConfig(modelId)
+
+    fun saveModelConfig(config: ModelConfig) {
+        modelRepo.updateConfig(config)
+        val info = installedModels.value.firstOrNull { it.id == config.modelId } ?: return
+        if (info.providerType != ProviderType.GGUF) return
+        if (serverController.isBusy) return
+        viewModelScope.launch { modelSession.load(info) }
+    }
+
+
+    fun addRepository(repo: HFRepository) {
+        viewModelScope.launch { repoDataStore.addRepository(repo); loadModels() }
+    }
+
+    fun removeRepository(repoId: String) {
+        viewModelScope.launch { repoDataStore.removeRepository(repoId); loadModels() }
+    }
+
+    fun toggleRepository(repoId: String) {
+        viewModelScope.launch { repoDataStore.toggleRepository(repoId); loadModels() }
+    }
+
+    fun updateRepository(repo: HFRepository) {
+        viewModelScope.launch { repoDataStore.updateRepository(repo); loadModels() }
+    }
+
+    fun validateRepository(repo: HFRepository) {
+        viewModelScope.launch {
+            _validationResults.value += repo.id to ValidationResult.Checking
+            _validationResults.value += repo.id to validator.validate(repo)
+        }
+    }
+
+
+    fun setExplorerQuery(query: String) {
+        _explorerQuery.value = query
+        if (query.isBlank()) { _explorerResults.value = emptyList(); _explorerError.value = null }
+    }
+
+    fun searchExplorerRepositories() {
+        explorerSearchJob?.cancel()
+        explorerSearchJob = viewModelScope.launch {
+            val q = _explorerQuery.value.trim()
+            if (q.isBlank()) { _explorerError.value = "Enter a search term"; return@launch }
+            _isExplorerLoading.value = true; _explorerError.value = null
+            try {
+                explorer.searchGgufRepos(q).onSuccess { repos ->
+                    _explorerResults.value = repos
+                    if (repos.isEmpty()) _explorerError.value = "No repositories found"
+                }.onFailure { _explorerResults.value = emptyList(); _explorerError.value = it.message }
+            } finally { _isExplorerLoading.value = false }
+        }
+    }
+
+    fun addExplorerRepository(repo: ExplorerRepo) {
+        viewModelScope.launch {
+            val existing = repoDataStore.repositories.value
+            if (existing.any { it.repoPath.equals(repo.id, ignoreCase = true) }) {
+                _explorerError.value = "Repository already added"; return@launch
+            }
+            repoDataStore.addRepository(HFRepository(
+                id = "hf-${repo.id.replace("/", "-").lowercase()}",
+                name = repo.id.substringAfter("/"),
+                repoPath = repo.id,
+            ))
+            _explorerError.value = null
+            loadModels()
+        }
+    }
+
+
+    private fun buildConfigJson(config: ModelConfig?): String {
+        if (config == null) return "{}"
+        val sb = StringBuilder(256).append('{')
+        val loading = config.loadingParamsJson
+        val inference = config.inferenceParamsJson
+        if (loading != "{}" && loading.isNotBlank()) {
+            val inner = loading.trim().removePrefix("{").removeSuffix("}")
+            if (inner.isNotBlank()) sb.append(inner).append(',')
+        }
+        if (inference != "{}" && inference.isNotBlank()) {
+            val inner = inference.trim().removePrefix("{").removeSuffix("}")
+            if (inner.isNotBlank()) sb.append(inner)
+        }
+        if (sb.last() == ',') sb.deleteCharAt(sb.length - 1)
+        sb.append('}')
+        return sb.toString()
+    }
+
+    private fun checksumId(uri: String, name: String, size: Long): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        digest.update(uri.toByteArray()); digest.update(name.toByteArray()); digest.update(size.toString().toByteArray())
+        return digest.digest().take(16).joinToString("") { "%02x".format(it) }
+    }
+}

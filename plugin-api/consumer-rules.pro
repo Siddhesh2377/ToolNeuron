@@ -1,2 +1,6 @@
-# Plugin Base Class
--keep class com.dark.plugin_api.info.plugin.Plugin { *; }
+-keep class com.dark.plugin_api.** { *; }
+-keep interface com.dark.plugin_api.** { *; }
+
+-keepclassmembers class com.dark.plugin_api.** {
+    <init>(...);
+}

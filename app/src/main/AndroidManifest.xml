@@ -1,38 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission
-        android:name="android.permission.BIND_VOICE_INTERACTION"
-        tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.INTERNET" />
-
-<!--    <queries>-->
-<!--        <intent>-->
-<!--            <action android:name="android.intent.action.MAIN" />-->
-<!--            <category android:name="android.intent.category.LAUNCHER" />-->
-<!--        </intent>-->
-<!--    </queries>-->
-
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
-
-    <uses-permission android:name="android.permission.VIBRATE"/>
-
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <application
-        android:name=".NeuroVerseApplication"
-        android:allowBackup="true"
+        android:name=".TNApplication"
+        android:allowBackup="false"
+        android:largeHeap="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
-        android:roundIcon="@mipmap/ic_launcher_monochrome"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.NeuroVerse">
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.ToolNeuron">
         <activity
-            android:name=".activities.BiometricActivity"
+            android:name=".activity.MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.NeuroVerse">
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.ToolNeuron">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -40,67 +31,48 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".activities.SetUpActivity"
-            android:exported="true"
-            android:theme="@style/Theme.NeuroVerse" />
 
         <activity
-            android:name=".activities.MainActivity"
+            android:name=".activity.TempActivity"
             android:exported="true"
-            android:theme="@style/Theme.NeuroVerse"
-            android:windowSoftInputMode="adjustResize"/>
+            android:theme="@style/Theme.ToolNeuron">
+        </activity>
 
         <activity
-            android:name=".activities.PluginManagerActivity"
-            android:exported="true"
-            android:theme="@style/Theme.NeuroVerse" />
+            android:name=".activity.ColorShowcaseActivity"
+            android:exported="false"
+            android:theme="@style/Theme.ToolNeuron">
+        </activity>
 
         <service
-            android:name=".services.assistant.NeuroVService"
-            android:enabled="true"
-            android:exported="true"
-            android:permission="android.permission.BIND_VOICE_INTERACTION">
-
-            <intent-filter>
-                <action android:name="android.service.voice.VoiceInteractionService" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.voice_interaction"
-                android:resource="@xml/voice_interaction_service" />
-        </service>
-
+            android:name="com.dark.download_manager.HxdService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="true" />
 
         <service
-            android:name=".services.accessibility.NeuroVAccessibilityService"
-            android:exported="true"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
-            tools:ignore="AccessibilityPolicy">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
+            android:name=".service.inference.InferenceService"
+            android:process=":inference"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="true" />
 
         <service
-            android:name=".services.assistant.NeuroVoiceInteractionSessionService"
-            android:permission="android.permission.BIND_VOICE_INTERACTION" />
-
+            android:name=".service.server.RemoteServerService"
+            android:process=":server"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider"
+            android:authorities="${applicationId}.exports"
             android:exported="false"
             android:grantUriPermissions="true">
             <meta-data
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths" />
         </provider>
-
     </application>
 
 </manifest>

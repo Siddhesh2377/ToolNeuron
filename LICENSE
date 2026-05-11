@@ -1,21 +1,21 @@
-Custom License – Personal & Non-Commercial Use Only
+MIT License
 
-Copyright (c) 2025 Siddhesh Sonar
+Copyright (c) 2026 Siddhesh Sonar
 
-This software is provided for personal, educational, and non-commercial use only.  
-You may view, study, and modify the code for non-commercial purposes.
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
 
-🚫 Commercial use of this software in any form is **strictly prohibited** unless  
-you have obtained a commercial license from the author.
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
 
-Commercial use includes but is not limited to:
-- Integrating the code into commercial products, apps, or services
-- Selling, sublicensing, or offering this software for a fee
-- Using the software in business environments, SaaS platforms, or monetized tools
-
-📬 To obtain a commercial license, contact:
-    siddheshsonar2377@gmail.com
-
-Unauthorized commercial use of this code may result in legal action.
-
-This software is provided "as is" without any warranties or guarantees.
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OF OR OTHER DEALINGS IN
+THE SOFTWARE.

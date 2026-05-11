@@ -9,8 +9,15 @@
 /.idea/assetWizardSettings.xml
 .DS_Store
 /build
-/app/google-services.json
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+/app/release/app-release.aab
+/RESEARCH_REPORT.md
+/docs/
+/.kotlin/
+/app/release/
+/.claude/
+/feats/
+/logs/

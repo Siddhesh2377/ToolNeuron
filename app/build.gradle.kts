@@ -1,117 +1,162 @@
-import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.kotlin.kapt)
-    alias(libs.plugins.google.gms.google.services)
+    alias(libs.plugins.kotlin.ksp)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.google.dagger.hilt)
 }
 
+val localProps = Properties().apply {
+    val f = rootProject.file("local.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val tnKeystorePath: String? = localProps.getProperty("TN_KEYSTORE_PATH")?.takeIf { it.isNotBlank() }
+val tnKeystorePassword: String? = localProps.getProperty("TN_KEYSTORE_PASSWORD")?.takeIf { it.isNotBlank() }
+val tnKeyAlias: String? = localProps.getProperty("TN_KEY_ALIAS")?.takeIf { it.isNotBlank() }
+val tnKeyPassword: String? = localProps.getProperty("TN_KEY_PASSWORD")?.takeIf { it.isNotBlank() }
+val hasReleaseSigning = tnKeystorePath != null &&
+    tnKeystorePassword != null &&
+    tnKeyAlias != null &&
+    tnKeyPassword != null
+
 android {
-    namespace = "com.dark.neuroverse"
-    compileSdk = 36
+    namespace = "com.dark.tool_neuron"
+    compileSdk {
+        version = release(37)
+    }
 
     defaultConfig {
-        applicationId = "com.dark.neurov"
-        minSdk = 33
-        targetSdk = 36
-        versionCode = 3
-        versionName = "0.3-beta"
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        val localPropertiesFile = rootProject.file("local.properties")
-        val apiKey = if (localPropertiesFile.exists()) {
-            val localProps = Properties().apply {
-                load(FileInputStream(localPropertiesFile))
-            }
-            localProps.getProperty("API_KEY") ?: "sample_dev_key"
-        } else {
-            System.getenv("API_KEY") ?: "sample_dev_key"
+        applicationId = "com.dark.tool_neuron"
+        minSdk = 31
+        targetSdk = 37
+        versionCode = (rootProject.findProperty("tn.versionCode") as String).toInt()
+        versionName = rootProject.findProperty("tn.versionName") as String
+        ndk {
+            // arm64-v8a — all modern Android phones and NPU-capable devices
+            // x86_64    — emulator support during development
+            abiFilters += listOf("arm64-v8a", "x86_64")
         }
-
-        buildConfigField("String", "API_KEY", apiKey)
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = file(tnKeystorePath!!)
+                storePassword = tnKeystorePassword
+                keyAlias = tnKeyAlias
+                keyPassword = tnKeyPassword
+                enableV2Signing = true
+                enableV3Signing = true
+                enableV4Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = true           // Enable code shrinking
-            isShrinkResources = true         // Remove unused resources
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isDebuggable = false
+            isJniDebuggable = false
         }
     }
+
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
+
     buildFeatures {
         compose = true
         buildConfig = true
+        aidl = true
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+            pickFirsts += setOf(
+                "lib/arm64-v8a/libc++_shared.so",
+                "lib/x86_64/libc++_shared.so",
+                "lib/armeabi-v7a/libc++_shared.so",
+                "lib/arm64-v8a/libonnxruntime.so",
+                "lib/x86_64/libonnxruntime.so",
+                "lib/armeabi-v7a/libonnxruntime.so",
+                "lib/arm64-v8a/libonnxruntime4j_jni.so",
+                "lib/x86_64/libonnxruntime4j_jni.so",
+                "lib/armeabi-v7a/libonnxruntime4j_jni.so",
+            )
+        }
+    }
+}
+
+kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xannotation-default-target=param-property")
     }
 }
 
 dependencies {
-
-    //PROJECTS
-    implementation(project(":ai-manager"))
+    // Local modules
+    implementation(project(":hxs_encryptor"))
+    implementation(project(":hxs"))
+    implementation(project(":download_manager"))
+    implementation(project(":networking"))
+    implementation(project(":native-server"))
     implementation(project(":plugin-api"))
-    implementation(project(":plugin-runtime"))
-    implementation(project(":smollm"))
+    implementation(project(":plugin-exc"))
 
-    implementation("com.google.accompanist:accompanist-insets:0.30.1")
-    implementation("com.google.accompanist:accompanist-insets-ui:0.36.0")
+    // AI inference AARs
+    implementation(files("../libs/gguf_lib-release.aar"))
+    implementation(files("../libs/ai_sherpa-release.aar"))
+    implementation(files("../libs/ai_sd-release.aar"))
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json)
 
-    implementation("androidx.biometric:biometric:1.2.0-alpha05")
+    // DI
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.android.compiler)
+    implementation(libs.hilt.navigation.compose)
+    implementation(libs.androidx.lifecycle.compose)
 
-    //DATABASE
-    implementation(libs.androidx.room.runtime)
-    implementation(platform(libs.firebase.bom))
-    implementation(libs.firebase.firestore)
-    implementation(libs.firebase.database)
-    // Navigation Compose (NOT Multiplatform)
-    implementation("androidx.navigation:navigation-compose:2.9.0")
-    // Accompanist Navigation Animation
-    implementation("com.google.accompanist:accompanist-navigation-animation:0.36.0")
-    //noinspection KaptUsageInsteadOfKsp
-    kapt(libs.androidx.room.compiler)
-
-    //UTILS
-    implementation(libs.google.gson)
-    implementation(libs.androidx.datastore.preferences)
-
-    //API
-    implementation(libs.retrofit)
-    implementation(libs.converter.gson)
-    implementation(libs.okhttp)
-
-    //KTX
-    implementation(libs.androidx.lifecycle.runtime.ktx)
-    implementation(libs.androidx.lifecycle.viewmodel.compose)
-
-    //CORE-UI-LIBS
-    implementation(platform(libs.androidx.compose.bom))
-    implementation(libs.androidx.material.icons.extended)
+    // Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.androidx.ui)
-    implementation(libs.androidx.ui.graphics)
-    implementation(libs.androidx.ui.tooling.preview)
-    implementation(libs.androidx.material3)
-    implementation("androidx.compose.animation:animation:1.8.2")
+    implementation(libs.commons.compress)
+    implementation(libs.xz)
+    implementation(libs.capsule)
 
-    //TESTING
+    // Compose BOM — pins all compose library versions together
+    implementation(platform(libs.androidx.compose.bom))
+    implementation(libs.androidx.compose.ui)
+    implementation(libs.androidx.compose.ui.graphics)
+    implementation(libs.androidx.compose.ui.tooling.preview)
+    implementation(libs.androidx.compose.navigation)
+    implementation(libs.androidx.material3)
+
+
+    // Unit tests
     testImplementation(libs.junit)
+
+    // Instrumented tests
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
-    androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 
-    //DEBUG
-    debugImplementation(libs.androidx.ui.tooling)
-    debugImplementation(libs.androidx.ui.test.manifest)
+    // Debug only — removed from release by build type
+    debugImplementation(libs.androidx.compose.ui.tooling)
+    debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

@@ -1,0 +1,12 @@
+{
+  "id": "com.dark.plugins.counter",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "name": "Counter",
+  "description": "A simple counter with smooth number transitions. Demonstrates plugin state persistence.",
+  "author": "darkbyte",
+  "entryClass": "com.dark.plugins.counter.CounterPlugin",
+  "initial": "C",
+  "capabilities": ["hxs.read", "hxs.write"],
+  "hasNativeCode": false
+}

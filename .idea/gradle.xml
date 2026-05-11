@@ -6,15 +6,15 @@
       <GradleProjectSettings>
         <option name="testRunner" value="CHOOSE_PER_TEST" />
         <option name="externalProjectPath" value="$PROJECT_DIR$" />
-        <option name="gradleJvm" value="#GRADLE_LOCAL_JAVA_HOME" />
         <option name="modules">
           <set>
             <option value="$PROJECT_DIR$" />
-            <option value="$PROJECT_DIR$/ai-manager" />
             <option value="$PROJECT_DIR$/app" />
-            <option value="$PROJECT_DIR$/plugin-api" />
-            <option value="$PROJECT_DIR$/plugin-runtime" />
-            <option value="$PROJECT_DIR$/smollm" />
+            <option value="$PROJECT_DIR$/download_manager" />
+            <option value="$PROJECT_DIR$/hxs" />
+            <option value="$PROJECT_DIR$/hxs_encryptor" />
+            <option value="$PROJECT_DIR$/native-server" />
+            <option value="$PROJECT_DIR$/networking" />
           </set>
         </option>
       </GradleProjectSettings>

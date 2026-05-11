@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Required for all HTTP/HTTPS downloads -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Required to survive screen lock and app background -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!--
+        Android 14+: dataSync is the correct type for file downloads.
+        On Android 10–13 this attribute is silently ignored.
+    -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+
+    <!--
+        Android 13+: required to show the download progress notification.
+        The host app must request this at runtime (POST_NOTIFICATIONS).
+        HXD does not request it itself — that is the app's responsibility.
+    -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <application>
+        <service
+            android:name=".HxdService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"
+            android:stopWithTask="true" />
+    </application>
+
+</manifest>

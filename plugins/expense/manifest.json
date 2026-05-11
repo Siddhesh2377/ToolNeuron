@@ -1,0 +1,12 @@
+{
+  "id": "com.dark.plugins.expense",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "name": "Expense Tracker",
+  "description": "Privacy-first expense tracking with AI auto-categorization. All data encrypted locally.",
+  "author": "darkbyte",
+  "entryClass": "com.dark.plugins.expense.ExpensePlugin",
+  "initial": "$",
+  "capabilities": ["hxs.read", "hxs.write", "ai.onnx"],
+  "hasNativeCode": false
+}
