@@ -3,9 +3,11 @@ package com.dark.tool_neuron.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.data.SecurityManager
 import com.dark.tool_neuron.data.VerifyResult
+import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
@@ -61,6 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val _researchPerSearch = MutableStateFlow(prefs.researchResultsPerSearch)
     private val _researchCancelBg = MutableStateFlow(prefs.researchCancelOnBackground)
     private val _researchActiveModel = MutableStateFlow(prefs.activeResearchModelId)
+    private val _vlmImageQuality = MutableStateFlow(prefs.vlmImageQuality)
+    private val _threadMode = MutableStateFlow(prefs.threadMode)
     private val appVersion: String = resolveVersion()
 
     val state: StateFlow<SettingsState> = combine(
@@ -80,6 +84,8 @@ class SettingsViewModel @Inject constructor(
         _researchPerSearch,
         _researchCancelBg,
         _researchActiveModel,
+        _vlmImageQuality,
+        _threadMode,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -98,6 +104,8 @@ class SettingsViewModel @Inject constructor(
         val researchPerSearch = values[13] as Int
         val researchCancelBg = values[14] as Boolean
         val researchActiveModel = values[15] as String
+        val vlmImageQuality = values[16] as String
+        val threadMode = values[17] as Int
 
         SettingsState(
             sections = buildSections(
@@ -115,6 +123,8 @@ class SettingsViewModel @Inject constructor(
                 researchPerSearch = researchPerSearch,
                 researchCancelBg = researchCancelBg,
                 researchActiveModel = researchActiveModel,
+                vlmImageQuality = vlmImageQuality,
+                threadMode = threadMode,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -156,12 +166,85 @@ class SettingsViewModel @Inject constructor(
         researchPerSearch: Int,
         researchCancelBg: Boolean,
         researchActiveModel: String,
+        vlmImageQuality: String,
+        threadMode: Int,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
         researchSection(models, researchMaxIter, researchMaxQ, researchPerSearch, researchCancelBg, researchActiveModel),
         voiceSection(models, activeTts, activeStt),
+        visionSection(vlmImageQuality),
+        performanceSection(threadMode),
         privacySection(lockEnabled, panicPinSet),
         aboutSection(),
+    )
+
+    private fun performanceSection(mode: Int): SettingsSection = SettingsSection(
+        id = SECTION_PERFORMANCE,
+        title = "Performance",
+        description = "CPU thread allocation for inference. Applies to currently loaded model and persists.",
+        icon = TnIcons.Cpu,
+        items = listOf(
+            SettingsItem.Choice(
+                id = ID_THREAD_MODE,
+                title = "Thread mode",
+                subtitle = "Balanced is the safe default. Performance only helps on long prompts.",
+                icon = TnIcons.Cpu,
+                selectedKey = mode.toString(),
+                options = listOf(
+                    SettingsChoiceOption(
+                        AppPreferences.THREAD_MODE_POWER_SAVING.toString(),
+                        "Power-saving",
+                        "1 thread, runs on efficiency cores. Slow but cool.",
+                    ),
+                    SettingsChoiceOption(
+                        AppPreferences.THREAD_MODE_BALANCED.toString(),
+                        "Balanced",
+                        "Up to 4 threads on perf cores. Default.",
+                    ),
+                    SettingsChoiceOption(
+                        AppPreferences.THREAD_MODE_PERFORMANCE.toString(),
+                        "Performance",
+                        "Up to 4 threads on perf cores + larger batch (1024). Best for long prompts.",
+                    ),
+                ),
+                onSelect = { key ->
+                    val v = key?.toIntOrNull()?.coerceIn(0, 2) ?: AppPreferences.DEFAULT_THREAD_MODE
+                    prefs.threadMode = v
+                    _threadMode.value = prefs.threadMode
+                    InferenceClient.setThreadMode(v)
+                    _dialog.value = null
+                },
+            ),
+        ),
+    )
+
+    private fun visionSection(quality: String): SettingsSection = SettingsSection(
+        id = SECTION_VISION,
+        title = "Vision",
+        description = "Image preprocessing for VLM (multimodal) models.",
+        icon = TnIcons.Photo,
+        items = listOf(
+            SettingsItem.Choice(
+                id = ID_VLM_IMAGE_QUALITY,
+                title = "Image quality",
+                subtitle = "Lower quality = faster encode, less detail. Affects VLM responses on images.",
+                icon = TnIcons.Photo,
+                selectedKey = quality,
+                options = listOf(
+                    SettingsChoiceOption("LOW", "Low", "≤384 px · fastest"),
+                    SettingsChoiceOption("MEDIUM", "Medium", "≤768 px · balanced (default)"),
+                    SettingsChoiceOption("HIGH", "High", "Full resolution · slowest, best detail"),
+                ),
+                onSelect = { key ->
+                    val v = key
+                        ?.let { runCatching { ImageQuality.valueOf(it) }.getOrNull()?.name }
+                        ?: AppPreferences.DEFAULT_VLM_IMAGE_QUALITY
+                    prefs.vlmImageQuality = v
+                    _vlmImageQuality.value = prefs.vlmImageQuality
+                    _dialog.value = null
+                },
+            ),
+        ),
     )
 
     private fun researchSection(
@@ -602,6 +685,8 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_CHAT_RAG = "chat_rag"
         const val SECTION_RESEARCH = "research"
         const val SECTION_VOICE = "voice"
+        const val SECTION_VISION = "vision"
+        const val SECTION_PERFORMANCE = "performance"
         const val SECTION_PRIVACY = "privacy"
         const val SECTION_ABOUT = "about"
 
@@ -617,6 +702,8 @@ class SettingsViewModel @Inject constructor(
         private const val ID_RESEARCH_PER_SEARCH = "research_per_search"
         private const val ID_RESEARCH_CANCEL_BG = "research_cancel_bg"
         private const val ID_RESEARCH_ACTIVE_MODEL = "research_active_model"
+        private const val ID_VLM_IMAGE_QUALITY = "vlm_image_quality"
+        private const val ID_THREAD_MODE = "thread_mode"
         private val CLEARABLE_CHOICE_IDS = setOf(
             ID_DEFAULT_EMBEDDING,
             ID_DEFAULT_TTS,
