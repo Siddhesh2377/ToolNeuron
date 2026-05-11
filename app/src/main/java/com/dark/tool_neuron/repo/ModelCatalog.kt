@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.repo
 
 import android.content.Context
+import com.dark.tool_neuron.data.SocBucket
 import com.dark.tool_neuron.model.HFRepository
 import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.util.VlmPaths
@@ -39,7 +40,174 @@ class ModelCatalog @Inject constructor(
         return models + getBuiltInModels()
     }
 
-    fun getBuiltInModels(): List<HuggingFaceModel> = BUILT_IN_MODELS
+    fun getBuiltInModels(): List<HuggingFaceModel> = BUILT_IN_MODELS + imageModels()
+
+    private fun imageModels(): List<HuggingFaceModel> {
+        val soc = SocBucket.socModel()
+        val bucket = SocBucket.bucket(soc)
+        val sdxlOk = SocBucket.isSdxlCapable(soc)
+        val list = mutableListOf<HuggingFaceModel>()
+
+        if (bucket != null) {
+            list += sdNpuRow("anythingv5", "Anything V5", bucket,
+                "masterpiece, best quality, 1girl, solo, cute, white hair,",
+                ANIME_NEGATIVE)
+            list += sdNpuRow("qteamix", "QteaMix", bucket,
+                "chibi, best quality, 1girl, solo, cute, pink hair,",
+                ANIME_NEGATIVE)
+            list += sdNpuRow("absolutereality", "Absolute Reality", bucket,
+                "masterpiece, best quality, ultra-detailed, realistic, 8k, a cat on grass,",
+                REAL_NEGATIVE)
+            list += sdNpuRow("cuteyukimix", "CuteYukiMix", bucket,
+                "masterpiece, best quality, 1girl, solo, cute, white hair,",
+                ANIME_NEGATIVE)
+            list += sdNpuRow("chilloutmix", "ChilloutMix", bucket,
+                "RAW photo, best quality, realistic, photo-realistic, masterpiece, 1girl, upper body,",
+                REAL_NEGATIVE)
+
+            if (sdxlOk) {
+                list += sdxlRow("sdxl_base", "SDXL Base 1.0",
+                    "sdxl_base_qnn2.28_8gen3.zip",
+                    "masterpiece, best quality, a majestic cat on a windowsill at sunset,",
+                    SDXL_NEGATIVE)
+                list += sdxlRow("illustrious_v16", "Illustrious v16",
+                    "illustrious_v16_qnn2.28_8gen3.zip",
+                    "1girl, solo, blue twintails, very long hair, masterpiece,",
+                    ANIME_NEGATIVE)
+            }
+            list += upscalerRow("upscaler_anime", "Real-ESRGAN x4 Anime",
+                "realesrgan_x4plus_anime_6b", bucket)
+            list += upscalerRow("upscaler_realistic", "UltraSharp v2 Lite",
+                "4x_UltraSharpV2_Lite", bucket)
+        } else {
+            list += sdCpuRow("anythingv5_cpu", "Anything V5 (CPU)",
+                "AnythingV5.zip",
+                "masterpiece, best quality, 1girl, solo, cute, white hair,",
+                ANIME_NEGATIVE)
+            list += sdCpuRow("qteamix_cpu", "QteaMix (CPU)",
+                "QteaMix.zip",
+                "chibi, best quality, 1girl, solo, cute, pink hair,",
+                ANIME_NEGATIVE)
+            list += sdCpuRow("absolutereality_cpu", "Absolute Reality (CPU)",
+                "AbsoluteReality.zip",
+                "masterpiece, best quality, ultra-detailed, realistic, 8k, a cat on grass,",
+                REAL_NEGATIVE)
+            list += sdCpuRow("cuteyukimix_cpu", "CuteYukiMix (CPU)",
+                "CuteYukiMix.zip",
+                "masterpiece, best quality, 1girl, solo, cute, white hair,",
+                ANIME_NEGATIVE)
+            list += sdCpuRow("chilloutmix_cpu", "ChilloutMix (CPU)",
+                "ChilloutMix.zip",
+                "RAW photo, best quality, realistic, photo-realistic, masterpiece, 1girl, upper body,",
+                REAL_NEGATIVE)
+        }
+
+        return list
+    }
+
+    private fun sdNpuRow(
+        id: String,
+        name: String,
+        bucket: String,
+        defaultPrompt: String,
+        defaultNegativePrompt: String,
+    ): HuggingFaceModel {
+        val fileName = sdQnnFile(id, bucket)
+        return HuggingFaceModel(
+            id = id, name = name,
+            fileName = fileName,
+            fileUri = "${HuggingFaceApi.BASE}/xororz/sd-qnn/resolve/main/$fileName",
+            approximateSize = "~1.1 GB", sizeBytes = 1_100_000_000L,
+            repoId = "image-gen-npu",
+            tags = listOf("Image Gen", "NPU", "SD 1.5", bucket),
+            modelType = "image_gen",
+            requiresNpu = true,
+            featureLabel = "Image Generation",
+            defaultPrompt = defaultPrompt,
+            defaultNegativePrompt = defaultNegativePrompt,
+            generationSize = 512,
+        )
+    }
+
+    private fun sdCpuRow(
+        id: String,
+        name: String,
+        zipName: String,
+        defaultPrompt: String,
+        defaultNegativePrompt: String,
+    ): HuggingFaceModel = HuggingFaceModel(
+        id = id, name = name,
+        fileName = zipName,
+        fileUri = "${HuggingFaceApi.BASE}/xororz/sd-mnn/resolve/main/$zipName",
+        approximateSize = "~1.2 GB", sizeBytes = 1_200_000_000L,
+        repoId = "image-gen-cpu",
+        tags = listOf("Image Gen", "CPU", "SD 1.5"),
+        modelType = "image_gen",
+        requiresNpu = false,
+        featureLabel = "Image Generation",
+        defaultPrompt = defaultPrompt,
+        defaultNegativePrompt = defaultNegativePrompt,
+        generationSize = 512,
+    )
+
+    private fun sdxlRow(
+        id: String,
+        name: String,
+        zipName: String,
+        defaultPrompt: String,
+        defaultNegativePrompt: String,
+    ): HuggingFaceModel = HuggingFaceModel(
+        id = id, name = name,
+        fileName = zipName,
+        fileUri = "${HuggingFaceApi.BASE}/xororz/sdxl-qnn/resolve/main/$zipName",
+        approximateSize = "~4.2 GB", sizeBytes = 4_500_000_000L,
+        repoId = "image-gen-sdxl",
+        tags = listOf("Image Gen", "NPU", "SDXL", "1024"),
+        modelType = "image_gen",
+        requiresNpu = true,
+        isSdxl = true,
+        featureLabel = "Image Generation",
+        defaultPrompt = defaultPrompt,
+        defaultNegativePrompt = defaultNegativePrompt,
+        generationSize = 1024,
+    )
+
+    private fun upscalerRow(
+        id: String,
+        name: String,
+        repoDir: String,
+        bucket: String,
+    ): HuggingFaceModel {
+        val fileName = "upscaler_$bucket.bin"
+        return HuggingFaceModel(
+            id = id, name = name,
+            fileName = fileName,
+            fileUri = "${HuggingFaceApi.BASE}/xororz/upscaler/resolve/main/$repoDir/$fileName",
+            approximateSize = "~70 MB", sizeBytes = 70_000_000L,
+            repoId = "image-upscaler",
+            tags = listOf("Upscaler", "4x", bucket),
+            modelType = "image_upscaler",
+            requiresNpu = true,
+            isUpscaler = true,
+            featureLabel = "Upscale 4x",
+        )
+    }
+
+    private fun sdQnnFile(id: String, bucket: String): String = when (id) {
+        "anythingv5" -> "AnythingV5_qnn2.28_$bucket.zip"
+        "qteamix" -> "QteaMix_qnn2.28_$bucket.zip"
+        "absolutereality" -> "AbsoluteReality_qnn2.28_$bucket.zip"
+        "cuteyukimix" -> "CuteYukiMix_qnn2.28_$bucket.zip"
+        "chilloutmix" -> "ChilloutMix_qnn2.28_$bucket.zip"
+        else -> "${id}_qnn2.28_$bucket.zip"
+    }
+
+    private val ANIME_NEGATIVE = "lowres, bad anatomy, bad hands, missing fingers, extra fingers, " +
+        "poorly drawn face, fused face, ugly, worst quality, 2girl, long fingers, disconnected limbs"
+    private val REAL_NEGATIVE = "worst quality, low quality, lowres, signature, watermark, " +
+        "ugly, blurry, unrealistic, semi realistic, pixelated, cartoon, anime, drawing, censored"
+    private val SDXL_NEGATIVE = "lowres, bad anatomy, text, error, missing fingers, cropped, " +
+        "worst quality, low quality, jpeg artifacts, signature, watermark, blurry"
 
     fun clearCache() {
         memoryCache = null
@@ -142,6 +310,13 @@ class ModelCatalog @Inject constructor(
         put("mmprojFileName", mmprojFileName)
         put("mmprojFileUri", mmprojFileUri)
         put("mmprojSizeBytes", mmprojSizeBytes)
+        put("isSdxl", isSdxl)
+        put("requiresNpu", requiresNpu)
+        put("isUpscaler", isUpscaler)
+        put("featureLabel", featureLabel)
+        put("defaultPrompt", defaultPrompt)
+        put("defaultNegativePrompt", defaultNegativePrompt)
+        put("generationSize", generationSize)
     }
 
     private fun JSONObject.toModel(): HuggingFaceModel = HuggingFaceModel(
@@ -161,6 +336,13 @@ class ModelCatalog @Inject constructor(
         mmprojFileName = optString("mmprojFileName"),
         mmprojFileUri = optString("mmprojFileUri"),
         mmprojSizeBytes = optLong("mmprojSizeBytes"),
+        isSdxl = optBoolean("isSdxl", false),
+        requiresNpu = optBoolean("requiresNpu", false),
+        isUpscaler = optBoolean("isUpscaler", false),
+        featureLabel = optString("featureLabel"),
+        defaultPrompt = optString("defaultPrompt"),
+        defaultNegativePrompt = optString("defaultNegativePrompt"),
+        generationSize = optInt("generationSize", 512),
     )
 
     companion object {

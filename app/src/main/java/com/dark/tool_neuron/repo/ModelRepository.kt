@@ -151,6 +151,25 @@ class ModelRepository @Inject constructor(
         return File(dir, "_archive_$leaf")
     }
 
+    fun imageModelDir(modelId: String): File {
+        val safe = modelId.replace('/', '_').replace(':', '_')
+        return File(context.filesDir, "sd_models/$safe").apply { mkdirs() }
+    }
+
+    fun imageModelArchive(modelId: String, fileName: String): File {
+        val safe = modelId.replace('/', '_').replace(':', '_')
+        val parent = File(context.filesDir, "sd_models").apply { mkdirs() }
+        val ext = fileName.substringAfterLast('.', "zip")
+        return File(parent, "_archive_${safe}.$ext")
+    }
+
+    fun imageUpscalerFile(modelId: String, fileName: String): File {
+        val safe = modelId.replace('/', '_').replace(':', '_')
+        val parent = File(context.filesDir, "sd_upscalers/$safe").apply { mkdirs() }
+        val leaf = fileName.substringAfterLast('/')
+        return File(parent, leaf)
+    }
+
 
 
     companion object {
