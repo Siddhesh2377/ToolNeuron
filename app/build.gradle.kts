@@ -24,15 +24,13 @@ val hasReleaseSigning = tnKeystorePath != null &&
 android {
     namespace = "com.dark.tool_neuron"
     compileSdk {
-        version = release(36) {
-            minorApiLevel = 1
-        }
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.dark.tool_neuron"
         minSdk = 31
-        targetSdk = 36
+        targetSdk = 37
         versionCode = (rootProject.findProperty("tn.versionCode") as String).toInt()
         versionName = rootProject.findProperty("tn.versionName") as String
         ndk {
@@ -113,6 +111,7 @@ dependencies {
     // AI inference AARs
     implementation(files("../libs/gguf_lib-release.aar"))
     implementation(files("../libs/ai_sherpa-release.aar"))
+    implementation(files("../libs/ai_sd-release.aar"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
 
@@ -128,6 +127,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.process)
     implementation(libs.androidx.activity.compose)
     implementation(libs.commons.compress)
+    implementation(libs.xz)
     implementation(libs.capsule)
 
     // Compose BOM — pins all compose library versions together

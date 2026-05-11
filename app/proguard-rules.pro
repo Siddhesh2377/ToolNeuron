@@ -23,8 +23,10 @@
 # inside libgguf_lib.so / libai_sherpa.so fail at runtime.
 -keep class com.dark.gguf_lib.** { *; }
 -keep class com.dark.ai_sherpa.** { *; }
+-keep class com.dark.ai_sd.** { *; }
 -dontwarn com.dark.gguf_lib.**
 -dontwarn com.dark.ai_sherpa.**
+-dontwarn com.dark.ai_sd.**
 
 # Local native modules — explicit keeps to satisfy R8 whole-program analysis
 -keep class com.dark.hxs.** { *; }
