@@ -259,6 +259,23 @@ private fun guideCategories(): List<GuideCategory> = listOf(
         ),
     ),
     GuideCategory(
+        title = "Beyond chat",
+        entries = listOf(
+            GuideEntry(
+                key = GuideEntryKeys.IMAGES,
+                title = "Image generation",
+                blurb = "Run Stable Diffusion on the device — QNN on NPU-capable phones, MNN as fallback.",
+                icon = TnIcons.Photo,
+            ),
+            GuideEntry(
+                key = GuideEntryKeys.PLUGINS,
+                title = "Plugins",
+                blurb = "Install mini-apps from the public HF catalog. Sandboxed Compose UIs with their own ONNX, storage, and dock.",
+                icon = TnIcons.Puzzle,
+            ),
+        ),
+    ),
+    GuideCategory(
         title = "Your phone, your data",
         entries = listOf(
             GuideEntry(
@@ -287,4 +304,6 @@ internal object GuideEntryKeys {
     const val THEMES = "themes"
     const val SERVER = "server"
     const val RESEARCH = "research"
+    const val PLUGINS = "plugins"
+    const val IMAGES = "images"
 }

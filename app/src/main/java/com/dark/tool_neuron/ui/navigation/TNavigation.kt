@@ -45,6 +45,8 @@ import com.dark.tool_neuron.ui.screens.guide.GuideSecurityScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideServerScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideThemesScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideVlmScreen
+import com.dark.tool_neuron.ui.screens.guide.GuidePluginsScreen
+import com.dark.tool_neuron.ui.screens.guide.GuideImagesScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideVoiceScreen
 import com.dark.tool_neuron.ui.screens.model_store.ModelStoreScreen
 import com.dark.tool_neuron.ui.screens.plugin_hub.PluginHubScreen
@@ -237,6 +239,8 @@ fun TNavigation(
                         GuideEntryKeys.THEMES -> NavScreens.GuideThemes.route
                         GuideEntryKeys.SERVER -> NavScreens.GuideServer.route
                         GuideEntryKeys.RESEARCH -> NavScreens.GuideResearch.route
+                        GuideEntryKeys.PLUGINS -> NavScreens.GuidePlugins.route
+                        GuideEntryKeys.IMAGES -> NavScreens.GuideImages.route
                         else -> null
                     }
                     route?.let { navController.navigate(it) }
@@ -252,6 +256,8 @@ fun TNavigation(
         composable(NavScreens.GuideThemes.route) { GuideThemesScreen(innerPadding) }
         composable(NavScreens.GuideServer.route) { GuideServerScreen(innerPadding) }
         composable(NavScreens.GuideResearch.route) { GuideResearchScreen(innerPadding) }
+        composable(NavScreens.GuidePlugins.route) { GuidePluginsScreen(innerPadding) }
+        composable(NavScreens.GuideImages.route) { GuideImagesScreen(innerPadding) }
         composable(NavScreens.PluginHub.route) {
             PluginHubScreen(
                 onClose = { navController.popBackStack() }

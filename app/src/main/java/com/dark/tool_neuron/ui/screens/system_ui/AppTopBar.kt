@@ -58,6 +58,8 @@ fun AppTopBar(
         NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
         NavScreens.GuideServer.route -> GuideTopBar(title = "Remote Server", onBack = onBack)
         NavScreens.GuideResearch.route -> GuideTopBar(title = "Research", onBack = onBack)
+        NavScreens.GuidePlugins.route -> GuideTopBar(title = "Plugins", onBack = onBack)
+        NavScreens.GuideImages.route -> GuideTopBar(title = "Image generation", onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
         NavScreens.SetupRag.route -> SetupScreenTopBar()
         NavScreens.ModelManager.route -> Unit

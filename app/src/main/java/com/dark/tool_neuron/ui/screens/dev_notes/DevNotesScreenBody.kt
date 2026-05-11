@@ -43,74 +43,92 @@ private enum class SectionTone { Neutral, Caution }
 private const val WELCOME_TITLE = "Welcome"
 
 private const val WELCOME_BODY =
-    "This is a small AI assistant that runs on your phone. The model lives on " +
-            "your device, your chats stay on your device, and nothing gets sent off to a " +
-            "server somewhere. You pick what you want to use, and the rest stays out of " +
-            "the way."
+    "ToolNeuron runs the AI on your phone. The model, your chats, your documents, your " +
+            "voice models — everything stays on the device. You pick what to use, the rest " +
+            "stays out of the way. This page is the short tour of what's here."
 
 private val SECTIONS = listOf(
     DevNotesSection(
-        title = "Your data stays here",
+        title = "Nothing leaves the phone",
         icon = TnIcons.Lock,
-        body = "Chats, attached files, voice models, and settings all sit on your phone. " +
-                "There is no analytics, no cloud sync, no telemetry. The master key that " +
-                "unlocks your data is held in your phone's secure chip, so a copy of the " +
-                "files on their own is just noise."
+        body = "Chats, files, voice models, plugins, and settings all live on your device. " +
+                "No analytics, no cloud sync, no telemetry. The master key that unlocks your " +
+                "data sits in your phone's secure chip, so the files on their own are just noise."
     ),
     DevNotesSection(
         title = "Chat with a model on your phone",
         icon = TnIcons.Cpu,
-        body = "Pick a model from the store and download it once. After that it runs " +
-                "offline. Smaller models are quick and friendly to your battery. Bigger " +
-                "ones are slower but write better answers, so try a couple and see what " +
-                "fits."
+        body = "Pick a model from the Store and download it once. After that it runs offline. " +
+                "Smaller models are quick and easy on the battery. Bigger ones write better " +
+                "answers but take longer to think. Try a couple and see what fits."
     ),
     DevNotesSection(
         title = "Talk to it, hear it back",
         icon = TnIcons.Mic,
-        body = "Tap the mic to speak instead of type. Tap the speaker on a reply to hear " +
-                "it read aloud. The voice models also live on your device, so this works " +
-                "with no signal."
+        body = "Tap the mic to speak instead of type. Tap the speaker on a reply to hear it " +
+                "read aloud. The voice models are also local, so this still works on a plane."
     ),
     DevNotesSection(
         title = "Ask questions about your documents",
         icon = TnIcons.FileText,
-        body = "Attach a PDF, a text file, or one of the common document formats from the " +
-                "Attach tab. The app reads through it locally and pulls the relevant bits " +
-                "into the conversation. Replies come with little chips you can tap to see " +
-                "the exact passage the answer drew from."
+        body = "Attach a PDF, a text file, or one of the common doc formats. The app reads " +
+                "through it locally and pulls the relevant bits into the conversation. Replies " +
+                "come with chips you can tap to see exactly which passage the answer drew from."
     ),
     DevNotesSection(
         title = "Show it pictures",
         icon = TnIcons.Eye,
-        body = "If you have loaded a vision model, the image button on the input bar wakes " +
-                "up. Attach a photo and ask about it. Without a vision model loaded the " +
-                "button stays dim, which is the hint to grab one from the store."
+        body = "Load a vision model and the image button on the input bar wakes up. Attach a " +
+                "photo and ask about it. Without a vision model loaded the button stays dim — " +
+                "that's the hint to grab one from the Store."
     ),
     DevNotesSection(
         title = "Look things up with Research",
         icon = TnIcons.Compass,
-        body = "Type /research followed by your question, or tap the compass on the input " +
-                "bar. The app runs a search, reads the top hits, summarises each one, then " +
-                "asks the model to write a structured document with citations. The search " +
-                "and fetch need a network. The reading and writing happen on your phone."
+        body = "Type /research followed by your question, or tap the compass on the input bar. " +
+                "The app searches, reads the top hits, summarises each one, then asks the " +
+                "model to write a structured document with citations. Search and fetch need a " +
+                "network. Reading and writing happen on your phone."
     ),
     DevNotesSection(
-        title = "Share it with your other devices",
+        title = "Generate images on the device",
+        icon = TnIcons.Photo,
+        body = "The Images screen runs Stable Diffusion locally. On a Snapdragon NPU you'll get " +
+                "real speed; on other phones it falls back to MNN on CPU/GPU. First use does a " +
+                "one-time runtime extract; after that it's prompt-in, image-out, no cloud calls."
+    ),
+    DevNotesSection(
+        title = "Plugins — mini-apps inside the app",
+        icon = TnIcons.Puzzle,
+        body = "Open Plugins from the drawer to browse the public catalog on HuggingFace. Tap " +
+                "Install, the zip downloads and runs inside ToolNeuron with its own screen and " +
+                "encrypted storage. First-party plugins so far: Notes, Counter, Expense Tracker " +
+                "(uses a tiny ONNX model to auto-categorise spends). Each plugin's permissions " +
+                "are listed up front."
+    ),
+    DevNotesSection(
+        title = "Share a chat",
+        icon = TnIcons.Download,
+        body = "Long-press a chat in the drawer and pick Share / Export. You choose between " +
+                "Markdown (keeps the formatting) and Plain text (strips code fences, LaTeX, " +
+                "and styling for a clean copy). The exported file goes through Android's share " +
+                "sheet — pick anywhere."
+    ),
+    DevNotesSection(
+        title = "Hand it to your other devices",
         icon = TnIcons.Server,
-        body = "Flip on the local server and the loaded model is reachable from another " +
-                "browser on your home Wi-Fi. There is a small bundled web UI so you can " +
-                "chat from a laptop without installing anything. A bearer token gates " +
-                "access, and you can rotate it any time."
+        body = "Flip on the local server and the loaded model is reachable from a browser on " +
+                "your home Wi-Fi. A small offline web UI is bundled, so you can chat from a " +
+                "laptop with nothing to install. A bearer token gates access; rotate it any time."
     ),
     DevNotesSection(
         title = "Rough edges",
         icon = TnIcons.AlertTriangle,
         tone = SectionTone.Caution,
-        body = "Downloads run in the background and show progress in the notification " +
-                "shade. There is no dedicated downloads screen yet, that one is on the " +
-                "list. The local server speaks plain HTTP, so only run it on a network " +
-                "you trust."
+        body = "Downloads run in the background and show progress in the notification shade. " +
+                "The local server speaks plain HTTP — only run it on networks you trust. " +
+                "Plugins run inside the host process; the capability badges on each plugin are " +
+                "the boundary, not an OS sandbox."
     ),
 )
 
