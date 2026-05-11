@@ -6,7 +6,7 @@ Project memory for this repo. **When you change anything that affects future wor
 
 ## Project scope
 
-Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer. Out of scope (pivoted 2026-04-20): tool calling, image generation, plugin hub, Termux integration.
+Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer, **on-device image generation / img2img / inpaint / 4× upscale via the `:ai_sd` AAR (re-pivoted in 2026-05-08)**. Out of scope: tool calling, plugin hub, Termux integration. (Image generation was originally cut on 2026-04-20 and re-added on 2026-05-08 by mirroring the LocalDream NPU model catalog through the existing model store + a new Image Task screen.)
 
 Package: `com.dark.tool_neuron` · minSdk 29 · targetSdk 36 · abiFilters `arm64-v8a`, `x86_64`.
 
@@ -16,6 +16,11 @@ Modules:
 - `:hxs_encryptor` — crypto + integrity primitives: Argon2id, AES-GCM/ChaCha20-Poly1305, BoringSSL, ML-KEM-768, ML-DSA-65, Ed25519, HKDF, mmap+mlock `SecureBuffer`, plus the native security policy / auth / boot-integrity stack.
 - `:native-server` — embedded OpenAI-compatible HTTP server (cpp-httplib + nlohmann/json header-only via FetchContent, no BoringSSL / OpenSSL / zlib dep). Powers Remote Server mode.
 - `:download_manager`, `:networking` — ancillary modules.
+
+Prebuilt AARs in `libs/`:
+- `gguf_lib-release.aar` — chat + VLM + embedding inference engine.
+- `ai_sherpa-release.aar` — TTS / STT.
+- `ai_sd-release.aar` — Stable Diffusion (text-to-image / img2img / inpaint / 4× upscale) via QNN on Snapdragon NPU and MNN on CPU. Currently the **debug** AAR is shipped because the release AAR's R8 minified the `StableDiffusionManager.Companion.getInstance` accessor; consumer-rules in `:ai_sd` need a `-keep class com.dark.ai_sd.StableDiffusionManager$Companion { *; }` before we can switch to release.
 
 ---
 
@@ -669,6 +674,65 @@ A first attempt (rm-graph engine + SmolLM2-135M-Int4) was wired and reverted on 
 
 ---
 
+## Image generation (`:ai_sd` AAR)
+
+Re-pivoted into scope on 2026-05-08. Drop-in port of LocalDream's catalog (xororz/sd-qnn + xororz/sd-mnn + xororz/sdxl-qnn + xororz/upscaler) onto the existing TN model store. Four user-facing tasks: **Generate (txt2img)**, **Edit (img2img)**, **Inpaint**, **Upscale 4×**. Tasks #5–#8 from the SDK's surface (LaMa fast removal, MobileSAM segmentation, depth, AdaIN style transfer) are implemented in the AAR's C++ but not yet bound through JNI — out of scope until the bindings ship.
+
+### SoC bucket policy (mirrors LocalDream)
+
+`data/SocBucket.kt` reads `Build.SOC_MODEL` (API ≥ 31; pre-S falls back to `"CPU"` and the user only sees CPU-bucket models). `chipsetModelSuffixes` maps known Snapdragons to one of three buckets:
+
+```
+SM8475, SM8450                                                         → "8gen1"
+SM8550, SM8550P, QCS8550, QCM8550, SM8650, SM8650P, SM8750, SM8750P,
+SM8850, SM8850P, SM8735, SM8845                                        → "8gen2"   (also covers 8 Gen 3 / Elite / Elite Gen 5)
+any other SM*                                                          → "min"
+non-Qualcomm                                                           → null      (CPU-only)
+```
+
+`isSdxlCapable(soc)` is a stricter predicate: only `{SM8650, SM8845, SM8750, SM8750P, SM8850, SM8850P}` get the SDXL rows. SDXL contexts are baked at a single `_8gen3.zip` variant (no per-bucket file).
+
+### Catalog wiring
+
+`ModelCatalog.imageModels()` is computed per-call (not in `BUILT_IN_MODELS` const) so the `Build.SOC_MODEL` read picks up cleanly. When a Snapdragon bucket is available it emits 5 SD 1.5 NPU rows (AnythingV5, QteaMix, AbsoluteReality, CuteYukiMix, ChilloutMix), the 2 SDXL rows (gated on `isSdxlCapable`), and 2 upscaler rows (Real-ESRGAN x4 anime + UltraSharp v2 Lite). On non-Snapdragon devices it instead emits 5 SD 1.5 CPU/MNN rows from `xororz/sd-mnn`. `qnn2.28` is baked into the URL as the SDK version token; if the AAR ever upgrades to `qnn2.30` both the URL constant and the `v3` upgrade marker need to bump together.
+
+`HuggingFaceModel` carries new image-gen fields (`isSdxl`, `requiresNpu`, `isUpscaler`, `featureLabel`, `defaultPrompt`, `defaultNegativePrompt`, `generationSize`); `modelType ∈ {"image_gen", "image_upscaler"}` switches the download finalize path. `ProviderType.IMAGE_GEN` and `ProviderType.IMAGE_UPSCALER` are the canonical categories on `ModelInfo` after install.
+
+### Download + extraction
+
+`ModelStoreViewModel.finalizeImageGenDownload` extracts the QNN/MNN ZIP into `<filesDir>/sd_models/<id>/` via `java.util.zip.ZipFile` with a hardened path-traversal check (entry's canonical path must start with the target's canonical path + `File.separator`). Archive deleted after extraction, `ModelInfo` inserted with `path` = the dir. `finalizeImageUpscalerDownload` is simpler: the upscaler is a single `.bin` file at `<filesDir>/sd_upscalers/<id>/upscaler_<bucket>.bin`, no extraction.
+
+### Runtime singleton
+
+`repo/ImageGenManager.kt` is the Hilt `@Singleton` wrapper around `StableDiffusionManager.getInstance(context)`. `ensureRuntime()` is mutex-guarded and fires `StableDiffusionManager.initialize()` on first use, which extracts `qnnlibs.tar.xz` from the AAR's bundled assets into `<filesDir>/ai_sd_runtime/`. Subsequent `loadDiffusionModel(model, w, h)` calls run model-specific load on the engine. The active model id is cached so re-entering Image Task screen with the same model is a no-op.
+
+### Image Task screen
+
+`ui/screens/image_task/ImageTaskScreen.kt` + `ImageTaskTopBar.kt` + `viewmodel/ImageTaskViewModel.kt`. Route: `NavScreens.ImageTask` (`"image_task"`). Reachable from the chat drawer's "Images" quick-link. The screen is one LazyColumn of cards:
+
+- **Task** — `ActionToggleGroup` segmented switch (Generate / Edit / Inpaint / Upscale).
+- **Image model / Upscaler** — list of installed models for the picked task; tapping a row triggers `loadDiffusionModel` or `loadUpscaler`.
+- **Prompt** — TnTextField for prompt + negative prompt (hidden in Upscale mode).
+- **Settings** — `ActionToggleGroup` rows for Steps, CFG, Scheduler, Resolution, Denoise (img2img / inpaint only).
+- **Input image** — SAF `OpenDocument` picker, shown for Edit / Inpaint / Upscale.
+- **Run** — Generate / Edit / Inpaint / Upscale 4× button, with Stop appearing during generation. LinearProgressIndicator binds to `DiffusionGenerationState.Progress.progress`.
+- **Output** — renders the final `Bitmap` (or live intermediate if `showDiffusionProcess` is on).
+
+### Things to know
+
+- The `:ai_sd` library declares `commons-compress` and `xz` as `api` deps in its module build. When consuming as a path AAR (`implementation(files(...))`) Gradle does NOT pull transitive deps from a POM-less file dependency, so `app/build.gradle.kts` must declare both directly. `xz` was added to `gradle/libs.versions.toml` as `org.tukaani:xz:1.12`.
+- `app/proguard-rules.pro` adds `-keep class com.dark.ai_sd.** { *; }` and `-dontwarn com.dark.ai_sd.**` alongside the existing gguf_lib / ai_sherpa rules.
+- The AAR ships `qnnlibs.tar.xz` (~200 MB compressed) inside `assets/qnnlibs/`. First-run setup extracts it into `filesDir/ai_sd_runtime/` and is observable through `RuntimeSetupState`. Don't move the runtime dir without bumping the SDK version token in catalog URLs.
+- Currently the **debug** AAR is shipped (release AAR's R8 mangled `StableDiffusionManager.Companion.getInstance`). Once `:ai_sd`'s `consumer-rules.pro` adds `-keep class com.dark.ai_sd.StableDiffusionManager$Companion { *; }` and the AAR is rebuilt, swap to release.
+
+### Future expansion
+
+To add Object Removal (LaMa), Segmentation (MobileSAM), Depth (MiDaS / Depth Anything V2), or Style Transfer (AdaIN) — the C++ already implements all four; needs a small JNI surface on `SDNativeLib` + matching state flows on `StableDiffusionManager` + new `ImageTaskMode` values + per-feature catalog rows pointing at the matching HF repos.
+
+To add SDXL on devices that aren't in `isSdxlCapable` — pipeline-level, not gating-level. SDK has `textEmbeddingSize=768` hardcoded across the C++ pipeline + SDK keeps 4-channel latents + 77-token CLIP + LDM-style weight names. SDXL needs 2048-dim, dual CLIP, additional UNet conditioning inputs (`text_embeds`, `time_ids`), and matching `sd_structure.h` / `lora_mapping.h` entries. Out of scope for this pivot.
+
+---
+
 ## Setup flow
 
 Sequence: Intro → **TermsConditions** (if !tcAccepted) → **DevNotes** (if !onboardingComplete) → SetupScreen (lock mode) → (SetupPassword if password chosen) → SetupTheme → ModelSetup → SetupRag → Home.
@@ -868,6 +932,18 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't snake_case the `sort` URL param. HF API wants camelCase: `trendingScore`, `lastModified`, `createdAt`, `downloads`, `likes`. The legacy code emitted `trending_score` / `last_modified` / `created_at` and HF returned 400. Source of truth is `HfSort.apiKey` in `repo/HfFilters.kt`.
 - Don't add speculative URL params to `HuggingFaceApi.searchUrl` without verifying they're documented for `/api/models`. `apps=`, `inference_provider=`, `inference=warm`, `filter=region:us` (with `region:` prefix), `filter=dataset:foo` (with `dataset:` prefix), `pipeline_tag=` — all of these were added historically and have been removed because they trigger HF 400. Only documented params are kept: `search`, `author`, `filter` (plain tag values, stackable), `gated`, `num_parameters`, `sort`, `limit`, `skip`. If you need a new filter, verify it works against a curl-built URL first; don't add it to the URL builder on the assumption that HF tolerates it.
 - Don't reintroduce post-filter sliders (`minDownloads`, `minLikes`, `recentDays`) into `HfFilters` / `HfPostFilters` / the VM. They were UI clutter without unlocking new searches — `sort=downloads` already gets the user "popular" results in the right order, and "recent" is `sort=lastModified`. The user explicitly asked to drop them; bringing them back without consent is a regression.
+- Don't change the SoC-bucket mapping in `data/SocBucket.kt` without first verifying `xororz/sd-qnn` still uses the same `_8gen1.zip` / `_8gen2.zip` / `_min.zip` filename suffixes. We pull our QNN model archives directly from LocalDream's HF repo, so a bucket rename or new chip class needs a re-validation against the actual `tree/main` listing. 8gen3 / 8 Elite intentionally route to the `8gen2` bucket because Qualcomm's HTP V73 contexts are forward-compatible — don't add a new "8gen3" bucket without uploading new archives first.
+- Don't show NPU image-gen rows on non-Snapdragon devices. `imageModels()` is gated on `SocBucket.bucket(soc) != null`. Falling back through to NPU rows on Tensor / Dimensity / Exynos would download QNN contexts that can't load — surface only the `xororz/sd-mnn` CPU/MNN variants on those devices.
+- Don't show SDXL rows on a SOC that's not in `SocBucket.SDXL_ELIGIBLE_SOCS`. The SDXL contexts ship only as `_8gen3.zip` and Qualcomm AI Hub hasn't compiled them for older NPUs. The rest of the pipeline still uses 768-dim CLIP under the hood, so even if you forced the download, generation would crash on the dimension mismatch — keep both gates (SDXL row visibility + 2048-dim future pipeline work) in lock-step.
+- Don't bypass the path-traversal check in `unzipInto`. Each entry's canonical path must start with `target.canonicalPath + File.separator` (or equal `target.canonicalPath` itself for the top-level dir). Skip `..` entries pre-canonicalization too. The QNN ZIPs from `xororz/sd-qnn` have flat layouts today, but a malicious mirror could craft `../../files/key.bin` entries; the check is the only line of defense.
+- Don't unwrap the SDK runtime onto an external dir. `<filesDir>/ai_sd_runtime/` is the correct location — internal storage, app-private, survives backups (`allowBackup=false` is set elsewhere). The QNN `.so`s extracted there are device-specific and shouldn't roam.
+- Don't open a fresh `StableDiffusionManager` per request. It's a process singleton (`getInstance(context)`), wrapped by Hilt's `ImageGenManager`. The init-mutex inside `ensureRuntime()` covers the qnnlibs.tar.xz extraction. Calling `initialize()` twice is a no-op but rebuilding the manager would tear down the persistent native sessions used across generations.
+- Don't ship the release AAR yet. `ai_sd-release.aar` ran R8 on the SDK side and renamed `StableDiffusionManager.Companion.getInstance` past Kotlin's compile-time visibility. Keep `ai_sd-debug.aar` copied as `libs/ai_sd-release.aar` until `:ai_sd`'s `consumer-rules.pro` adds `-keep class com.dark.ai_sd.StableDiffusionManager$Companion { *; }` and the AAR is rebuilt.
+- Don't remove the standalone QNN upscaler implementation. The original AAR's `nativeLoadUpscaler` for QNN was a stub that only stashed the model path — `nativeUpscaleImage` would then fail with "Upscaler model not provided" because the QnnModel was never built. Filled in 2026-05-08 by porting LocalDream's per-request load pattern: `sd_pipeline::loadStandaloneQnnUpscaler(modelPath)` in `model_loader.cpp` calls `createQnnModel(path, "upscaler")` + `initializeQnnApp("Upscaler", upscalerApp)` and assigns to the global `upscalerApp`, mirroring `main.cpp:3203` in LocalDream. Prerequisite: `sd_pipeline::ensureQnnSystemReady(systemLibPath, backendPath)` must be called first to populate `g_qnnSystemFuncs` + `g_backendPathCmd` — `ai_sd_jni.cpp::nativeInitRuntime` does this best-effort using `<libDir>/libQnn{System,Htp}.so`. The Kotlin caller (`ImageGenManager.loadUpscaler`) just calls `sdk.loadUpscaler(path, useMnn=path.endsWith(".mnn"), useOpenCL=...)` and the AAR's JNI dispatches to the right load path. Don't restore the .mnn-only IllegalStateException guard — the QNN path works now.
+- Don't lift the upscaler input cap above 1024 max-edge in `ImageTaskViewModel.runUpscale`. 4× output of 2048² is 8192²×4 ≈ 256 MB which OOMs on bitmap allocation in `DiffusionManager.createBitmapFromRgb` even with `largeHeap=true`. The 1024 cap produces 4096²×4 ≈ 64 MB which fits comfortably. Combined with `android:largeHeap="true"` in the manifest, larger inputs MIGHT work on flagship devices, but the failure mode (OOM during bitmap return) is silent + crashy, so keep the cap and let users downscale beforehand if they need higher fidelity.
+- Don't declare `commons-compress` and `xz` as anything weaker than `implementation` in `app/build.gradle.kts`. They are required by the AAR's runtime extraction path; `implementation(files(...))` AAR consumption does NOT pull transitive POM deps, so without explicit declarations the app crashes with `NoClassDefFoundError: org.tukaani.xz.XZInputStream` on first init.
+- Don't switch image-gen tasks to a separate ViewModel per task. `ImageTaskViewModel` is the single VM for all four modes (Generate, Img2Img, Inpaint, Upscale) — sharing prompt / model selection / preview state across modes is intentional so the user can tweak a prompt then quickly switch from Generate to Edit without re-typing.
+- Don't reuse the chat model picker for image-gen models. They're separate `ProviderType` rows (`IMAGE_GEN`, `IMAGE_UPSCALER`) on `ModelInfo` and live in `<filesDir>/sd_models/` / `<filesDir>/sd_upscalers/`, never in the GGUF chat model dir. The store routes them through `finalizeImageGenDownload` / `finalizeImageUpscalerDownload` and they should not appear in `chatModels` filters anywhere.
 
 ---
 
