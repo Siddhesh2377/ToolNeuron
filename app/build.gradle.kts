@@ -88,7 +88,13 @@ android {
             pickFirsts += setOf(
                 "lib/arm64-v8a/libc++_shared.so",
                 "lib/x86_64/libc++_shared.so",
-                "lib/armeabi-v7a/libc++_shared.so"
+                "lib/armeabi-v7a/libc++_shared.so",
+                "lib/arm64-v8a/libonnxruntime.so",
+                "lib/x86_64/libonnxruntime.so",
+                "lib/armeabi-v7a/libonnxruntime.so",
+                "lib/arm64-v8a/libonnxruntime4j_jni.so",
+                "lib/x86_64/libonnxruntime4j_jni.so",
+                "lib/armeabi-v7a/libonnxruntime4j_jni.so",
             )
         }
     }
@@ -107,6 +113,8 @@ dependencies {
     implementation(project(":download_manager"))
     implementation(project(":networking"))
     implementation(project(":native-server"))
+    implementation(project(":plugin-api"))
+    implementation(project(":plugin-exc"))
 
     // AI inference AARs
     implementation(files("../libs/gguf_lib-release.aar"))

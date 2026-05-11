@@ -27,6 +27,12 @@ espressoCore = "3.7.0"
 coroutines = "1.11.0"
 kotlinx-serialization-json = "1.11.0"
 
+# ONNX runtime
+# Must match the version bundled inside ai_sherpa-release.aar (jni/<abi>/libonnxruntime.so).
+# Verify with: `strings libs/ai_sherpa-release.aar | grep ^1\.2`. Symbol versions
+# (e.g. OrtGetApiBase@@VERS_1.24.3) need to match between the Java JNI bridge and the engine .so.
+onnxruntime = "1.24.3"
+
 
 [libraries]
 
@@ -40,6 +46,9 @@ commons-compress = { group = "org.apache.commons", name = "commons-compress", ve
 xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinx-serialization-json" }
+
+# ONNX runtime
+onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 
 # Compose
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
