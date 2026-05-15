@@ -115,12 +115,6 @@ private val SETTINGS_LANDING_CARDS = listOf(
         icon = TnIcons.MessageCircle,
     ),
     LandingCard(
-        route = NavScreens.SettingsResearch.route,
-        title = "Research",
-        description = "Iterations, follow-ups, results per search",
-        icon = TnIcons.Compass,
-    ),
-    LandingCard(
         route = NavScreens.SettingsVoice.route,
         title = "Voice",
         description = "Default text-to-speech and speech-to-text",
@@ -139,10 +133,10 @@ private val SETTINGS_LANDING_CARDS = listOf(
         icon = TnIcons.Photo,
     ),
     LandingCard(
-        route = NavScreens.SettingsPerformance.route,
-        title = "Performance",
-        description = "Thread mode, CPU placement, decode priority",
-        icon = TnIcons.Cpu,
+        route = NavScreens.SettingsModel.route,
+        title = "Model",
+        description = "Performance and per-model configuration",
+        icon = TnIcons.Sliders,
     ),
     LandingCard(
         route = NavScreens.SettingsPlugins.route,

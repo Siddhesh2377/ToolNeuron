@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -468,7 +470,12 @@ internal fun AddRepositoryDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add Repository") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 360.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+            ) {
                 OutlinedTextField(value = repoName, onValueChange = { repoName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = repoPath, onValueChange = { repoPath = it }, label = { Text("Repository Path") }, placeholder = { Text("username/repo-name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
             }
@@ -502,7 +509,12 @@ internal fun EditRepositoryDialog(
         onDismissRequest = onDismiss,
         title = { Text("Edit Repository") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)) {
+            Column(
+                modifier = Modifier
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
+            ) {
                 OutlinedTextField(value = repoName, onValueChange = { repoName = it }, label = { Text("Name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(value = repoPath, onValueChange = { repoPath = it }, label = { Text("Repository Path") }, singleLine = true, modifier = Modifier.fillMaxWidth())
 
