@@ -20,16 +20,37 @@ import com.dark.ai_sherpa.OfflineTtsConfig
 import com.dark.ai_sherpa.OfflineTtsModelConfig
 import com.dark.ai_sherpa.OfflineTtsVitsModelConfig
 import com.dark.ai_sherpa.OfflineWhisperModelConfig
-import com.dark.ai_sherpa.SherpaLib
-import com.dark.gguf_lib.ErrorTracker
+import android.graphics.Bitmap
+import com.dark.ai_sd.DiffusionBackendState
+import com.dark.ai_sd.DiffusionGenerationParams
+import com.dark.ai_sd.DiffusionGenerationState
+import com.dark.ai_sd.DiffusionModelConfig
+import com.dark.ai_sd.DiffusionRuntimeConfig
+import com.dark.ai_sd.RuntimeSetupState
+import com.dark.ai_sd.StableDiffusionManager
+import com.dark.ai_sd.UpscaleState
 import com.dark.gguf_lib.GGMLEngine
 import com.dark.gguf_lib.ImageQuality
+import com.dark.gguf_lib.RAGEngine
 import com.dark.gguf_lib.models.GenerationEvent
+import com.dark.tool_neuron.service.IDiffusionCallback
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collect
+import org.json.JSONArray
+import com.dark.tn_security.LogcatSink
+import com.dark.tn_security.TnCode
+import com.dark.tn_security.TnEvent
+import com.dark.tn_security.TnModule
+import com.dark.tn_security.TnSecurity
+import com.dark.tn_security.TnSink
+import com.dark.tn_security.TnStage
 import java.io.File
+import android.os.RemoteCallbackList
 import com.dark.tool_neuron.R
 import com.dark.tool_neuron.service.IGenerationCallback
 import com.dark.tool_neuron.service.IInferenceService
 import com.dark.tool_neuron.service.IModelLoadCallback
+import com.dark.tool_neuron.service.ITnEventCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,19 +66,65 @@ class InferenceService : Service() {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val engine = GGMLEngine()
+    private val ragEngine = RAGEngine()
+    private val ragLock = Any()
     private val ttsLock = Any()
     private val sttLock = Any()
     private var tts: OfflineTts? = null
     private var stt: OfflineRecognizer? = null
 
-    private val crashLogFile: File by lazy {
-        File(filesDir, "inference_crash.json").also { it.parentFile?.mkdirs() }
+    private val crashDir: File by lazy {
+        File(filesDir, "tn_security/crashes").also { it.mkdirs() }
     }
-    private val sherpaCrashLogFile: File by lazy {
-        File(filesDir, "sherpa_crash.json").also { it.parentFile?.mkdirs() }
+
+    private val tnClients = RemoteCallbackList<ITnEventCallback>()
+    private val sdClients = RemoteCallbackList<IDiffusionCallback>()
+    private var sdForwardingJobs: List<Job> = emptyList()
+    private val sdLock = Any()
+    private val sdBroadcastLock = Any()
+    @Volatile private var sdInitialized = false
+    private val sdManager: StableDiffusionManager by lazy {
+        StableDiffusionManager.getInstance(applicationContext)
     }
-    private val ktErrorLock = Any()
-    @Volatile private var ktLastErrorJson: String? = null
+
+    private val tnSink = TnSink { ev ->
+        val n = tnClients.beginBroadcast()
+        try {
+            for (i in 0 until n) {
+                val cb = tnClients.getBroadcastItem(i)
+                try {
+                    when (ev) {
+                        is TnEvent.Log -> cb.onEvent(
+                            0, ev.level.value, ev.module.value, 0, 0,
+                            ev.tag, ev.opId, ev.file, ev.line, ev.func,
+                            ev.message, null, ev.timestampMs, ev.tid,
+                        )
+                        is TnEvent.Error -> cb.onEvent(
+                            1, 4 /*ERROR*/, ev.module.value, ev.code.value, ev.stage.value,
+                            null, ev.opId, ev.file, ev.line, ev.func,
+                            ev.message, ev.suggestion, ev.timestampMs, ev.tid,
+                        )
+                        is TnEvent.Cancellation -> cb.onEvent(
+                            2, 2 /*INFO*/, ev.module.value, TnCode.CANCELLED.value, 0,
+                            null, ev.opId, null, 0, null,
+                            ev.reason ?: "", null, ev.timestampMs, ev.tid,
+                        )
+                        is TnEvent.Crash -> cb.onCrashReplay(
+                            // Re-emit as a synthetic crash JSON for the app side.
+                            // Real crash files are shipped via replayPendingCrashes().
+                            "{}", ev.crashFilePath,
+                        )
+                    }
+                } catch (_: DeadObjectException) {
+                    // Will be reaped by RemoteCallbackList automatically.
+                } catch (_: Throwable) {
+                    // Per-callback failure must not kill the broadcast loop.
+                }
+            }
+        } finally {
+            tnClients.finishBroadcast()
+        }
+    }
 
     @Volatile private var loadedProjectorPath: String? = null
     @Volatile private var loadedImageMaxTokens: Int = -1
@@ -73,16 +140,16 @@ class InferenceService : Service() {
         startForeground(NOTIFICATION_ID, buildNotification("Inference ready"))
         engine.setTokenBatchSize(STREAMING_TOKEN_BATCH_BYTES)
         try {
-            ErrorTracker.init()
-            ErrorTracker.setCrashLogPath(crashLogFile.absolutePath)
+            TnSecurity.init(
+                context = this,
+                module = TnModule.TN_SERVICE,
+                crashDir = crashDir,
+                installSignalHandlers = true,
+            )
+            TnSecurity.addSink(LogcatSink())  // dev visibility
+            TnSecurity.addSink(tnSink)        // broadcast to bound clients
         } catch (t: Throwable) {
-            Log.e(TAG, "gguf error tracker init failed", t)
-        }
-        try {
-            SherpaLib.nativeErrorInit()
-            SherpaLib.nativeErrorSetCrashLogPath(sherpaCrashLogFile.absolutePath)
-        } catch (t: Throwable) {
-            Log.e(TAG, "sherpa error tracker init failed", t)
+            Log.e(TAG, "tn_security init failed", t)
         }
         try {
             engine.vtCacheInit(vtCacheDir.absolutePath, VT_CACHE_BUDGET_BYTES)
@@ -91,11 +158,120 @@ class InferenceService : Service() {
         }
     }
 
+    private fun startSdForwarding() {
+        synchronized(sdLock) {
+            if (sdForwardingJobs.isNotEmpty()) return
+            // Tail every SD StateFlow so registered callbacks see live updates.
+            sdForwardingJobs = listOf(
+                scope.launch {
+                    sdManager.diffusionBackendState.collect { state ->
+                        broadcastBackend(state)
+                    }
+                },
+                scope.launch {
+                    sdManager.diffusionGenerationState.collect { state ->
+                        broadcastGeneration(state)
+                    }
+                },
+                scope.launch {
+                    sdManager.isGenerating.collect { gen ->
+                        broadcastIsGenerating(gen)
+                    }
+                },
+                scope.launch {
+                    sdManager.upscaleState.collect { state ->
+                        broadcastUpscale(state)
+                    }
+                },
+                scope.launch {
+                    sdManager.runtimeSetupState.collect { state ->
+                        broadcastRuntimeSetup(state)
+                    }
+                },
+            )
+        }
+    }
+
+    private fun fanoutSd(block: (IDiffusionCallback) -> Unit) {
+        synchronized(sdBroadcastLock) {
+            val n = sdClients.beginBroadcast()
+            try {
+                for (i in 0 until n) {
+                    try { block(sdClients.getBroadcastItem(i)) } catch (_: Throwable) {}
+                }
+            } finally {
+                sdClients.finishBroadcast()
+            }
+        }
+    }
+
+    private fun broadcastBackend(state: DiffusionBackendState) = fanoutSd { cb ->
+        when (state) {
+            is DiffusionBackendState.Idle      -> cb.onBackendState(0, null)
+            is DiffusionBackendState.Starting  -> cb.onBackendState(1, null)
+            is DiffusionBackendState.Running   -> cb.onBackendState(2, null)
+            is DiffusionBackendState.Error     -> cb.onBackendState(3, state.message)
+        }
+    }
+
+    private fun broadcastGeneration(state: DiffusionGenerationState) = fanoutSd { cb ->
+        when (state) {
+            is DiffusionGenerationState.Idle ->
+                cb.onGenerationState(0, 0f, 0, 0, null, null, 0L, 0, 0, null)
+            is DiffusionGenerationState.Progress ->
+                cb.onGenerationState(1, state.progress, state.currentStep, state.totalSteps,
+                    state.intermediateImage, null, 0L, 0, 0, null)
+            is DiffusionGenerationState.Complete ->
+                cb.onGenerationState(2, 1f, 0, 0, null, state.bitmap,
+                    state.seed ?: 0L, state.width, state.height, null)
+            is DiffusionGenerationState.Error ->
+                cb.onGenerationState(3, 0f, 0, 0, null, null, 0L, 0, 0, state.message)
+        }
+    }
+
+    private fun broadcastIsGenerating(generating: Boolean) = fanoutSd { cb ->
+        cb.onIsGenerating(generating)
+    }
+
+    private fun broadcastUpscale(state: UpscaleState) = fanoutSd { cb ->
+        when (state) {
+            is UpscaleState.Idle       -> cb.onUpscaleState(0, null, 0, 0, 0, null)
+            is UpscaleState.Processing -> cb.onUpscaleState(1, null, 0, 0, 0, null)
+            is UpscaleState.Complete   -> cb.onUpscaleState(2, state.bitmap, state.width, state.height, state.timeMs, null)
+            is UpscaleState.Error      -> cb.onUpscaleState(3, null, 0, 0, 0, state.message)
+        }
+    }
+
+    private fun broadcastRuntimeSetup(state: RuntimeSetupState) = fanoutSd { cb ->
+        when (state) {
+            is RuntimeSetupState.Idle ->
+                cb.onRuntimeSetupState(0, 0L, 0L, null, null)
+            is RuntimeSetupState.Downloading ->
+                cb.onRuntimeSetupState(1, state.bytesDownloaded, state.totalBytes, state.fileName, null)
+            is RuntimeSetupState.CopyingAsset ->
+                cb.onRuntimeSetupState(2, state.bytesWritten, state.totalBytes, null, null)
+            is RuntimeSetupState.Extracting ->
+                cb.onRuntimeSetupState(3, state.filesExtracted.toLong(), 0L, state.currentFile, null)
+            is RuntimeSetupState.CopyingSafetyChecker ->
+                cb.onRuntimeSetupState(4, 0L, 0L, null, null)
+            is RuntimeSetupState.InitializingRuntime ->
+                cb.onRuntimeSetupState(5, 0L, 0L, null, null)
+            is RuntimeSetupState.Complete ->
+                cb.onRuntimeSetupState(6, 0L, 0L, null, null)
+            is RuntimeSetupState.Error ->
+                cb.onRuntimeSetupState(7, 0L, 0L, null, state.message)
+        }
+    }
+
     override fun onBind(intent: Intent?): IBinder = binder
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            try { engine.stopGeneration() } catch (_: Throwable) {}
+            // Hard-stop from the foreground notification: cancel any in-flight
+            // work AND tear down every loaded backend before we let the
+            // process go down, so memory is reclaimed immediately instead of
+            // waiting on onDestroy ordering / lingering binder refs.
+            unloadEverything()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
@@ -103,21 +279,55 @@ class InferenceService : Service() {
     }
 
     override fun onTaskRemoved(rootIntent: Intent?) {
+        unloadEverything()
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {
+        unloadEverything()
+        scope.cancel()
+        super.onDestroy()
+    }
+
+    @Volatile private var teardownInProgress = false
+
+    /**
+     * Synchronously release every backend held by this service: cancel any
+     * generation, free the LLM + VLM projector, close TTS/STT/RAG, and tear
+     * down the SD pipeline. Idempotent — safe to call from onStartCommand,
+     * onTaskRemoved, and onDestroy (which often fire in sequence).
+     */
+    private fun unloadEverything() {
+        if (teardownInProgress) return
+        teardownInProgress = true
+        try { engine.stopGeneration() } catch (_: Throwable) {}
         try {
             runBlocking(Dispatchers.IO) {
                 if (engine.isLoaded) engine.unload()
             }
         } catch (_: Throwable) {}
-        synchronized(ttsLock) { tts?.close(); tts = null }
-        synchronized(sttLock) { stt?.close(); stt = null }
-        scope.cancel()
-        super.onDestroy()
+        try { engine.releaseVlmProjector() } catch (_: Throwable) {}
+        synchronized(ttsLock) {
+            try { tts?.close() } catch (_: Throwable) {}
+            tts = null
+        }
+        synchronized(sttLock) {
+            try { stt?.close() } catch (_: Throwable) {}
+            stt = null
+        }
+        synchronized(ragLock) {
+            try { ragEngine.close() } catch (_: Throwable) {}
+        }
+        synchronized(sdLock) {
+            sdForwardingJobs.forEach { it.cancel() }
+            sdForwardingJobs = emptyList()
+            if (sdInitialized) {
+                try { sdManager.cleanup() } catch (_: Throwable) {}
+                sdInitialized = false
+            }
+        }
     }
 
     private val binder = object : IInferenceService.Stub() {
@@ -152,9 +362,9 @@ class InferenceService : Service() {
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
                     } else {
-                        val nativeMsg = nativeErrorOrFallback("Model load returned false")
-                        captureKt("loadModel", "path=$modelPath", "ModelLoad", nativeMsg)
-                        safeCallback(callback) { it.onError(nativeMsg) }
+                        val msg = "Model load returned false"
+                        captureKt("loadModel", "path=$modelPath", "ModelLoad", msg)
+                        safeCallback(callback) { it.onError(msg) }
                     }
                 } catch (e: OutOfMemoryError) {
                     try { engine.unload() } catch (_: Throwable) {}
@@ -215,6 +425,30 @@ class InferenceService : Service() {
 
         override fun generateMultiTurn(messagesJson: String, maxTokens: Int, callback: IGenerationCallback) {
             collectFlow(engine.generateMultiTurnFlow(messagesJson, maxTokens), callback)
+        }
+
+        override fun compactConversation(messagesJson: String, maxTokens: Int, callback: IGenerationCallback) {
+            // Append the summarize instruction as a synthetic user turn, run
+            // the normal multi-turn generate, then wipe the KV cache so the
+            // next real turn prefills from scratch against whatever new
+            // history the caller installs (typically [system, assistant:
+            // summary, user: …]).
+            val augmented = try {
+                val arr = org.json.JSONArray(messagesJson)
+                arr.put(org.json.JSONObject().apply {
+                    put("role", "user")
+                    put("content", GGMLEngine.DEFAULT_SUMMARIZE_PROMPT)
+                })
+                arr.toString()
+            } catch (e: Exception) {
+                try { callback.onError("invalid messages json: ${e.message}") } catch (_: Exception) {}
+                return
+            }
+            collectFlow(
+                flow = engine.generateMultiTurnFlow(augmented, maxTokens),
+                callback = callback,
+                onComplete = { try { engine.resetKvCache() } catch (_: Throwable) {} },
+            )
         }
 
         override fun stopGeneration() {
@@ -507,51 +741,373 @@ class InferenceService : Service() {
             }
         }
 
-        override fun getLastErrorJson(): String = readNativeOrKtError()
-
-        override fun clearLastError() {
-            synchronized(ktErrorLock) { ktLastErrorJson = null }
-            try { ErrorTracker.clear() } catch (_: Throwable) {}
+        override fun registerTnEvents(cb: ITnEventCallback?) {
+            if (cb != null) tnClients.register(cb)
         }
 
-        override fun drainCrashLogJson(): String {
-            return try {
-                if (!crashLogFile.exists()) return ""
-                val content = crashLogFile.readText()
-                crashLogFile.delete()
-                content
+        override fun unregisterTnEvents(cb: ITnEventCallback?) {
+            if (cb != null) tnClients.unregister(cb)
+        }
+
+        override fun ragEnsureReady(
+            threads: Int, chunkSize: Int, chunkOverlap: Int,
+            dims: Int, topK: Int, topN: Int, lateChunking: Boolean,
+        ): Boolean = synchronized(ragLock) {
+            try {
+                if (ragEngine.isCreated) return@synchronized true
+                ragEngine.create(
+                    threads = threads,
+                    chunkSize = chunkSize,
+                    chunkOverlap = chunkOverlap,
+                    dims = dims,
+                    topK = topK,
+                    topN = topN,
+                    lateChunking = lateChunking,
+                )
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to drain crash log", e)
-                ""
+                captureKt("ragEnsureReady", null, "RAG", e.message ?: e.javaClass.simpleName)
+                false
             }
         }
 
-        override fun getSherpaLastErrorJson(): String {
-            return try {
-                val raw = SherpaLib.nativeErrorGetLastJson()
-                if (raw == "{}" || raw.isBlank()) "" else raw
-            } catch (_: Throwable) { "" }
-        }
-
-        override fun clearSherpaLastError() {
-            try { SherpaLib.nativeErrorClear() } catch (_: Throwable) {}
-        }
-
-        override fun drainSherpaCrashLogJson(): String {
-            return try {
-                if (!sherpaCrashLogFile.exists()) return ""
-                val content = sherpaCrashLogFile.readText()
-                sherpaCrashLogFile.delete()
-                content
+        override fun ragLoadEmbeddingModel(path: String): Boolean = synchronized(ragLock) {
+            try {
+                runBlocking(Dispatchers.IO) { ragEngine.loadModel(path) }
             } catch (e: Throwable) {
-                Log.e(TAG, "Failed to drain sherpa crash log", e)
-                ""
+                captureKt("ragLoadEmbeddingModel", "path=$path", "RAG", e.message ?: e.javaClass.simpleName)
+                false
+            }
+        }
+
+        override fun ragLoadEmbeddingModelFromFd(pfd: ParcelFileDescriptor?): Boolean {
+            if (pfd == null) return false
+            val fd = pfd.detachFd()
+            return synchronized(ragLock) {
+                try {
+                    runBlocking(Dispatchers.IO) { ragEngine.loadModelFromFd(fd) }
+                } catch (e: Throwable) {
+                    captureKt("ragLoadEmbeddingModelFromFd", "fd=$fd", "RAG", e.message ?: e.javaClass.simpleName)
+                    false
+                }
+            }
+        }
+
+        override fun ragUnloadEmbeddingModel() {
+            synchronized(ragLock) {
+                try { ragEngine.close() } catch (_: Throwable) {}
+            }
+        }
+
+        override fun ragIsLoaded(): Boolean = synchronized(ragLock) {
+            try { ragEngine.isModelLoaded } catch (_: Throwable) { false }
+        }
+
+        override fun ragIngestBytes(
+            pfd: ParcelFileDescriptor?, size: Long,
+            mimeHint: String?, nameHint: String?, docId: String,
+        ): Int {
+            if (pfd == null) return -2
+            val bytes = try {
+                readAllFromPfd(pfd, size)
+            } catch (e: Throwable) {
+                captureKt("ragIngestBytes", "docId=$docId size=$size", "RAG", e.message ?: e.javaClass.simpleName)
+                return -2
+            }
+            return synchronized(ragLock) {
+                try {
+                    runBlocking(Dispatchers.IO) {
+                        ragEngine.ingestBytes(bytes, mimeHint, nameHint, docId)
+                    }
+                } catch (e: Throwable) {
+                    captureKt("ragIngestBytes", "docId=$docId", "RAG", e.message ?: e.javaClass.simpleName)
+                    -5
+                }
+            }
+        }
+
+        override fun ragExtractText(
+            pfd: ParcelFileDescriptor?, size: Long,
+            mimeHint: String?, nameHint: String?,
+        ): String? {
+            if (pfd == null) return null
+            val bytes = try {
+                readAllFromPfd(pfd, size)
+            } catch (e: Throwable) {
+                captureKt("ragExtractText", "size=$size", "RAG", e.message ?: e.javaClass.simpleName)
+                return null
+            }
+            return try {
+                runBlocking(Dispatchers.IO) {
+                    ragEngine.extractText(bytes, mimeHint, nameHint)
+                }
+            } catch (e: Throwable) {
+                captureKt("ragExtractText", null, "RAG", e.message ?: e.javaClass.simpleName)
+                null
+            }
+        }
+
+        override fun ragQuery(query: String): String = synchronized(ragLock) {
+            try {
+                val hits = runBlocking(Dispatchers.IO) { ragEngine.query(query) }
+                serializeHits(hits)
+            } catch (e: Throwable) {
+                captureKt("ragQuery", "q=${query.take(60)}", "RAG", e.message ?: e.javaClass.simpleName)
+                "[]"
+            }
+        }
+
+        override fun ragQueryFiltered(query: String, docIdPrefix: String): String = synchronized(ragLock) {
+            try {
+                val hits = runBlocking(Dispatchers.IO) { ragEngine.queryFiltered(query, docIdPrefix) }
+                serializeHits(hits)
+            } catch (e: Throwable) {
+                captureKt("ragQueryFiltered", "prefix=$docIdPrefix", "RAG", e.message ?: e.javaClass.simpleName)
+                "[]"
+            }
+        }
+
+        override fun ragRemoveDocument(docId: String): Int = synchronized(ragLock) {
+            try { ragEngine.removeDocument(docId) } catch (_: Throwable) { -1 }
+        }
+
+        override fun ragClear() {
+            synchronized(ragLock) { try { ragEngine.clear() } catch (_: Throwable) {} }
+        }
+
+        override fun ragInfo(): String? = synchronized(ragLock) {
+            try { ragEngine.info() } catch (_: Throwable) { null }
+        }
+
+        override fun ragDocumentCount(): Int = synchronized(ragLock) {
+            try { ragEngine.documentCount } catch (_: Throwable) { 0 }
+        }
+
+        override fun ragChunkCount(): Int = synchronized(ragLock) {
+            try { ragEngine.chunkCount } catch (_: Throwable) { 0 }
+        }
+
+        override fun ragExportIndex(pfd: ParcelFileDescriptor?): Int {
+            if (pfd == null) return -1
+            val bytes = synchronized(ragLock) {
+                try { ragEngine.exportIndex() } catch (_: Throwable) { null }
+            } ?: run { try { pfd.close() } catch (_: Throwable) {}; return -1 }
+            return try {
+                ParcelFileDescriptor.AutoCloseOutputStream(pfd).use { out ->
+                    out.write(bytes)
+                }
+                bytes.size
+            } catch (e: Throwable) {
+                captureKt("ragExportIndex", "bytes=${bytes.size}", "RAG", e.message ?: e.javaClass.simpleName)
+                -1
+            }
+        }
+
+        override fun ragImportIndex(pfd: ParcelFileDescriptor?, size: Long): Int {
+            if (pfd == null) return -5
+            val bytes = try {
+                readAllFromPfd(pfd, size)
+            } catch (e: Throwable) {
+                captureKt("ragImportIndex", "size=$size", "RAG", e.message ?: e.javaClass.simpleName)
+                return -5
+            }
+            return synchronized(ragLock) {
+                try { ragEngine.importIndex(bytes) } catch (e: Throwable) {
+                    captureKt("ragImportIndex", "bytes=${bytes.size}", "RAG", e.message ?: e.javaClass.simpleName)
+                    -5
+                }
+            }
+        }
+
+        override fun ragRelease() {
+            synchronized(ragLock) {
+                try { ragEngine.close() } catch (_: Throwable) {}
+            }
+        }
+
+        override fun sdEnsureRuntime(runtimeDir: String, tarXzSourcePath: String): Boolean {
+            return try {
+                startSdForwarding()
+                runBlocking(Dispatchers.IO) {
+                    sdManager.initialize(
+                        DiffusionRuntimeConfig(
+                            runtimeDir = runtimeDir,
+                            tarXzSourcePath = tarXzSourcePath,
+                        )
+                    )
+                }
+                sdInitialized = true
+                true
+            } catch (e: Throwable) {
+                captureKt("sdEnsureRuntime", "tar=$tarXzSourcePath", "SD", e.message ?: e.javaClass.simpleName)
+                false
+            }
+        }
+
+        override fun sdLoadDiffusionModel(
+            name: String, modelDir: String,
+            textEmbeddingSize: Int, runOnCpu: Boolean, useCpuClip: Boolean,
+            isPony: Boolean, safetyMode: Boolean,
+            width: Int, height: Int,
+        ): Boolean {
+            return try {
+                sdManager.loadModel(
+                    DiffusionModelConfig(
+                        name = name,
+                        modelDir = modelDir,
+                        textEmbeddingSize = textEmbeddingSize,
+                        runOnCpu = runOnCpu,
+                        useCpuClip = useCpuClip,
+                        isPony = isPony,
+                        safetyMode = safetyMode,
+                    ),
+                    width = width, height = height,
+                )
+            } catch (e: Throwable) {
+                captureKt("sdLoadDiffusionModel", "model=$name dir=$modelDir", "SD", e.message ?: e.javaClass.simpleName)
+                false
+            }
+        }
+
+        override fun sdLoadUpscaler(modelPath: String, useMnn: Boolean, useOpenCL: Boolean): Boolean {
+            return try {
+                sdManager.loadUpscaler(modelPath, useMnn = useMnn, useOpenCL = useOpenCL)
+            } catch (e: Throwable) {
+                captureKt("sdLoadUpscaler", "path=$modelPath", "SD", e.message ?: e.javaClass.simpleName)
+                false
+            }
+        }
+
+        override fun sdGenerate(
+            prompt: String, negativePrompt: String, steps: Int, cfgScale: Float,
+            seed: Long, hasSeed: Boolean,
+            width: Int, height: Int, scheduler: String, useOpenCL: Boolean,
+            inputImage: String?, mask: String?, denoiseStrength: Float,
+            showDiffusionProcess: Boolean, showDiffusionStride: Int,
+        ) {
+            try {
+                sdManager.generateImage(
+                    DiffusionGenerationParams(
+                        prompt = prompt,
+                        negativePrompt = negativePrompt,
+                        steps = steps,
+                        cfgScale = cfgScale,
+                        seed = if (hasSeed) seed else null,
+                        width = width,
+                        height = height,
+                        scheduler = scheduler,
+                        useOpenCL = useOpenCL,
+                        inputImage = inputImage,
+                        mask = mask,
+                        denoiseStrength = denoiseStrength,
+                        showDiffusionProcess = showDiffusionProcess,
+                        showDiffusionStride = showDiffusionStride,
+                    )
+                )
+            } catch (e: Throwable) {
+                captureKt("sdGenerate", "prompt=${prompt.take(60)}", "SD", e.message ?: e.javaClass.simpleName)
+            }
+        }
+
+        override fun sdCancelGeneration() {
+            try { sdManager.cancelGeneration() } catch (_: Throwable) {}
+        }
+
+        override fun sdResetGenerationState() {
+            try { sdManager.resetGenerationState() } catch (_: Throwable) {}
+        }
+
+        override fun sdUpscale(bitmap: Bitmap?) {
+            if (bitmap == null) return
+            try { sdManager.upscaleImage(bitmap) } catch (e: Throwable) {
+                captureKt("sdUpscale", "size=${bitmap.width}x${bitmap.height}", "SD", e.message ?: e.javaClass.simpleName)
+            }
+        }
+
+        override fun sdStop() {
+            try { sdManager.stopBackend() } catch (_: Throwable) {}
+        }
+
+        override fun sdCleanup() {
+            try { sdManager.cleanup() } catch (_: Throwable) {}
+        }
+
+        override fun sdIsBackendRunning(): Boolean =
+            try { sdManager.isBackendRunning() } catch (_: Throwable) { false }
+
+        override fun sdGetSupportedResolutions(modelDir: String, baseW: Int, baseH: Int): String {
+            return try {
+                val list = sdManager.getSupportedResolutions(modelDir, baseW, baseH)
+                val arr = JSONArray()
+                for ((w, h) in list) arr.put(JSONArray().put(w).put(h))
+                arr.toString()
+            } catch (_: Throwable) { "[]" }
+        }
+
+        override fun sdRegisterEvents(cb: IDiffusionCallback?) {
+            if (cb == null) return
+            sdClients.register(cb)
+            startSdForwarding()
+            // Re-emit current values so a late subscriber sees state immediately.
+            try {
+                cb.onBackendState(
+                    when (val s = sdManager.diffusionBackendState.value) {
+                        is DiffusionBackendState.Idle -> 0
+                        is DiffusionBackendState.Starting -> 1
+                        is DiffusionBackendState.Running -> 2
+                        is DiffusionBackendState.Error -> 3
+                    },
+                    (sdManager.diffusionBackendState.value as? DiffusionBackendState.Error)?.message,
+                )
+                cb.onIsGenerating(sdManager.isGenerating.value)
+            } catch (_: Throwable) {}
+        }
+
+        override fun sdUnregisterEvents(cb: IDiffusionCallback?) {
+            if (cb != null) sdClients.unregister(cb)
+        }
+
+        override fun replayPendingCrashes() {
+            try {
+                val replayed = TnSecurity.drainCrashFiles(crashDir)
+                for (crash in replayed) {
+                    val json = try {
+                        // Re-read the file would be cleaner but drain already
+                        // deleted it. Build a minimal envelope from the
+                        // already-materialised TnEvent.Crash so the client
+                        // can render it consistently.
+                        JSONObject().apply {
+                            put("signal", crash.signal)
+                            put("signal_name", crash.signalName)
+                            put("timestamp_ms", crash.timestampMs)
+                            put("pid", crash.pid)
+                            put("tid", crash.tid)
+                            put("module", crash.module.value)
+                            put("module_slug", crash.module.slug)
+                            put("fault_addr", crash.faultAddr ?: "")
+                        }.toString()
+                    } catch (_: Throwable) { "{}" }
+                    val n = tnClients.beginBroadcast()
+                    try {
+                        for (i in 0 until n) {
+                            try {
+                                tnClients.getBroadcastItem(i)
+                                    .onCrashReplay(json, crash.crashFilePath)
+                            } catch (_: Throwable) {}
+                        }
+                    } finally { tnClients.finishBroadcast() }
+                }
+            } catch (e: Throwable) {
+                Log.e(TAG, "replayPendingCrashes failed", e)
             }
         }
 
     }
 
-    private fun collectFlow(flow: Flow<GenerationEvent>, callback: IGenerationCallback) {
+    private fun collectFlow(
+        flow: Flow<GenerationEvent>,
+        callback: IGenerationCallback,
+        onComplete: () -> Unit = {},
+    ) {
         scope.launch(Dispatchers.IO) {
             try {
                 flow.collect { event ->
@@ -590,6 +1146,8 @@ class InferenceService : Service() {
                 engine.stopGeneration()
             } catch (e: Exception) {
                 try { callback.onError(e.message ?: "Unknown error") } catch (_: Exception) {}
+            } finally {
+                try { onComplete() } catch (_: Throwable) {}
             }
         }
     }
@@ -636,32 +1194,65 @@ class InferenceService : Service() {
         try { block(target) } catch (_: DeadObjectException) {}
     }
 
-    private fun nativeErrorOrFallback(fallback: String): String {
-        return try {
-            val j = JSONObject(ErrorTracker.getLastErrorJson())
-            j.optString("message").takeIf { it.isNotBlank() } ?: fallback
-        } catch (_: Throwable) { fallback }
-    }
-
+    /**
+     * Compat shim — translates the old captureKt() signature into a structured
+     * TnSecurity.error call. Keeps existing call sites compiling while every
+     * error flows through the unified event pipeline.
+     */
     private fun captureKt(op: String, detail: String?, category: String, message: String) {
-        fun esc(s: String?): String = s.orEmpty()
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t")
-        val ts = System.currentTimeMillis()
-        val json = """{"code":1,"category":"${esc(category)}","message":"${esc(message)}","op_at_time":{"op":"${esc(op)}","detail":"${esc(detail)}","started_ms":$ts},"timestamp":$ts}"""
-        synchronized(ktErrorLock) { ktLastErrorJson = json }
+        val (code, stage) = mapCategoryToTn(category)
+        TnSecurity.withOp(op) {
+            TnSecurity.error(
+                code = code,
+                stage = stage,
+                module = TnModule.TN_SERVICE,
+                message = if (detail.isNullOrBlank()) message else "$message (detail: $detail)",
+            )
+        }
     }
 
-    private fun readNativeOrKtError(): String {
-        val kt = synchronized(ktErrorLock) { ktLastErrorJson }
-        if (!kt.isNullOrBlank()) return kt
-        return try {
-            val native = ErrorTracker.getLastErrorJson()
-            if (native == "{}" || native.isBlank()) "" else native
-        } catch (_: Throwable) { "" }
+    private fun mapCategoryToTn(category: String): Pair<TnCode, TnStage> = when (category) {
+        "InsufficientRam" -> TnCode.OOM             to TnStage.INIT
+        "OOM"             -> TnCode.OOM             to TnStage.LOAD
+        "ModelLoad"       -> TnCode.MODEL_LOAD_FAIL to TnStage.LOAD
+        "TTS"             -> TnCode.DECODE_FAIL     to TnStage.TTS_GENERATE
+        "STT"             -> TnCode.DECODE_FAIL     to TnStage.STT_DECODE
+        "VLM"             -> TnCode.DECODE_FAIL     to TnStage.VLM_DECODE_IMG
+        "RAG"             -> TnCode.DECODE_FAIL     to TnStage.RAG_INGEST
+        "SD"              -> TnCode.DECODE_FAIL     to TnStage.SD_UNET
+        else              -> TnCode.UNKNOWN         to TnStage.UNSPECIFIED
+    }
+
+    private fun readAllFromPfd(pfd: ParcelFileDescriptor, hintedSize: Long): ByteArray {
+        val capacity = if (hintedSize in 1..(64L * 1024L * 1024L)) hintedSize.toInt() else 0
+        return ParcelFileDescriptor.AutoCloseInputStream(pfd).use { input ->
+            if (capacity > 0) {
+                val buf = ByteArray(capacity)
+                var read = 0
+                while (read < capacity) {
+                    val n = input.read(buf, read, capacity - read)
+                    if (n <= 0) break
+                    read += n
+                }
+                if (read == capacity) buf else buf.copyOf(read)
+            } else {
+                input.readBytes()
+            }
+        }
+    }
+
+    private fun serializeHits(hits: List<com.dark.gguf_lib.models.RAGResult>): String {
+        val arr = JSONArray()
+        for (h in hits) {
+            arr.put(
+                JSONObject()
+                    .put("text", h.text)
+                    .put("doc_id", h.docId)
+                    .put("chunk_index", h.chunkIndex)
+                    .put("score", h.score.toDouble()),
+            )
+        }
+        return arr.toString()
     }
 
     private fun setupNotificationChannel() {
