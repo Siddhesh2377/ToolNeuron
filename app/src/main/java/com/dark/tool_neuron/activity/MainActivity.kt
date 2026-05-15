@@ -8,7 +8,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.getValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.data.ThemeController
-import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.ui.screens.system_ui.AppScaffold
 import com.dark.tool_neuron.ui.theme.ToolNeuronTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,7 +20,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        InferenceClient.bind(applicationContext)
+        // Inference service binding is owned by TNApplication so background
+        // work (RAG ingest, SD pipeline, scheduled jobs) doesn't lose the
+        // service the moment MainActivity is recreated or finishes.
         enableEdgeToEdge()
         setContent {
             val mode by themeController.mode.collectAsStateWithLifecycle()
@@ -38,8 +39,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    override fun onDestroy() {
-        InferenceClient.unbind()
-        super.onDestroy()
-    }
 }
