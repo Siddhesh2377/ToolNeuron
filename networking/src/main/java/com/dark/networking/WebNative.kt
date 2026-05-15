@@ -130,6 +130,11 @@ object WebNative {
 
     private val EmptyStrArr = emptyArray<String>()
 
+    // Matches the curl-impersonate "chrome116" profile we set via
+    // nativeSetProfile in ensureReady. Sending a Mobile/Chrome 124 UA with a
+    // desktop Chrome 116 TLS fingerprint is bot-detection 101 — DDG flagged
+    // every POST and served the anomaly page even with cookies. Keep this
+    // string in lock-step with the profile name.
     const val DefaultUserAgent: String =
-        "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36"
 }
