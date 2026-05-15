@@ -23,7 +23,6 @@ sealed class NavScreens(val route: String) {
     object GuideSecurity : NavScreens("guide_security")
     object GuideThemes : NavScreens("guide_themes")
     object GuideServer : NavScreens("guide_server")
-    object GuideResearch : NavScreens("guide_research")
     object GuidePlugins : NavScreens("guide_plugins")
     object GuideImages : NavScreens("guide_images")
     object PluginHub : NavScreens("plugin_hub")
@@ -31,12 +30,12 @@ sealed class NavScreens(val route: String) {
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
     object SettingsChatRag : NavScreens("settings_chat_rag")
-    object SettingsResearch : NavScreens("settings_research")
     object SettingsVoice : NavScreens("settings_voice")
     object SettingsTheming : NavScreens("settings_theming")
     object SettingsPrivacy : NavScreens("settings_privacy")
     object SettingsAbout : NavScreens("settings_about")
     object SettingsPerformance : NavScreens("settings_performance")
+    object SettingsModel : NavScreens("settings_model")
     object SettingsVision : NavScreens("settings_vision")
     object SettingsPlugins : NavScreens("settings_plugins")
     object Storage : NavScreens("storage")
@@ -44,11 +43,6 @@ sealed class NavScreens(val route: String) {
     object RagDebug : NavScreens("rag_debug")
     object ServerScreen : NavScreens("server_screen")
     object HfExplorer : NavScreens("hf_explorer")
-    object Documents : NavScreens("documents")
-    object DocumentViewer : NavScreens("document/{docId}") {
-        const val ARG_DOC_ID = "docId"
-        fun routeFor(docId: String) = "document/$docId"
-    }
     object HfRepoDetail : NavScreens("hf_repo/{repoPath}") {
         const val ARG_REPO_PATH = "repoPath"
         fun routeFor(repoPath: String) = "hf_repo/${URLEncoder.encode(repoPath, "UTF-8")}"

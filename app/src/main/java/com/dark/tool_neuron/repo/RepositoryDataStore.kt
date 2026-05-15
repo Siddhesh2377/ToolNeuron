@@ -95,6 +95,7 @@ class RepositoryDataStore @Inject constructor(
             HFRepository("mistral-7b-v03", "Mistral 7B Instruct v0.3", "bartowski/Mistral-7B-Instruct-v0.3-GGUF"),
             // Gemma
             HFRepository("gemma3-1b-it", "Gemma 3 1B IT", "unsloth/gemma-3-1b-it-GGUF"),
+            HFRepository("gemma4-e2b-it", "Gemma 4 E2B IT", "unsloth/gemma-4-E2B-it-GGUF"),
             // Tool-calling champion (per project memory)
             HFRepository("smollm3-3b", "SmolLM3 3B", "HuggingFaceTB/SmolLM3-3B-GGUF"),
             // General-purpose pick

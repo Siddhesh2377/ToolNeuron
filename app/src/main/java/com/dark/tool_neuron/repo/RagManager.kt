@@ -3,11 +3,15 @@ package com.dark.tool_neuron.repo
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import com.dark.gguf_lib.RAGEngine
+import com.dark.tn_security.TnCode
+import com.dark.tn_security.TnModule
+import com.dark.tn_security.TnSecurity
+import com.dark.tn_security.TnStage
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.service.inference.InferenceClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,7 +41,6 @@ class RagManager @Inject constructor(
     private val appPrefs: AppPreferences,
     private val sourceVault: SourceFileVault,
 ) {
-    private val engine = RAGEngine()
     private val opsMutex = Mutex()
     private val readyMutex = Mutex()
     private val raptorMutex = Mutex()
@@ -82,32 +85,49 @@ class RagManager @Inject constructor(
     suspend fun ensureReady(): Boolean = readyMutex.withLock {
         if (_isReady.value) return@withLock true
 
-        if (!engine.isCreated) {
-            val created = withContext(Dispatchers.IO) {
-                engine.create(
-                    threads = 0,
-                    chunkSize = 256,
-                    chunkOverlap = 32,
-                    dims = 256,
-                    topK = 64,
-                    topN = DENSE_CANDIDATES,
-                    lateChunking = true,
-                )
-            }
-            if (!created) {
-                Log.e(TAG, "Failed to create RAG engine")
-                return@withLock false
-            }
+        val created = InferenceClient.ragEnsureReady(
+            threads = 0,
+            chunkSize = 256,
+            chunkOverlap = 32,
+            dims = 256,
+            topK = 64,
+            topN = DENSE_CANDIDATES,
+            lateChunking = true,
+        )
+        if (!created) {
+            Log.e(TAG, "Failed to create RAG engine in :inference")
+            TnSecurity.error(
+                code = TnCode.MODEL_LOAD_FAIL,
+                stage = TnStage.INIT,
+                module = TnModule.TN_APP,
+                message = "RAG engine create() returned false in :inference",
+                suggestion = "Check :inference service is bound and RAGEngine.create() native call is reachable",
+            )
+            return@withLock false
         }
 
         val model = pickEmbeddingModel() ?: run {
             Log.w(TAG, "No embedding model installed")
+            TnSecurity.error(
+                code = TnCode.MODEL_LOAD_FAIL,
+                stage = TnStage.INIT,
+                module = TnModule.TN_APP,
+                message = "No embedding model installed; RAG cannot start",
+                suggestion = "Install EmbeddingGemma (or any embedding GGUF) from Model Store",
+            )
             return@withLock false
         }
 
-        val loaded = withContext(Dispatchers.IO) { engine.loadModel(model.path) }
+        val loaded = InferenceClient.ragLoadEmbeddingModel(model.path)
         if (!loaded) {
             Log.e(TAG, "Failed to load embedding model at ${model.path}")
+            TnSecurity.error(
+                code = TnCode.MODEL_LOAD_FAIL,
+                stage = TnStage.LOAD,
+                module = TnModule.TN_APP,
+                message = "Failed to load embedding model at ${model.path}",
+                suggestion = "Verify the file exists, isn't truncated, and matches the dims expected by the RAG index",
+            )
             return@withLock false
         }
 
@@ -130,7 +150,7 @@ class RagManager @Inject constructor(
         val f = snapshotFile
         if (!f.exists() || f.length() <= 0) return@withContext
         val bytes = runCatching { f.readBytes() }.getOrNull() ?: return@withContext
-        val rc = opsMutex.withLock { engine.importIndex(bytes) }
+        val rc = opsMutex.withLock { InferenceClient.ragImportIndex(bytes) }
         if (rc == 0) {
             documentRepo.getAllDocuments().forEach { doc ->
                 ingestedDocIds += doc.id
@@ -141,13 +161,20 @@ class RagManager @Inject constructor(
             Log.i(TAG, "vector snapshot restored: ${bytes.size / 1024} KB, ${ingestedDocIds.size} docs")
         } else {
             Log.w(TAG, "vector snapshot import failed (rc=$rc) — deleting and re-embedding on demand")
+            TnSecurity.error(
+                code = TnCode.UNKNOWN,
+                stage = TnStage.RAG_INGEST,
+                module = TnModule.TN_APP,
+                message = "vector snapshot import failed rc=$rc; will re-embed on demand",
+                suggestion = "rc -1=magic, -2=version, -3=dim, -4=model fingerprint, -5=corrupt, -6=engine not ready",
+            )
             runCatching { f.delete() }
         }
     }
 
     suspend fun saveIndexSnapshot() = withContext(Dispatchers.IO) {
         if (!_isReady.value) return@withContext
-        val bytes = opsMutex.withLock { engine.exportIndex() } ?: return@withContext
+        val bytes = opsMutex.withLock { InferenceClient.ragExportIndex() } ?: return@withContext
         val tmp = File(snapshotFile.parentFile, snapshotFile.name + ".tmp")
         runCatching {
             tmp.outputStream().use { it.write(bytes) }
@@ -183,7 +210,7 @@ class RagManager @Inject constructor(
             if (doc.sourceId.isBlank()) return@forEach
             val bytes = sourceVault.read(doc.sourceId) ?: return@forEach
             val chunks = opsMutex.withLock {
-                engine.ingestBytes(bytes, doc.mimeType, doc.name, doc.id)
+                InferenceClient.ragIngestBytes(bytes, doc.mimeType, doc.name, doc.id)
             }
             if (chunks >= 0) {
                 ingestedDocIds += doc.id
@@ -230,22 +257,26 @@ class RagManager @Inject constructor(
         }
 
         val chunkCount = opsMutex.withLock {
-            engine.ingestBytes(bytes, effectiveMime, displayName, docId)
+            InferenceClient.ragIngestBytes(bytes, effectiveMime, displayName, docId)
         }
 
-        when {
-            chunkCount == -1 -> return@withContext Result.failure(
-                IllegalStateException("Unsupported document format")
+        if (chunkCount < 0) {
+            val reason = when (chunkCount) {
+                -1 -> "Unsupported document format"
+                -2 -> "Could not parse document"
+                -3 -> "Document contains no readable text"
+                -4 -> "Out of memory during ingest"
+                -6 -> "RAG engine not ready in :inference"
+                else -> "Indexing failed (code $chunkCount)"
+            }
+            TnSecurity.error(
+                code = if (chunkCount == -4) TnCode.OOM else TnCode.DECODE_FAIL,
+                stage = TnStage.RAG_INGEST,
+                module = TnModule.TN_APP,
+                message = "ingestBytes $displayName: $reason (rc=$chunkCount)",
+                suggestion = null,
             )
-            chunkCount == -2 -> return@withContext Result.failure(
-                IllegalStateException("Could not parse document")
-            )
-            chunkCount == -3 -> return@withContext Result.failure(
-                IllegalStateException("Document contains no readable text")
-            )
-            chunkCount < 0 -> return@withContext Result.failure(
-                IllegalStateException("Indexing failed (code $chunkCount)")
-            )
+            return@withContext Result.failure(IllegalStateException(reason))
         }
 
         ingestedDocIds += docId
@@ -288,7 +319,7 @@ class RagManager @Inject constructor(
             ?: return@withContext Result.failure(IllegalStateException("Could not read stored bytes"))
 
         val chunkCount = opsMutex.withLock {
-            engine.ingestBytes(bytes, source.mimeType, source.name, docId)
+            InferenceClient.ragIngestBytes(bytes, source.mimeType, source.name, docId)
         }
         if (chunkCount < 0) {
             return@withContext Result.failure(IllegalStateException("Indexing failed (code $chunkCount)"))
@@ -354,7 +385,7 @@ class RagManager @Inject constructor(
                 val combined = ctxPrefix + chunk
                 val combinedBytes = combined.toByteArray(Charsets.UTF_8)
                 val n = opsMutex.withLock {
-                    engine.ingestBytes(combinedBytes, "text/plain", "${doc.name} (ctx$idx)", subDocId)
+                    InferenceClient.ragIngestBytes(combinedBytes, "text/plain", "${doc.name} (ctx$idx)", subDocId)
                 }
                 if (n >= 0) ingestedDocIds += subDocId
                 keywordIndex.ingest(subDocId, doc.chatId.orEmpty(), doc.sourceId, listOf(combined))
@@ -398,7 +429,7 @@ class RagManager @Inject constructor(
                     val subDocId = "$docId::raptor:lvl$levelIdx:cluster$clusterIdx"
                     val bytes = summary.toByteArray(Charsets.UTF_8)
                     val chunks = opsMutex.withLock {
-                        engine.ingestBytes(bytes, "text/plain", "${doc.name} (lvl$levelIdx)", subDocId)
+                        InferenceClient.ragIngestBytes(bytes, "text/plain", "${doc.name} (lvl$levelIdx)", subDocId)
                     }
                     if (chunks >= 0) {
                         ingestedDocIds += subDocId
@@ -420,14 +451,14 @@ class RagManager @Inject constructor(
     }
 
     suspend fun removeDocument(docId: String) = withContext(Dispatchers.IO) {
-        opsMutex.withLock { engine.removeDocument(docId) }
+        opsMutex.withLock { InferenceClient.ragRemoveDocument(docId) }
         ingestedDocIds -= docId
         keywordIndex.removeDocument(docId)
         val subIds = ingestedDocIds.filter {
             it.startsWith("$docId::ctx") || it.startsWith("$docId::raptor")
         }.toList()
         subIds.forEach { sub ->
-            opsMutex.withLock { engine.removeDocument(sub) }
+            opsMutex.withLock { InferenceClient.ragRemoveDocument(sub) }
             ingestedDocIds -= sub
             keywordIndex.removeDocument(sub)
         }
@@ -469,7 +500,7 @@ class RagManager @Inject constructor(
             var totalBm25 = 0
             val chatPrefix = "$chatId:"
             for (q in queries) {
-                val dense = opsMutex.withLock { engine.queryFiltered(q, chatPrefix) }
+                val dense = opsMutex.withLock { InferenceClient.ragQueryFiltered(q, chatPrefix) }
                 val bm25 = runCatching { keywordIndex.query(q, chatId, topK = KEYWORD_CANDIDATES) }
                     .getOrElse { emptyList() }
                 totalDense += dense.size
@@ -558,7 +589,7 @@ class RagManager @Inject constructor(
     )
 
     private fun rrfFuse(
-        dense: List<com.dark.gguf_lib.models.RAGResult>,
+        dense: List<InferenceClient.RagHit>,
         bm25: List<KeywordHit>,
     ): List<FusedHit> {
         val rankings = buildList {
@@ -598,7 +629,7 @@ class RagManager @Inject constructor(
         query: String,
         budget: Int = DEFAULT_RAG_BUDGET_TOKENS,
     ): RagDebugResult = withContext(Dispatchers.IO) {
-        val info = runCatching { engine.info() }.getOrNull() ?: "{}"
+        val info = runCatching { InferenceClient.ragInfo() }.getOrNull() ?: "{}"
         if (!_isReady.value || query.isBlank()) {
             return@withContext RagDebugResult(
                 query = query,
@@ -613,7 +644,7 @@ class RagManager @Inject constructor(
             )
         }
 
-        val dense = opsMutex.withLock { engine.queryFiltered(query, "$chatId:") }
+        val dense = opsMutex.withLock { InferenceClient.ragQueryFiltered(query, "$chatId:") }
         val bm25 = runCatching { keywordIndex.query(query, chatId, KEYWORD_CANDIDATES) }
             .getOrElse { emptyList() }
         val fused = rrfFuse(dense, bm25)
@@ -633,7 +664,7 @@ class RagManager @Inject constructor(
     }
 
     suspend fun release() = opsMutex.withLock {
-        engine.close()
+        InferenceClient.ragRelease()
         ingestedDocIds.clear()
         _isReady.value = false
         _activeEmbeddingName.value = null

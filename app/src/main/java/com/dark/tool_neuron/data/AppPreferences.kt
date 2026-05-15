@@ -191,33 +191,6 @@ class AppPreferences @Inject constructor(
         get() = getBoolean(KEY_RAG_DEEP_RESEARCH)
         set(value) = putBoolean(KEY_RAG_DEEP_RESEARCH, value)
 
-    var researchMaxIterations: Int
-        get() = getString(KEY_RESEARCH_MAX_ITERATIONS).toIntOrNull()?.coerceIn(1, 10)
-            ?: DEFAULT_RESEARCH_MAX_ITERATIONS
-        set(value) = putString(KEY_RESEARCH_MAX_ITERATIONS, value.coerceIn(1, 10).toString())
-
-    var researchMaxQuestions: Int
-        get() = getString(KEY_RESEARCH_MAX_QUESTIONS).toIntOrNull()?.coerceIn(1, 6)
-            ?: DEFAULT_RESEARCH_MAX_QUESTIONS
-        set(value) = putString(KEY_RESEARCH_MAX_QUESTIONS, value.coerceIn(1, 6).toString())
-
-    var researchResultsPerSearch: Int
-        get() = getString(KEY_RESEARCH_RESULTS_PER_SEARCH).toIntOrNull()?.coerceIn(3, 10)
-            ?: DEFAULT_RESEARCH_RESULTS_PER_SEARCH
-        set(value) = putString(KEY_RESEARCH_RESULTS_PER_SEARCH, value.coerceIn(3, 10).toString())
-
-    var researchDdgLocale: String
-        get() = getString(KEY_RESEARCH_DDG_LOCALE)
-        set(value) = putString(KEY_RESEARCH_DDG_LOCALE, value)
-
-    var researchCancelOnBackground: Boolean
-        get() = getBoolean(KEY_RESEARCH_CANCEL_ON_BG, default = true)
-        set(value) = putBoolean(KEY_RESEARCH_CANCEL_ON_BG, value)
-
-    var activeResearchModelId: String
-        get() = getString(KEY_ACTIVE_RESEARCH_MODEL)
-        set(value) = putString(KEY_ACTIVE_RESEARCH_MODEL, value)
-
     var vlmImageQuality: String
         get() = getString(KEY_VLM_IMAGE_QUALITY, DEFAULT_VLM_IMAGE_QUALITY)
         set(value) = putString(KEY_VLM_IMAGE_QUALITY, value)
@@ -302,12 +275,6 @@ class AppPreferences @Inject constructor(
         const val KEY_RAG_SMART_RERANK = "rag_smart_rerank"
         const val KEY_RAG_MULTI_QUERY = "rag_multi_query"
         const val KEY_RAG_DEEP_RESEARCH = "rag_deep_research"
-        const val KEY_RESEARCH_MAX_ITERATIONS = "research_max_iterations"
-        const val KEY_RESEARCH_MAX_QUESTIONS = "research_max_questions"
-        const val KEY_RESEARCH_RESULTS_PER_SEARCH = "research_results_per_search"
-        const val KEY_RESEARCH_DDG_LOCALE = "research_ddg_locale"
-        const val KEY_RESEARCH_CANCEL_ON_BG = "research_cancel_on_bg"
-        const val KEY_ACTIVE_RESEARCH_MODEL = "active_research_model"
         const val KEY_VLM_IMAGE_QUALITY = "vlm_image_quality"
         const val DEFAULT_VLM_IMAGE_QUALITY = "MEDIUM"
         const val KEY_THREAD_MODE = "thread_mode"
@@ -321,9 +288,6 @@ class AppPreferences @Inject constructor(
         const val PLUGIN_ONNX_EP_NNAPI = "nnapi"
         const val PLUGIN_ONNX_EP_XNNPACK = "xnnpack"
         const val DEFAULT_PLUGIN_ONNX_EP = PLUGIN_ONNX_EP_CPU
-        const val DEFAULT_RESEARCH_MAX_ITERATIONS = 5
-        const val DEFAULT_RESEARCH_MAX_QUESTIONS = 4
-        const val DEFAULT_RESEARCH_RESULTS_PER_SEARCH = 5
         const val DEFAULT_SERVER_PORT = 11434
         const val DEFAULT_BIND_MODE = "ALL_INTERFACES"
         private const val KEY_AUTH_STATE = "auth_state_v1"
