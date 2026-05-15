@@ -5,10 +5,7 @@ import android.graphics.Bitmap
 import com.dark.ai_sd.DiffusionBackendState
 import com.dark.ai_sd.DiffusionGenerationParams
 import com.dark.ai_sd.DiffusionGenerationState
-import com.dark.ai_sd.DiffusionModelConfig
-import com.dark.ai_sd.DiffusionRuntimeConfig
 import com.dark.ai_sd.RuntimeSetupState
-import com.dark.ai_sd.StableDiffusionManager
 import com.dark.ai_sd.UpscaleState
 import com.dark.download_manager.HxdManager
 import com.dark.download_manager.HxdState
@@ -16,6 +13,7 @@ import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.data.SocBucket
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.service.inference.InferenceClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -30,7 +28,6 @@ import javax.inject.Singleton
 class ImageGenManager @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
-    private val sdk by lazy { StableDiffusionManager.getInstance(context) }
     private val initLock = Mutex()
     @Volatile private var initialized = false
     @Volatile private var loadedModelId: String = ""
@@ -79,11 +76,11 @@ class ImageGenManager @Inject constructor(
             "https://huggingface.co/Void2377/toon-neuron-storage/resolve/main/qnnlibs.tar.xz?download=true"
     }
 
-    val backendState: StateFlow<DiffusionBackendState> get() = sdk.diffusionBackendState
-    val generationState: StateFlow<DiffusionGenerationState> get() = sdk.diffusionGenerationState
-    val isGenerating: StateFlow<Boolean> get() = sdk.isGenerating
-    val upscaleState: StateFlow<UpscaleState> get() = sdk.upscaleState
-    val runtimeSetupState: StateFlow<RuntimeSetupState> get() = sdk.runtimeSetupState
+    val backendState: StateFlow<DiffusionBackendState> get() = InferenceClient.sdBackendState
+    val generationState: StateFlow<DiffusionGenerationState> get() = InferenceClient.sdGenerationState
+    val isGenerating: StateFlow<Boolean> get() = InferenceClient.sdIsGenerating
+    val upscaleState: StateFlow<UpscaleState> get() = InferenceClient.sdUpscaleState
+    val runtimeSetupState: StateFlow<RuntimeSetupState> get() = InferenceClient.sdRuntimeSetupState
 
     suspend fun ensureRuntime() {
         initLock.withLock {
@@ -93,23 +90,24 @@ class ImageGenManager @Inject constructor(
                 "Runtime archive missing — call downloadRuntime() first"
             }
             File(context.filesDir, RUNTIME_DIR_NAME).mkdirs()
-            sdk.initialize(
-                DiffusionRuntimeConfig(
-                    runtimeDir = RUNTIME_DIR_NAME,
-                    tarXzSourcePath = archive.absolutePath,
-                ),
+            val ok = InferenceClient.sdEnsureRuntime(
+                runtimeDir = RUNTIME_DIR_NAME,
+                tarXzSourcePath = archive.absolutePath,
             )
+            if (!ok) {
+                throw IllegalStateException("SD runtime init failed in :inference")
+            }
             initialized = true
         }
     }
 
     suspend fun loadDiffusionModel(model: ModelInfo, width: Int, height: Int): Boolean {
         ensureRuntime()
-        if (loadedModelId == model.id) return sdk.isBackendRunning()
+        if (loadedModelId == model.id) return InferenceClient.sdIsBackendRunning()
         val runOnCpu = !SocBucket.supportsNpu()
         val isSdxl = looksSdxl(model)
         val effectivePath = liftToModelDir(File(model.path)).absolutePath
-        val cfg = DiffusionModelConfig(
+        val ok = InferenceClient.sdLoadDiffusionModel(
             name = model.name,
             modelDir = effectivePath,
             textEmbeddingSize = if (isSdxl) 768 else 768,
@@ -117,8 +115,9 @@ class ImageGenManager @Inject constructor(
             useCpuClip = !runOnCpu,
             isPony = false,
             safetyMode = false,
+            width = width,
+            height = height,
         )
-        val ok = sdk.loadModel(cfg, width, height)
         if (ok) loadedModelId = model.id
         return ok
     }
@@ -144,19 +143,13 @@ class ImageGenManager @Inject constructor(
      * noise output we see when 1024² is requested on a `min` variant —
      * use this list to gate the UI.
      */
-    fun getSupportedResolutions(model: ModelInfo): List<Pair<Int, Int>> {
+    suspend fun getSupportedResolutions(model: ModelInfo): List<Pair<Int, Int>> {
         val dir = liftToModelDir(File(model.path))
         val (baseW, baseH) = inferBaseResolution(dir)
-        return sdk.getSupportedResolutions(
-            modelDir = dir.absolutePath,
-            baseWidth = baseW,
-            baseHeight = baseH,
-        )
+        return InferenceClient.sdGetSupportedResolutions(dir.absolutePath, baseW, baseH)
     }
 
     private fun inferBaseResolution(modelDir: File): Pair<Int, Int> {
-        // xororz / Mr-J-369 encode base size as `output_<N>` in the dir
-        // chain — usually one level above qnn_models_<variant>/.
         val pattern = Regex("output_(\\d+)")
         var cur: File? = modelDir
         repeat(4) {
@@ -190,11 +183,7 @@ class ImageGenManager @Inject constructor(
     suspend fun loadUpscaler(model: ModelInfo): Boolean {
         ensureRuntime()
         val isMnnFile = model.path.endsWith(".mnn", ignoreCase = true)
-        // QNN .bin paths now work standalone — the AAR's nativeLoadUpscaler
-        // calls sd_pipeline::loadStandaloneQnnUpscaler which builds the
-        // QnnModel + initializeQnnApp inline (mirrors LocalDream's per-request
-        // /upscale handler).
-        return sdk.loadUpscaler(
+        return InferenceClient.sdLoadUpscaler(
             modelPath = model.path,
             useMnn = isMnnFile,
             useOpenCL = !isMnnFile,
@@ -202,32 +191,32 @@ class ImageGenManager @Inject constructor(
     }
 
     fun generate(params: DiffusionGenerationParams) {
-        sdk.generateImage(params)
+        InferenceClient.sdGenerate(params)
     }
 
     fun cancelGeneration() {
-        sdk.cancelGeneration()
+        InferenceClient.sdCancelGeneration()
     }
 
     fun resetGenerationState() {
-        sdk.resetGenerationState()
+        InferenceClient.sdResetGenerationState()
     }
 
     fun upscale(bitmap: Bitmap) {
-        sdk.upscaleImage(bitmap)
+        InferenceClient.sdUpscale(bitmap)
     }
 
     fun stop() {
-        sdk.stopBackend()
+        InferenceClient.sdStop()
         loadedModelId = ""
     }
 
     fun cleanup() {
-        sdk.cleanup()
+        InferenceClient.sdCleanup()
         loadedModelId = ""
     }
 
-    fun isBackendRunning(): Boolean = sdk.isBackendRunning()
+    fun isBackendRunning(): Boolean = InferenceClient.sdIsBackendRunning()
 
     fun activeModelId(): String = loadedModelId
 
