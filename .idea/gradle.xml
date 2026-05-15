@@ -15,6 +15,12 @@
             <option value="$PROJECT_DIR$/hxs_encryptor" />
             <option value="$PROJECT_DIR$/native-server" />
             <option value="$PROJECT_DIR$/networking" />
+            <option value="$PROJECT_DIR$/plugin-api" />
+            <option value="$PROJECT_DIR$/plugin-exc" />
+            <option value="$PROJECT_DIR$/plugins" />
+            <option value="$PROJECT_DIR$/plugins/counter" />
+            <option value="$PROJECT_DIR$/plugins/expense" />
+            <option value="$PROJECT_DIR$/plugins/notes" />
           </set>
         </option>
       </GradleProjectSettings>
