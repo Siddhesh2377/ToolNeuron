@@ -29,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +39,8 @@ import com.dark.tool_neuron.model.ChatMessage
 import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.ui.components.markdown.MarkdownText
 import com.dark.tool_neuron.ui.components.markdown.ThinkingBlock
+import com.dark.tool_neuron.ui.icons.TnIcons
+import androidx.compose.material3.Icon
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 
@@ -62,35 +65,88 @@ fun MessageBubble(
     onSpeakToggle: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // Archived (folded into a CompactSummary) — render the regular bubble
+    // but visually muted and stripped of action buttons. Still searchable
+    // and scrollable as conversation history.
+    val archived = message.archivedByCompactId != null
+    val effectiveModifier = if (archived) modifier.alpha(0.45f) else modifier
     when {
+        message.kind == MessageKind.CompactSummary ->
+            CompactSummaryCard(message = message, modifier = modifier)
         message.kind == MessageKind.ToolResult || message.role == ROLE_TOOL ->
-            ToolResultBubble(message = message, modifier = modifier)
+            ToolResultBubble(message = message, modifier = effectiveModifier)
         message.role == ROLE_USER ->
             UserBubble(
                 message = message,
-                canDelete = canDelete,
-                canEdit = canEdit,
-                canFork = canFork,
+                canDelete = canDelete && !archived,
+                canEdit = canEdit && !archived,
+                canFork = canFork && !archived,
                 onDelete = onDelete,
                 onEdit = { newContent -> onEdit(message.id, newContent) },
                 onFork = onFork,
-                modifier = modifier,
+                modifier = effectiveModifier,
             )
         else ->
             AssistantBubble(
                 message = message,
-                canRegenerate = canRegenerate,
-                canDelete = canDelete,
-                canFork = canFork,
+                canRegenerate = canRegenerate && !archived,
+                canDelete = canDelete && !archived,
+                canFork = canFork && !archived,
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
                 onFork = onFork,
                 isSpeaking = isSpeaking,
                 isSpeakLoading = isSpeakLoading,
-                canSpeak = canSpeak,
+                canSpeak = canSpeak && !archived,
                 onSpeakToggle = onSpeakToggle,
-                modifier = modifier,
+                modifier = effectiveModifier,
             )
+    }
+}
+
+@Composable
+private fun CompactSummaryCard(
+    message: ChatMessage,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        shape = tnShapes.lg,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+        modifier = modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(
+                horizontal = dimens.spacingMd,
+                vertical = dimens.spacingSm,
+            ),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Icon(
+                    imageVector = TnIcons.Sparkles,
+                    contentDescription = null,
+                    modifier = Modifier.size(dimens.iconSm),
+                    tint = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "Conversation summary",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            }
+            SelectionContainer {
+                MarkdownText(
+                    text = message.content,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+        }
     }
 }
 
