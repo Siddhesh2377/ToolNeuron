@@ -22,8 +22,6 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.ui.screens.credits.CreditsScreen
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesScreen
-import com.dark.tool_neuron.ui.screens.document.DocumentViewerScreen
-import com.dark.tool_neuron.ui.screens.documents.DocumentsScreen
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
@@ -40,7 +38,6 @@ import com.dark.tool_neuron.ui.screens.guide.GuideChatScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideEntryKeys
 import com.dark.tool_neuron.ui.screens.guide.GuideModelsScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideRagScreen
-import com.dark.tool_neuron.ui.screens.guide.GuideResearchScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideSecurityScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideServerScreen
 import com.dark.tool_neuron.ui.screens.guide.GuideThemesScreen
@@ -116,28 +113,7 @@ fun TNavigation(
                 actionWindowExpanded = actionWindowExpanded,
                 onActionWindowDismiss = onActionWindowDismiss,
                 onOpenModelManager = { navController.navigate(NavScreens.ModelManager.route) },
-                onOpenResearchDocument = { docId ->
-                    navController.navigate(NavScreens.DocumentViewer.routeFor(docId))
-                },
                 viewModel = homeViewModel,
-            )
-        }
-        composable(NavScreens.Documents.route) {
-            DocumentsScreen(
-                innerPadding = innerPadding,
-                onOpenDocument = { docId ->
-                    navController.navigate(NavScreens.DocumentViewer.routeFor(docId))
-                },
-            )
-        }
-        composable(
-            route = NavScreens.DocumentViewer.route,
-            arguments = listOf(navArgument(NavScreens.DocumentViewer.ARG_DOC_ID) { type = NavType.StringType }),
-        ) { backStack ->
-            val docId = backStack.arguments?.getString(NavScreens.DocumentViewer.ARG_DOC_ID).orEmpty()
-            DocumentViewerScreen(
-                docId = docId,
-                innerPadding = innerPadding,
             )
         }
         composable(NavScreens.TermsConditions.route) {
@@ -238,7 +214,6 @@ fun TNavigation(
                         GuideEntryKeys.SECURITY -> NavScreens.GuideSecurity.route
                         GuideEntryKeys.THEMES -> NavScreens.GuideThemes.route
                         GuideEntryKeys.SERVER -> NavScreens.GuideServer.route
-                        GuideEntryKeys.RESEARCH -> NavScreens.GuideResearch.route
                         GuideEntryKeys.PLUGINS -> NavScreens.GuidePlugins.route
                         GuideEntryKeys.IMAGES -> NavScreens.GuideImages.route
                         else -> null
@@ -255,7 +230,6 @@ fun TNavigation(
         composable(NavScreens.GuideSecurity.route) { GuideSecurityScreen(innerPadding) }
         composable(NavScreens.GuideThemes.route) { GuideThemesScreen(innerPadding) }
         composable(NavScreens.GuideServer.route) { GuideServerScreen(innerPadding) }
-        composable(NavScreens.GuideResearch.route) { GuideResearchScreen(innerPadding) }
         composable(NavScreens.GuidePlugins.route) { GuidePluginsScreen(innerPadding) }
         composable(NavScreens.GuideImages.route) { GuideImagesScreen(innerPadding) }
         composable(NavScreens.PluginHub.route) {
@@ -274,15 +248,6 @@ fun TNavigation(
             SettingsSectionScreen(
                 innerPadding = innerPadding,
                 sectionId = SettingsViewModel.SECTION_CHAT_RAG,
-                viewModel = viewModel,
-                onNavigate = { route -> navController.navigate(route) },
-            )
-        }
-        composable(NavScreens.SettingsResearch.route) {
-            val viewModel: SettingsViewModel = hiltViewModel()
-            SettingsSectionScreen(
-                innerPadding = innerPadding,
-                sectionId = SettingsViewModel.SECTION_RESEARCH,
                 viewModel = viewModel,
                 onNavigate = { route -> navController.navigate(route) },
             )
@@ -317,6 +282,15 @@ fun TNavigation(
             SettingsSectionScreen(
                 innerPadding = innerPadding,
                 sectionId = SettingsViewModel.SECTION_PERFORMANCE,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsModel.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_MODEL,
                 viewModel = viewModel,
                 onNavigate = { route -> navController.navigate(route) },
             )

@@ -129,10 +129,6 @@ private fun AppScaffoldInner() {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.ServerScreen.route)
                     },
-                    onNavigateToDocuments = {
-                        scope.launch { drawerState.close() }
-                        navController.navigate(NavScreens.Documents.route)
-                    },
                     onNavigateToCredits = {
                         scope.launch { drawerState.close() }
                         navController.navigate(NavScreens.Credits.route)
@@ -163,8 +159,6 @@ private fun AppScaffoldInner() {
                     },
                     onBack = { navController.popBackStack() },
                     onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
-                    onNavigateToGuide = { navController.navigate(NavScreens.AppGuide.route) },
-                    onNavigateToModelManager = { navController.navigate(NavScreens.ModelManager.route) },
                 )
             },
             bottomBar = {

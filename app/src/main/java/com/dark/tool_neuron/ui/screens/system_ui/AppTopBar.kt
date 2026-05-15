@@ -4,8 +4,6 @@ import androidx.compose.runtime.Composable
 import com.dark.tool_neuron.model.DownloadProgress
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.screens.dev_notes.DevNotesTopBar
-import com.dark.tool_neuron.ui.screens.document.DocumentViewerTopBar
-import com.dark.tool_neuron.ui.screens.documents.DocumentsTopBar
 import com.dark.tool_neuron.ui.screens.guide.GuideTopBar
 import com.dark.tool_neuron.ui.screens.home_screen.HomeScreenTopbar
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskTopBar
@@ -28,8 +26,6 @@ fun AppTopBar(
     onMenuClick: () -> Unit = {},
     onBack: () -> Unit = {},
     onNavigateToStore: () -> Unit = {},
-    onNavigateToGuide: () -> Unit = {},
-    onNavigateToModelManager: () -> Unit = {},
 ) {
     when (currentRoute) {
         NavScreens.HomeScreen.route -> HomeScreenTopbar(
@@ -39,8 +35,6 @@ fun AppTopBar(
             onToggle = onActionWindowToggle,
             onMenuClick = onMenuClick,
             onStoreClick = onNavigateToStore,
-            onGuideClick = onNavigateToGuide,
-            onModelManagerClick = onNavigateToModelManager,
         )
         NavScreens.TermsConditions.route -> TermsConditionsTopBar()
         NavScreens.DevNotes.route -> DevNotesTopBar()
@@ -57,7 +51,6 @@ fun AppTopBar(
         NavScreens.GuideSecurity.route -> GuideTopBar(title = "Privacy and lock", onBack = onBack)
         NavScreens.GuideThemes.route -> GuideTopBar(title = "Themes", onBack = onBack)
         NavScreens.GuideServer.route -> GuideTopBar(title = "Remote Server", onBack = onBack)
-        NavScreens.GuideResearch.route -> GuideTopBar(title = "Research", onBack = onBack)
         NavScreens.GuidePlugins.route -> GuideTopBar(title = "Plugins", onBack = onBack)
         NavScreens.GuideImages.route -> GuideTopBar(title = "Image generation", onBack = onBack)
         NavScreens.SetupTheme.route -> SetupScreenTopBar()
@@ -68,11 +61,6 @@ fun AppTopBar(
             onBack = onBack,
             title = "Chat & RAG",
             subtitle = "Defaults for indexing and retrieval",
-        )
-        NavScreens.SettingsResearch.route -> SettingsTopBar(
-            onBack = onBack,
-            title = "Research",
-            subtitle = "Multi-iteration web research",
         )
         NavScreens.SettingsVoice.route -> SettingsTopBar(
             onBack = onBack,
@@ -99,6 +87,11 @@ fun AppTopBar(
             title = "Performance",
             subtitle = "Thread placement and decode priority",
         )
+        NavScreens.SettingsModel.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Model",
+            subtitle = "Performance and per-model configuration",
+        )
         NavScreens.SettingsPlugins.route -> SettingsTopBar(
             onBack = onBack,
             title = "Plugins",
@@ -114,12 +107,9 @@ fun AppTopBar(
         NavScreens.ServerScreen.route -> ServerTopBar()
         NavScreens.PluginInstall.route -> PluginInstallTopBar(onBack = onBack)
         NavScreens.HfExplorer.route -> GuideTopBar(title = "HF Explorer", onBack = onBack)
-        NavScreens.Documents.route -> DocumentsTopBar(onBack = onBack)
         else -> {
             if (currentRoute?.startsWith("hf_repo/") == true) {
                 GuideTopBar(title = "Repository", onBack = onBack)
-            } else if (currentRoute?.startsWith("document/") == true) {
-                DocumentViewerTopBar(title = "Document", onBack = onBack)
             } else if (currentRoute?.startsWith("model_config/") == true) Unit
             else Unit
         }
