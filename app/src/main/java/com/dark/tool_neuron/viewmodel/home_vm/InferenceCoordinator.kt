@@ -10,6 +10,7 @@ import com.dark.tool_neuron.model.Citation
 import com.dark.tool_neuron.model.MessageKind
 import com.dark.tool_neuron.model.MemoryMetrics
 import com.dark.tool_neuron.model.TextMetrics
+import com.dark.tool_neuron.model.WebSearchUiState
 import com.dark.tool_neuron.repo.ChatRepository
 import com.dark.tool_neuron.repo.RagAugmentation
 import com.dark.tool_neuron.repo.RagChunk
@@ -330,14 +331,25 @@ class InferenceCoordinator @Inject constructor(
             }
             when (msg.role) {
                 ROLE_USER, ROLE_ASSISTANT, ROLE_TOOL -> {
-                    val content = if (msg.id == vlmLastUserId && marker.isNotEmpty()) {
+                    // Web-search assistant cards carry the user's query in
+                    // msg.content (used by the card Header). The actual
+                    // synthesized answer lives in msg.webSearchState. The LLM
+                    // must see the answer, not the echoed query. Skip the
+                    // card entirely if the run never produced one (in-flight,
+                    // cancelled, failed) so the model doesn't get a junk
+                    // assistant turn.
+                    val effectiveContent = if (msg.webSearchRunId != null) {
+                        val answer = WebSearchUiState.fromJson(msg.webSearchState).answer.trim()
+                        if (answer.isEmpty()) return@forEach
+                        answer
+                    } else if (msg.id == vlmLastUserId && marker.isNotEmpty()) {
                         if (msg.content.isBlank()) marker else "$marker\n${msg.content}"
                     } else {
                         msg.content
                     }
                     arr.put(JSONObject().apply {
                         put("role", msg.role)
-                        put("content", content)
+                        put("content", effectiveContent)
                         if (msg.role == ROLE_TOOL && msg.modelName.isNotEmpty()) {
                             put("name", msg.modelName)
                         }
