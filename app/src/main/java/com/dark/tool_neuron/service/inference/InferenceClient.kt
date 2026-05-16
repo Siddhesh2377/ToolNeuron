@@ -80,6 +80,12 @@ object InferenceClient {
     private val _isModelLoaded = MutableStateFlow(false)
     val isModelLoaded: StateFlow<Boolean> = _isModelLoaded.asStateFlow()
 
+    // Set when the user taps Stop on the foreground notification. The next
+    // onServiceDisconnected / onBindingDied must NOT auto-rebind, otherwise
+    // BIND_AUTO_CREATE makes Android respawn :inference the moment we killed
+    // it. Consumed on the next disconnect callback.
+    @Volatile private var userStopRequested: Boolean = false
+
     private val _contextUsage = MutableStateFlow(0f)
     val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
 
@@ -324,9 +330,14 @@ object InferenceClient {
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
             _isVlmLoaded.value = false
-            _state.value = ServiceState.Crashed("Service process died")
+            _state.value = if (userStopRequested) ServiceState.Disconnected else ServiceState.Crashed("Service process died")
             isBinding = false
             failPendingLoads("Inference service crashed during model load")
+            if (userStopRequested) {
+                userStopRequested = false
+                Log.i(TAG, "Service disconnected — user-initiated stop, not rebinding")
+                return
+            }
             Log.w(TAG, "Service disconnected — will auto-rebind")
             rebind()
         }
@@ -337,9 +348,14 @@ object InferenceClient {
             _isTtsLoaded.value = false
             _isSttLoaded.value = false
             _isVlmLoaded.value = false
-            _state.value = ServiceState.Crashed("Service binding died")
+            _state.value = if (userStopRequested) ServiceState.Disconnected else ServiceState.Crashed("Service binding died")
             isBinding = false
             failPendingLoads("Inference service binding died")
+            if (userStopRequested) {
+                userStopRequested = false
+                Log.i(TAG, "Binding died — user-initiated stop, not rebinding")
+                return
+            }
             Log.e(TAG, "Binding died — rebinding")
             rebind()
         }
@@ -373,6 +389,20 @@ object InferenceClient {
         _isSttLoaded.value = false
         _isVlmLoaded.value = false
         isBinding = false
+    }
+
+    /**
+     * Entry point from the foreground notification's Stop button. Tears the
+     * binding down first so BIND_AUTO_CREATE can't respawn :inference the
+     * moment the service kills itself, then forwards ACTION_STOP to the
+     * service so it can run its unload-everything teardown before exit.
+     */
+    fun requestUserStop(context: Context) {
+        appContext = context.applicationContext
+        userStopRequested = true
+        unbind()
+        val intent = Intent(context, InferenceService::class.java).setAction(InferenceService.ACTION_STOP)
+        try { context.startService(intent) } catch (_: Exception) {}
     }
 
     private fun performBind() {

@@ -71,6 +71,10 @@
             android:foregroundServiceType="dataSync"
             android:stopWithTask="false" />
 
+        <receiver
+            android:name=".service.inference.InferenceStopReceiver"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.exports"

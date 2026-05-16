@@ -274,6 +274,7 @@ class InferenceService : Service() {
             unloadEverything()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
+            killSelfProcess()
         }
         return START_NOT_STICKY
     }
@@ -283,6 +284,19 @@ class InferenceService : Service() {
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
         super.onTaskRemoved(rootIntent)
+        killSelfProcess()
+    }
+
+    /**
+     * After unloadEverything+stopSelf, bound clients can still be holding the
+     * binder alive (foreground service + active binding outlive stopSelf).
+     * Killing the process is the only way to (a) force onServiceDisconnected
+     * on every client — which is what flips InferenceClient._isModelLoaded
+     * back to false so the pill stops lying — and (b) actually free the model
+     * pages, since the app process re-binds will spawn a fresh :inference.
+     */
+    private fun killSelfProcess() {
+        Process.killProcess(Process.myPid())
     }
 
     override fun onDestroy() {
@@ -349,6 +363,12 @@ class InferenceService : Service() {
 
                     if (engine.isLoaded) engine.unload()
                     val config = parseConfig(configJson)
+                    // Stash the user's thread-mode preference BEFORE load so the
+                    // single apply_thread_mode that runs during ctx construction
+                    // picks the right pool. Without this, load would build the
+                    // pool for the default mode (1) and a post-load setThreadMode
+                    // would tear it down and rebuild — wasting ~50 ms per load.
+                    engine.setThreadMode(config.optInt("threadMode", 1))
                     val success = engine.load(
                         path = modelPath,
                         contextSize = config.optInt("contextSize", 4096),
@@ -357,7 +377,6 @@ class InferenceService : Service() {
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
-                        engine.setThreadMode(config.optInt("threadMode", 1))
                         applySamplingFromConfig(config)
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
@@ -384,6 +403,9 @@ class InferenceService : Service() {
                 try {
                     if (engine.isLoaded) engine.unload()
                     val config = parseConfig(configJson)
+                    // See loadModel above — pre-set thread mode to avoid the
+                    // post-load threadpool rebuild.
+                    engine.setThreadMode(config.optInt("threadMode", 1))
                     val success = engine.loadFromFd(
                         fd = fd,
                         contextSize = config.optInt("contextSize", 4096),
@@ -392,7 +414,6 @@ class InferenceService : Service() {
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
                     )
                     if (success) {
-                        engine.setThreadMode(config.optInt("threadMode", 1))
                         applySamplingFromConfig(config)
                         updateNotification("Model loaded")
                         safeCallback(callback) { it.onSuccess(engine.getModelInfoJson() ?: "{}") }
@@ -1264,10 +1285,14 @@ class InferenceService : Service() {
     }
 
     private fun buildNotification(text: String): Notification {
-        val stopPi = PendingIntent.getService(
+        // Route Stop through :app's BroadcastReceiver, NOT directly into this
+        // service. The receiver unbinds the InferenceClient first so the
+        // BIND_AUTO_CREATE binding can't respawn :inference the instant we
+        // kill ourselves, then forwards ACTION_STOP back here for teardown.
+        val stopPi = PendingIntent.getBroadcast(
             this,
             1,
-            Intent(this, InferenceService::class.java).setAction(ACTION_STOP),
+            Intent(this, InferenceStopReceiver::class.java).setAction(InferenceStopReceiver.ACTION_STOP),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(this, CHANNEL_ID)
