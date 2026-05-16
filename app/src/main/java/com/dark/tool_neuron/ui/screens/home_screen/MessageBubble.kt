@@ -72,7 +72,12 @@ fun MessageBubble(
     val effectiveModifier = if (archived) modifier.alpha(0.45f) else modifier
     when {
         message.kind == MessageKind.CompactSummary ->
-            CompactSummaryCard(message = message, modifier = modifier)
+            CompactSummaryCard(
+                message = message,
+                canFork = canFork,
+                onFork = onFork,
+                modifier = modifier,
+            )
         message.kind == MessageKind.ToolResult || message.role == ROLE_TOOL ->
             ToolResultBubble(message = message, modifier = effectiveModifier)
         message.role == ROLE_USER ->
@@ -80,7 +85,7 @@ fun MessageBubble(
                 message = message,
                 canDelete = canDelete && !archived,
                 canEdit = canEdit && !archived,
-                canFork = canFork && !archived,
+                canFork = canFork,
                 onDelete = onDelete,
                 onEdit = { newContent -> onEdit(message.id, newContent) },
                 onFork = onFork,
@@ -91,9 +96,11 @@ fun MessageBubble(
                 message = message,
                 canRegenerate = canRegenerate && !archived,
                 canDelete = canDelete && !archived,
-                canFork = canFork && !archived,
+                canEdit = canEdit && !archived,
+                canFork = canFork,
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
+                onEdit = { newContent -> onEdit(message.id, newContent) },
                 onFork = onFork,
                 isSpeaking = isSpeaking,
                 isSpeakLoading = isSpeakLoading,
@@ -107,46 +114,64 @@ fun MessageBubble(
 @Composable
 private fun CompactSummaryCard(
     message: ChatMessage,
+    canFork: Boolean,
+    onFork: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
-    Surface(
-        shape = tnShapes.lg,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+    Column(
         modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
     ) {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = dimens.spacingMd,
-                vertical = dimens.spacingSm,
-            ),
-            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        Surface(
+            shape = tnShapes.lg,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.10f),
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            Column(
+                modifier = Modifier.padding(
+                    horizontal = dimens.spacingMd,
+                    vertical = dimens.spacingSm,
+                ),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
             ) {
-                Icon(
-                    imageVector = TnIcons.Sparkles,
-                    contentDescription = null,
-                    modifier = Modifier.size(dimens.iconSm),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "Conversation summary",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            SelectionContainer {
-                MarkdownText(
-                    text = message.content,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                ) {
+                    Icon(
+                        imageVector = TnIcons.Sparkles,
+                        contentDescription = null,
+                        modifier = Modifier.size(dimens.iconSm),
+                        tint = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "Conversation summary",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                }
+                SelectionContainer {
+                    MarkdownText(
+                        text = message.content,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
             }
         }
+        MessageActions(
+            message = message,
+            canRegenerate = false,
+            canDelete = false,
+            canEdit = false,
+            canFork = canFork,
+            onRegenerate = {},
+            onDelete = {},
+            onEdit = {},
+            onFork = onFork,
+        )
     }
 }
 
@@ -299,6 +324,7 @@ private fun UserBubble(
     if (editing) {
         EditMessageDialog(
             initialText = message.content,
+            confirmLabel = "Save & regenerate",
             onConfirm = { newContent ->
                 editing = false
                 onEdit(newContent)
@@ -311,6 +337,7 @@ private fun UserBubble(
 @Composable
 private fun EditMessageDialog(
     initialText: String,
+    confirmLabel: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -331,7 +358,7 @@ private fun EditMessageDialog(
             TextButton(
                 onClick = { onConfirm(text) },
                 enabled = text.trim().isNotEmpty() && text.trim() != initialText.trim(),
-            ) { Text("Save & regenerate") }
+            ) { Text(confirmLabel) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
@@ -344,9 +371,11 @@ private fun AssistantBubble(
     message: ChatMessage,
     canRegenerate: Boolean,
     canDelete: Boolean,
+    canEdit: Boolean,
     canFork: Boolean,
     onRegenerate: () -> Unit,
     onDelete: (String) -> Unit,
+    onEdit: (String) -> Unit,
     onFork: (String) -> Unit,
     isSpeaking: Boolean,
     isSpeakLoading: Boolean,
@@ -355,6 +384,7 @@ private fun AssistantBubble(
     modifier: Modifier = Modifier,
 ) {
     val dimens = LocalDimens.current
+    var editing by remember(message.id) { mutableStateOf(false) }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -385,11 +415,11 @@ private fun AssistantBubble(
                 message = message,
                 canRegenerate = canRegenerate,
                 canDelete = canDelete,
-                canEdit = false,
+                canEdit = canEdit,
                 canFork = canFork,
                 onRegenerate = onRegenerate,
                 onDelete = onDelete,
-                onEdit = {},
+                onEdit = { editing = true },
                 onFork = onFork,
                 isSpeaking = isSpeaking,
                 isSpeakLoading = isSpeakLoading,
@@ -397,6 +427,18 @@ private fun AssistantBubble(
                 onSpeakToggle = onSpeakToggle,
             )
         }
+    }
+
+    if (editing) {
+        EditMessageDialog(
+            initialText = message.content,
+            confirmLabel = "Save",
+            onConfirm = { newContent ->
+                editing = false
+                onEdit(newContent)
+            },
+            onDismiss = { editing = false },
+        )
     }
 }
 

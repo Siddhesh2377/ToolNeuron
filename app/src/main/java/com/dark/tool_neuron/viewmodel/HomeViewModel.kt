@@ -804,7 +804,7 @@ class HomeViewModel @Inject constructor(
         selectChat(newChat.id)
     }
 
-    fun editUserMessage(messageId: String, newContent: String) {
+    fun editMessage(messageId: String, newContent: String) {
         if (_isGenerating.value) return
         val chatId = _currentChatId.value ?: return
         val trimmed = newContent.trim()
@@ -812,20 +812,22 @@ class HomeViewModel @Inject constructor(
 
         val all = chatRepo.getMessages(chatId)
         val target = all.firstOrNull { it.id == messageId } ?: return
-        if (target.role != ROLE_USER) return
         if (target.content == trimmed) return
+        if (target.archivedByCompactId != null) return
 
         chatRepo.updateMessage(target.copy(content = trimmed))
 
-        all.filter { it.timestamp > target.timestamp }
-            .forEach { chatRepo.deleteMessage(it.id) }
-
-        _messages.value = chatRepo.getMessages(chatId)
-
-        if (activeModel.value != null) {
-            runGeneration(chatId, isFirstTurn = false, userText = trimmed)
+        if (target.role == ROLE_USER) {
+            all.filter { it.timestamp > target.timestamp }
+                .forEach { chatRepo.deleteMessage(it.id) }
+            _messages.value = chatRepo.getMessages(chatId)
+            if (activeModel.value != null) {
+                runGeneration(chatId, isFirstTurn = false, userText = trimmed)
+            } else {
+                _loadModelWindow.value = true
+            }
         } else {
-            _loadModelWindow.value = true
+            _messages.value = chatRepo.getMessages(chatId)
         }
     }
 

@@ -103,7 +103,7 @@ fun HomeScreen(
             onSpeakToggle = viewModel::toggleSpeakMessage,
             onRegenerate = viewModel::regenerateLast,
             onDelete = viewModel::deleteMessage,
-            onEditUserMessage = viewModel::editUserMessage,
+            onEditMessage = viewModel::editMessage,
             onForkFromMessage = viewModel::forkFromMessage,
             onCancelWebSearch = viewModel::cancelWebSearch,
             retrievalLabel = retrievalLabel,
