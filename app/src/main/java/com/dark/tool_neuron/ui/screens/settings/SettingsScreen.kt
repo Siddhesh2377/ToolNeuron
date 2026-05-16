@@ -151,6 +151,12 @@ private val SETTINGS_LANDING_CARDS = listOf(
         icon = TnIcons.Shield,
     ),
     LandingCard(
+        route = NavScreens.SettingsDiagnostics.route,
+        title = "Diagnostics",
+        description = "Recent errors, crashes, exportable bundle",
+        icon = TnIcons.AlertTriangle,
+    ),
+    LandingCard(
         route = NavScreens.Storage.route,
         title = "Storage",
         description = "Disk usage by category",

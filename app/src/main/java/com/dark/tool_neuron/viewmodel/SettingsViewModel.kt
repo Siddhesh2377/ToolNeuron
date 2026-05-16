@@ -1,6 +1,7 @@
 package com.dark.tool_neuron.viewmodel
 
 import android.content.Context
+import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.gguf_lib.ImageQuality
@@ -14,6 +15,7 @@ import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
 import com.dark.tool_neuron.voice.VoiceModelManager
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
@@ -164,6 +166,7 @@ class SettingsViewModel @Inject constructor(
         performanceSection(threadMode),
         pluginsSection(pluginOnnxEp, pluginCount),
         privacySection(lockEnabled, panicPinSet),
+        diagnosticsSection(),
         aboutSection(),
     )
 
@@ -614,6 +617,26 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    private fun diagnosticsSection(): SettingsSection = SettingsSection(
+        id = SECTION_DIAGNOSTICS,
+        title = "Diagnostics",
+        description = "Inspect recent errors and crash reports.",
+        icon = TnIcons.AlertTriangle,
+        items = listOf(
+            SettingsItem.Action(
+                id = ID_OPEN_CRASH_REPORTS,
+                title = "Crash reports",
+                subtitle = "Recent errors, native crashes, and the raw JSON bundle.",
+                icon = TnIcons.AlertTriangle,
+                onClick = {
+                    val intent = Intent(context, CrashReportActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    runCatching { context.startActivity(intent) }
+                },
+            ),
+        ),
+    )
+
     private fun aboutSection(): SettingsSection = SettingsSection(
         id = "about",
         title = "About",
@@ -663,6 +686,7 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_MODEL = "model"
         const val SECTION_PLUGINS = "plugins"
         const val SECTION_PRIVACY = "privacy"
+        const val SECTION_DIAGNOSTICS = "diagnostics"
         const val SECTION_ABOUT = "about"
 
         private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
@@ -676,6 +700,7 @@ class SettingsViewModel @Inject constructor(
         private const val ID_THREAD_MODE = "thread_mode"
         private const val ID_OPEN_PERFORMANCE = "open_performance"
         private const val ID_OPEN_MODEL_EDITOR = "open_model_editor"
+        private const val ID_OPEN_CRASH_REPORTS = "open_crash_reports"
         private const val ID_PLUGINS_COUNT = "plugins_count"
         private const val ID_PLUGIN_ONNX_EP = "plugin_onnx_ep"
         private val CLEARABLE_CHOICE_IDS = setOf(
