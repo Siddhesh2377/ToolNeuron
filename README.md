@@ -4,7 +4,7 @@ On-device AI for Android. No Google Play services, no telemetry, no cloud. Model
 
 The point isn't to clone ChatGPT into your pocket. It's to give you a chat surface, a RAG pipeline, a voice loop, and a plugin runtime that all run with the radio off if you want them to.
 
-[Repo](https://github.com/Siddhesh2377/ToolNeuron) · [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Issues](https://github.com/Siddhesh2377/ToolNeuron/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
+[Play Store](https://play.google.com/store/apps/details?id=com.dark.tool_neuron) · [Repo](https://github.com/Siddhesh2377/ToolNeuron) · [Releases](https://github.com/Siddhesh2377/ToolNeuron/releases) · [Issues](https://github.com/Siddhesh2377/ToolNeuron/issues) · [Discord](https://discord.gg/mVPwHDhrAP)
 
 ## What it does
 
@@ -123,4 +123,4 @@ Missing keys fall back to an unsigned release so the dev flow stays open. `compi
 
 ---
 
-Built by [Siddhesh Sonar](https://github.com/Siddhesh2377).
+Built by [Siddhesh Sonar](https://github.com/Siddhesh2377). Come hang on [Discord](https://discord.gg/mVPwHDhrAP).
