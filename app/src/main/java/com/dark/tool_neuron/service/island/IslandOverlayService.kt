@@ -25,8 +25,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
+import androidx.compose.ui.util.lerp
 
 class IslandOverlayService : Service() {
 
@@ -88,9 +90,10 @@ class IslandOverlayService : Service() {
         serviceScope.launch {
             animY.snapTo(pos.offsetYDp)
         }
+        val (initialW, initialH) = sizeForProgress(0f, density)
         return WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            initialW,
+            initialH,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
@@ -100,7 +103,15 @@ class IslandOverlayService : Service() {
             x = 0
             y = (pos.offsetYDp * density).toInt()
             title = IslandGeometry.OVERLAY_WINDOW_TITLE
+            windowAnimations = 0
         }
+    }
+
+    private fun sizeForProgress(progress: Float, density: Float): Pair<Int, Int> {
+        val pad = IslandGeometry.OUTER_PADDING_DP * 2f
+        val wDp = lerp(IslandGeometry.PILL_W_DP, IslandGeometry.CARD_W_DP, progress) + pad
+        val hDp = lerp(IslandGeometry.PILL_H_DP, IslandGeometry.CARD_H_DP, progress) + pad
+        return (wDp * density).toInt() to (hDp * density).toInt()
     }
 
     private fun startPlacement() {
@@ -118,20 +129,26 @@ class IslandOverlayService : Service() {
                 }
             }
             launch {
-                snapshotFlow { animY.value }.collect { y ->
-                    applyLayoutParams(y)
+                combine(
+                    snapshotFlow { animY.value },
+                    IslandPositionStore.morphProgress,
+                ) { y, p -> y to p }.collect { (y, p) ->
+                    applyLayoutParams(y, p)
                 }
             }
         }
     }
 
-    private fun applyLayoutParams(yDp: Float) {
+    private fun applyLayoutParams(yDp: Float, progress: Float) {
         val view = islandView ?: return
         val params = view.layoutParams as? WindowManager.LayoutParams ?: return
         val density = resources.displayMetrics.density
+        val (w, h) = sizeForProgress(progress, density)
         params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
         params.x = 0
         params.y = (yDp * density).toInt()
+        params.width = w
+        params.height = h
         try {
             windowManager.updateViewLayout(view, params)
         } catch (_: Throwable) {

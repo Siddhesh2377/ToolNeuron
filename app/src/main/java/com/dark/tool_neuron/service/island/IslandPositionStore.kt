@@ -25,6 +25,9 @@ object IslandPositionStore {
     private val _accessibilityActive = MutableStateFlow(false)
     val accessibilityActive: StateFlow<Boolean> = _accessibilityActive.asStateFlow()
 
+    private val _morphProgress = MutableStateFlow(0f)
+    val morphProgress: StateFlow<Float> = _morphProgress.asStateFlow()
+
     fun init(context: Context) {
         if (::prefs.isInitialized) return
         prefs = context.applicationContext
@@ -50,5 +53,9 @@ object IslandPositionStore {
     fun setAccessibilityActive(active: Boolean) {
         _accessibilityActive.value = active
         if (!active) _dodgeY.value = 0f
+    }
+
+    fun setMorphProgress(progress: Float) {
+        _morphProgress.value = progress
     }
 }

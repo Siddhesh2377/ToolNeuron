@@ -2,10 +2,11 @@ package com.dark.tool_neuron.service.island
 
 import android.view.HapticFeedbackConstants
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,15 +30,16 @@ import androidx.compose.material3.MaterialTheme.LocalMaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
@@ -58,7 +60,6 @@ fun IslandSurface(
     onToggle: () -> Unit,
 ) {
     val view = LocalView.current
-    val dimens = LocalDimens.current
     val motion = LocalMaterialTheme.current.motionScheme
 
     var mode by remember { mutableStateOf(IslandMode.ASSISTANT) }
@@ -67,10 +68,9 @@ fun IslandSurface(
     val transition = updateTransition(expanded, label = "island-morph")
     val progress by transition.animateFloat(
         transitionSpec = {
-            spring(
-                dampingRatio = MORPH_DAMPING,
-                stiffness = Spring.StiffnessMediumLow,
-                visibilityThreshold = 0.0005f,
+            tween(
+                durationMillis = MORPH_DURATION_MS,
+                easing = MORPH_EASING,
             )
         },
         label = "progress",
@@ -88,14 +88,24 @@ fun IslandSurface(
 
     val pressScale by animateFloatAsState(
         targetValue = if (pressed) IslandGeometry.PRESS_SCALE else 1f,
-        animationSpec = motion.fastSpatialSpec<Float>(),
+        animationSpec = motion.fastSpatialSpec(),
         label = "press-scale",
     )
 
-    val cornerKey = cornerRadius.roundToInt()
-    val shape = remember(cornerKey) { islandShape(cornerKey.dp) }
+    val shapeCache = remember {
+        val min = (IslandGeometry.PILL_H_DP / 2f).roundToInt()
+        val max = IslandGeometry.CARD_CORNER_DP.roundToInt()
+        Array<Shape>(max - min + 1) { i -> islandShape((min + i).dp) }
+    }
+    val minCorner = (IslandGeometry.PILL_H_DP / 2f).roundToInt()
+    val shape = shapeCache[(cornerRadius.roundToInt() - minCorner)
+        .coerceIn(0, shapeCache.size - 1)]
 
-    Box(modifier = Modifier.padding(dimens.spacingSm)) {
+    SideEffect {
+        IslandPositionStore.setMorphProgress(progress)
+    }
+
+    Box(modifier = Modifier.padding(IslandGeometry.OUTER_PADDING_DP.dp)) {
         Surface(
             color = Color.Black,
             contentColor = Color.White,
@@ -150,13 +160,13 @@ fun IslandSurface(
                 if (pillAlpha > 0.01f) {
                     PillModeBadge(
                         mode = mode,
-                        modifier = Modifier.alpha(pillAlpha),
+                        modifier = Modifier.graphicsLayer { alpha = pillAlpha },
                     )
                 }
                 if (cardAlpha > 0.01f) {
                     IslandCardContent(
                         mode = mode,
-                        modifier = Modifier.alpha(cardAlpha),
+                        modifier = Modifier.graphicsLayer { alpha = cardAlpha },
                     )
                 }
             }
@@ -305,4 +315,5 @@ private val IslandMode.actions: List<ImageVector>
 private val AssistantActions = listOf(TnIcons.Mic, TnIcons.Send)
 private val ControlActions = listOf(TnIcons.Volume, TnIcons.Settings)
 
-private const val MORPH_DAMPING = 0.85f
+private const val MORPH_DURATION_MS = 420
+private val MORPH_EASING: Easing = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1.0f)
