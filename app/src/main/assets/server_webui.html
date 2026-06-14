@@ -213,6 +213,12 @@ button, input, textarea { font: inherit; color: inherit; }
 
 .msg { display: flex; gap: 12px; align-items: flex-start; }
 .msg.user { flex-direction: row-reverse; }
+.msg-stack {
+  max-width: calc(100% - 50px);
+  display: flex; flex-direction: column; gap: 6px;
+  align-items: flex-start;
+}
+.msg.user .msg-stack { align-items: flex-end; }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%;
   flex-shrink: 0;
@@ -229,7 +235,7 @@ button, input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   border-radius: 22px;
   padding: 14px 16px;
-  max-width: calc(100% - 50px);
+  max-width: 100%;
   word-wrap: break-word; overflow-wrap: anywhere;
   line-height: 1.55;
   contain: layout style;
@@ -277,6 +283,32 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .bubble pre:hover .copy-code, .bubble pre:focus-within .copy-code { opacity: 1; }
 .copy-code.copied { color: var(--accent); border-color: var(--accent-edge); }
+
+.msg-actions {
+  display: inline-flex; align-items: center; gap: 4px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.msg:hover .msg-actions, .msg:focus-within .msg-actions { opacity: 1; }
+.msg-action {
+  height: 28px; min-width: 28px;
+  border: 1px solid var(--border);
+  background: color-mix(in oklab, var(--surface) 92%, transparent);
+  color: var(--muted);
+  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  padding: 0 8px;
+  cursor: pointer;
+  font-size: 12px; font-weight: 600;
+  transition: background-color 100ms, color 100ms, border-color 100ms;
+}
+.msg-action:hover { background: var(--surface-2); color: var(--fg); border-color: var(--border-2); }
+.msg-action svg { flex-shrink: 0; }
+@media (hover: none) { .msg-actions { opacity: 1; } }
+@media (max-width: 540px) {
+  .msg-action { padding: 0 7px; }
+  .msg-action span { display: none; }
+}
 
 .cursor::after {
   content: ''; display: inline-block;
@@ -456,7 +488,9 @@ kbd {
 .attach-btn:hover { color:var(--fg); }
 .attach-row { display:flex; gap:.5rem; flex-wrap:wrap; padding:.4rem .25rem 0; }
 .attach-row .chip { display:flex; align-items:center; gap:.35rem; background:var(--bg); border:1px solid var(--border); padding:.25rem .5rem; border-radius:999px; font-size:.7rem; color:var(--muted); }
+.attach-row .chip img { width:24px; height:24px; object-fit:cover; border-radius:999px; border:1px solid var(--border-2); }
 .attach-row .chip button { background:none; border:0; color:var(--danger); cursor:pointer; font-size:.85rem; padding:0 .1rem; }
+.drop-ready .composer-inner { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
 </style>
 </head>
 <body>
@@ -824,15 +858,52 @@ kbd {
     var av = document.createElement('div');
     av.className = 'avatar';
     av.textContent = m.role === 'user' ? 'You' : 'AI';
+    var stack = document.createElement('div');
+    stack.className = 'msg-stack';
     var bub = document.createElement('div');
     bub.className = 'bubble';
     bub.dataset.id = m.id;
     bub.innerHTML = renderMarkdown(m.content || '');
     if (m.streaming) bub.classList.add('cursor');
     wireCopy(bub);
+    stack.appendChild(bub);
+    if (!m.streaming) stack.appendChild(renderMessageActions(m));
     wrap.appendChild(av);
-    wrap.appendChild(bub);
+    wrap.appendChild(stack);
     return wrap;
+  }
+
+  function renderMessageActions(m) {
+    var actions = document.createElement('div');
+    actions.className = 'msg-actions';
+    actions.appendChild(actionButton('Copy', copyIcon(), function() { copyMessage(m.id); }));
+    if (m.role === 'user') {
+      actions.appendChild(actionButton('Edit', editIcon(), function() { editMessage(m.id); }));
+    } else if (m.role === 'assistant') {
+      actions.appendChild(actionButton('Regenerate', regenIcon(), function() { regenerateMessage(m.id); }));
+    }
+    return actions;
+  }
+
+  function actionButton(label, icon, handler) {
+    var btn = document.createElement('button');
+    btn.className = 'msg-action';
+    btn.type = 'button';
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.innerHTML = icon + '<span>' + label + '</span>';
+    btn.onclick = handler;
+    return btn;
+  }
+
+  function copyIcon() {
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+  }
+  function editIcon() {
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>';
+  }
+  function regenIcon() {
+    return '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>';
   }
 
   function selectChat(id) {
@@ -903,6 +974,74 @@ kbd {
     document.title = (c && c.title && c.title !== 'New chat') ? c.title + ' · ToolNeuron' : 'ToolNeuron';
   }
 
+  function findMessage(chat, id) {
+    if (!chat) return { index: -1, message: null };
+    var idx = chat.messages.findIndex(function(m) { return m.id === id; });
+    return { index: idx, message: idx >= 0 ? chat.messages[idx] : null };
+  }
+
+  function writeClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise(function(resolve, reject) {
+      try {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        resolve();
+      } catch (e) { reject(e); }
+    });
+  }
+
+  function copyMessage(id) {
+    var found = findMessage(activeChat(), id);
+    if (!found.message) return;
+    writeClipboard(found.message.content || '').then(function() {
+      toast('Message copied');
+    }).catch(function() {
+      toast('Could not copy');
+    });
+  }
+
+  function editMessage(id) {
+    if (state.streaming) return;
+    var chat = activeChat();
+    var found = findMessage(chat, id);
+    if (!found.message || found.message.role !== 'user') return;
+    els.input.value = found.message.content || '';
+    chat.messages = chat.messages.slice(0, found.index);
+    if (chat.messages.length === 0) chat.title = 'New chat';
+    save();
+    refreshAll();
+    els.input.dispatchEvent(new Event('input'));
+    els.input.focus();
+    toast('Edit your message and send again');
+  }
+
+  function regenerateMessage(id) {
+    if (state.streaming) return;
+    var chat = activeChat();
+    var found = findMessage(chat, id);
+    if (!chat || found.index < 0 || found.message.role !== 'assistant') return;
+    var userIdx = -1;
+    for (var i = found.index - 1; i >= 0; i--) {
+      if (chat.messages[i].role === 'user') { userIdx = i; break; }
+    }
+    if (userIdx < 0) return;
+    var prompt = chat.messages[userIdx].content || '';
+    chat.messages = chat.messages.slice(0, userIdx);
+    save();
+    refreshAll();
+    sendMessage(prompt);
+  }
+
   var scrollAnchored = true;
   els.messages.addEventListener('scroll', function() {
     var dist = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight;
@@ -916,7 +1055,7 @@ kbd {
   els.input.addEventListener('input', function() {
     els.input.style.height = 'auto';
     els.input.style.height = Math.min(els.input.scrollHeight, 240) + 'px';
-    els.sendBtn.disabled = !state.streaming && els.input.value.trim().length === 0;
+    updateSendState();
   });
   els.input.addEventListener('keydown', function(e) {
     if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
@@ -931,17 +1070,19 @@ kbd {
       return;
     }
     var text = els.input.value.trim();
-    if (!text) return;
+    if (!text && studioPendingImages.length === 0) return;
     sendMessage(text);
   }
 
   async function sendMessage(text) {
     var chat = activeChat();
     if (!chat) return;
-    var userMsg = { id: 'u' + Date.now(), role: 'user', content: text };
+    var imagesToSend = (typeof window.consumePendingImages === 'function') ? window.consumePendingImages() : [];
+    var displayText = text || (imagesToSend.length > 0 ? '[Image attached]' : '');
+    var userMsg = { id: 'u' + Date.now(), role: 'user', content: displayText };
     chat.messages.push(userMsg);
     if (chat.title === 'New chat') {
-      chat.title = text.length > 40 ? text.slice(0, 40).trim() + '…' : text;
+      chat.title = displayText.length > 40 ? displayText.slice(0, 40).trim() + '…' : displayText;
     }
     els.input.value = '';
     els.input.style.height = 'auto';
@@ -954,7 +1095,6 @@ kbd {
     setStreaming(true);
     state.abort = new AbortController();
     await ensureModelCache();
-    var imagesToSend = (typeof window.consumePendingImages === 'function') ? window.consumePendingImages() : [];
     var model = resolveChatModel(imagesToSend.length > 0);
     if (!model) {
       finishStream(aiMsg, imagesToSend.length > 0
@@ -969,7 +1109,7 @@ kbd {
       var last = messages[messages.length - 1];
       if (last.role === 'user') {
         var parts = [];
-        if (last.content) parts.push({ type: 'text', text: last.content });
+        if (text) parts.push({ type: 'text', text: text });
         imagesToSend.forEach(function(img) {
           parts.push({ type: 'image_url', image_url: { url: img.dataUrl } });
         });
@@ -1030,12 +1170,17 @@ kbd {
     }
     aiMsg.streaming = false;
     setStreaming(false);
+    state.abort = null;
     save();
     var bub = bubbleEl(aiMsg.id);
     if (bub) {
       bub.classList.remove('cursor');
       bub.innerHTML = renderMarkdown(aiMsg.content);
       wireCopy(bub);
+      var stack = bub.parentElement;
+      if (stack && !stack.querySelector('.msg-actions')) {
+        stack.appendChild(renderMessageActions(aiMsg));
+      }
     }
   }
   function appendMessage(m) {
@@ -1063,11 +1208,16 @@ kbd {
   function setStreaming(on) {
     state.streaming = on;
     els.sendBtn.classList.toggle('stop', on);
-    els.sendBtn.disabled = on ? false : els.input.value.trim().length === 0;
+    updateSendState();
     els.sendBtn.setAttribute('aria-label', on ? 'Stop' : 'Send');
     els.sendBtn.innerHTML = on
       ? '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
       : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12l14 0M13 6l6 6-6 6"/></svg>';
+  }
+  function updateSendState() {
+    var hasText = els.input.value.trim().length > 0;
+    var hasImages = Array.isArray(studioPendingImages) && studioPendingImages.length > 0;
+    els.sendBtn.disabled = state.streaming ? false : !(hasText || hasImages);
   }
   function authHeaders() {
     return state.token ? { 'Authorization': 'Bearer ' + state.token } : {};
@@ -1159,7 +1309,7 @@ kbd {
     bubble.querySelectorAll('.copy-code').forEach(function(btn) {
       btn.onclick = function() {
         var code = btn.parentElement.querySelector('code');
-        navigator.clipboard.writeText(code.innerText).then(function() {
+        writeClipboard(code.innerText).then(function() {
           btn.classList.add('copied');
           btn.textContent = 'Copied';
           setTimeout(function() {
@@ -1617,36 +1767,80 @@ kbd {
     attachBtn.addEventListener('click', function() { attachInput.click(); });
     attachInput.addEventListener('change', function() {
       var files = Array.prototype.slice.call(attachInput.files || []);
-      files.forEach(function(f) {
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          studioPendingImages.push({ name: f.name, dataUrl: e.target.result });
-          renderAttachRow();
-        };
-        reader.readAsDataURL(f);
-      });
+      addPendingImageFiles(files);
       attachInput.value = '';
     });
   }
+  function addPendingImageFiles(files) {
+    files.filter(function(f) { return f && /^image\//i.test(f.type || ''); }).forEach(function(f) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        studioPendingImages.push({ name: f.name || 'pasted image', dataUrl: e.target.result });
+        renderAttachRow();
+        updateSendState();
+      };
+      reader.readAsDataURL(f);
+    });
+  }
+  els.input.addEventListener('paste', function(e) {
+    var items = e.clipboardData && e.clipboardData.items ? Array.prototype.slice.call(e.clipboardData.items) : [];
+    var files = items.map(function(item) {
+      return item.kind === 'file' ? item.getAsFile() : null;
+    }).filter(Boolean);
+    if (files.some(function(f) { return /^image\//i.test(f.type || ''); })) {
+      addPendingImageFiles(files);
+      toast('Image pasted');
+    }
+  });
+  ['dragenter', 'dragover'].forEach(function(evt) {
+    document.addEventListener(evt, function(e) {
+      if (e.dataTransfer && Array.prototype.some.call(e.dataTransfer.items || [], function(i) { return /^image\//i.test(i.type || ''); })) {
+        e.preventDefault();
+        document.body.classList.add('drop-ready');
+      }
+    });
+  });
+  ['dragleave', 'drop'].forEach(function(evt) {
+    document.addEventListener(evt, function() {
+      document.body.classList.remove('drop-ready');
+    });
+  });
+  document.addEventListener('drop', function(e) {
+    var files = e.dataTransfer && e.dataTransfer.files ? Array.prototype.slice.call(e.dataTransfer.files) : [];
+    if (files.some(function(f) { return /^image\//i.test(f.type || ''); })) {
+      e.preventDefault();
+      addPendingImageFiles(files);
+      toast('Image attached');
+      window.switchTab('chat');
+      els.input.focus();
+    }
+  });
   function renderAttachRow() {
     if (!attachRow) return;
     attachRow.innerHTML = '';
-    if (studioPendingImages.length === 0) { attachRow.hidden = true; return; }
+    if (studioPendingImages.length === 0) {
+      attachRow.hidden = true;
+      updateSendState();
+      return;
+    }
     attachRow.hidden = false;
     studioPendingImages.forEach(function(img, idx) {
       var chip = document.createElement('div'); chip.className = 'chip';
+      var thumb = document.createElement('img'); thumb.src = img.dataUrl; thumb.alt = '';
       var name = document.createElement('span'); name.textContent = img.name || 'image';
       var rm = document.createElement('button'); rm.type = 'button'; rm.textContent = '×'; rm.onclick = function() {
-        studioPendingImages.splice(idx, 1); renderAttachRow();
+        studioPendingImages.splice(idx, 1); renderAttachRow(); updateSendState();
       };
-      chip.appendChild(name); chip.appendChild(rm);
+      chip.appendChild(thumb); chip.appendChild(name); chip.appendChild(rm);
       attachRow.appendChild(chip);
     });
+    updateSendState();
   }
   window.consumePendingImages = function() {
     var images = studioPendingImages.slice();
     studioPendingImages = [];
     renderAttachRow();
+    updateSendState();
     return images;
   };
 
