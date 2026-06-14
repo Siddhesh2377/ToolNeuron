@@ -251,7 +251,7 @@ class ModelStoreViewModel @Inject constructor(
         }
 
         _selectedSizeCategory.value?.let { size ->
-            filtered = filtered.filter { SizeCategory.fromSize(it.approximateSize) == size }
+            filtered = filtered.filter { SizeCategory.fromBytes(sizeBytesOf(it)) == size }
         }
 
         if (_selectedTags.value.isNotEmpty()) {
@@ -265,7 +265,13 @@ class ModelStoreViewModel @Inject constructor(
         }
 
         _selectedModelType.value?.let { type ->
-            filtered = filtered.filter { it.modelType == type }
+            filtered = filtered.filter {
+                when (type) {
+                    "vlm" -> it.isVlm && !it.isMmproj
+                    "gguf" -> it.modelType == "gguf" && !it.isVlm && !it.isMmproj
+                    else -> it.modelType == type
+                }
+            }
         }
 
         _executionTarget.value?.let { target ->
@@ -282,7 +288,7 @@ class ModelStoreViewModel @Inject constructor(
 
         filtered = when (_sortBy.value) {
             SortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
-            SortOption.SIZE -> filtered.sortedBy { SizeCategory.parseSizeToBytes(it.approximateSize) }
+            SortOption.SIZE -> filtered.sortedBy { sizeBytesOf(it).takeIf { bytes -> bytes > 0 } ?: Long.MAX_VALUE }
             SortOption.RECENTLY_ADDED -> filtered.reversed()
         }
 
@@ -317,6 +323,9 @@ class ModelStoreViewModel @Inject constructor(
         _sortBy.value = SortOption.NAME; _searchQuery.value = ""
         applyAllFilters()
     }
+
+    private fun sizeBytesOf(model: HuggingFaceModel): Long =
+        model.sizeBytes.takeIf { it > 0 } ?: SizeCategory.parseSizeToBytes(model.approximateSize)
 
     fun getAvailableTags(): List<String> =
         _models.value.flatMap { it.tags }.distinct()
@@ -771,12 +780,67 @@ class ModelStoreViewModel @Inject constructor(
         fileSize: Long,
         providerType: ProviderType = ProviderType.GGUF,
     ) {
-        modelRepo.insert(ModelInfo(
-            id = checksumId(uri.toString(), fileName, fileSize),
-            name = fileName.removeSuffix(".gguf"),
-            path = uri.toString(), pathType = PathType.CONTENT_URI,
-            providerType = providerType, fileSize = fileSize,
-        ))
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val modelId = checksumId(uri.toString(), fileName, fileSize)
+                val localFile = when (providerType) {
+                    ProviderType.IMAGE_UPSCALER -> copyLocalImport(uri, modelRepo.imageUpscalerFile(modelId, fileName))
+                    ProviderType.IMAGE_GEN -> copyLocalImport(uri, java.io.File(modelRepo.imageModelDir(modelId), fileName.substringAfterLast('/')))
+                    else -> null
+                }
+                modelRepo.insert(ModelInfo(
+                    id = modelId,
+                    name = fileName.removeSuffix(".gguf"),
+                    path = localFile?.absolutePath ?: uri.toString(),
+                    pathType = if (localFile != null) PathType.FILE else PathType.CONTENT_URI,
+                    providerType = providerType,
+                    fileSize = localFile?.length() ?: fileSize,
+                ))
+            }.onFailure { throwable ->
+                _error.value = "Import failed: ${throwable.message ?: throwable.javaClass.simpleName}"
+            }
+        }
+    }
+
+    private fun copyLocalImport(uri: Uri, dest: java.io.File): java.io.File {
+        dest.parentFile?.mkdirs()
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            dest.outputStream().use { output -> input.copyTo(output) }
+        } ?: error("Unable to open local model file")
+        return dest
+    }
+
+    fun updateModelProviderType(modelId: String, providerType: ProviderType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = modelRepo.getModelById(modelId) ?: return@launch
+            if (current.providerType == providerType) return@launch
+
+            if (current.isActive && providerType != ProviderType.GGUF) {
+                InferenceClient.unloadModel()
+            }
+            if (current.providerType == ProviderType.EMBEDDING && providerType != ProviderType.EMBEDDING &&
+                ragManager.defaultEmbeddingModelId.value == modelId
+            ) {
+                ragManager.setDefaultEmbeddingModelId(null)
+            }
+            if (current.providerType == ProviderType.TTS && providerType != ProviderType.TTS &&
+                prefs.activeTtsModelId == modelId
+            ) {
+                prefs.activeTtsModelId = ""
+            }
+            if (current.providerType == ProviderType.STT && providerType != ProviderType.STT &&
+                prefs.activeSttModelId == modelId
+            ) {
+                prefs.activeSttModelId = ""
+            }
+            if (current.providerType == ProviderType.GGUF && providerType != ProviderType.GGUF &&
+                serverController.selectedModelId() == modelId
+            ) {
+                serverController.setSelectedModelId("")
+            }
+
+            modelRepo.updateProviderType(modelId, providerType)
+        }
     }
 
     suspend fun getModelConfig(modelId: String): ModelConfig? = modelRepo.getConfig(modelId)

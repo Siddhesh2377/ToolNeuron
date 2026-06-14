@@ -74,8 +74,9 @@ fun ServerScreen(
     val bindMode by vm.bindMode.collectAsStateWithLifecycle()
     val events by vm.requestEvents.collectAsStateWithLifecycle()
     val tokenVisible by vm.tokenVisible.collectAsStateWithLifecycle()
-    val installedModels by vm.installedChatModels.collectAsStateWithLifecycle()
-    val selectedModelId by vm.selectedModelId.collectAsStateWithLifecycle()
+    val anyEngineInstalled by vm.anyEngineInstalled.collectAsStateWithLifecycle()
+    val chatModels by vm.chatModels.collectAsStateWithLifecycle()
+    val selectedChatModelId by vm.selectedChatModelId.collectAsStateWithLifecycle()
 
     val dimens = LocalDimens.current
     val busy = state is ServerState.Running ||
@@ -98,11 +99,11 @@ fun ServerScreen(
             EndpointsCard(state as ServerState.Running)
         }
 
-        ModelPickerCard(
-            models = installedModels,
-            selectedId = selectedModelId,
+        ServerChatModelCard(
+            models = chatModels,
+            selectedId = selectedChatModelId,
             disabled = busy,
-            onSelect = vm::selectModel,
+            onPick = vm::setChatDefaultModel,
         )
 
         ConfigCard(
@@ -124,7 +125,7 @@ fun ServerScreen(
 
         StartStopBar(
             state = state,
-            startEnabled = !busy && (vm.anyEngineInstalled.collectAsStateWithLifecycle().value || !selectedModelId.isNullOrBlank()),
+            startEnabled = !busy && anyEngineInstalled,
             onStart = vm::start,
             onStop = vm::stop,
         )
@@ -137,7 +138,7 @@ fun ServerScreen(
 private fun StatusCard(state: ServerState) {
     val dimens = LocalDimens.current
     val (title, subtitle) = when (state) {
-        ServerState.Stopped -> "Stopped" to "Pick a model and tap Start."
+        ServerState.Stopped -> "Stopped" to "Configure server model defaults in Settings, then tap Start."
         is ServerState.LoadingModel -> "Loading model" to state.modelName
         ServerState.Starting -> "Starting" to "Binding port and attaching bridge."
         is ServerState.Running ->
@@ -276,37 +277,41 @@ private fun UrlRow(label: String, url: String, onCopy: () -> Unit) {
 }
 
 @Composable
-private fun ModelPickerCard(
+private fun ServerChatModelCard(
     models: List<ModelInfo>,
-    selectedId: String?,
+    selectedId: String,
     disabled: Boolean,
-    onSelect: (String) -> Unit,
+    onPick: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
     StandardCard(
-        title = "Model",
-        description = "Server loads this model on start, unloads on stop.",
+        title = "Chat model",
+        description = "Used by the bundled Web UI and by API requests with a blank/default chat model.",
         icon = TnIcons.Cpu,
     ) {
-        if (models.isEmpty()) {
-            CaptionText("No chat models installed. Download one from the Model Store first.")
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+            if (models.isEmpty()) {
+                CaptionText(
+                    text = "No GGUF chat model installed. Import or download a chat model first.",
+                    color = MaterialTheme.colorScheme.error,
+                )
+            } else {
                 models.forEach { model ->
-                    ModelRow(
+                    ServerModelRow(
                         model = model,
                         selected = model.id == selectedId,
                         enabled = !disabled,
-                        onClick = { onSelect(model.id) },
+                        onClick = { onPick(model.id) },
                     )
                 }
             }
+            CaptionText("Other endpoint defaults, like embeddings, voice, image generation, and upscaling, live in Settings > Server model roles.")
         }
     }
 }
 
 @Composable
-private fun ModelRow(
+private fun ServerModelRow(
     model: ModelInfo,
     selected: Boolean,
     enabled: Boolean,
@@ -317,62 +322,47 @@ private fun ModelRow(
     val bg = if (selected)
         MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
     else
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)
+    val border = if (selected)
+        MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+    else
+        Color.Transparent
     Surface(
         shape = tnShapes.cardSmall,
         color = bg,
+        border = androidx.compose.foundation.BorderStroke(1.dp, border),
         modifier = Modifier
             .fillMaxWidth()
             .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
         Row(
-            modifier = Modifier.padding(
-                horizontal = dimens.spacingSm,
-                vertical = dimens.spacingSm,
-            ),
+            modifier = Modifier.padding(dimens.spacingSm),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
         ) {
-            Box(
-                modifier = Modifier
-                    .size(18.dp)
-                    .background(
-                        color = if (selected) MaterialTheme.colorScheme.primary else Color.Transparent,
-                        shape = RoundedCornerShape(50),
-                    )
-                    .background(
-                        color = Color.Transparent,
-                        shape = RoundedCornerShape(50),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                if (selected) {
-                    Icon(
-                        TnIcons.Check,
-                        contentDescription = "Selected",
-                        modifier = Modifier.size(12.dp),
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                    )
-                }
-            }
+            Icon(
+                imageVector = if (selected) TnIcons.CircleCheck else TnIcons.Cpu,
+                contentDescription = null,
+                tint = if (selected)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(dimens.iconSm),
+            )
             Column(modifier = Modifier.weight(1f)) {
+                BodyLabel(
+                    text = model.name,
+                    maxLines = 1,
+                )
                 Text(
-                    model.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    text = model.id,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    color = if (enabled)
-                        MaterialTheme.colorScheme.onSurface
-                    else
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
-                )
-                CaptionText(
-                    text = model.id,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                        .copy(alpha = if (enabled) 0.7f else 0.3f),
                 )
             }
+            if (selected) StatusBadge(text = "DEFAULT", isActive = true)
         }
     }
 }

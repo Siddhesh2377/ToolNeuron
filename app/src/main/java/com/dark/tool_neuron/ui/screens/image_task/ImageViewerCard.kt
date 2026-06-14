@@ -2,7 +2,10 @@ package com.dark.tool_neuron.ui.screens.image_task
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,7 +51,9 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.ImageExport
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 6f
@@ -67,6 +72,30 @@ fun ImageViewerCard(
     val scope = rememberCoroutineScope()
     var fullscreen by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var savingAs by remember { mutableStateOf(false) }
+    var pendingSaveAsBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val saveAsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val outUri = uri ?: run {
+            savingAs = false
+            pendingSaveAsBitmap = null
+            return@rememberLauncherForActivityResult
+        }
+        val pending = pendingSaveAsBitmap ?: bitmap
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                writeBitmapToUri(context, pending, outUri)
+            }
+            savingAs = false
+            pendingSaveAsBitmap = null
+            toast(
+                context,
+                if (result.isSuccess) "Saved image"
+                else "Save failed: ${result.exceptionOrNull()?.message}",
+            )
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -132,8 +161,20 @@ fun ImageViewerCard(
                         }
                     },
                     icon = TnIcons.Download,
-                    text = if (saving) "Saving…" else "Save",
+                    text = if (saving) "Saving…" else "Save Photos",
                     enabled = !saving,
+                    modifier = Modifier.weight(1f),
+                )
+
+                ActionTextButton(
+                    onClickListener = {
+                        savingAs = true
+                        pendingSaveAsBitmap = bitmap
+                        saveAsLauncher.launch("${saveNamePrefix}_${System.currentTimeMillis()}.png")
+                    },
+                    icon = TnIcons.Download,
+                    text = if (savingAs) "Saving…" else "Save as…",
+                    enabled = !savingAs,
                     modifier = Modifier.weight(1f),
                 )
 
@@ -161,6 +202,15 @@ fun ImageViewerCard(
             bitmap = bitmap,
             onDismiss = { fullscreen = false },
         )
+    }
+}
+
+private fun writeBitmapToUri(context: Context, bitmap: Bitmap, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+            throw IllegalStateException("Bitmap.compress returned false")
+        }
     }
 }
 

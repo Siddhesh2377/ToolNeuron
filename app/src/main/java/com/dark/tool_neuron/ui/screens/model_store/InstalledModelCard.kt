@@ -102,13 +102,28 @@ internal fun InstalledModelsTab(
     }
 
     if (models.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
-            ) {
-                Icon(TnIcons.Database, null, Modifier.size(64.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("No installed models", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingLg),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            item(key = "empty") {
+                Column(
+                    modifier = Modifier
+                        .fillParentMaxHeight(0.55f)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Icon(TnIcons.Database, null, Modifier.size(64.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("No installed models", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+            item(key = "import") {
+                ImportLocalCard {
+                    filePicker.launch(arrayOf("application/octet-stream", "*/*"))
+                }
             }
         }
     } else {
@@ -145,7 +160,18 @@ internal fun InstalledModelsTab(
     }
 
     selectedModel?.let { model ->
-        ModelDetailsDialog(model, viewModel) { selectedModel = null }
+        ModelDetailsDialog(
+            model = model,
+            viewModel = viewModel,
+            onChangeType = { type ->
+                selectedModel = model.copy(
+                    providerType = type,
+                    isActive = if (type == ProviderType.GGUF) model.isActive else false,
+                )
+                viewModel.updateModelProviderType(model.id, type)
+            },
+            onDismiss = { selectedModel = null },
+        )
     }
 
     showDeleteDialog?.let { model ->
@@ -191,7 +217,7 @@ private fun ImportLocalCard(onClick: () -> Unit) {
             Icon(TnIcons.Download, null, Modifier.size(20.dp), MaterialTheme.colorScheme.primary)
             Column {
                 Text("Import local model", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-                Text("Pick a .gguf chat or embedding model from storage", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("Pick a local model file and assign its type", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -306,10 +332,12 @@ internal fun InstalledModelCard(
 internal fun ModelDetailsDialog(
     model: ModelInfo,
     viewModel: ModelStoreViewModel,
+    onChangeType: (ProviderType) -> Unit,
     onDismiss: () -> Unit
 ) {
     var config by remember { mutableStateOf<ModelConfig?>(null) }
     var configLoaded by remember { mutableStateOf(false) }
+    var showTypePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(model.id) {
         config = viewModel.getModelConfig(model.id)
@@ -325,14 +353,10 @@ internal fun ModelDetailsDialog(
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
                 modifier = Modifier.verticalScroll(rememberScrollState())
             ) {
-                DetailRow("Type", when (model.providerType) {
-                    ProviderType.GGUF -> "GGUF (LLM)"
-                    ProviderType.TTS -> "Text-to-Speech"
-                    ProviderType.STT -> "Speech-to-Text"
-                    ProviderType.EMBEDDING -> "Embedding (RAG)"
-                    ProviderType.IMAGE_GEN -> "Image Generation"
-                    ProviderType.IMAGE_UPSCALER -> "Upscaler"
-                })
+                DetailRow("Type", providerTypeLabel(model.providerType))
+                TextButton(onClick = { showTypePicker = true }) {
+                    Text("Change model type")
+                }
                 DetailRow("Status", if (model.isActive) "Active" else "Inactive")
 
                 val sizeText by produceState("Calculating...", model.path) {
@@ -362,6 +386,19 @@ internal fun ModelDetailsDialog(
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
     )
+
+    if (showTypePicker) {
+        ModelTypePickerDialog(
+            title = "Model type",
+            fileName = model.name,
+            selectedType = model.providerType,
+            onPick = { type ->
+                onChangeType(type)
+                showTypePicker = false
+            },
+            onDismiss = { showTypePicker = false },
+        )
+    }
 }
 
 @Composable

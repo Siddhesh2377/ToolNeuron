@@ -159,6 +159,14 @@ class AppPreferences @Inject constructor(
         get() = getString(KEY_SERVER_SELECTED_MODEL)
         set(value) = putString(KEY_SERVER_SELECTED_MODEL, value)
 
+    var serverModelRolesJson: String
+        get() = getString(KEY_SERVER_MODEL_ROLES, "{}")
+        set(value) = putString(KEY_SERVER_MODEL_ROLES, value)
+
+    var serverRoleDefaultsJson: String
+        get() = getString(KEY_SERVER_ROLE_DEFAULTS, "{}")
+        set(value) = putString(KEY_SERVER_ROLE_DEFAULTS, value)
+
     var hfSearchHistory: String
         get() = getString(KEY_HF_SEARCH_HISTORY)
         set(value) = putString(KEY_HF_SEARCH_HISTORY, value)
@@ -267,6 +275,8 @@ class AppPreferences @Inject constructor(
         const val KEY_SERVER_AUTO_START = "server_auto_start"
         const val KEY_SERVER_CONFIGURED = "server_configured"
         const val KEY_SERVER_SELECTED_MODEL = "server_selected_model"
+        const val KEY_SERVER_MODEL_ROLES = "server_model_roles_v1"
+        const val KEY_SERVER_ROLE_DEFAULTS = "server_role_defaults_v1"
         const val KEY_HF_SEARCH_HISTORY = "hf_search_history"
         const val KEY_HF_TAGS_CATALOG = "hf_tags_catalog_v1"
         const val KEY_HF_TAGS_CATALOG_AT = "hf_tags_catalog_v1_at"

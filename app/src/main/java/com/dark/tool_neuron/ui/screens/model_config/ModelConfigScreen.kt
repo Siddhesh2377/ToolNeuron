@@ -71,6 +71,7 @@ fun ModelConfigScreen(
     var contextSize by remember { mutableIntStateOf(loadingJson.optInt("contextSize", 4096)) }
     var threadMode by remember { mutableIntStateOf(loadingJson.optInt("threadMode", 0)) }
     var flashAttn by remember { mutableStateOf(loadingJson.optBoolean("flashAttn", false)) }
+    var opOffload by remember { mutableStateOf(loadingJson.optBoolean("opOffload", false)) }
     var cacheTypeK by remember { mutableStateOf(loadingJson.optString("cacheTypeK", "q8_0")) }
     var cacheTypeV by remember { mutableStateOf(loadingJson.optString("cacheTypeV", "q8_0")) }
 
@@ -124,7 +125,7 @@ fun ModelConfigScreen(
     var showMemory by remember { mutableStateOf(false) }
 
     fun resetToDefaults() {
-        contextSize = 4096; threadMode = 0; flashAttn = false
+        contextSize = 4096; threadMode = 0; flashAttn = false; opOffload = false
         cacheTypeK = "q8_0"; cacheTypeV = "q8_0"
         temperature = 0.7f; topK = 40; topP = 0.9f; minP = 0.05f
         repeatPenalty = 1.1f; maxTokens = 2048; seed = "-1"
@@ -144,6 +145,7 @@ fun ModelConfigScreen(
                 loading.put("contextSize", contextSize)
                 loading.put("threadMode", threadMode)
                 loading.put("flashAttn", flashAttn)
+                loading.put("opOffload", opOffload)
                 loading.put("cacheTypeK", cacheTypeK)
                 loading.put("cacheTypeV", cacheTypeV)
                 if (isVlmBase && selectedProjector.isNotBlank()) {
@@ -305,6 +307,14 @@ fun ModelConfigScreen(
                                     onCheckedChange = { flashAttn = it },
                                     explanation = "A faster way to do the model's attention math. " +
                                         "Example: Same output, just quicker. Most modern models support it. Try turning it on.",
+                                )
+                                ConfigSwitch(
+                                    label = "GPU Offload",
+                                    checked = opOffload,
+                                    onCheckedChange = { opOffload = it },
+                                    explanation = "Allows the GGUF runtime to offload supported operations to the device GPU/backend. " +
+                                        "This can speed up chat on supported phones, but may fail or heat up on some drivers. " +
+                                        "If loading crashes or replies slow down, turn it off and reload the model.",
                                 )
                                 ConfigToggleGroup(
                                     label = "KV Cache — Keys",

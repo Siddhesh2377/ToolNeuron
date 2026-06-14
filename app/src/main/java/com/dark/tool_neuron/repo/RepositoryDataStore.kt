@@ -91,6 +91,14 @@ class RepositoryDataStore @Inject constructor(
             HFRepository("unsloth-qwen3_5-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF"),
             // Qwen (vision)
             HFRepository("qwen3-vl-2b", "Qwen3-VL 2B Instruct", "Qwen/Qwen3-VL-2B-Instruct-GGUF"),
+            // Embeddings / RAG
+            HFRepository("nomic-embed-text-v15", "Nomic Embed Text v1.5", "nomic-ai/nomic-embed-text-v1.5-GGUF", category = ModelCategory.RESEARCH),
+            HFRepository("bge-small-en-v15-q8", "BGE Small EN v1.5", "ggml-org/bge-small-en-v1.5-Q8_0-GGUF", category = ModelCategory.RESEARCH),
+            HFRepository("e5-small-v2-q8", "E5 Small v2", "ggml-org/e5-small-v2-Q8_0-GGUF", category = ModelCategory.RESEARCH),
+            HFRepository("bge-m3", "BGE M3 Embedding", "gpustack/bge-m3-GGUF", category = ModelCategory.RESEARCH),
+            HFRepository("qwen3-embedding-4b", "Qwen3 Embedding 4B", "Qwen/Qwen3-Embedding-4B-GGUF", category = ModelCategory.RESEARCH),
+            // Code-focused chat
+            HFRepository("qwen3-coder-30b-a3b", "Qwen3 Coder 30B A3B", "unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF", category = ModelCategory.CODING),
             // Mistral
             HFRepository("mistral-7b-v03", "Mistral 7B Instruct v0.3", "bartowski/Mistral-7B-Instruct-v0.3-GGUF"),
             // Gemma

@@ -22,6 +22,7 @@ class ServerEngine {
             flashAttn = cfg.optBoolean("flashAttn", true),
             cacheTypeK = cfg.optString("cacheTypeK", "q8_0"),
             cacheTypeV = cfg.optString("cacheTypeV", "q8_0"),
+            opOffload = cfg.optBoolean("opOffload", false),
         )
         if (ok) {
             engine.setThreadMode(cfg.optInt("threadMode", 1))

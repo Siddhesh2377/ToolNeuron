@@ -39,6 +39,7 @@ sealed class NavScreens(val route: String) {
     object SettingsPerformance : NavScreens("settings_performance")
     object SettingsModel : NavScreens("settings_model")
     object SettingsVision : NavScreens("settings_vision")
+    object SettingsServerRoles : NavScreens("settings_server_roles")
     object SettingsPlugins : NavScreens("settings_plugins")
     object Storage : NavScreens("storage")
     object ImageTask : NavScreens("image_task")

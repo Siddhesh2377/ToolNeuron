@@ -40,6 +40,8 @@ import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.ui.screens.model_store.ModelTypePickerDialog
+import com.dark.tool_neuron.ui.screens.model_store.providerTypeLabel
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.extractParameterCount
@@ -58,6 +60,7 @@ fun ModelManagerScreen(
     val installed by viewModel.installedModels.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ModelInfo?>(null) }
+    var pendingTypeChange by remember { mutableStateOf<ModelInfo?>(null) }
 
     Scaffold(
         topBar = {
@@ -66,7 +69,7 @@ fun ModelManagerScreen(
                     Column {
                         Text("Model Settings", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Edit configs, delete installed models",
+                            "Edit configs, categories, delete installed models",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -113,6 +116,7 @@ fun ModelManagerScreen(
                             model = model,
                             isDeleting = deleteInProgress == model.id,
                             onEdit = { onEditModel(model.id) },
+                            onChangeType = { pendingTypeChange = model },
                             onDelete = { pendingDelete = model },
                         )
                     }
@@ -137,6 +141,19 @@ fun ModelManagerScreen(
             },
         )
     }
+
+    pendingTypeChange?.let { model ->
+        ModelTypePickerDialog(
+            title = "Model type",
+            fileName = model.name,
+            selectedType = model.providerType,
+            onPick = { type ->
+                viewModel.updateModelProviderType(model.id, type)
+                pendingTypeChange = null
+            },
+            onDismiss = { pendingTypeChange = null },
+        )
+    }
 }
 
 @Composable
@@ -144,6 +161,7 @@ private fun ModelManagerCard(
     model: ModelInfo,
     isDeleting: Boolean,
     onEdit: () -> Unit,
+    onChangeType: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -187,14 +205,7 @@ private fun ModelManagerCard(
                     if (!params.isNullOrBlank()) Tag(text = params)
                     if (!quant.isNullOrBlank()) Tag(text = quant)
                 }
-                val typeLabel = when (model.providerType) {
-                    ProviderType.GGUF -> "Chat (GGUF)"
-                    ProviderType.TTS -> "Text-to-Speech"
-                    ProviderType.STT -> "Speech-to-Text"
-                    ProviderType.EMBEDDING -> "Embedding (RAG)"
-                    ProviderType.IMAGE_GEN -> "Image Generation"
-                    ProviderType.IMAGE_UPSCALER -> "Upscale 4×"
-                }
+                val typeLabel = providerTypeLabel(model.providerType)
                 val sourceLabel = if (model.pathType == PathType.CONTENT_URI) "Local" else "Downloaded"
                 CaptionText(
                     text = if (model.fileSize > 0)
@@ -220,6 +231,11 @@ private fun ModelManagerCard(
                     contentDescription = "Edit config",
                 )
                 ActionButton(
+                    onClickListener = onChangeType,
+                    icon = TnIcons.Settings,
+                    contentDescription = "Change type",
+                )
+                ActionButton(
                     onClickListener = onDelete,
                     icon = TnIcons.Trash,
                     contentDescription = "Delete model",
@@ -234,6 +250,8 @@ private data class Section(val type: ProviderType, val label: String, val blurb:
 private val SECTIONS = listOf(
     Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen."),
     Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG)."),
+    Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace."),
+    Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode."),
     Section(ProviderType.TTS,       "Text-to-Speech",    "Reads model replies aloud."),
     Section(ProviderType.STT,       "Speech-to-Text",    "Transcribes voice input."),
 )

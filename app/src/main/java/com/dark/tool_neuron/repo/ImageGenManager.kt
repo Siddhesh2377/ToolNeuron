@@ -182,13 +182,13 @@ class ImageGenManager @Inject constructor(
         return cur
     }
 
-    suspend fun loadUpscaler(model: ModelInfo): Boolean {
+    suspend fun loadUpscaler(model: ModelInfo, useOpenCL: Boolean): Boolean {
         ensureRuntime()
         val isMnnFile = model.path.endsWith(".mnn", ignoreCase = true)
         return InferenceClient.sdLoadUpscaler(
             modelPath = model.path,
             useMnn = isMnnFile,
-            useOpenCL = !isMnnFile,
+            useOpenCL = useOpenCL && !isMnnFile,
         )
     }
 

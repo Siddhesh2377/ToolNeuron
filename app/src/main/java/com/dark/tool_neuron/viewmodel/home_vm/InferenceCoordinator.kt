@@ -42,6 +42,9 @@ private const val DEEP_RESEARCH_INSTRUCTION =
         "do NOT guess. Instead end your response with exactly one line: " +
         "[NEED_MORE: <a focused query for follow-up retrieval>] and stop. " +
         "If the context is sufficient, answer normally and DO NOT emit any [NEED_MORE] marker."
+private val LEAKED_RETRIEVAL_INSTRUCTION_REGEX = Regex(
+    pattern = """(?is)\bInstruction:\s*if\s+the\s+context\s+above\s+is\s+insufficient.*?(?=\n\s*\n|\n\s*(?:User|Answer|Summary):|$)""",
+)
 
 data class GenerationOutcome(
     val content: String,
@@ -137,7 +140,7 @@ class InferenceCoordinator @Inject constructor(
                             is InferenceEvent.Token -> {
                                 rawAssistant += event.text
                                 val (clean, think) = parseThinking(rawAssistant)
-                                cleanContent = stripNeedMoreMarker(clean)
+                                cleanContent = sanitizeRagControlText(clean)
                                 thinkingContent = think
                                 onStreamingUpdate(cleanContent, thinkingContent)
                             }
@@ -235,7 +238,13 @@ class InferenceCoordinator @Inject constructor(
         val ragReady = ragManager.isReady.value
         val budget = computeRagBudget(messages)
         val aug = if (ragReady) {
-            ragManager.augment(chatId, original.content, original.content, budget)
+            if (isDocumentSummaryRequest(original.content)) {
+                ragManager.summarizeAttachedDocuments(chatId, original.content, budget)
+                    .takeIf { it.didAugment }
+                    ?: ragManager.augment(chatId, original.content, original.content, budget)
+            } else {
+                ragManager.augment(chatId, original.content, original.content, budget)
+            }
         } else {
             RagAugmentation.NONE
         }
@@ -264,7 +273,7 @@ class InferenceCoordinator @Inject constructor(
         if (finalContent == original.content) return messages to RagAugmentation.NONE
         Log.i(
             TAG,
-            "prompt augmented (rag=$ragApplied, deep=$deepResearchEnabled, followups=${followups.size}, len ${original.content.length} -> ${finalContent.length}, budget=$budget tok)",
+            "prompt augmented (rag=$ragApplied, summary=${isDocumentSummaryRequest(original.content)}, deep=$deepResearchEnabled, followups=${followups.size}, len ${original.content.length} -> ${finalContent.length}, budget=$budget tok)",
         )
         val updated = messages.toMutableList().also {
             it[lastUserIdx] = original.copy(content = finalContent)
@@ -299,6 +308,25 @@ class InferenceCoordinator @Inject constructor(
     private fun stripNeedMoreMarker(content: String): String {
         if (!content.contains("[NEED_MORE")) return content
         return NEED_MORE_REGEX.replace(content, "").trimEnd()
+    }
+
+    private fun sanitizeRagControlText(content: String): String {
+        val withoutNeedMore = stripNeedMoreMarker(content)
+        return LEAKED_RETRIEVAL_INSTRUCTION_REGEX
+            .replace(withoutNeedMore, "")
+            .trimStart()
+    }
+
+    private fun isDocumentSummaryRequest(text: String): Boolean {
+        val q = text.lowercase()
+        if (!q.contains("summar")) return false
+        return q.contains("file") ||
+            q.contains("pdf") ||
+            q.contains("document") ||
+            q.contains("doc") ||
+            q.contains("attachment") ||
+            q.contains("attached") ||
+            q.contains("based on")
     }
 
     private fun computeRagBudget(messages: List<ChatMessage>): Int {

@@ -226,6 +226,7 @@ class ModelCatalog @Inject constructor(
             val likes = meta.optInt("likes", 0)
             val gated = meta.opt("gated")
             val isGated = gated != null && gated != false && gated.toString() != "false"
+            val repoModelType = inferModelType(repo, meta)
 
             val allFiles = (0 until tree.length()).mapNotNull { i ->
                 val file = tree.getJSONObject(i)
@@ -242,6 +243,7 @@ class ModelCatalog @Inject constructor(
 
                 val isMmproj = VlmPaths.isMmprojFileName(path)
                 val quant = if (isMmproj) "mmproj" else (extractQuantization(path) ?: "")
+                val modelType = if (isMmproj) "gguf" else repoModelType
 
                 models.add(HuggingFaceModel(
                     id = "${repo.id}__$path",
@@ -257,10 +259,14 @@ class ModelCatalog @Inject constructor(
                         add(author)
                         if (isGated) add("Gated")
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
+                        if (modelType == "embedding") {
+                            add("Embedding")
+                            add("RAG")
+                        }
                         if (isVlmRepo) add("VLM")
                         if (isMmproj) add("mmproj")
                     },
-                    modelType = "gguf",
+                    modelType = modelType,
                     isVlm = isVlmRepo,
                     isMmproj = isMmproj,
                     mmprojFileName = mmprojFile?.first.orEmpty(),
@@ -272,6 +278,24 @@ class ModelCatalog @Inject constructor(
             }
             models.sortedWith(compareByDescending<HuggingFaceModel> { it.isMmproj }.thenBy { it.sizeBytes })
         }
+
+    private fun inferModelType(repo: HFRepository, meta: JSONObject): String {
+        val haystack = buildString {
+            append(repo.id).append(' ')
+            append(repo.name).append(' ')
+            append(repo.repoPath).append(' ')
+            append(meta.optString("pipeline_tag")).append(' ')
+            meta.optJSONArray("tags")?.let { tags ->
+                for (i in 0 until tags.length()) append(tags.optString(i)).append(' ')
+            }
+        }.lowercase()
+
+        val embeddingHints = listOf(
+            "sentence-similarity", "feature-extraction", "embedding", "embeddings",
+            "embed", "bge", "e5-", "gte-", "nomic-embed", "qwen3-embedding",
+        )
+        return if (embeddingHints.any { it in haystack }) "embedding" else "gguf"
+    }
 
     private fun buildDisplayName(repoName: String, quant: String, fileName: String): String {
         if (quant.isNotBlank()) return "$repoName $quant"

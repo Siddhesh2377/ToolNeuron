@@ -141,14 +141,16 @@ class RemoteServerService : Service() {
             return
         }
 
-        val primary = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+        val displayEntry = catalog.primary()
+            ?: catalog.all.firstOrNull { it.defaultModel }
+            ?: catalog.firstOf(ServerEngineKind.CHAT_GGUF)
             ?: catalog.firstOf(ServerEngineKind.VLM)
             ?: catalog.all.first()
 
         publish(snapshot.copy(
-            phase = "loading_model",
-            modelId = primary.id,
-            modelName = primary.name,
+            phase = "starting",
+            modelId = displayEntry.id,
+            modelName = "catalog ready",
             bindModeName = bindMode.name,
         ))
 
@@ -156,7 +158,7 @@ class RemoteServerService : Service() {
             Log.w(TAG, "self-start failed", e)
         }
 
-        val notif = buildNotification(this, info(resolution, port, bindMode), primary.name)
+        val notif = buildNotification(this, info(resolution, port, bindMode), "catalog ready")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -165,24 +167,6 @@ class RemoteServerService : Service() {
 
         configureStagingDir()
         registry.setCatalog(catalog)
-
-        val preloadChat = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
-        val preloadVlm  = catalog.firstOf(ServerEngineKind.VLM)
-        if (preloadChat != null) {
-            val loaded = registry.chatFor(preloadChat.id)
-            if (loaded == null) {
-                pushFailure("primary chat model failed to load")
-                stopForegroundSafe()
-                return
-            }
-        } else if (preloadVlm != null) {
-            val loaded = registry.vlmFor(preloadVlm.id)
-            if (loaded == null) {
-                pushFailure("primary VLM model failed to load")
-                stopForegroundSafe()
-                return
-            }
-        }
 
         publish(snapshot.copy(phase = "starting"))
 
@@ -210,8 +194,8 @@ class RemoteServerService : Service() {
 
         publish(ServerSnapshot(
             phase = "running",
-            modelId = primary.id,
-            modelName = primary.name,
+            modelId = displayEntry.id,
+            modelName = "catalog ready",
             host = resolution.host,
             displayHost = resolution.displayHost,
             lanHost = resolution.lanHost,
@@ -221,7 +205,7 @@ class RemoteServerService : Service() {
             reason = null,
         ))
 
-        Log.i(TAG, "server up host=${resolution.host} port=$effective primary=${primary.id} engines=${catalog.all.size}")
+        Log.i(TAG, "server up host=${resolution.host} port=$effective engines=${catalog.all.size}")
     }
 
     private suspend fun handleStop(reason: String) {

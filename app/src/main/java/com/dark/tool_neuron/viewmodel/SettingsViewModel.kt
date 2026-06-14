@@ -14,9 +14,11 @@ import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.service.server.ServerModelRole
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
 import com.dark.tool_neuron.voice.VoiceModelManager
+import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsItem
@@ -36,6 +38,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -64,6 +68,8 @@ class SettingsViewModel @Inject constructor(
     private val _vlmImageQuality = MutableStateFlow(prefs.vlmImageQuality)
     private val _threadMode = MutableStateFlow(prefs.threadMode)
     private val _pluginOnnxEp = MutableStateFlow(prefs.pluginOnnxEp)
+    private val _serverModelRolesJson = MutableStateFlow(prefs.serverModelRolesJson)
+    private val _serverRoleDefaultsJson = MutableStateFlow(prefs.serverRoleDefaultsJson)
     private val _installedPluginCount = pluginExecutor.registry.installed
     private val appVersion: String = resolveVersion()
 
@@ -82,6 +88,8 @@ class SettingsViewModel @Inject constructor(
         _vlmImageQuality,
         _threadMode,
         _pluginOnnxEp,
+        _serverModelRolesJson,
+        _serverRoleDefaultsJson,
         _installedPluginCount,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -99,8 +107,10 @@ class SettingsViewModel @Inject constructor(
         val vlmImageQuality = values[11] as String
         val threadMode = values[12] as Int
         val pluginOnnxEp = values[13] as String
+        val serverModelRolesJson = values[14] as String
+        val serverRoleDefaultsJson = values[15] as String
         @Suppress("UNCHECKED_CAST")
-        val installedPlugins = values[14] as List<com.dark.plugin_exc.InstalledPlugin>
+        val installedPlugins = values[16] as List<com.dark.plugin_exc.InstalledPlugin>
         val pluginCount = installedPlugins.size
 
         SettingsState(
@@ -117,6 +127,8 @@ class SettingsViewModel @Inject constructor(
                 vlmImageQuality = vlmImageQuality,
                 threadMode = threadMode,
                 pluginOnnxEp = pluginOnnxEp,
+                serverModelRolesJson = serverModelRolesJson,
+                serverRoleDefaultsJson = serverRoleDefaultsJson,
                 pluginCount = pluginCount,
             ),
             dialog = dialog,
@@ -139,7 +151,7 @@ class SettingsViewModel @Inject constructor(
             title = item.title,
             options = item.options,
             selectedKey = item.selectedKey,
-            allowClear = item.id in CLEARABLE_CHOICE_IDS,
+            allowClear = item.id in CLEARABLE_CHOICE_IDS || item.id.startsWith(ID_SERVER_DEFAULT_PREFIX),
             onSelect = item.onSelect,
         )
     }
@@ -157,11 +169,14 @@ class SettingsViewModel @Inject constructor(
         vlmImageQuality: String,
         threadMode: Int,
         pluginOnnxEp: String,
+        serverModelRolesJson: String,
+        serverRoleDefaultsJson: String,
         pluginCount: Int,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
         voiceSection(models, activeTts, activeStt),
         visionSection(vlmImageQuality),
+        serverRolesSection(models, serverModelRolesJson, serverRoleDefaultsJson, activeTts, activeStt),
         modelSection(),
         performanceSection(threadMode),
         pluginsSection(pluginOnnxEp, pluginCount),
@@ -313,6 +328,184 @@ class SettingsViewModel @Inject constructor(
             ),
         ),
     )
+
+    private fun serverRolesSection(
+        models: List<ModelInfo>,
+        rolesJson: String,
+        defaultsJson: String,
+        activeTts: String,
+        activeStt: String,
+    ): SettingsSection {
+        val roles = parseServerModelRoles(rolesJson)
+        val defaults = parseServerRoleDefaults(defaultsJson).toMutableMap().apply {
+            if (get(ServerModelRole.TTS.token).isNullOrBlank() && activeTts.isNotBlank()) {
+                put(ServerModelRole.TTS.token, activeTts)
+            }
+            if (get(ServerModelRole.STT.token).isNullOrBlank() && activeStt.isNotBlank()) {
+                put(ServerModelRole.STT.token, activeStt)
+            }
+        }
+        val fileModels = models.filter { it.pathType == com.dark.tool_neuron.model.enums.PathType.FILE }
+        val roleOptions = listOf(
+            SettingsChoiceOption(ServerModelRole.AUTO.token, "Auto", "Use the installed model type."),
+            SettingsChoiceOption(ServerModelRole.CHAT.token, "Chat model", "Expose for text chat completions."),
+            SettingsChoiceOption(ServerModelRole.VLM.token, "Vision chat model", "Expose for image chat. Requires a colocated mmproj."),
+            SettingsChoiceOption(ServerModelRole.EMBEDDING.token, "Embedding model", "Expose for embeddings."),
+            SettingsChoiceOption(ServerModelRole.TTS.token, "Text-to-speech", "Expose for speech generation."),
+            SettingsChoiceOption(ServerModelRole.STT.token, "Speech-to-text", "Expose for transcription."),
+            SettingsChoiceOption(ServerModelRole.IMAGE_GEN.token, "Image generation", "Expose for image creation."),
+            SettingsChoiceOption(ServerModelRole.IMAGE_UPSCALER.token, "Image upscaler", "Expose for image upscaling."),
+            SettingsChoiceOption(ServerModelRole.DISABLED.token, "Not exposed", "Hide this model from the remote server."),
+        )
+        val serverKinds = listOf(
+            ServerModelRole.CHAT to "Default chat model",
+            ServerModelRole.VLM to "Default vision chat model",
+            ServerModelRole.EMBEDDING to "Default embedding model",
+            ServerModelRole.TTS to "Default text-to-speech model",
+            ServerModelRole.STT to "Default speech-to-text model",
+            ServerModelRole.IMAGE_GEN to "Default image generation model",
+            ServerModelRole.IMAGE_UPSCALER to "Default image upscaler",
+        )
+        val defaultItems = serverKinds.map { (role, title) ->
+            val candidates = serverRoleCandidates(fileModels, roles, role)
+            SettingsItem.Choice(
+                id = "$ID_SERVER_DEFAULT_PREFIX${role.token}",
+                title = title,
+                subtitle = "Used only when a remote request leaves model blank.",
+                icon = TnIcons.Server,
+                selectedKey = defaults[role.token],
+                options = candidates.map { model ->
+                    SettingsChoiceOption(model.id, model.name, model.id)
+                },
+                emptyMessage = if (candidates.isEmpty()) "No ${roleLabel(role)} models" else "Not set",
+                enabled = candidates.isNotEmpty(),
+                onSelect = { modelId ->
+                    setServerRoleDefault(role, modelId)
+                },
+            )
+        }
+        val roleItems = if (fileModels.isEmpty()) {
+            listOf(
+                SettingsItem.Info(
+                    id = "server_roles_empty",
+                    title = "No local model files",
+                    subtitle = "Install or import models before assigning server roles.",
+                    icon = TnIcons.Server,
+                    value = "",
+                ),
+            )
+        } else {
+            fileModels.map { model ->
+                SettingsItem.Choice(
+                    id = "$ID_SERVER_ROLE_PREFIX${model.id}",
+                    title = model.name,
+                    subtitle = "Remote server role",
+                    icon = TnIcons.Server,
+                    selectedKey = roles[model.id]?.token ?: ServerModelRole.AUTO.token,
+                    options = roleOptions,
+                    onSelect = { key ->
+                        setServerModelRole(model.id, ServerModelRole.fromToken(key))
+                    },
+                )
+            }
+        }
+        return SettingsSection(
+            id = SECTION_SERVER_ROLES,
+            title = "Server model roles",
+            description = "Choose server defaults and manual identities for remote API models.",
+            icon = TnIcons.Server,
+            items = defaultItems + roleItems,
+        )
+    }
+
+    private fun serverRoleCandidates(
+        models: List<ModelInfo>,
+        roles: Map<String, ServerModelRole>,
+        wanted: ServerModelRole,
+    ): List<ModelInfo> = models.filter { model ->
+        val role = roles[model.id] ?: defaultServerRole(model)
+        role == wanted
+    }
+
+    private fun defaultServerRole(model: ModelInfo): ServerModelRole = when (model.providerType) {
+        ProviderType.GGUF -> {
+            val modelsRoot = modelRepo.getModelsDir()
+            if (VlmPaths.isInsideVlmFolder(model.path, modelsRoot) &&
+                VlmPaths.colocatedMmproj(File(model.path)) != null
+            ) {
+                ServerModelRole.VLM
+            } else {
+                ServerModelRole.CHAT
+            }
+        }
+        ProviderType.EMBEDDING -> ServerModelRole.EMBEDDING
+        ProviderType.TTS -> ServerModelRole.TTS
+        ProviderType.STT -> ServerModelRole.STT
+        ProviderType.IMAGE_GEN -> ServerModelRole.IMAGE_GEN
+        ProviderType.IMAGE_UPSCALER -> ServerModelRole.IMAGE_UPSCALER
+    }
+
+    private fun roleLabel(role: ServerModelRole): String = when (role) {
+        ServerModelRole.CHAT -> "chat"
+        ServerModelRole.VLM -> "vision chat"
+        ServerModelRole.EMBEDDING -> "embedding"
+        ServerModelRole.TTS -> "text-to-speech"
+        ServerModelRole.STT -> "speech-to-text"
+        ServerModelRole.IMAGE_GEN -> "image generation"
+        ServerModelRole.IMAGE_UPSCALER -> "image upscaler"
+        ServerModelRole.AUTO -> "auto"
+        ServerModelRole.DISABLED -> "enabled"
+    }
+
+    private fun parseServerModelRoles(raw: String): Map<String, ServerModelRole> {
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, ServerModelRole>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val id = keys.next()
+            val role = ServerModelRole.fromToken(obj.optString(id))
+            if (id.isNotBlank() && role != ServerModelRole.AUTO) out[id] = role
+        }
+        return out
+    }
+
+    private fun parseServerRoleDefaults(raw: String): Map<String, String> {
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val modelId = obj.optString(key)
+            if (key.isNotBlank() && modelId.isNotBlank()) out[key] = modelId
+        }
+        return out
+    }
+
+    private fun setServerModelRole(modelId: String, role: ServerModelRole) {
+        val obj = runCatching { JSONObject(prefs.serverModelRolesJson) }.getOrDefault(JSONObject())
+        if (role == ServerModelRole.AUTO) {
+            obj.remove(modelId)
+        } else {
+            obj.put(modelId, role.token)
+        }
+        val next = obj.toString()
+        prefs.serverModelRolesJson = next
+        _serverModelRolesJson.value = next
+        _dialog.value = null
+    }
+
+    private fun setServerRoleDefault(role: ServerModelRole, modelId: String?) {
+        val obj = runCatching { JSONObject(prefs.serverRoleDefaultsJson) }.getOrDefault(JSONObject())
+        if (modelId.isNullOrBlank()) {
+            obj.remove(role.token)
+        } else {
+            obj.put(role.token, modelId)
+        }
+        val next = obj.toString()
+        prefs.serverRoleDefaultsJson = next
+        _serverRoleDefaultsJson.value = next
+        _dialog.value = null
+    }
 
     private fun chatAndRagSection(
         models: List<ModelInfo>,
@@ -682,6 +875,7 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_CHAT_RAG = "chat_rag"
         const val SECTION_VOICE = "voice"
         const val SECTION_VISION = "vision"
+        const val SECTION_SERVER_ROLES = "server_roles"
         const val SECTION_PERFORMANCE = "performance"
         const val SECTION_MODEL = "model"
         const val SECTION_PLUGINS = "plugins"
@@ -697,6 +891,8 @@ class SettingsViewModel @Inject constructor(
         private const val ID_RAG_MULTI_QUERY = "rag_multi_query"
         private const val ID_RAG_DEEP_RESEARCH = "rag_deep_research"
         private const val ID_VLM_IMAGE_QUALITY = "vlm_image_quality"
+        private const val ID_SERVER_DEFAULT_PREFIX = "server_default_"
+        private const val ID_SERVER_ROLE_PREFIX = "server_role_"
         private const val ID_THREAD_MODE = "thread_mode"
         private const val ID_OPEN_PERFORMANCE = "open_performance"
         private const val ID_OPEN_MODEL_EDITOR = "open_model_editor"

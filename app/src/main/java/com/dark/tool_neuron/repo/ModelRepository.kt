@@ -99,6 +99,19 @@ class ModelRepository @Inject constructor(
             .firstOrNull()?.toModelInfo()
     }
 
+    fun updateProviderType(modelId: String, providerType: ProviderType) {
+        val records = storage.queryString(COL_MODELS, TAG_ID, modelId)
+        records.forEach { record ->
+            record.putString(TAG_PROVIDER_TYPE, providerType.name)
+            if (providerType != ProviderType.GGUF) {
+                record.putBool(TAG_IS_ACTIVE, false)
+            }
+            storage.update(COL_MODELS, record)
+        }
+        storage.flush(COL_MODELS)
+        refresh()
+    }
+
     fun getModelsDir(): File {
         val dir = File(context.filesDir, "models")
         dir.mkdirs()

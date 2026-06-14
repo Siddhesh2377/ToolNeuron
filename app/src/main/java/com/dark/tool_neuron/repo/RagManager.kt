@@ -22,6 +22,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -209,9 +210,7 @@ class RagManager @Inject constructor(
             if (doc.id in ingestedDocIds) return@forEach
             if (doc.sourceId.isBlank()) return@forEach
             val bytes = sourceVault.read(doc.sourceId) ?: return@forEach
-            val chunks = opsMutex.withLock {
-                InferenceClient.ragIngestBytes(bytes, doc.mimeType, doc.name, doc.id)
-            }
+            val chunks = ingestBytesWithFallback(bytes, doc.mimeType, doc.name, doc.id)
             if (chunks >= 0) {
                 ingestedDocIds += doc.id
                 indexKeywordsIfTextLike(doc.id, chatId, doc.sourceId, doc.name, doc.mimeType, bytes)
@@ -256,9 +255,7 @@ class RagManager @Inject constructor(
             return@withContext Result.failure(IllegalStateException("Could not store document bytes"))
         }
 
-        val chunkCount = opsMutex.withLock {
-            InferenceClient.ragIngestBytes(bytes, effectiveMime, displayName, docId)
-        }
+        val chunkCount = ingestBytesWithFallback(bytes, effectiveMime, displayName, docId)
 
         if (chunkCount < 0) {
             val reason = when (chunkCount) {
@@ -318,9 +315,7 @@ class RagManager @Inject constructor(
         val bytes = sourceVault.read(source.sourceId)
             ?: return@withContext Result.failure(IllegalStateException("Could not read stored bytes"))
 
-        val chunkCount = opsMutex.withLock {
-            InferenceClient.ragIngestBytes(bytes, source.mimeType, source.name, docId)
-        }
+        val chunkCount = ingestBytesWithFallback(bytes, source.mimeType, source.name, docId)
         if (chunkCount < 0) {
             return@withContext Result.failure(IllegalStateException("Indexing failed (code $chunkCount)"))
         }
@@ -359,8 +354,8 @@ class RagManager @Inject constructor(
 
         val bytes = sourceVault.read(doc.sourceId)
             ?: return@withContext Result.failure(IllegalStateException("Failed to read source"))
-        val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() }
-            ?: return@withContext Result.failure(IllegalStateException("Source contains no text"))
+            val text = extractReadableText(bytes, doc.mimeType, doc.name)
+                ?: return@withContext Result.failure(IllegalStateException("Source contains no text"))
 
         _deepIndexing.value = _deepIndexing.value + docId
         try {
@@ -417,7 +412,7 @@ class RagManager @Inject constructor(
         try {
             val bytes = withContext(Dispatchers.IO) { sourceVault.read(doc.sourceId) }
                 ?: return@withLock Result.failure(IllegalStateException("Source bytes for ${doc.name} are missing"))
-            val text = runCatching { String(bytes, Charsets.UTF_8) }.getOrNull()
+            val text = extractReadableText(bytes, doc.mimeType, doc.name)
                 ?: return@withLock Result.failure(IllegalStateException("Could not read source text"))
 
             val tree = raptor.buildTree(text, doc.name) { _, _, _ -> }
@@ -581,6 +576,82 @@ class RagManager @Inject constructor(
         }
     }
 
+    suspend fun summarizeAttachedDocuments(
+        chatId: String,
+        originalPrompt: String,
+        maxContextTokens: Int = DEFAULT_RAG_BUDGET_TOKENS,
+    ): RagAugmentation = withContext(Dispatchers.IO) {
+        if (!_isReady.value) return@withContext RagAugmentation.NONE
+        val docs = documentRepo.getDocumentsForChat(chatId)
+            .filter { it.sourceId.isNotBlank() }
+            .take(MAX_SUMMARY_DOCS)
+        if (docs.isEmpty()) return@withContext RagAugmentation.NONE
+
+        val budget = maxContextTokens.coerceAtLeast(MIN_RAG_BUDGET_TOKENS)
+        val kept = mutableListOf<RagChunk>()
+        var used = 0
+
+        docs.forEach { doc ->
+            val bytes = sourceVault.read(doc.sourceId) ?: return@forEach
+            val text = extractReadableText(bytes, doc.mimeType, doc.name)
+                ?.replace(Regex("""[ \t\r]+"""), " ")
+                ?.replace(Regex("""\n{3,}"""), "\n\n")
+                ?.trim()
+                ?: return@forEach
+            if (text.isBlank()) return@forEach
+
+            val chunks = RagChunker.chunk(
+                text = text,
+                targetChars = SUMMARY_CHUNK_TARGET_CHARS,
+                minChars = SUMMARY_CHUNK_MIN_CHARS,
+            )
+            if (chunks.isEmpty()) return@forEach
+
+            val indices = representativeIndices(chunks.size, SUMMARY_SECTIONS_PER_DOC)
+            for (idx in indices) {
+                val chunkText = chunks.getOrNull(idx)?.trim().orEmpty()
+                if (chunkText.isBlank()) continue
+                val cost = approxTokens(chunkText) + PER_CHUNK_OVERHEAD_TOKENS
+                if (used + cost > budget) break
+                kept += RagChunk(
+                    docId = doc.id,
+                    sourceId = doc.sourceId,
+                    chunkIndex = idx,
+                    score = 1f,
+                    text = chunkText,
+                    name = doc.name,
+                    mimeType = doc.mimeType,
+                )
+                used += cost
+            }
+        }
+        if (kept.isEmpty()) return@withContext RagAugmentation.NONE
+
+        val prompt = buildString {
+            append("The user asked to summarize attached document(s). ")
+            append("Use the representative excerpts below to write a useful document summary in your own words. ")
+            append("Cover the main topics, important definitions, and notable sections. ")
+            append("Do not mention that the excerpts are representative unless the user asks. ")
+            append("Cite supporting excerpts inline using [1], [2], etc.\n\n")
+            append("<document_excerpts>\n")
+            kept.forEachIndexed { index, chunk ->
+                append("[${index + 1}] ")
+                append(chunk.name)
+                append(" · section ")
+                append(chunk.chunkIndex + 1)
+                append("\n")
+                append(chunk.text)
+                append("\n\n")
+            }
+            append("</document_excerpts>\n\n")
+            append("User request: ")
+            append(originalPrompt)
+        }
+
+        Log.i(TAG, "RAG document-summary augment: docs=${docs.size} excerpts=${kept.size} (~$used / $budget tok)")
+        RagAugmentation(augmentedPrompt = prompt, chunks = kept)
+    }
+
     private data class FusedHit(
         val docId: String,
         val chunkIndex: Int,
@@ -623,6 +694,125 @@ class RagManager @Inject constructor(
     }
 
     private fun approxTokens(text: String): Int = (text.length + 3) / 4
+
+    private suspend fun extractReadableText(bytes: ByteArray, mime: String, name: String): String? {
+        if (isTextLike(mime, name)) {
+            val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+            if (!text.isNullOrBlank() && text.count { it == '�' }.toFloat() / text.length.coerceAtLeast(1) <= 0.05f) {
+                return text
+            }
+        }
+        runCatching { InferenceClient.ragExtractText(bytes, mime, name) }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+        zipTextFallback(bytes, name)?.let { return it }
+        return plainTextFallback(bytes)
+    }
+
+    private suspend fun ingestBytesWithFallback(
+        bytes: ByteArray,
+        mime: String?,
+        name: String?,
+        docId: String,
+    ): Int {
+        val direct = opsMutex.withLock {
+            InferenceClient.ragIngestBytes(bytes, mime, name, docId)
+        }
+        if (direct >= 0) return direct
+
+        val text = extractReadableText(bytes, mime.orEmpty(), name.orEmpty()) ?: return direct
+        val fallback = text.trim()
+        if (fallback.length < MIN_FALLBACK_TEXT_CHARS) return direct
+
+        val textBytes = fallback.toByteArray(Charsets.UTF_8)
+        val rc = opsMutex.withLock {
+            InferenceClient.ragIngestBytes(textBytes, "text/plain", name ?: "document.txt", docId)
+        }
+        return if (rc >= 0) rc else direct
+    }
+
+    private fun plainTextFallback(bytes: ByteArray): String? {
+        val utf8 = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+        if (!utf8.isNullOrBlank() && isMostlyReadableText(utf8)) return utf8
+
+        val utf16 = runCatching { bytes.toString(Charsets.UTF_16) }.getOrNull()
+        if (!utf16.isNullOrBlank() && isMostlyReadableText(utf16)) return utf16
+        return null
+    }
+
+    private fun isMostlyReadableText(text: String): Boolean {
+        if (text.length < MIN_FALLBACK_TEXT_CHARS) return false
+        val sample = text.take(20_000)
+        val control = sample.count { it.code < 32 && it !in "\n\r\t" }
+        val replacement = sample.count { it == '�' }
+        val readable = sample.count { !it.isISOControl() || it in "\n\r\t" }
+        val total = sample.length.coerceAtLeast(1)
+        return control.toFloat() / total < 0.02f &&
+            replacement.toFloat() / total < 0.03f &&
+            readable.toFloat() / total > 0.85f
+    }
+
+    private fun zipTextFallback(bytes: ByteArray, name: String): String? {
+        if (!looksLikeZip(bytes, name)) return null
+        val out = StringBuilder()
+        runCatching {
+            ZipInputStream(bytes.inputStream()).use { zip ->
+                while (true) {
+                    val entry = zip.nextEntry ?: break
+                    val entryName = entry.name.lowercase()
+                    if (!entry.isDirectory && shouldReadZipTextEntry(entryName)) {
+                        val text = zip.readBytes()
+                            .toString(Charsets.UTF_8)
+                            .replace(Regex("""<[^>]+>"""), " ")
+                            .replace(Regex("""&(?:amp|lt|gt|quot|apos);""")) { m ->
+                                when (m.value) {
+                                    "&amp;" -> "&"
+                                    "&lt;" -> "<"
+                                    "&gt;" -> ">"
+                                    "&quot;" -> "\""
+                                    "&apos;" -> "'"
+                                    else -> " "
+                                }
+                            }
+                            .replace(Regex("""\s+"""), " ")
+                            .trim()
+                        if (text.isNotBlank()) {
+                            if (out.isNotEmpty()) out.append("\n\n")
+                            out.append(text)
+                        }
+                    }
+                    if (out.length > MAX_ZIP_FALLBACK_CHARS) return@use
+                }
+            }
+        }.getOrNull()
+        return out.toString().takeIf { it.length >= MIN_FALLBACK_TEXT_CHARS }
+    }
+
+    private fun looksLikeZip(bytes: ByteArray, name: String): Boolean =
+        bytes.size >= 4 &&
+            bytes[0] == 0x50.toByte() &&
+            bytes[1] == 0x4B.toByte() &&
+            name.substringAfterLast('.', "").lowercase() in ZIP_TEXT_EXTS
+
+    private fun shouldReadZipTextEntry(entryName: String): Boolean {
+        if (entryName.startsWith("__macosx/")) return false
+        if (entryName.endsWith(".xml") || entryName.endsWith(".xhtml") || entryName.endsWith(".html")) return true
+        if (entryName.endsWith(".txt") || entryName.endsWith(".md") || entryName.endsWith(".csv")) return true
+        return false
+    }
+
+    private fun representativeIndices(size: Int, wanted: Int): List<Int> {
+        if (size <= 0 || wanted <= 0) return emptyList()
+        if (size <= wanted) return (0 until size).toList()
+        val out = linkedSetOf<Int>()
+        out += 0
+        val slots = (wanted - 1).coerceAtLeast(1)
+        for (i in 1..slots) {
+            out += ((size - 1) * (i.toDouble() / slots)).toInt().coerceIn(0, size - 1)
+        }
+        return out.toList().sorted()
+    }
 
     suspend fun debugQuery(
         chatId: String,
@@ -720,6 +910,13 @@ class RagManager @Inject constructor(
         const val FUSED_POOL_SIZE = 12
         const val FINAL_TOP_N = 8
         const val RRF_K = 60
+        const val MAX_SUMMARY_DOCS = 3
+        const val SUMMARY_SECTIONS_PER_DOC = 10
+        const val SUMMARY_CHUNK_TARGET_CHARS = 1200
+        const val SUMMARY_CHUNK_MIN_CHARS = 260
+        const val MIN_FALLBACK_TEXT_CHARS = 80
+        const val MAX_ZIP_FALLBACK_CHARS = 750_000
+        val ZIP_TEXT_EXTS = setOf("docx", "xlsx", "pptx", "odt", "ods", "odp", "epub", "zip")
         val TEXT_LIKE_MIMES = setOf(
             "application/json",
             "application/xml",

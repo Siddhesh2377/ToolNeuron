@@ -56,6 +56,8 @@ private data class FilterOption<T>(val label: String, val value: T)
 private val MODEL_TYPE_OPTIONS: List<FilterOption<String?>> = listOf(
     FilterOption("All", null),
     FilterOption("Text", "gguf"),
+    FilterOption("VLM", "vlm"),
+    FilterOption("Embed", "embedding"),
     FilterOption("Image", "image_gen"),
     FilterOption("Upscale", "image_upscaler"),
     FilterOption("TTS", "tts"),

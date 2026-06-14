@@ -84,6 +84,11 @@ fun AppTopBar(
             title = "Vision",
             subtitle = "VLM image preprocessing",
         )
+        NavScreens.SettingsServerRoles.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Server model roles",
+            subtitle = "Remote API model identities",
+        )
         NavScreens.SettingsPerformance.route -> SettingsTopBar(
             onBack = onBack,
             title = "Performance",

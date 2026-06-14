@@ -77,7 +77,8 @@ namespace tn::server {
 
         std::string resolve_model_id(const std::string& requested, m::Kind k) {
             if (!requested.empty() && m::has_id_of_kind(requested, k)) return requested;
-            auto fallback = m::first_of_kind(k);
+            if (!requested.empty()) return {};
+            auto fallback = m::default_of_kind(k);
             return fallback.id;
         }
 
@@ -85,7 +86,9 @@ namespace tn::server {
                               const char* type_label) {
             if (model_id.empty()) model_id = resolve_model_id(model_id, k);
             if (model_id.empty()) {
-                std::string msg = std::string("no ") + type_label + " model installed";
+                std::string msg = m::has_any_of_kind(k)
+                    ? std::string("no default ") + type_label + " model configured"
+                    : std::string("no ") + type_label + " model installed";
                 respond_error(res, 404, "model_not_found", msg, "invalid_request_error");
                 return false;
             }
@@ -473,23 +476,10 @@ namespace tn::server {
             const bool route_vlm = parsed.request.has_images;
 
             std::string model_id = parsed.request.model;
-            if (route_vlm && !m::has_id_of_kind(model_id, m::Kind::Vlm)) {
-                if (m::has_any_of_kind(m::Kind::Vlm)) {
-                    model_id = m::first_of_kind(m::Kind::Vlm).id;
-                } else {
-                    respond_error(res, 404, "vlm_unavailable",
-                        "request contains images but no VLM model is loaded on this server",
-                        "invalid_request_error");
-                    return;
-                }
-            } else if (!route_vlm && !m::has_id_of_kind(model_id, m::Kind::ChatGguf)) {
-                if (m::has_any_of_kind(m::Kind::ChatGguf)) {
-                    model_id = m::first_of_kind(m::Kind::ChatGguf).id;
-                } else {
-                    respond_error(res, 404, "model_not_found",
-                        "no chat model installed on this server", "invalid_request_error");
-                    return;
-                }
+            if (route_vlm) {
+                if (!ensure_model_for(res, model_id, m::Kind::Vlm, "VLM")) return;
+            } else {
+                if (!ensure_model_for(res, model_id, m::Kind::ChatGguf, "chat")) return;
             }
 
             parsed.request.model = model_id;

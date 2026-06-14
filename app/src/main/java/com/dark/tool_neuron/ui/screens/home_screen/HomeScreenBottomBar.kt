@@ -844,14 +844,5 @@ private fun ContextIndicator(
 }
 
 private val STORAGE_MIME_FILTER = arrayOf(
-    "text/*",
-    "application/pdf",
-    "application/json",
-    "application/xml",
-    "application/rtf",
-    "application/epub+zip",
-    "application/vnd.oasis.opendocument.text",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "*/*",
 )

@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -49,6 +50,7 @@ import com.dark.tool_neuron.ui.components.ActionToggleGroup
 import com.dark.tool_neuron.ui.components.BodyLabel
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.StandardCard
+import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.components.TnTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
@@ -56,6 +58,7 @@ import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.viewmodel.ImageTaskMode
 import com.dark.tool_neuron.viewmodel.ImageTaskUi
 import com.dark.tool_neuron.viewmodel.ImageTaskViewModel
+import com.dark.tool_neuron.viewmodel.ImageOutputAction
 import com.dark.tool_neuron.viewmodel.ModelLoadPhase
 import com.dark.tool_neuron.viewmodel.RuntimePhase
 import kotlinx.coroutines.Dispatchers
@@ -81,6 +84,22 @@ fun ImageTaskScreen(
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(viewModel::setInputImage) }
+    var pendingSaveElsewhereBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var handledSaveElsewhereToken by remember { mutableStateOf("") }
+    val saveElsewhere = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val bitmap = pendingSaveElsewhereBitmap
+        pendingSaveElsewhereBitmap = null
+        if (uri != null && bitmap != null) {
+            val result = writeBitmapToUri(context, bitmap, uri)
+            Toast.makeText(
+                context,
+                if (result.isSuccess) "Saved image" else "Save failed: ${result.exceptionOrNull()?.message}",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
 
     var showMaskPainter by remember { mutableStateOf(false) }
     var painterBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -95,6 +114,24 @@ fun ImageTaskScreen(
         }
         if (!showMaskPainter) {
             painterBitmap = null
+        }
+    }
+
+    LaunchedEffect(ui.outputToken, ui.outputAction, ui.diffusionResultImage, ui.upscaleResultImage) {
+        val image = ui.upscaleResultImage ?: ui.diffusionResultImage
+        if (ui.outputAction == ImageOutputAction.SAVE_ELSEWHERE &&
+            ui.outputToken.isNotBlank() &&
+            ui.outputToken != handledSaveElsewhereToken &&
+            image != null
+        ) {
+            handledSaveElsewhereToken = ui.outputToken
+            pendingSaveElsewhereBitmap = image
+            val prefix = when (ui.mode) {
+                ImageTaskMode.GENERATE -> "tn_generate"
+                ImageTaskMode.INPAINT -> "tn_inpaint"
+                ImageTaskMode.UPSCALE -> "tn_upscale"
+            }
+            saveElsewhere.launch("${prefix}_${System.currentTimeMillis()}.png")
         }
     }
 
@@ -131,6 +168,12 @@ fun ImageTaskScreen(
                 onOpenStore = onOpenStore,
             )
         }
+        item("gpu") {
+            ImageGpuCard(
+                ui = ui,
+                onToggle = viewModel::setGpuAcceleration,
+            )
+        }
         if (ui.modelLoadPhase !is ModelLoadPhase.Idle && ui.modelLoadPhase !is ModelLoadPhase.Loaded) {
             item("model-load") {
                 ModelLoadCard(
@@ -162,6 +205,7 @@ private fun LazyListScope.generateBody(
 ) {
     item("g-prompt") { PromptCard(ui = ui, viewModel = viewModel) }
     item("g-knobs") { KnobsCard(ui = ui, viewModel = viewModel, showDenoise = false) }
+    item("g-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
     item("g-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("g-output") {
         DiffusionOutputCard(
@@ -190,6 +234,7 @@ private fun LazyListScope.inpaintBody(
     }
     item("i-prompt") { PromptCard(ui = ui, viewModel = viewModel) }
     item("i-knobs") { KnobsCard(ui = ui, viewModel = viewModel, showDenoise = true) }
+    item("i-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
     item("i-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("i-output") {
         DiffusionOutputCard(
@@ -215,8 +260,52 @@ private fun LazyListScope.upscaleBody(
             onClearMask = {},
         )
     }
+    item("u-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
     item("u-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("u-output") { UpscaleOutputCard(ui = ui) }
+}
+
+@Composable
+private fun OutputPolicyCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
+    val dimens = LocalDimens.current
+    StandardCard(
+        title = "After completion",
+        icon = TnIcons.Download,
+        description = "Choose where the new image goes when the task finishes.",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            ActionToggleGroup(
+                items = listOf(
+                    ImageOutputAction.KEEP,
+                    ImageOutputAction.REPLACE_INPUT,
+                    ImageOutputAction.SAVE_PHOTOS,
+                    ImageOutputAction.SAVE_ELSEWHERE,
+                ),
+                selectedItem = ui.outputAction,
+                onItemSelected = viewModel::setOutputAction,
+                itemLabel = { action ->
+                    when (action) {
+                        ImageOutputAction.KEEP -> "Keep"
+                        ImageOutputAction.REPLACE_INPUT -> "Replace"
+                        ImageOutputAction.SAVE_PHOTOS -> "Photos"
+                        ImageOutputAction.SAVE_ELSEWHERE -> "Save as"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            CaptionText(
+                text = when (ui.outputAction) {
+                    ImageOutputAction.KEEP -> "Keep the result in this screen. You can still Save Photos or Save as from the result card."
+                    ImageOutputAction.REPLACE_INPUT -> "Use the new image as the next input and clear the mask."
+                    ImageOutputAction.SAVE_PHOTOS -> "Auto-save to Android Photos: Pictures/ToolNeuron."
+                    ImageOutputAction.SAVE_ELSEWHERE -> "Open Android's save dialog when the new image is ready."
+                },
+            )
+            if (ui.outputStatus.isNotBlank()) {
+                BodyLabel(text = ui.outputStatus)
+            }
+        }
+    }
 }
 
 @Composable
@@ -380,6 +469,35 @@ private fun RuntimeCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
                 RuntimePhase.READY -> Unit
             }
         }
+    }
+}
+
+@Composable
+private fun ImageGpuCard(
+    ui: ImageTaskUi,
+    onToggle: (Boolean) -> Unit,
+) {
+    StandardCard(
+        title = "Acceleration",
+        icon = TnIcons.Zap,
+    ) {
+        SwitchRow(
+            title = "Use GPU / OpenCL",
+            description = when (ui.mode) {
+                ImageTaskMode.UPSCALE ->
+                    "Applies to non-MNN upscalers. MNN upscalers keep their own mobile backend."
+                else ->
+                    "Applies to image generation and inpaint when the runtime/model backend supports OpenCL."
+            },
+            checked = ui.useGpuAcceleration,
+            onCheckedChange = onToggle,
+            icon = TnIcons.Cpu,
+            enabled = !ui.isBusy,
+        )
+        CaptionText(
+            text = "If a model fails to load or the device gets unstable, turn this off and retry.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -725,6 +843,7 @@ private fun InputImageCard(
 private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
     val dimens = LocalDimens.current
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+        ProgressMetricsCard(ui)
         if (ui.statusText.isNotBlank()) {
             CaptionText(text = ui.statusText)
         }
@@ -768,6 +887,64 @@ private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
 }
 
 @Composable
+private fun ProgressMetricsCard(ui: ImageTaskUi) {
+    val metrics = ui.metrics
+    if (!metrics.active && metrics.progress <= 0f) return
+    val dimens = LocalDimens.current
+    StandardCard(
+        title = metrics.label.ifBlank { "Progress" },
+        icon = TnIcons.Zap,
+        description = metrics.detail,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            LinearProgressIndicator(
+                progress = { metrics.progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                MetricPill("Elapsed", formatDuration(metrics.elapsedMs), Modifier.weight(1f))
+                MetricPill("ETA", metrics.etaMs?.let(::formatDuration) ?: "--", Modifier.weight(1f))
+                MetricPill("Done", "${(metrics.progress.coerceIn(0f, 1f) * 100).toInt()}%", Modifier.weight(1f))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                val step = if (metrics.currentStep != null && metrics.totalSteps != null)
+                    "${metrics.currentStep}/${metrics.totalSteps}" else "--"
+                MetricPill("Step", step, Modifier.weight(1f))
+                MetricPill("Step time", metrics.stepMs?.let(::formatDuration) ?: "--", Modifier.weight(1f))
+                val res = if (metrics.width > 0 && metrics.height > 0) "${metrics.width}×${metrics.height}" else "--"
+                MetricPill("Output", res, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricPill(label: String, value: String, modifier: Modifier = Modifier) {
+    val dimens = LocalDimens.current
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        shape = LocalTnShapes.current.cardSmall,
+    ) {
+        Column(modifier = Modifier.padding(dimens.spacingSm)) {
+            CaptionText(text = label)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+    }
+}
+
+@Composable
 private fun DiffusionOutputCard(
     ui: ImageTaskUi,
     sectionTitle: String,
@@ -785,6 +962,14 @@ private fun DiffusionOutputCard(
         showUpscale = isResult,
         onUpscaleClick = { onUpscale(image) },
     )
+}
+
+private fun formatDuration(ms: Long): String {
+    val safe = ms.coerceAtLeast(0L)
+    val totalSec = (safe + 999L) / 1000L
+    val min = totalSec / 60L
+    val sec = totalSec % 60L
+    return if (min > 0) "${min}m ${sec}s" else "${sec}s"
 }
 
 @Composable
@@ -808,4 +993,13 @@ private fun decodeBitmap(context: android.content.Context, path: String): Bitmap
     }
 } catch (_: Throwable) {
     null
+}
+
+private fun writeBitmapToUri(context: android.content.Context, bitmap: Bitmap, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+            throw IllegalStateException("Bitmap.compress returned false")
+        }
+    }
 }

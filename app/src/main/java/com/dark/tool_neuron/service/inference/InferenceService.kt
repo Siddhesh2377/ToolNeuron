@@ -375,6 +375,7 @@ class InferenceService : Service() {
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
+                        opOffload = config.optBoolean("opOffload", false),
                     )
                     if (success) {
                         applySamplingFromConfig(config)
@@ -412,6 +413,7 @@ class InferenceService : Service() {
                         flashAttn = config.optBoolean("flashAttn", true),
                         cacheTypeK = config.optString("cacheTypeK", "q8_0"),
                         cacheTypeV = config.optString("cacheTypeV", "q8_0"),
+                        opOffload = config.optBoolean("opOffload", false),
                     )
                     if (success) {
                         applySamplingFromConfig(config)

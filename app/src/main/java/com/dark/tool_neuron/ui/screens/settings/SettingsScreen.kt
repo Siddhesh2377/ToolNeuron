@@ -133,6 +133,12 @@ private val SETTINGS_LANDING_CARDS = listOf(
         icon = TnIcons.Photo,
     ),
     LandingCard(
+        route = NavScreens.SettingsServerRoles.route,
+        title = "Server model roles",
+        description = "Manual identities for remote API models",
+        icon = TnIcons.Server,
+    ),
+    LandingCard(
         route = NavScreens.SettingsModel.route,
         title = "Model",
         description = "Performance and per-model configuration",
