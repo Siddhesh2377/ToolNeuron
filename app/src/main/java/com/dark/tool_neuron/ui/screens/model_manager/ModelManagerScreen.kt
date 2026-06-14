@@ -10,11 +10,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -61,6 +63,7 @@ fun ModelManagerScreen(
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
     var pendingDelete by remember { mutableStateOf<ModelInfo?>(null) }
     var pendingTypeChange by remember { mutableStateOf<ModelInfo?>(null) }
+    var selectedType by remember { mutableStateOf<ProviderType?>(null) }
 
     Scaffold(
         topBar = {
@@ -97,6 +100,9 @@ fun ModelManagerScreen(
                     if (items.isEmpty()) null else section to items
                 }
             }
+            val visibleGroups = remember(grouped, selectedType) {
+                if (selectedType == null) grouped else grouped.filter { it.first.type == selectedType }
+            }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -107,7 +113,14 @@ fun ModelManagerScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
-                grouped.forEach { (section, items) ->
+                item(key = "tabs") {
+                    ModelTypeTabs(
+                        groups = grouped.map { it.first },
+                        selectedType = selectedType,
+                        onSelect = { selectedType = it },
+                    )
+                }
+                visibleGroups.forEach { (section, items) ->
                     item(key = "header-${section.type.name}") {
                         SectionHeader(label = section.label, count = items.size, blurb = section.blurb)
                     }
@@ -245,15 +258,49 @@ private fun ModelManagerCard(
     }
 }
 
-private data class Section(val type: ProviderType, val label: String, val blurb: String)
+@Composable
+private fun ModelTypeTabs(
+    groups: List<Section>,
+    selectedType: ProviderType?,
+    onSelect: (ProviderType?) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        contentPadding = PaddingValues(vertical = dimens.spacingXs),
+    ) {
+        item(key = "all") {
+            FilterChip(
+                selected = selectedType == null,
+                onClick = { onSelect(null) },
+                label = { Text("All") },
+            )
+        }
+        items(groups, key = { it.type.name }) { section ->
+            FilterChip(
+                selected = selectedType == section.type,
+                onClick = { onSelect(section.type) },
+                label = { Text(section.tabLabel) },
+            )
+        }
+    }
+}
+
+private data class Section(
+    val type: ProviderType,
+    val label: String,
+    val blurb: String,
+    val tabLabel: String,
+)
 
 private val SECTIONS = listOf(
-    Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen."),
-    Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG)."),
-    Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace."),
-    Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode."),
-    Section(ProviderType.TTS,       "Text-to-Speech",    "Reads model replies aloud."),
-    Section(ProviderType.STT,       "Speech-to-Text",    "Transcribes voice input."),
+    Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen.", "Chat"),
+    Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG).", "RAG"),
+    Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace.", "Image"),
+    Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode.", "Upscale"),
+    Section(ProviderType.TTS,       "Text-to-Speech",    "Reads model replies aloud.", "TTS"),
+    Section(ProviderType.STT,       "Speech-to-Text",    "Transcribes voice input.", "STT"),
 )
 
 @Composable

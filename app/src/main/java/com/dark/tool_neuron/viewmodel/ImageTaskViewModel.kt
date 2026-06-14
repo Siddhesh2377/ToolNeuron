@@ -225,7 +225,7 @@ class ImageTaskViewModel @Inject constructor(
             imageGen.generationState.collect { state ->
                 if (state is DiffusionGenerationState.Complete) {
                     handleCompletedOutput(
-                        token = "gen_${state.seed}_${state.width}_${state.height}",
+                        token = "gen_${state.seed}_${state.width}_${state.height}_${System.nanoTime()}",
                         bitmap = state.bitmap,
                         prefix = if (inputs.value.mode == ImageTaskMode.INPAINT) "tn_inpaint" else "tn_generate",
                     )
@@ -237,7 +237,7 @@ class ImageTaskViewModel @Inject constructor(
             imageGen.upscaleState.collect { state ->
                 if (state is UpscaleState.Complete) {
                     handleCompletedOutput(
-                        token = "up_${state.width}_${state.height}_${state.timeMs}",
+                        token = "up_${state.width}_${state.height}_${state.timeMs}_${System.nanoTime()}",
                         bitmap = state.bitmap,
                         prefix = "tn_upscale",
                         finalUpscaleTimeMs = state.timeMs.toLong().coerceAtLeast(1L),

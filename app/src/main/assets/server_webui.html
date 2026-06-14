@@ -17,6 +17,7 @@
   --accent-soft:rgba(155,199,255,0.13); --accent-edge:rgba(155,199,255,0.32);
   --danger:#FF7A7A; --warn:#F4B860;
   --code-bg:#111923;
+  --active-chat:#1D3B5E; --overlay:rgba(0,0,0,0.42); --shadow:rgba(0,0,0,0.5);
   --r-xs:10px; --r-sm:14px; --r-md:18px; --r-lg:24px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-top: env(safe-area-inset-top, 0px);
@@ -29,6 +30,7 @@
     --accent:#256CB8; --accent-2:#1D5EA8; --accent-on:#FFFFFF;
     --accent-soft:rgba(37,108,184,0.10); --accent-edge:rgba(37,108,184,0.28);
     --code-bg:#EEF3F9;
+    --active-chat:#DCEBFF; --overlay:rgba(15,23,42,0.22); --shadow:rgba(15,23,42,0.18);
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -61,12 +63,12 @@ button, input, textarea { font: inherit; color: inherit; }
     z-index: 30;
     transition: transform 220ms cubic-bezier(.22,1,.36,1);
     will-change: transform;
-    box-shadow: 0 0 0 1px var(--border), 24px 0 60px -20px rgba(0,0,0,0.5);
+    box-shadow: 0 0 0 1px var(--border), 24px 0 60px -20px var(--shadow);
   }
   .sidebar.open { transform: translateX(0); }
   .scrim {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.42);
+    background: var(--overlay);
     backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
     z-index: 20; opacity: 0; pointer-events: none;
     transition: opacity 200ms;
@@ -110,7 +112,7 @@ button, input, textarea { font: inherit; color: inherit; }
   border: 1px solid transparent;
 }
 .chat-item:hover { background: var(--surface); }
-.chat-item.active { background: #1D3B5E; border-color: rgba(155,199,255,0.22); }
+.chat-item.active { background: var(--active-chat); border-color: var(--accent-edge); }
 .chat-item .label {
   flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 14px; color: var(--fg-dim);
@@ -1206,6 +1208,7 @@ kbd {
   }
   function closeSettings() { els.settingsModal.classList.remove('open'); }
   function saveSettings() {
+    var tokenChanged = state.token !== els.tokenInput.value.trim();
     state.token = els.tokenInput.value.trim();
     if (state.token) localStorage.setItem(TOKEN_KEY, state.token);
     else localStorage.removeItem(TOKEN_KEY);
@@ -1213,7 +1216,8 @@ kbd {
     if (state.model) localStorage.setItem(CHAT_MODEL_KEY, state.model);
     else localStorage.removeItem(CHAT_MODEL_KEY);
     closeSettings();
-    ensureModelCache();
+    if (tokenChanged) modelCache = null;
+    refreshModelCache();
     updateModelDisplay();
     toast('Settings saved');
   }
@@ -1233,7 +1237,7 @@ kbd {
     try {
       var r = await fetch('/v1/models', { headers: authHeaders() });
       if (!r.ok) {
-        modelCache = [];
+        if (state.token) modelCache = [];
         updateModelDisplay();
         return;
       }
@@ -1248,7 +1252,7 @@ kbd {
       repopulateSelects();
       populateChatModelSelect();
     } catch (e) {
-      modelCache = [];
+      if (state.token) modelCache = [];
       updateModelDisplay();
     }
   }
@@ -1298,7 +1302,7 @@ kbd {
   }
 
   async function ensureModelCache() {
-    if (Array.isArray(modelCache)) return modelCache;
+    if (Array.isArray(modelCache) && (modelCache.length > 0 || !state.token)) return modelCache;
     await refreshModelCache();
     return modelCache || [];
   }

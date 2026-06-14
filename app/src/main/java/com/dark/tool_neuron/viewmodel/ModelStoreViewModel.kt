@@ -46,6 +46,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import javax.inject.Inject
 
@@ -814,33 +815,63 @@ class ModelStoreViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             val current = modelRepo.getModelById(modelId) ?: return@launch
             if (current.providerType == providerType) return@launch
+            updateModelProviderTypeNow(current, providerType)
+        }
+    }
 
-            if (current.isActive && providerType != ProviderType.GGUF) {
-                InferenceClient.unloadModel()
-            }
-            if (current.providerType == ProviderType.EMBEDDING && providerType != ProviderType.EMBEDDING &&
-                ragManager.defaultEmbeddingModelId.value == modelId
-            ) {
-                ragManager.setDefaultEmbeddingModelId(null)
-            }
-            if (current.providerType == ProviderType.TTS && providerType != ProviderType.TTS &&
-                prefs.activeTtsModelId == modelId
-            ) {
-                prefs.activeTtsModelId = ""
-            }
-            if (current.providerType == ProviderType.STT && providerType != ProviderType.STT &&
-                prefs.activeSttModelId == modelId
-            ) {
-                prefs.activeSttModelId = ""
-            }
-            if (current.providerType == ProviderType.GGUF && providerType != ProviderType.GGUF &&
-                serverController.selectedModelId() == modelId
-            ) {
-                serverController.setSelectedModelId("")
-            }
+    private suspend fun updateModelProviderTypeNow(current: ModelInfo, providerType: ProviderType) {
+        val modelId = current.id
+        if (current.isActive && providerType != ProviderType.GGUF) {
+            InferenceClient.unloadModel()
+        }
+        if (current.providerType == ProviderType.EMBEDDING && providerType != ProviderType.EMBEDDING &&
+            ragManager.defaultEmbeddingModelId.value == modelId
+        ) {
+            ragManager.setDefaultEmbeddingModelId(null)
+        }
+        if (current.providerType == ProviderType.TTS && providerType != ProviderType.TTS &&
+            prefs.activeTtsModelId == modelId
+        ) {
+            prefs.activeTtsModelId = ""
+        }
+        if (current.providerType == ProviderType.STT && providerType != ProviderType.STT &&
+            prefs.activeSttModelId == modelId
+        ) {
+            prefs.activeSttModelId = ""
+        }
+        if (current.providerType == ProviderType.GGUF && providerType != ProviderType.GGUF &&
+            serverController.selectedModelId() == modelId
+        ) {
+            serverController.setSelectedModelId("")
+        }
 
+        val migrated = migrateLocalUriForImageModel(current, providerType)
+        if (migrated != null) {
+            modelRepo.insert(migrated)
+        } else {
             modelRepo.updateProviderType(modelId, providerType)
         }
+    }
+
+    private fun migrateLocalUriForImageModel(
+        current: ModelInfo,
+        providerType: ProviderType,
+    ): ModelInfo? {
+        if (current.pathType != PathType.CONTENT_URI) return null
+        val uri = Uri.parse(current.path)
+        val fileName = current.name.substringAfterLast('/').ifBlank { current.id.substringAfterLast('/') }
+        val localFile = when (providerType) {
+            ProviderType.IMAGE_UPSCALER -> copyLocalImport(uri, modelRepo.imageUpscalerFile(current.id, fileName))
+            ProviderType.IMAGE_GEN -> copyLocalImport(uri, java.io.File(modelRepo.imageModelDir(current.id), fileName))
+            else -> return null
+        }
+        return current.copy(
+            path = localFile.absolutePath,
+            pathType = PathType.FILE,
+            providerType = providerType,
+            fileSize = localFile.length(),
+            isActive = false,
+        )
     }
 
     suspend fun getModelConfig(modelId: String): ModelConfig? = modelRepo.getConfig(modelId)
@@ -851,6 +882,20 @@ class ModelStoreViewModel @Inject constructor(
         if (info.providerType != ProviderType.GGUF) return
         if (serverController.isBusy) return
         viewModelScope.launch { modelSession.load(info) }
+    }
+
+    fun saveModelConfig(config: ModelConfig, providerType: ProviderType) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val current = modelRepo.getModelById(config.modelId)
+            if (current != null && current.providerType != providerType) {
+                updateModelProviderTypeNow(current, providerType)
+            }
+            modelRepo.updateConfig(config)
+            val latest = modelRepo.getModelById(config.modelId)
+            if (latest?.providerType == ProviderType.GGUF && !serverController.isBusy) {
+                withContext(Dispatchers.Main) { modelSession.load(latest) }
+            }
+        }
     }
 
 

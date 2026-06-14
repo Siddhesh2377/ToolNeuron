@@ -346,17 +346,6 @@ class SettingsViewModel @Inject constructor(
             }
         }
         val fileModels = models.filter { it.pathType == com.dark.tool_neuron.model.enums.PathType.FILE }
-        val roleOptions = listOf(
-            SettingsChoiceOption(ServerModelRole.AUTO.token, "Auto", "Use the installed model type."),
-            SettingsChoiceOption(ServerModelRole.CHAT.token, "Chat model", "Expose for text chat completions."),
-            SettingsChoiceOption(ServerModelRole.VLM.token, "Vision chat model", "Expose for image chat. Requires a colocated mmproj."),
-            SettingsChoiceOption(ServerModelRole.EMBEDDING.token, "Embedding model", "Expose for embeddings."),
-            SettingsChoiceOption(ServerModelRole.TTS.token, "Text-to-speech", "Expose for speech generation."),
-            SettingsChoiceOption(ServerModelRole.STT.token, "Speech-to-text", "Expose for transcription."),
-            SettingsChoiceOption(ServerModelRole.IMAGE_GEN.token, "Image generation", "Expose for image creation."),
-            SettingsChoiceOption(ServerModelRole.IMAGE_UPSCALER.token, "Image upscaler", "Expose for image upscaling."),
-            SettingsChoiceOption(ServerModelRole.DISABLED.token, "Not exposed", "Hide this model from the remote server."),
-        )
         val serverKinds = listOf(
             ServerModelRole.CHAT to "Default chat model",
             ServerModelRole.VLM to "Default vision chat model",
@@ -384,37 +373,18 @@ class SettingsViewModel @Inject constructor(
                 },
             )
         }
-        val roleItems = if (fileModels.isEmpty()) {
-            listOf(
-                SettingsItem.Info(
-                    id = "server_roles_empty",
-                    title = "No local model files",
-                    subtitle = "Install or import models before assigning server roles.",
-                    icon = TnIcons.Server,
-                    value = "",
-                ),
-            )
-        } else {
-            fileModels.map { model ->
-                SettingsItem.Choice(
-                    id = "$ID_SERVER_ROLE_PREFIX${model.id}",
-                    title = model.name,
-                    subtitle = "Remote server role",
-                    icon = TnIcons.Server,
-                    selectedKey = roles[model.id]?.token ?: ServerModelRole.AUTO.token,
-                    options = roleOptions,
-                    onSelect = { key ->
-                        setServerModelRole(model.id, ServerModelRole.fromToken(key))
-                    },
-                )
-            }
-        }
         return SettingsSection(
             id = SECTION_SERVER_ROLES,
             title = "Server model roles",
-            description = "Choose server defaults and manual identities for remote API models.",
+            description = "Choose the fallback models used when remote API requests leave model blank. Per-model identity lives in Model settings.",
             icon = TnIcons.Server,
-            items = defaultItems + roleItems,
+            items = defaultItems + SettingsItem.Action(
+                id = ID_OPEN_MODEL_EDITOR_FROM_SERVER,
+                title = "Edit per-model identities",
+                subtitle = "Assign Chat, Embedding, Image, Voice, or hidden from each model's settings page.",
+                icon = TnIcons.Sliders,
+                onClick = { _navEvents.tryEmit(NavScreens.ModelManager.route) },
+            ),
         )
     }
 
@@ -429,6 +399,7 @@ class SettingsViewModel @Inject constructor(
 
     private fun defaultServerRole(model: ModelInfo): ServerModelRole = when (model.providerType) {
         ProviderType.GGUF -> {
+            inferRoleFromName(model)?.let { return it }
             val modelsRoot = modelRepo.getModelsDir()
             if (VlmPaths.isInsideVlmFolder(model.path, modelsRoot) &&
                 VlmPaths.colocatedMmproj(File(model.path)) != null
@@ -443,6 +414,26 @@ class SettingsViewModel @Inject constructor(
         ProviderType.STT -> ServerModelRole.STT
         ProviderType.IMAGE_GEN -> ServerModelRole.IMAGE_GEN
         ProviderType.IMAGE_UPSCALER -> ServerModelRole.IMAGE_UPSCALER
+    }
+
+    private fun inferRoleFromName(model: ModelInfo): ServerModelRole? {
+        val haystack = "${model.name} ${model.id} ${model.path}".lowercase()
+        val ext = model.path.substringAfterLast('.', "").lowercase()
+        return when {
+            ext == "mnn" && listOf("upscale", "upscaler", "esrgan", "realesrgan", "upgif", "x2", "x3", "x4")
+                .any { it in haystack } -> ServerModelRole.IMAGE_UPSCALER
+            listOf("embed", "embedding", "bge-", "e5-", "nomic-embed", "gte-", "snowflake-arctic-embed")
+                .any { it in haystack } -> ServerModelRole.EMBEDDING
+            listOf("whisper", "speech-to-text", "stt", "transcrib")
+                .any { it in haystack } -> ServerModelRole.STT
+            listOf("piper", "kokoro", "text-to-speech", "tts")
+                .any { it in haystack } -> ServerModelRole.TTS
+            listOf("stable-diffusion", "sd-", "sd_", "diffusion", "unet", "inpaint")
+                .any { it in haystack } -> ServerModelRole.IMAGE_GEN
+            listOf("-vl-", "_vl_", "vision", "vlm", "mmproj", "llava", "moondream", "minicpm-v")
+                .any { it in haystack } -> ServerModelRole.VLM
+            else -> null
+        }
     }
 
     private fun roleLabel(role: ServerModelRole): String = when (role) {
@@ -896,6 +887,7 @@ class SettingsViewModel @Inject constructor(
         private const val ID_THREAD_MODE = "thread_mode"
         private const val ID_OPEN_PERFORMANCE = "open_performance"
         private const val ID_OPEN_MODEL_EDITOR = "open_model_editor"
+        private const val ID_OPEN_MODEL_EDITOR_FROM_SERVER = "open_model_editor_from_server"
         private const val ID_OPEN_CRASH_REPORTS = "open_crash_reports"
         private const val ID_PLUGINS_COUNT = "plugins_count"
         private const val ID_PLUGIN_ONNX_EP = "plugin_onnx_ep"

@@ -410,8 +410,8 @@ fun TNavigation(
                     ModelConfigScreen(
                         modelInfo = model,
                         initialConfig = initialConfig,
-                        onSave = { config ->
-                            viewModel.saveModelConfig(config)
+                        onSave = { config, providerType ->
+                            viewModel.saveModelConfig(config, providerType)
                             navController.popBackStack()
                         },
                         onBack = { navController.popBackStack() },

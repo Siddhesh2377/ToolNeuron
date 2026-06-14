@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
 fun ModelConfigScreen(
     modelInfo: ModelInfo,
     initialConfig: ModelConfig?,
-    onSave: (ModelConfig) -> Unit,
+    onSave: (ModelConfig, ProviderType) -> Unit,
     onBack: () -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -123,6 +123,7 @@ fun ModelConfigScreen(
     // Section toggles
     var showAdvancedSampling by remember { mutableStateOf(false) }
     var showMemory by remember { mutableStateOf(false) }
+    var selectedProviderType by remember(modelInfo.id) { mutableStateOf(modelInfo.providerType) }
 
     fun resetToDefaults() {
         contextSize = 4096; threadMode = 0; flashAttn = false; opOffload = false
@@ -140,7 +141,7 @@ fun ModelConfigScreen(
     fun buildConfig(): ModelConfig {
         val loading = JSONObject()
         val inference = JSONObject()
-        when (modelInfo.providerType) {
+        when (selectedProviderType) {
             ProviderType.GGUF -> {
                 loading.put("contextSize", contextSize)
                 loading.put("threadMode", threadMode)
@@ -240,7 +241,7 @@ fun ModelConfigScreen(
                     )
                     Spacer(Modifier.width(dimens.spacingSm))
                     ActionButton(
-                        onClickListener = { onSave(buildConfig()) },
+                        onClickListener = { onSave(buildConfig(), selectedProviderType) },
                         icon = TnIcons.Check,
                         contentDescription = "Save"
                     )
@@ -258,7 +259,32 @@ fun ModelConfigScreen(
                 .padding(horizontal = dimens.screenPadding),
             verticalArrangement = Arrangement.spacedBy(dimens.itemSpacing)
         ) {
-            when (modelInfo.providerType) {
+            item {
+                Spacer(Modifier.height(dimens.spacingSm))
+                StandardCard(title = "Identity") {
+                    Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)) {
+                        Text(
+                            text = "Tell ToolNeuron what this file is. This drives Model Manager tabs, Image Task lists, RAG choices, and remote server exposure.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        MODEL_TYPES.forEach { type ->
+                            ModelIdentityOption(
+                                type = type,
+                                selected = selectedProviderType == type,
+                                onSelect = { selectedProviderType = type },
+                            )
+                        }
+                        Text(
+                            text = modelTypeDescription(selectedProviderType),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
+            }
+            when (selectedProviderType) {
                 ProviderType.IMAGE_GEN, ProviderType.IMAGE_UPSCALER -> {
                     item {
                         Spacer(Modifier.height(dimens.spacingSm))
@@ -749,6 +775,68 @@ fun ModelConfigScreen(
 
 private val CACHE_TYPES = listOf("f16", "q8_0", "q5_0", "q4_0")
 private val MIROSTAT_LABELS = listOf("Off", "v1", "v2")
+private val MODEL_TYPES = listOf(
+    ProviderType.GGUF,
+    ProviderType.EMBEDDING,
+    ProviderType.IMAGE_GEN,
+    ProviderType.IMAGE_UPSCALER,
+    ProviderType.TTS,
+    ProviderType.STT,
+)
+
+@Composable
+private fun ModelIdentityOption(
+    type: ProviderType,
+    selected: Boolean,
+    onSelect: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onSelect)
+            .padding(vertical = dimens.spacingXs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+    ) {
+        Icon(
+            imageVector = if (selected) TnIcons.CircleCheck else TnIcons.Circle,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = modelTypeLabel(type),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+            )
+            Text(
+                text = modelTypeDescription(type),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun modelTypeLabel(type: ProviderType): String = when (type) {
+    ProviderType.GGUF -> "Chat"
+    ProviderType.EMBEDDING -> "RAG"
+    ProviderType.IMAGE_GEN -> "Image Gen"
+    ProviderType.IMAGE_UPSCALER -> "Upscaler"
+    ProviderType.TTS -> "TTS"
+    ProviderType.STT -> "STT"
+}
+
+private fun modelTypeDescription(type: ProviderType): String = when (type) {
+    ProviderType.GGUF -> "Chat model: used by normal chat and OpenAI-compatible text completions."
+    ProviderType.EMBEDDING -> "Embedding model: used for document indexing and RAG retrieval."
+    ProviderType.IMAGE_GEN -> "Image generation model: used by image create/inpaint tasks."
+    ProviderType.IMAGE_UPSCALER -> "Image upscaler: used by image upscale tasks."
+    ProviderType.TTS -> "Text-to-speech model: reads replies aloud."
+    ProviderType.STT -> "Speech-to-text model: transcribes voice input."
+}
 
 @Composable
 private fun ConfigSlider(

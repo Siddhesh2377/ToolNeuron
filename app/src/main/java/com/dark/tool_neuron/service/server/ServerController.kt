@@ -222,6 +222,7 @@ class ServerController @Inject constructor(
     private fun defaultServerKind(model: ModelInfo, modelsRoot: File): ServerEngineKind? =
         when (model.providerType) {
             ProviderType.GGUF -> {
+                inferServerKindFromName(model)?.let { return it }
                 if (VlmPaths.isInsideVlmFolder(model.path, modelsRoot) &&
                     VlmPaths.colocatedMmproj(File(model.path)) != null
                 ) {
@@ -236,6 +237,26 @@ class ServerController @Inject constructor(
             ProviderType.IMAGE_GEN -> ServerEngineKind.IMAGE_GEN
             ProviderType.IMAGE_UPSCALER -> ServerEngineKind.IMAGE_UPSCALER
         }
+
+    private fun inferServerKindFromName(model: ModelInfo): ServerEngineKind? {
+        val haystack = "${model.name} ${model.id} ${model.path}".lowercase()
+        val ext = model.path.substringAfterLast('.', "").lowercase()
+        return when {
+            ext == "mnn" && listOf("upscale", "upscaler", "esrgan", "realesrgan", "upgif", "x2", "x3", "x4")
+                .any { it in haystack } -> ServerEngineKind.IMAGE_UPSCALER
+            listOf("embed", "embedding", "bge-", "e5-", "nomic-embed", "gte-", "snowflake-arctic-embed")
+                .any { it in haystack } -> ServerEngineKind.EMBEDDING
+            listOf("whisper", "speech-to-text", "stt", "transcrib")
+                .any { it in haystack } -> ServerEngineKind.STT
+            listOf("piper", "kokoro", "text-to-speech", "tts")
+                .any { it in haystack } -> ServerEngineKind.TTS
+            listOf("stable-diffusion", "sd-", "sd_", "diffusion", "unet", "inpaint")
+                .any { it in haystack } -> ServerEngineKind.IMAGE_GEN
+            listOf("-vl-", "_vl_", "vision", "vlm", "mmproj", "llava", "moondream", "minicpm-v")
+                .any { it in haystack } -> ServerEngineKind.VLM
+            else -> null
+        }
+    }
 
     private fun readServerModelRoles(): Map<String, ServerModelRole> {
         val raw = prefs.serverModelRolesJson
