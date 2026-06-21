@@ -158,6 +158,9 @@ class ModelStoreViewModel @Inject constructor(
     private val _selectedSizeCategory = MutableStateFlow<SizeCategory?>(null)
     val selectedSizeCategory: StateFlow<SizeCategory?> = _selectedSizeCategory.asStateFlow()
 
+    private val _showOver2GbModels = MutableStateFlow(false)
+    val showOver2GbModels: StateFlow<Boolean> = _showOver2GbModels.asStateFlow()
+
     private val _selectedTags = MutableStateFlow<Set<String>>(emptySet())
     val selectedTags: StateFlow<Set<String>> = _selectedTags.asStateFlow()
 
@@ -341,6 +344,13 @@ class ModelStoreViewModel @Inject constructor(
     private fun applyAllFilters() {
         var filtered = _models.value
 
+        if (!_showOver2GbModels.value) {
+            filtered = filtered.filter { model ->
+                val bytes = sizeBytesOf(model)
+                bytes <= 0L || bytes <= DEFAULT_MAX_VISIBLE_MODEL_BYTES
+            }
+        }
+
         _selectedCategory.value?.let { cat ->
             val repos = repoDataStore.repositories.value
             val matching = repos.filter { it.category == cat && it.isEnabled }.map { it.id }.toSet()
@@ -425,12 +435,14 @@ class ModelStoreViewModel @Inject constructor(
         applyAllFilters()
     }
     fun setShowNsfw(show: Boolean) { _showNsfw.value = show; applyAllFilters() }
+    fun setShowOver2GbModels(show: Boolean) { _showOver2GbModels.value = show; applyAllFilters() }
     fun setExecutionTarget(t: String?) { _executionTarget.value = t; applyAllFilters() }
     fun clearAllFilters() {
         _selectedModelType.value = null; _selectedCategory.value = null
         _selectedParameters.value = emptySet(); _selectedQuantizations.value = emptySet()
         _selectedSizeCategory.value = null; _selectedTags.value = emptySet()
         _showNsfw.value = true; _executionTarget.value = null
+        _showOver2GbModels.value = false
         _sortBy.value = SortOption.NAME; _searchQuery.value = ""
         applyAllFilters()
     }
@@ -471,6 +483,11 @@ class ModelStoreViewModel @Inject constructor(
                 .thenBy { sizeBytesOf(it).takeIf { bytes -> bytes > 0 } ?: Long.MAX_VALUE }
                 .thenBy { it.name.lowercase() })
 
+    fun getTaskGroupsForRepo(repoKey: String): List<Pair<String, List<HuggingFaceModel>>> =
+        getModelsForRepo(repoKey)
+            .groupBy { ModelTaxonomy.task(it).displayName }
+            .map { (task, items) -> task to items }
+
 
     fun downloadByQuickStartId(modelId: String) {
         viewModelScope.launch {
@@ -509,6 +526,8 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     companion object {
+        const val DEFAULT_MAX_VISIBLE_MODEL_BYTES = 2L * 1024L * 1024L * 1024L
+
         val QUICK_START_QUANT_PRIORITY = listOf("Q4_K_M", "Q4_K_S", "Q4_0", "Q5_K_M", "Q5_K_S", "Q8_0")
 
         const val PACK_CHAT_ONLY = "pack_chat_only"

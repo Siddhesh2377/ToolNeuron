@@ -207,7 +207,7 @@ internal fun RepoDetailView(
 ) {
     val dimens = LocalDimens.current
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
-    val repoModels = remember(filteredModels, repoKey) { viewModel.getModelsForRepo(repoKey) }
+    val taskGroups = remember(filteredModels, repoKey) { viewModel.getTaskGroupsForRepo(repoKey) }
     val groupedRepos = remember(filteredModels) { viewModel.getGroupedRepos() }
     val repoInfo = groupedRepos[repoKey]
 
@@ -241,17 +241,55 @@ internal fun RepoDetailView(
             contentPadding = PaddingValues(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(repoModels, key = { it.id }) { model ->
-                CatalogModelCard(
-                    model = model,
-                    isInstalled = model.id in installedModelIds,
-                    downloadState = downloadStates[model.id],
-                    isExtracting = model.id in extractingIds,
-                    extractingEntryName = extractingFile[model.id],
-                    onDownload = { onDownload(model) },
-                    onCancel = { onCancelDownload(model.id) }
-                )
+            taskGroups.forEach { (taskName, modelsForTask) ->
+                item(key = "task_$repoKey$taskName") {
+                    TaskSectionHeader(
+                        title = taskName,
+                        count = modelsForTask.size,
+                    )
+                }
+                items(modelsForTask, key = { it.id }) { model ->
+                    CatalogModelCard(
+                        model = model,
+                        isInstalled = model.id in installedModelIds,
+                        downloadState = downloadStates[model.id],
+                        isExtracting = model.id in extractingIds,
+                        extractingEntryName = extractingFile[model.id],
+                        onDownload = { onDownload(model) },
+                        onCancel = { onCancelDownload(model.id) }
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TaskSectionHeader(
+    title: String,
+    count: Int,
+) {
+    val dimens = LocalDimens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = dimens.spacingSm, bottom = dimens.spacingXs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        Icon(
+            imageVector = TnIcons.ArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        CaptionText(text = "$count")
     }
 }

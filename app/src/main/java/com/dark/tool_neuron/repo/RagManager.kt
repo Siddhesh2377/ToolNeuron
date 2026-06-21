@@ -600,6 +600,21 @@ class RagManager @Inject constructor(
                 ?: return@forEach
             if (text.isBlank()) return@forEach
 
+            val wholeDocCost = approxTokens(text) + PER_CHUNK_OVERHEAD_TOKENS
+            if (used + wholeDocCost <= budget) {
+                kept += RagChunk(
+                    docId = doc.id,
+                    sourceId = doc.sourceId,
+                    chunkIndex = 0,
+                    score = 1f,
+                    text = text,
+                    name = doc.name,
+                    mimeType = doc.mimeType,
+                )
+                used += wholeDocCost
+                return@forEach
+            }
+
             val chunks = RagChunker.chunk(
                 text = text,
                 targetChars = SUMMARY_CHUNK_TARGET_CHARS,
@@ -628,23 +643,23 @@ class RagManager @Inject constructor(
         if (kept.isEmpty()) return@withContext RagAugmentation.NONE
 
         val prompt = buildString {
-            append("The user is asking a document-wide question about the attached file(s). ")
-            append("Use the excerpts below to write a useful answer in your own words. ")
+            append("Answer the user's document request directly using the attached document context below. ")
+            append("Do not describe the request itself; do not start with phrases like \"the question is asking\" or \"the passages highlight\". ")
+            append("If the user asks for a summary, provide a concise summary of the document content. ")
             append("If the user asks to learn, teach from the basics first, then expand into the main sections. ")
-            append("Cover the main topics, definitions, examples, and notable sections that appear in the excerpts. ")
+            append("Cover the main topics, definitions, examples, and notable sections that appear in the context. ")
             append("Do not ask for a follow-up just because the excerpts are not the full file; answer from the available document context. ")
             append("Cite supporting excerpts inline using [1], [2], etc.\n\n")
-            append("<document_excerpts>\n")
+            append("<document_context>\n")
             kept.forEachIndexed { index, chunk ->
                 append("[${index + 1}] ")
                 append(chunk.name)
-                append(" · section ")
-                append(chunk.chunkIndex + 1)
+                append(if (chunk.chunkIndex == 0 && kept.size == 1) " · full extracted text" else " · section ${chunk.chunkIndex + 1}")
                 append("\n")
                 append(chunk.text)
                 append("\n\n")
             }
-            append("</document_excerpts>\n\n")
+            append("</document_context>\n\n")
             append("User request: ")
             append(originalPrompt)
         }

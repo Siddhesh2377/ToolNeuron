@@ -122,6 +122,7 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsStateWithLifecycle()
     val selectedTags by viewModel.selectedTags.collectAsStateWithLifecycle()
     val showNsfw by viewModel.showNsfw.collectAsStateWithLifecycle()
+    val showOver2GbModels by viewModel.showOver2GbModels.collectAsStateWithLifecycle()
     val executionTarget by viewModel.executionTarget.collectAsStateWithLifecycle()
     val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
 
@@ -135,6 +136,7 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
         selectedSizeCategory != null,
         selectedTags.isNotEmpty(),
         !showNsfw,
+        showOver2GbModels,
         executionTarget != null,
         sortBy != SortOption.NAME,
     ).count { it }
@@ -160,6 +162,33 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                     selected = selectedModelType == opt.value,
                     onClick = { viewModel.filterByModelType(opt.value) },
                     label = { Text(opt.label) },
+                )
+            }
+        }
+
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimens.spacingLg),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hide models over 2 GB", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Default phone-friendly store view. Turn off to see heavier files.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                ActionSwitch(
+                    checked = !showOver2GbModels,
+                    onCheckedChange = { checked -> viewModel.setShowOver2GbModels(!checked) },
                 )
             }
         }

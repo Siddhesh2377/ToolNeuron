@@ -51,8 +51,7 @@ fun CitationStrip(citations: List<Citation>) {
     var expanded by remember(citations) { mutableStateOf(false) }
     var openCitation by remember(citations) { mutableStateOf<Citation?>(null) }
 
-    val anyCited = remember(citations) { citations.any { it.cited } }
-    val title = if (anyCited) "Sources" else "Possible sources"
+    val title = "Sources"
     val subtitle = buildString {
         append(grouped.size)
         append(if (grouped.size == 1) " doc" else " docs")

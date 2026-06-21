@@ -40,17 +40,17 @@ object ModelTaxonomy {
 
         return when {
             model.modelType == "image_gen" -> ModelFamily.IMAGE_GEN
-            model.modelType == "tool_search" -> ModelFamily.SMOLLM
             model.modelType == "image_upscaler" || model.modelType == "tts" || model.modelType == "stt" -> ModelFamily.OTHER
             model.modelType == "embedding" -> ModelFamily.EMBEDDING
             model.isVlm || "vlm" in haystack || "vision" in haystack -> ModelFamily.VISION
             "lfm" in haystack -> ModelFamily.LFM
+            "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "qwen" in haystack -> ModelFamily.QWEN
             "gemma" in haystack -> ModelFamily.GEMMA
             "smollm" in haystack || "smallm" in haystack -> ModelFamily.SMOLLM
             "phi" in haystack -> ModelFamily.PHI
-            "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "mistral" in haystack -> ModelFamily.MISTRAL
+            model.modelType == "tool_search" -> ModelFamily.OTHER
             else -> ModelFamily.OTHER
         }
     }
@@ -63,11 +63,11 @@ object ModelTaxonomy {
             model.providerType == ProviderType.EMBEDDING -> ModelFamily.EMBEDDING
             model.providerType == ProviderType.VISION_CHAT || "vl" in haystack || "vision" in haystack -> ModelFamily.VISION
             "lfm" in haystack -> ModelFamily.LFM
+            "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "qwen" in haystack -> ModelFamily.QWEN
             "gemma" in haystack -> ModelFamily.GEMMA
             "smollm" in haystack || "smallm" in haystack -> ModelFamily.SMOLLM
             "phi" in haystack -> ModelFamily.PHI
-            "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "mistral" in haystack -> ModelFamily.MISTRAL
             else -> ModelFamily.OTHER
         }

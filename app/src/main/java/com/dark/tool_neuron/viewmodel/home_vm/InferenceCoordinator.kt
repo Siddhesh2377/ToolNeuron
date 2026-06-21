@@ -362,7 +362,8 @@ class InferenceCoordinator @Inject constructor(
         val historyTokens = (historyChars + 3) / 4
         val safetyMargin = 256
         val available = ctx - output - historyTokens - safetyMargin
-        return available.coerceIn(256, 4096)
+        val upper = minOf(8192, (ctx - output - safetyMargin).coerceAtLeast(4096))
+        return available.coerceIn(256, upper)
     }
 
     private fun buildMessagesJson(

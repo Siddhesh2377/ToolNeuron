@@ -127,6 +127,12 @@ label textarea{min-height:100px}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
 .drop{position:fixed;inset:0;border:3px dashed var(--brand);background:rgba(47,111,168,.12);display:none;place-items:center;z-index:50;font-size:24px;font-weight:800}
 .drop.show{display:grid}
+.setup-gate{position:fixed;inset:0;display:none;place-items:center;background:color-mix(in oklab,var(--bg) 70%,rgba(0,0,0,.52));backdrop-filter:blur(10px);z-index:70;padding:20px}
+.setup-gate.show{display:grid}
+.setup-card{width:min(560px,100%);background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:22px;display:flex;flex-direction:column;gap:16px}
+.setup-card h2{margin:0;font-size:26px}
+.setup-card p{margin:0;color:var(--muted)}
+.setup-status{border:1px solid var(--line);background:var(--panel-2);border-radius:14px;padding:10px 12px;color:var(--muted);font-size:13px}
 .overlay{display:none}
 @media (max-width:1100px){
   .app{grid-template-columns:var(--rail) minmax(0,1fr) 0}
@@ -248,11 +254,27 @@ label textarea{min-height:100px}
 <div id="overlay" class="overlay"></div>
 <div id="drop" class="drop">Drop files to attach</div>
 <div id="toast" class="toast"></div>
+<div id="setupGate" class="setup-gate">
+  <div class="setup-card">
+    <div>
+      <h2>Connect ToolNeuron</h2>
+      <p>Enter the token from the Android Server screen, then choose the model this web chat should use.</p>
+    </div>
+    <div id="setupStatus" class="setup-status">Waiting for server settings.</div>
+    <label>Server URL<input id="gateServerUrl" placeholder="http://192.168.x.x:11434" /></label>
+    <label>Bearer token<input id="gateToken" type="password" placeholder="tn_sk_..." /></label>
+    <label>Chat model<select id="gateModelSelect"></select></label>
+    <div class="row">
+      <button id="gateSave" class="primary" type="button">Save and load</button>
+      <button id="gateReload" class="secondary" type="button">Reload models</button>
+    </div>
+  </div>
+</div>
 <script>
 (function(){
   "use strict";
   var $=function(id){return document.getElementById(id)};
-  var app=$("app"),left=$("left"),right=$("right"),overlay=$("overlay"),toast=$("toast");
+  var app=$("app"),left=$("left"),right=$("right"),overlay=$("overlay"),toast=$("toast"),setupGate=$("setupGate");
   var storeKey="tn.webui.v2";
   var state=loadState();
   var modelCache=[];
@@ -271,6 +293,7 @@ label textarea{min-height:100px}
 
   function applySettingsToUi(){
     $("serverUrl").value=state.serverUrl||location.origin;$("token").value=state.token||"";
+    $("gateServerUrl").value=state.serverUrl||location.origin;$("gateToken").value=state.token||"";
     $("systemPrompt").value=state.systemPrompt||"";$("maxTokens").value=state.maxTokens||1024;
     $("temp").value=state.temp??.7;$("stream").checked=!!state.stream;
     $("theme").value=state.theme||"system";$("speakReplies").checked=!!state.speakReplies;$("notifyReplies").checked=state.notifyReplies!==false;
@@ -283,7 +306,21 @@ label textarea{min-height:100px}
     state.theme=$("theme").value;state.speakReplies=$("speakReplies").checked;state.notifyReplies=$("notifyReplies").checked;
     saveState();applyTheme();
   }
+  function readGateSettings(){
+    state.serverUrl=$("gateServerUrl").value.trim()||location.origin;
+    state.token=$("gateToken").value.trim();
+    state.model=$("gateModelSelect").value||state.model||"";
+    $("serverUrl").value=state.serverUrl;$("token").value=state.token;
+    saveState();
+  }
   function applyTheme(){document.documentElement.dataset.theme=state.theme==="system"?"":state.theme}
+  function showGate(message){
+    $("setupStatus").textContent=message||"Complete setup to start chatting.";
+    $("gateServerUrl").value=state.serverUrl||location.origin;
+    $("gateToken").value=state.token||"";
+    setupGate.classList.add("show");
+  }
+  function hideGate(){setupGate.classList.remove("show")}
 
   function newChat(){
     activeChat={id:uid(),title:"New chat",createdAt:Date.now(),messages:[]};
@@ -356,26 +393,30 @@ label textarea{min-height:100px}
 
   async function loadModels(){
     readSettingsFromUi();
+    if(!state.token){modelCache=[];renderModels();setStatus("Token required");showGate("Paste the bearer token from the app Server screen.");return}
     setStatus("Loading models...");
     try{
       var r=await fetch(api("/v1/models"),{headers:authHeaders()});
-      if(r.status===401||r.status===403){setStatus("Token rejected. Paste the token from the app.");openRight();return}
+      if(r.status===401||r.status===403){modelCache=[];renderModels();setStatus("Token rejected");showGate("The server rejected this token. Paste the current token from the app.");return}
       if(!r.ok)throw new Error(await r.text());
       var j=await r.json();modelCache=(j.data||[]).filter(function(m){return m.type==="gguf"||m.type==="vlm"});
       if(!state.model&&modelCache[0])state.model=modelCache.find(function(m){return m.default})?.id||modelCache[0].id;
+      if(state.model&&!modelCache.some(function(m){return m.id===state.model})&&modelCache[0])state.model=modelCache[0].id;
       saveState();renderModels();setStatus(modelCache.length?modelCache.length+" chat-capable models":"No chat-capable models exposed");
-      if(!modelCache.length)openRight();
-    }catch(e){setStatus("Could not load models");showToast("Model load failed");openRight()}
+      if(!modelCache.length){showGate("No chat-capable models are exposed. Install or assign a Chat/Vision chat model in the app.");return}
+      hideGate();
+    }catch(e){modelCache=[];renderModels();setStatus("Could not load models");showGate("Could not reach the server or load models. Check the address and token.")}
   }
   function renderModels(){
     var search=($("modelSearch").value||"").toLowerCase();
-    var selects=[$("modelList"),$("modelSelect")];selects.forEach(function(el){el.innerHTML=""});
+    var selects=[$("modelList"),$("modelSelect"),$("gateModelSelect")];selects.forEach(function(el){el.innerHTML=""});
+    if(!modelCache.length){["modelSelect","gateModelSelect"].forEach(function(id){var o=document.createElement("option");o.value="";o.textContent="No models exposed";$(id).appendChild(o)});$("modelLabel").textContent=state.model||"Choose model";return}
     modelCache.filter(function(m){return !search||m.id.toLowerCase().includes(search)}).forEach(function(m){
       var b=document.createElement("button");b.className="model-option"+(m.id===state.model?" active":"");b.type="button";
       b.innerHTML="<span></span><span class='pill'></span>";b.querySelector("span").textContent=m.id;b.querySelector(".pill").textContent=m.type||"model";
       b.onclick=function(){state.model=m.id;saveState();$("modelMenu").classList.remove("open");renderAll()};
       $("modelList").appendChild(b);
-      var o=document.createElement("option");o.value=m.id;o.textContent=m.id;if(m.id===state.model)o.selected=true;$("modelSelect").appendChild(o);
+      ["modelSelect","gateModelSelect"].forEach(function(id){var o=document.createElement("option");o.value=m.id;o.textContent=m.id;if(m.id===state.model)o.selected=true;$(id).appendChild(o)});
     });
     $("modelLabel").textContent=state.model||"Choose model";
   }
@@ -385,8 +426,8 @@ label textarea{min-height:100px}
     readSettingsFromUi();
     var text=$("prompt").value.trim();
     if(!text&&!attachments.length)return;
-    if(!state.token){openRight();showToast("Paste the server token first");return}
-    if(!state.model){openRight();showToast("Choose a chat model first");return}
+    if(!state.token){showGate("Paste the server token first.");return}
+    if(!state.model){showGate("Choose a chat model first.");return}
     var files=attachments.map(function(f){return{kind:f.kind,name:f.name,type:f.type}});
     activeChat.messages.push({role:"user",text:text,files:files});
     renameFromFirstMessage(activeChat);
@@ -449,6 +490,7 @@ label textarea{min-height:100px}
   $("rightToggle").onclick=openRight;$("closeRight").onclick=closeRight;overlay.onclick=function(){left.classList.remove("open");closeRight()};
   $("modelBtn").onclick=function(){$("modelMenu").classList.toggle("open")};$("modelSearch").oninput=renderModels;$("modelSelect").onchange=function(){state.model=this.value;saveState();renderAll()};
   $("saveSettings").onclick=function(){readSettingsFromUi();loadModels()};$("reloadModels").onclick=loadModels;$("theme").onchange=function(){readSettingsFromUi()};
+  $("gateSave").onclick=function(){readGateSettings();loadModels()};$("gateReload").onclick=function(){readGateSettings();loadModels()};
   $("speakReplies").onchange=readSettingsFromUi;$("notifyReplies").onchange=readSettingsFromUi;$("stream").onchange=readSettingsFromUi;
   $("composer").onsubmit=function(e){e.preventDefault();submit()};$("prompt").addEventListener("input",autoSize);
   $("attachBtn").onclick=function(){$("fileInput").click()};$("fileInput").onchange=function(){addFiles(this.files);this.value=""};

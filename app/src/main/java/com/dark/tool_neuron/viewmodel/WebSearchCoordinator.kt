@@ -75,6 +75,8 @@ class WebSearchCoordinator @Inject constructor(
             val requestedUrl = extractUrl(userQuery)
             val queries = if (requestedUrl != null) {
                 buildUrlFocusedQueries(userQuery, requestedUrl)
+            } else if (wantsPlayStore(userQuery)) {
+                buildPlayStoreQueries(userQuery)
             } else {
                 generateQueries(userQuery).take(MAX_QUERIES)
             }
@@ -106,7 +108,8 @@ class WebSearchCoordinator @Inject constructor(
             }
 
             emit(WebSearchEvent.SynthesizeStart(runId))
-            val answer = runInference(WebSearchPrompts.synthesize(userQuery, filteredHits), SYNTHESIZE_MAX_TOKENS)
+            val answer = directAnswerIfPossible(userQuery, filteredHits)
+                ?: runInference(WebSearchPrompts.synthesize(userQuery, filteredHits), SYNTHESIZE_MAX_TOKENS)
             emit(WebSearchEvent.Done(runId, answer, filteredHits))
         } catch (ce: CancellationException) {
             _events.tryEmit(WebSearchEvent.Cancelled(runId, ce.message ?: "Cancelled"))
@@ -170,14 +173,26 @@ class WebSearchCoordinator @Inject constructor(
         ).distinct().take(MAX_QUERIES)
     }
 
+    private fun buildPlayStoreQueries(userQuery: String): List<String> {
+        val appName = userQuery
+            .replace(Regex("""(?i)\b(give|me|the|direct|exact|download|link|url|for|to|on|google|play|store|app|please)\b"""), " ")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+            .ifBlank { userQuery.trim() }
+        return listOf(
+            "$appName site:play.google.com/store/apps/details",
+            "$appName Google Play Store",
+            "$appName official Android app",
+        ).distinct().take(MAX_QUERIES)
+    }
+
     private fun filterAndRankHits(
         userQuery: String,
         requestedUrl: String?,
         hits: List<WebSearchHit>,
     ): List<WebSearchHit> {
         val requestedDomain = requestedUrl?.let(::domainOf)
-        val wantsPlayStore = userQuery.contains("play store", ignoreCase = true) ||
-            userQuery.contains("google play", ignoreCase = true)
+        val wantsPlayStore = wantsPlayStore(userQuery)
         val wantsDirectLink = userQuery.contains("link", ignoreCase = true) ||
             userQuery.contains("download", ignoreCase = true)
 
@@ -207,6 +222,38 @@ class WebSearchCoordinator @Inject constructor(
             .map { it.first }
             .distinctBy { normalizeUrl(it.url) }
             .take(MAX_FILTERED_SOURCES)
+    }
+
+    private fun wantsPlayStore(userQuery: String): Boolean =
+        userQuery.contains("play store", ignoreCase = true) ||
+            userQuery.contains("google play", ignoreCase = true)
+
+    private fun directAnswerIfPossible(userQuery: String, hits: List<WebSearchHit>): String? {
+        val wantsDirectLink = userQuery.contains("link", ignoreCase = true) ||
+            userQuery.contains("url", ignoreCase = true) ||
+            userQuery.contains("download", ignoreCase = true)
+        if (!wantsDirectLink) return null
+
+        val playStoreHit = hits.firstOrNull { hit ->
+            domainOf(hit.url) == "play.google.com" &&
+                hit.url.contains("/store/apps/details", ignoreCase = true)
+        }
+        if (playStoreHit != null) {
+            return buildString {
+                append("Direct Play Store link: ")
+                append(playStoreHit.url)
+                if (playStoreHit.title.isNotBlank()) {
+                    append("\n\n")
+                    append(playStoreHit.title)
+                }
+            }
+        }
+
+        val officialHit = hits.firstOrNull { hit ->
+            hit.title.contains("official", ignoreCase = true) ||
+                hit.snippet.contains("official", ignoreCase = true)
+        } ?: hits.firstOrNull()
+        return officialHit?.let { "Best matching link: ${it.url}" }
     }
 
     private fun domainOf(url: String): String? = runCatching {

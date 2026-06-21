@@ -762,10 +762,34 @@ class HomeViewModel @Inject constructor(
         return null
     }
 
+    private fun webSearchQueryWithContext(messages: List<ChatMessage>, userQuery: String): String {
+        val normalized = userQuery.trim()
+        val lowInformationFollowUp = normalized.split(Regex("\\s+")).size <= 4 &&
+            (normalized.contains("link", ignoreCase = true) ||
+                normalized.contains("url", ignoreCase = true) ||
+                normalized.contains("download", ignoreCase = true) ||
+                normalized.contains("exact", ignoreCase = true))
+        if (!lowInformationFollowUp) return normalized
+
+        val priorTopic = messages.asReversed()
+            .asSequence()
+            .filter { it.role == ROLE_USER }
+            .map { it.content.trim() }
+            .firstOrNull { content ->
+                content.isNotBlank() &&
+                    content.length > normalized.length &&
+                    !content.equals(normalized, ignoreCase = true)
+            }
+            ?: return normalized
+        return "$priorTopic $normalized"
+    }
+
     private fun startWebSearch(active: ModelInfo, userQuery: String) {
         if (webSearchActive.value) return
         val chatId = ensureChat(active)
-        val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
+        val previousMessages = chatRepo.getMessages(chatId)
+        val searchQuery = webSearchQueryWithContext(previousMessages, userQuery)
+        val isFirstTurn = previousMessages.count { it.role == ROLE_USER } == 1
         val userMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
@@ -783,18 +807,18 @@ class HomeViewModel @Inject constructor(
             id = cardMessageId,
             chatId = chatId,
             role = ROLE_ASSISTANT,
-            content = userQuery,
+            content = searchQuery,
             timestamp = System.currentTimeMillis() + 1,
             kind = MessageKind.Text,
             modelName = active.name,
             webSearchRunId = placeholderRunId,
-            webSearchState = WebSearchUiState(userQuery = userQuery).toJson(),
+            webSearchState = WebSearchUiState(userQuery = searchQuery).toJson(),
         )
         chatRepo.addMessage(cardMessage)
 
         val runId = webSearchCoordinator.start(
             scope = viewModelScope,
-            userQuery = userQuery,
+            userQuery = searchQuery,
         )
         webSearchMessages[runId] = chatId to cardMessageId
 
