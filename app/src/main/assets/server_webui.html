@@ -74,7 +74,11 @@ html, body {
 ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
 button, input, textarea { font: inherit; color: inherit; }
 
-.app { display: grid; grid-template-columns: 320px 1fr; height: 100dvh; }
+.app { display: grid; grid-template-columns: 300px minmax(0,1fr) 320px; height: 100dvh; }
+@media (max-width: 1180px) {
+  .app { grid-template-columns: 300px 1fr; }
+  .controls { display:none !important; }
+}
 @media (max-width: 880px) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
@@ -192,6 +196,17 @@ button, input, textarea { font: inherit; color: inherit; }
 }
 .menu-btn:hover { border-color: var(--border-2); background: var(--surface-2); }
 .topbar-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 800; font-size: 18px; }
+.top-model {
+  min-width: min(340px, 34vw);
+  max-width: 420px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 14px;
+}
+@media (max-width: 720px) { .top-model { min-width: 0; width: 46vw; } }
 .conn {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 11px; color: var(--muted);
@@ -201,6 +216,48 @@ button, input, textarea { font: inherit; color: inherit; }
   border: 1px solid var(--border);
   background: var(--surface);
 }
+.controls {
+  background: var(--bg-soft);
+  border-left: 1px solid var(--border);
+  height: 100dvh;
+  overflow-y: auto;
+  padding: max(18px, var(--safe-top)) 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.controls-head { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.controls h2 { margin:0; font-size:16px; font-weight:750; letter-spacing:0; }
+.control-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+}
+.control-card summary {
+  cursor:pointer;
+  font-weight:650;
+  color:var(--fg);
+  list-style:none;
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+}
+.control-card summary::-webkit-details-marker { display:none; }
+.control-card summary::after { content:'⌄'; color:var(--muted); }
+.control-card[open] summary::after { content:'⌃'; }
+.control-stack { margin-top:12px; display:flex; flex-direction:column; gap:10px; }
+.control-stack label {
+  display:flex; flex-direction:column; gap:5px;
+  font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted);
+  font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+.control-stack input, .control-stack select, .control-stack textarea {
+  width:100%; border:1px solid var(--border); background:var(--bg); color:var(--fg);
+  border-radius:var(--r-sm); padding:8px 10px; font:inherit; font-size:13px;
+}
+.control-stack textarea { min-height:94px; resize:vertical; }
+.control-note { color:var(--muted); font-size:12px; line-height:1.45; margin:0; }
 .conn .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); transition: background-color 200ms; }
 .conn.live .dot { background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 
@@ -547,6 +604,7 @@ kbd {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
       <span class="topbar-title" id="topbarTitle">New chat</span>
+      <select class="top-model" id="topModelSelect" aria-label="Chat model"></select>
       <span class="conn" id="conn" aria-live="polite">
         <span class="dot" aria-hidden="true"></span>
         <span id="connText">Checking…</span>
@@ -686,6 +744,37 @@ kbd {
       </div>
     </div>
   </main>
+  <aside class="controls" aria-label="Controls">
+    <div class="controls-head">
+      <h2>Controls</h2>
+      <button class="icon-btn" onclick="openSettings()" type="button" title="Settings" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15.5A3.5 3.5 0 1 0 12 8a3.5 3.5 0 0 0 0 7.5Z"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21a2 2 0 1 1-4 0v-.09A1.7 1.7 0 0 0 8.6 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3a2 2 0 1 1 0-4h.09A1.7 1.7 0 0 0 4.6 8.6a1.7 1.7 0 0 0-.34-1.88l-.06-.06A2 2 0 1 1 7.03 3.8l.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3a2 2 0 1 1 4 0v.09A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.4.2.75.5 1 .9.26.4.4.76.4 1.1V11a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.31 0Z"/></svg>
+      </button>
+    </div>
+    <details class="control-card" open>
+      <summary>System Prompt</summary>
+      <div class="control-stack">
+        <label>Prompt<textarea id="systemPrompt" placeholder="Optional instructions for this browser session"></textarea></label>
+        <p class="control-note">Prepended to chat requests from this Web UI only.</p>
+      </div>
+    </details>
+    <details class="control-card" open>
+      <summary>Models</summary>
+      <div class="control-stack">
+        <label>Chat model<select id="sideModelSelect"></select></label>
+        <label>Theme<select id="sideThemeSelect"><option value="system">System</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        <p class="control-note">Vision inputs require a VLM model. Tool/Search routing is handled by the Android app role system.</p>
+      </div>
+    </details>
+    <details class="control-card">
+      <summary>Advanced Params</summary>
+      <div class="control-stack">
+        <label>Temperature<input id="temperatureInput" type="number" value="" placeholder="Default" min="0" max="2" step="0.05"></label>
+        <label>Max tokens<input id="maxTokensInput" type="number" value="" placeholder="Default" min="1" step="1"></label>
+        <p class="control-note">Blank values use server defaults.</p>
+      </div>
+    </details>
+  </aside>
 </div>
 
 <div class="modal-scrim" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
@@ -739,10 +828,16 @@ kbd {
   var TOKEN_KEY = 'tn.token';
   var CHAT_MODEL_KEY = 'tn.chatModel';
   var THEME_KEY = 'tn.theme';
+  var SYSTEM_PROMPT_KEY = 'tn.systemPrompt';
+  var TEMP_KEY = 'tn.temperature';
+  var MAX_TOKENS_KEY = 'tn.maxTokens';
   var state = {
     chats: [], activeId: null, streaming: false, abort: null,
     model: localStorage.getItem(CHAT_MODEL_KEY) || '', token: localStorage.getItem(TOKEN_KEY) || '',
     theme: localStorage.getItem(THEME_KEY) || 'system',
+    systemPrompt: localStorage.getItem(SYSTEM_PROMPT_KEY) || '',
+    temperature: localStorage.getItem(TEMP_KEY) || '',
+    maxTokens: localStorage.getItem(MAX_TOKENS_KEY) || '',
   };
   var els = {
     chatList: document.getElementById('chatList'),
@@ -759,7 +854,13 @@ kbd {
     renameInput: document.getElementById('renameInput'),
     hostInfo: document.getElementById('hostInfo'),
     chatModelSelect: document.getElementById('chatModelSelect'),
+    topModelSelect: document.getElementById('topModelSelect'),
+    sideModelSelect: document.getElementById('sideModelSelect'),
     themeSelect: document.getElementById('themeSelect'),
+    sideThemeSelect: document.getElementById('sideThemeSelect'),
+    systemPrompt: document.getElementById('systemPrompt'),
+    temperatureInput: document.getElementById('temperatureInput'),
+    maxTokensInput: document.getElementById('maxTokensInput'),
     modelSub: document.getElementById('modelSub'),
     toast: document.getElementById('toast'),
     conn: document.getElementById('conn'),
@@ -1135,6 +1236,9 @@ kbd {
     var messages = chat.messages
       .filter(function(m) { return !m.streaming; })
       .map(function(m) { return { role: m.role, content: m.content }; });
+    if ((state.systemPrompt || '').trim()) {
+      messages.unshift({ role: 'system', content: state.systemPrompt.trim() });
+    }
     if (imagesToSend.length > 0 && messages.length > 0) {
       var last = messages[messages.length - 1];
       if (last.role === 'user') {
@@ -1146,12 +1250,17 @@ kbd {
         last.content = parts;
       }
     }
+    var requestBody = { model: model, messages: messages, stream: true };
+    var temp = parseFloat(state.temperature);
+    var maxTokens = parseInt(state.maxTokens, 10);
+    if (Number.isFinite(temp)) requestBody.temperature = temp;
+    if (Number.isFinite(maxTokens) && maxTokens > 0) requestBody.max_tokens = maxTokens;
     try {
       var r = await fetch('/v1/chat/completions', {
         method: 'POST',
         signal: state.abort.signal,
         headers: Object.assign({}, authHeaders(), { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ model: model, messages: messages, stream: true }),
+        body: JSON.stringify(requestBody),
       });
       if (!r.ok) {
         var detail = '';
@@ -1185,6 +1294,7 @@ kbd {
         }
       }
       finishStream(aiMsg, null, false);
+      notifyCompletion(chat.title, aiMsg.content);
     } catch (e) {
       if (e.name === 'AbortError') {
         finishStream(aiMsg, '⏹ stopped', true);
@@ -1381,7 +1491,7 @@ kbd {
   function openSettings() {
     els.tokenInput.value = state.token;
     els.hostInfo.value = location.host;
-    if (els.themeSelect) els.themeSelect.value = state.theme || 'system';
+    applyControlValues();
     populateChatModelSelect();
     ensureModelCache().then(populateChatModelSelect);
     els.settingsModal.classList.add('open');
@@ -1399,7 +1509,9 @@ kbd {
     state.theme = els.themeSelect ? (els.themeSelect.value || 'system') : 'system';
     if (state.theme === 'system') localStorage.removeItem(THEME_KEY);
     else localStorage.setItem(THEME_KEY, state.theme);
+    persistSessionControls();
     applyTheme();
+    applyControlValues();
     closeSettings();
     if (tokenChanged) modelCache = null;
     refreshModelCache();
@@ -1410,6 +1522,44 @@ kbd {
     var m = findModel(state.model);
     var suffix = m && m.type ? ' · ' + modelTypeLabel(m.type) : '';
     els.modelSub.textContent = state.model ? state.model + suffix : 'No chat model selected';
+  }
+  function persistSessionControls() {
+    var prompt = (els.systemPrompt && els.systemPrompt.value) || '';
+    var temp = (els.temperatureInput && els.temperatureInput.value) || '';
+    var maxTokens = (els.maxTokensInput && els.maxTokensInput.value) || '';
+    state.systemPrompt = prompt;
+    state.temperature = temp;
+    state.maxTokens = maxTokens;
+    if (prompt.trim()) localStorage.setItem(SYSTEM_PROMPT_KEY, prompt);
+    else localStorage.removeItem(SYSTEM_PROMPT_KEY);
+    if (temp !== '') localStorage.setItem(TEMP_KEY, temp);
+    else localStorage.removeItem(TEMP_KEY);
+    if (maxTokens !== '') localStorage.setItem(MAX_TOKENS_KEY, maxTokens);
+    else localStorage.removeItem(MAX_TOKENS_KEY);
+  }
+  function applyControlValues() {
+    if (els.systemPrompt) els.systemPrompt.value = state.systemPrompt || '';
+    if (els.temperatureInput) els.temperatureInput.value = state.temperature || '';
+    if (els.maxTokensInput) els.maxTokensInput.value = state.maxTokens || '';
+    if (els.themeSelect) els.themeSelect.value = state.theme || 'system';
+    if (els.sideThemeSelect) els.sideThemeSelect.value = state.theme || 'system';
+  }
+  function setupControlBindings() {
+    [els.systemPrompt, els.temperatureInput, els.maxTokensInput].forEach(function(el) {
+      if (!el) return;
+      el.addEventListener('input', persistSessionControls);
+      el.addEventListener('change', persistSessionControls);
+    });
+    [els.themeSelect, els.sideThemeSelect].forEach(function(sel) {
+      if (!sel) return;
+      sel.addEventListener('change', function() {
+        state.theme = sel.value || 'system';
+        if (state.theme === 'system') localStorage.removeItem(THEME_KEY);
+        else localStorage.setItem(THEME_KEY, state.theme);
+        applyTheme();
+        applyControlValues();
+      });
+    });
   }
   function applyTheme() {
     if (state.theme === 'dark' || state.theme === 'light') {
@@ -1424,6 +1574,22 @@ kbd {
     els.toast.classList.add('show');
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function() { els.toast.classList.remove('show'); }, 1800);
+  }
+  function notifyCompletion(title, body) {
+    if (!document.hidden || !('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      Notification.requestPermission().catch(function() {});
+      return;
+    }
+    if (Notification.permission !== 'granted') return;
+    var text = (body || '').replace(/\s+/g, ' ').trim();
+    if (text.length > 160) text = text.slice(0, 157) + '...';
+    try {
+      new Notification(title || 'ToolNeuron response ready', {
+        body: text || 'The model finished responding.',
+        tag: 'toolneuron-chat-response',
+      });
+    } catch (e) {}
   }
   async function fetchModel() {
     try {
@@ -1464,6 +1630,8 @@ kbd {
     }
   }
   load();
+  setupControlBindings();
+  applyControlValues();
   applyTheme();
   refreshAll();
   fetchModel();
@@ -1545,29 +1713,49 @@ kbd {
   }
 
   function populateChatModelSelect() {
-    var sel = els.chatModelSelect;
-    if (!sel) return;
-    var prev = state.model || sel.value;
-    sel.innerHTML = '';
-    appendChatGroup(sel, 'Chat models', 'gguf');
-    appendChatGroup(sel, 'Vision chat models', 'vlm');
-    if (sel.options.length === 0) {
-      var empty = document.createElement('option');
-      empty.value = '';
-      empty.textContent = '(no chat/VLM model installed)';
-      empty.disabled = true;
-      sel.appendChild(empty);
-      return;
+    var selects = [els.chatModelSelect, els.topModelSelect, els.sideModelSelect].filter(Boolean);
+    var preferred = state.model || '';
+    var fallback = defaultModelId('gguf') || defaultModelId('vlm') || '';
+    selects.forEach(function(sel) {
+      sel.innerHTML = '';
+      appendChatGroup(sel, 'Chat models', 'gguf');
+      appendChatGroup(sel, 'Vision chat models', 'vlm');
+      if (sel.options.length === 0) {
+        var empty = document.createElement('option');
+        empty.value = '';
+        empty.textContent = '(no chat/VLM model installed)';
+        empty.disabled = true;
+        sel.appendChild(empty);
+        sel.disabled = true;
+        return;
+      }
+      sel.disabled = false;
+      var value = preferred && Array.prototype.some.call(sel.options, function(o) { return o.value === preferred; })
+        ? preferred
+        : fallback || sel.options[0].value;
+      sel.value = value;
+      sel.onchange = function() {
+        state.model = sel.value || '';
+        if (state.model) localStorage.setItem(CHAT_MODEL_KEY, state.model);
+        else localStorage.removeItem(CHAT_MODEL_KEY);
+        syncChatModelSelects();
+        updateModelDisplay();
+      };
+    });
+    if (!state.model && fallback) {
+      state.model = fallback;
+      localStorage.setItem(CHAT_MODEL_KEY, state.model);
     }
-    if (prev && Array.prototype.some.call(sel.options, function(o) { return o.value === prev; })) {
-      sel.value = prev;
-    } else {
-      sel.value = defaultModelId('gguf') || defaultModelId('vlm') || sel.options[0].value;
-    }
-    sel.onchange = function() {
-      state.model = sel.value || '';
-      updateModelDisplay();
-    };
+    syncChatModelSelects();
+  }
+
+  function syncChatModelSelects() {
+    [els.chatModelSelect, els.topModelSelect, els.sideModelSelect].forEach(function(sel) {
+      if (!sel || sel.disabled) return;
+      if (Array.prototype.some.call(sel.options, function(o) { return o.value === state.model; })) {
+        sel.value = state.model;
+      }
+    });
   }
 
   function appendChatGroup(sel, label, type) {

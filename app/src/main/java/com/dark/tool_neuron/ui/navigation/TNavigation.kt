@@ -199,6 +199,10 @@ fun TNavigation(
                     onModelSetupComplete()
                 },
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
+                onRestoreBackup = { uri ->
+                    storeVm.importModels(uri)
+                    onModelSetupComplete()
+                },
                 onLocalImport = { uri, name, size, type ->
                     storeVm.importLocalModel(uri, name, size, type)
                     onModelSetupComplete()

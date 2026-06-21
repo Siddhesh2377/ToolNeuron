@@ -18,7 +18,10 @@ import com.dark.tool_neuron.model.WebSearchEvent
 import com.dark.tool_neuron.model.WebSearchUiState
 import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.data.AppVisibility
+import com.dark.tool_neuron.data.UserNotificationManager
 import com.dark.tool_neuron.repo.ChatRepository
+import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.VlmVisionCacheRepository
@@ -79,6 +82,9 @@ class HomeViewModel @Inject constructor(
     private val webSearchCoordinator: WebSearchCoordinator,
     private val appPrefs: AppPreferences,
     private val vlmCache: VlmVisionCacheRepository,
+    private val downloadCoordinator: DownloadCoordinator,
+    private val appVisibility: AppVisibility,
+    private val userNotifications: UserNotificationManager,
 ) : ViewModel() {
 
     val speakingMessageId: StateFlow<String?> = voiceManager.speakingId
@@ -285,6 +291,8 @@ class HomeViewModel @Inject constructor(
     private val _contextUsage = MutableStateFlow(0f)
     val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
 
+    private val _manualGenerationStatus = MutableStateFlow<GenerationStatus?>(null)
+
     val pillState: StateFlow<PillState> = combine(
         InferenceClient.isModelLoaded,
         modelSession.loadState,
@@ -312,6 +320,7 @@ class HomeViewModel @Inject constructor(
         _messages,
         _streamingFragment,
         _contextUsage,
+        _manualGenerationStatus,
     ) { args ->
         val isLoaded = args[0] as Boolean
         val loadState = args[1] as ModelLoadState
@@ -322,9 +331,11 @@ class HomeViewModel @Inject constructor(
         val msgs = @Suppress("UNCHECKED_CAST") (args[6] as List<ChatMessage>)
         val streaming = args[7] as StreamingFragment?
         val ctxUsage = args[8] as Float
+        val manualStatus = args[9] as GenerationStatus?
 
         val modelName = active?.name ?: streaming?.let { "Model" } ?: ""
         when {
+            manualStatus != null -> manualStatus
             loadState is ModelLoadState.Loading -> GenerationStatus.ModelLoading(modelName.ifBlank { "Model" })
             loadState is ModelLoadState.Error -> GenerationStatus.Error(loadState.message, modelName.ifBlank { null })
             generating -> {
@@ -340,6 +351,14 @@ class HomeViewModel @Inject constructor(
             else -> GenerationStatus.Hidden
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, GenerationStatus.Welcome)
+
+    private fun showTemporaryStatus(status: GenerationStatus, durationMs: Long = 4_500L) {
+        _manualGenerationStatus.value = status
+        viewModelScope.launch {
+            delay(durationMs)
+            if (_manualGenerationStatus.value == status) _manualGenerationStatus.value = null
+        }
+    }
 
     private var generationJob: Job? = null
 
@@ -681,10 +700,17 @@ class HomeViewModel @Inject constructor(
         val active = activeModel.value
             ?: chatModels.value.firstOrNull()?.also { modelRepo.setActive(it.id) }
             ?: run {
+                val message = if (downloadCoordinator.activeCount.value > 0) {
+                    "A model is still downloading. Wait for it to finish, then send again."
+                } else {
+                    "Install or import a chat model before sending a message."
+                }
+                showTemporaryStatus(GenerationStatus.Error(message))
                 _loadModelWindow.value = true
                 return
             }
         if (images.isNotEmpty() && active.providerType != ProviderType.VISION_CHAT) {
+            showTemporaryStatus(GenerationStatus.Error("Image chat requires a Vision chat model."))
             _loadModelWindow.value = true
             return
         }
@@ -1109,6 +1135,10 @@ class HomeViewModel @Inject constructor(
         chatRepo.addMessage(finalMessage)
         if (isFirstTurn) chatRepo.autoTitle(chatId, userText)
         _messages.value = chatRepo.getMessages(chatId)
+        if (!wasStopped && error == null && !appVisibility.isForeground) {
+            val chatTitle = chats.value.firstOrNull { it.id == chatId }?.title.orEmpty()
+            userNotifications.notifyAssistantResponse(chatTitle, finalContent)
+        }
         _streamingFragment.value = null
         _isGenerating.value = false
     }

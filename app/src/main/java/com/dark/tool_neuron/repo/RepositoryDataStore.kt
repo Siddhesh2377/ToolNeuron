@@ -83,9 +83,13 @@ class RepositoryDataStore @Inject constructor(
         val DEFAULT_REPOSITORIES = listOf(
             // LFM (text)
             HFRepository("lfm25-350m", "LFM 2.5 350M", "LiquidAI/LFM2.5-350M-GGUF"),
+            HFRepository("lfm25-12b-instruct", "LFM 2.5 1.2B Instruct", "LiquidAI/LFM2.5-1.2B-Instruct-GGUF"),
+            HFRepository("lfm25-12b-thinking", "LFM 2.5 1.2B Thinking", "unsloth/LFM2.5-1.2B-Thinking-GGUF"),
             // LFM (vision) — kept; small enough to be a default VLM
             HFRepository("lfm2-vl-450m", "LFM2-VL 450M", "LiquidAI/LFM2-VL-450M-GGUF"),
+            HFRepository("lfm25-vl-16b", "LFM2.5-VL 1.6B", "LiquidAI/LFM2.5-VL-1.6B-GGUF"),
             // Qwen (text) — small, tool-calling tested
+            HFRepository("qwen25-05b-instruct", "Qwen2.5 0.5B Instruct", "unsloth/Qwen2.5-0.5B-Instruct-GGUF"),
             HFRepository("qwen3-0.6b", "Qwen3 0.6B", "Qwen/Qwen3-0.6B-GGUF"),
             HFRepository("unsloth-qwen3_5-0_8b", "Qwen3.5 0.8B", "unsloth/Qwen3.5-0.8B-GGUF"),
             HFRepository("unsloth-qwen3_5-4b", "Qwen3.5 4B", "unsloth/Qwen3.5-4B-GGUF"),
@@ -102,12 +106,17 @@ class RepositoryDataStore @Inject constructor(
             // Mistral
             HFRepository("mistral-7b-v03", "Mistral 7B Instruct v0.3", "bartowski/Mistral-7B-Instruct-v0.3-GGUF"),
             // Gemma
+            HFRepository("gemma3-270m-it", "Gemma 3 270M IT", "unsloth/gemma-3-270m-it-GGUF"),
             HFRepository("gemma3-1b-it", "Gemma 3 1B IT", "unsloth/gemma-3-1b-it-GGUF"),
             HFRepository("gemma4-e2b-it", "Gemma 4 E2B IT", "unsloth/gemma-4-E2B-it-GGUF"),
             // Tool-calling champion (per project memory)
+            HFRepository("smollm2-360m-instruct", "SmolLM2 360M Instruct", "HuggingFaceTB/SmolLM2-360M-Instruct-GGUF"),
             HFRepository("smollm3-3b", "SmolLM3 3B", "HuggingFaceTB/SmolLM3-3B-GGUF"),
             // General-purpose pick
             HFRepository("phi35-mini", "Phi 3.5 Mini Instruct", "unsloth/Phi-3.5-mini-instruct-GGUF"),
+            // Reasoning / thinking
+            HFRepository("deepseek-r1-qwen-15b", "DeepSeek-R1 Distill Qwen 1.5B", "unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"),
+            HFRepository("deepseek-r1-qwen-7b", "DeepSeek-R1 Distill Qwen 7B", "unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF"),
             // Uncensored / roleplay (Llama 3.2 1B class — ~700 MB–1.3 GB)
             // mradermacher/* repos pulled — their GGUF-embedded chat templates crash gguf_lib's minja eval (SIGBUS)
             HFRepository("novaciano-sorete-1b", "Sorete 1B", "Novaciano/Sorete-1B-GGUF", category = ModelCategory.UNCENSORED),

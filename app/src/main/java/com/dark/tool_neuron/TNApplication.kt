@@ -10,6 +10,7 @@ import com.dark.tn_security.LogcatSink
 import com.dark.tn_security.TnModule
 import com.dark.tn_security.TnSecurity
 import com.dark.tool_neuron.data.AccessibilityGuard
+import com.dark.tool_neuron.data.AppVisibility
 import com.dark.tool_neuron.service.inference.HxsTnSink
 import com.dark.networking.WebNative
 import com.dark.tool_neuron.service.inference.InferenceClient
@@ -26,6 +27,7 @@ class TNApplication : Application() {
     @Inject lateinit var integrityLazy: Lazy<NativeIntegrity>
     @Inject lateinit var appLockObserverLazy: Lazy<AppLockObserver>
     @Inject lateinit var accessibilityGuardLazy: Lazy<AccessibilityGuard>
+    @Inject lateinit var appVisibilityLazy: Lazy<AppVisibility>
     @Inject lateinit var pluginContainerHostLazy: Lazy<PluginContainerHost>
 
     override fun onCreate() {
@@ -84,6 +86,7 @@ class TNApplication : Application() {
         val integrity = integrityLazy.get()
         val appLockObserver = appLockObserverLazy.get()
         val accessibilityGuard = accessibilityGuardLazy.get()
+        appVisibilityLazy.get().register()
 
         val envReasons = integrity.scanProcessEnvironment()
         val hardEnvReasons = envReasons and (BootIntegrity.FAIL_DEBUGGER or BootIntegrity.FAIL_FRIDA)

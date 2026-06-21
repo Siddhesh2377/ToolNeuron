@@ -56,6 +56,7 @@ import kotlinx.coroutines.delay
 
 private enum class SetupPath(val label: String) {
     Packs("Packs"),
+    Restore("Restore"),
     Custom("Custom")
 }
 
@@ -92,6 +93,7 @@ fun ModelSetupScreen(
     innerPadding: PaddingValues,
     onPackSelected: (packId: String) -> Unit,
     onOpenStore: () -> Unit,
+    onRestoreBackup: (uri: Uri) -> Unit,
     onLocalImport: (uri: Uri, name: String, size: Long, type: ProviderType) -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -121,6 +123,10 @@ fun ModelSetupScreen(
             }
             pendingImport = Triple(uri, name, size)
         }
+    }
+
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onRestoreBackup(uri)
     }
 
     LaunchedEffect(Unit) { delay(80); visible = true }
@@ -194,6 +200,10 @@ fun ModelSetupScreen(
                             onContinue = { selectedPack?.let(onPackSelected) },
                         )
 
+                        SetupPath.Restore -> RestoreSection(
+                            onPickBackup = { backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
+                        )
+
                         SetupPath.Custom -> CustomSection(
                             onOpenStore = onOpenStore,
                             onPickFile = { filePicker.launch(arrayOf("application/octet-stream", "*/*")) },
@@ -230,6 +240,28 @@ fun ModelSetupScreen(
                 pendingImport = null
             },
             onDismiss = { pendingImport = null },
+        )
+    }
+}
+
+@Composable
+private fun RestoreSection(
+    onPickBackup: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Column {
+        Text(
+            text = "Restore a ToolNeuron backup ZIP with model files, roles, and saved configuration.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(dimens.spacingLg))
+
+        ActionTextButton(
+            onClickListener = onPickBackup,
+            icon = TnIcons.Download,
+            text = "Restore from backup",
         )
     }
 }

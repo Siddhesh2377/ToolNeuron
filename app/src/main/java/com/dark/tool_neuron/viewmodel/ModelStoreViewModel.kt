@@ -13,6 +13,7 @@ import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.model.ModelCategory
 import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.ModelTaxonomy
 import com.dark.tool_neuron.model.SizeCategory
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
@@ -20,6 +21,8 @@ import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorer
 import com.dark.tool_neuron.repo.InstallProgressTracker
+import com.dark.tool_neuron.repo.BackupProgress
+import com.dark.tool_neuron.repo.BackupPreview
 import com.dark.tool_neuron.repo.ModelBackupManager
 import com.dark.tool_neuron.repo.ModelCatalog
 import com.dark.tool_neuron.repo.ModelRepository
@@ -30,6 +33,7 @@ import com.dark.tool_neuron.viewmodel.home_vm.ModelSessionManager
 import com.dark.tool_neuron.repo.RepositoryValidator
 import com.dark.tool_neuron.repo.ValidationResult
 import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.data.UserNotificationManager
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.util.extractParameterCount
 import com.dark.tool_neuron.util.extractQuantization
@@ -59,6 +63,7 @@ data class RepoGroupInfo(
     val displayName: String,
     val author: String,
     val modelCount: Int,
+    val priority: Int = 999,
 )
 
 @HiltViewModel
@@ -76,6 +81,7 @@ class ModelStoreViewModel @Inject constructor(
     private val modelSession: ModelSessionManager,
     private val downloadCoordinator: DownloadCoordinator,
     private val modelBackup: ModelBackupManager,
+    private val userNotifications: UserNotificationManager,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
@@ -110,6 +116,11 @@ class ModelStoreViewModel @Inject constructor(
 
     private val _backupStatus = MutableStateFlow<String?>(null)
     val backupStatus: StateFlow<String?> = _backupStatus.asStateFlow()
+    private val _backupProgress = MutableStateFlow<BackupProgress?>(null)
+    val backupProgress: StateFlow<BackupProgress?> = _backupProgress.asStateFlow()
+    private val _backupImportPreview = MutableStateFlow<BackupPreview?>(null)
+    val backupImportPreview: StateFlow<BackupPreview?> = _backupImportPreview.asStateFlow()
+    private var pendingImportUri: Uri? = null
 
     private val _deviceInfo = MutableStateFlow<Map<String, String>>(emptyMap())
     val deviceInfo: StateFlow<Map<String, String>> = _deviceInfo.asStateFlow()
@@ -225,12 +236,18 @@ class ModelStoreViewModel @Inject constructor(
     fun exportModels(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             _backupStatus.value = "Exporting models..."
+            _backupProgress.value = BackupProgress("Preparing export")
             try {
                 val models = modelRepo.models.value
-                modelBackup.exportTo(uri, models)
+                modelBackup.exportTo(uri, models) { progress -> _backupProgress.value = progress }
                 _backupStatus.value = "Exported ${models.size} models"
+                userNotifications.notifyBackupFinished("Model export complete", "Exported ${models.size} models.")
             } catch (t: Throwable) {
-                _backupStatus.value = "Export failed: ${t.message ?: t.javaClass.simpleName}"
+                val detail = "Export failed: ${t.message ?: t.javaClass.simpleName}"
+                _backupStatus.value = detail
+                userNotifications.notifyBackupFinished("Model export failed", detail)
+            } finally {
+                _backupProgress.value = null
             }
         }
     }
@@ -238,13 +255,60 @@ class ModelStoreViewModel @Inject constructor(
     fun importModels(uri: Uri) {
         viewModelScope.launch(Dispatchers.IO) {
             _backupStatus.value = "Importing models..."
+            _backupProgress.value = BackupProgress("Preparing import")
             try {
-                val count = modelBackup.importFrom(uri)
+                val count = modelBackup.importFrom(uri) { progress -> _backupProgress.value = progress }
                 _backupStatus.value = "Imported $count models"
+                userNotifications.notifyBackupFinished("Model import complete", "Imported $count models.")
             } catch (t: Throwable) {
-                _backupStatus.value = "Import failed: ${t.message ?: t.javaClass.simpleName}"
+                val detail = "Import failed: ${t.message ?: t.javaClass.simpleName}"
+                _backupStatus.value = detail
+                userNotifications.notifyBackupFinished("Model import failed", detail)
+            } finally {
+                _backupProgress.value = null
             }
         }
+    }
+
+    fun previewImport(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                pendingImportUri = uri
+                _backupImportPreview.value = modelBackup.preview(uri)
+            } catch (t: Throwable) {
+                _backupStatus.value = "Import preview failed: ${t.message ?: t.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun confirmPreviewImport(selectedIds: Set<String>, overwriteExisting: Boolean) {
+        val uri = pendingImportUri ?: return
+        viewModelScope.launch(Dispatchers.IO) {
+            _backupImportPreview.value = null
+            _backupStatus.value = "Importing models..."
+            _backupProgress.value = BackupProgress("Preparing import")
+            try {
+                val count = modelBackup.importFrom(
+                    uri = uri,
+                    selectedIds = selectedIds,
+                    overwriteExisting = overwriteExisting,
+                ) { progress -> _backupProgress.value = progress }
+                _backupStatus.value = "Imported $count models"
+                userNotifications.notifyBackupFinished("Model import complete", "Imported $count models.")
+            } catch (t: Throwable) {
+                val detail = "Import failed: ${t.message ?: t.javaClass.simpleName}"
+                _backupStatus.value = detail
+                userNotifications.notifyBackupFinished("Model import failed", detail)
+            } finally {
+                pendingImportUri = null
+                _backupProgress.value = null
+            }
+        }
+    }
+
+    fun dismissImportPreview() {
+        pendingImportUri = null
+        _backupImportPreview.value = null
     }
 
     fun clearBackupStatus() {
@@ -368,21 +432,32 @@ class ModelStoreViewModel @Inject constructor(
             .sorted()
 
     fun getGroupedRepos(): Map<String, RepoGroupInfo> {
-        val repos = repoDataStore.repositories.value
-        val repoNameLookup = repos.associate { it.repoPath to it.name }
         val grouped = mutableMapOf<String, RepoGroupInfo>()
 
-        _filteredModels.value.groupBy { it.repoId }.forEach { (repoId, models) ->
-            val repoPath = repos.find { it.id == repoId }?.repoPath ?: repoId
-            val displayName = repoNameLookup[repoPath] ?: repoId.substringAfterLast("/")
-            val author = if (repoPath.contains("/")) repoPath.substringBefore("/") else ""
-            grouped[repoId] = RepoGroupInfo(displayName, author, models.size)
+        _filteredModels.value.groupBy { ModelTaxonomy.groupKey(it) }.forEach { (key, models) ->
+            val family = ModelTaxonomy.family(models.first())
+            val taskSummary = models
+                .map { ModelTaxonomy.task(it).displayName }
+                .distinct()
+                .take(4)
+                .joinToString(" / ")
+            grouped[key] = RepoGroupInfo(
+                displayName = family.displayName,
+                author = taskSummary,
+                modelCount = models.size,
+                priority = family.priority,
+            )
         }
-        return grouped
+        return grouped.entries
+            .sortedWith(compareBy<Map.Entry<String, RepoGroupInfo>> { it.value.priority }.thenBy { it.value.displayName })
+            .associate { it.key to it.value }
     }
 
     fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
-        _filteredModels.value.filter { it.repoId == repoKey }
+        _filteredModels.value.filter { ModelTaxonomy.groupKey(it) == repoKey }
+            .sortedWith(compareBy<HuggingFaceModel> { ModelTaxonomy.task(it).ordinal }
+                .thenBy { sizeBytesOf(it).takeIf { bytes -> bytes > 0 } ?: Long.MAX_VALUE }
+                .thenBy { it.name.lowercase() })
 
 
     fun downloadByQuickStartId(modelId: String) {
@@ -486,7 +561,11 @@ class ModelStoreViewModel @Inject constructor(
                             finalizeMmprojDownload(model, destFile)
                         } else if (model.isVlm && model.mmprojFileUri.isNotBlank()) {
                             val mmprojFile = modelRepo.vlmMmprojFile(model.repoPath, model.mmprojFileName)
-                            finalizeVlmDownload(model, destFile, mmprojFile)
+                            downloadVlmProjectorThenFinalize(model, destFile, mmprojFile)
+                        } else if (model.isVlm) {
+                            _error.value = "${model.name} is missing a vision projector file"
+                            _downloadIds.value = _downloadIds.value - model.id
+                            _downloadStates.value = _downloadStates.value - model.id
                         } else if (model.modelType == "tts" || model.modelType == "stt") {
                             finalizeVoiceDownload(model, destFile)
                         } else if (model.modelType == "image_gen") {
@@ -514,6 +593,42 @@ class ModelStoreViewModel @Inject constructor(
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
         _installedMmprojIds.value = _installedMmprojIds.value + model.id
+    }
+
+    private fun downloadVlmProjectorThenFinalize(
+        model: HuggingFaceModel,
+        baseFile: java.io.File,
+        mmprojFile: java.io.File,
+    ) {
+        if (mmprojFile.exists() && mmprojFile.length() > 0L) {
+            finalizeVlmDownload(model, baseFile, mmprojFile)
+            return
+        }
+
+        val hxdId = HxdManager.enqueue(context, model.mmprojFileUri, mmprojFile.absolutePath)
+        downloadCoordinator.registerLabel(hxdId, "${model.name} projector", "mmproj")
+        _downloadIds.value = _downloadIds.value + (model.id to hxdId)
+        _downloadStates.value = _downloadStates.value + (model.id to
+            HxdState(hxdId, model.mmprojFileUri, mmprojFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
+
+        viewModelScope.launch(Dispatchers.IO) {
+            HxdManager.observe(hxdId).collect { state ->
+                if (state == null) return@collect
+                _downloadStates.value = _downloadStates.value + (model.id to state)
+                when (state.status) {
+                    HxdStatus.COMPLETED -> finalizeVlmDownload(model, baseFile, mmprojFile)
+                    HxdStatus.FAILED -> {
+                        _error.value = "Projector download failed for ${model.name}"
+                        _downloadIds.value = _downloadIds.value - model.id
+                    }
+                    HxdStatus.CANCELLED -> {
+                        _downloadIds.value = _downloadIds.value - model.id
+                        _downloadStates.value = _downloadStates.value - model.id
+                    }
+                    else -> {}
+                }
+            }
+        }
     }
 
     fun refreshInstalledMmproj() {
@@ -755,14 +870,21 @@ class ModelStoreViewModel @Inject constructor(
         baseFile: java.io.File,
         mmprojFile: java.io.File,
     ) {
+        if (!mmprojFile.exists() || mmprojFile.length() <= 0L) {
+            _error.value = "Vision projector missing for ${model.name}"
+            _downloadIds.value = _downloadIds.value - model.id
+            _downloadStates.value = _downloadStates.value - model.id
+            return
+        }
         modelRepo.insert(ModelInfo(
             id = model.id, name = model.name,
             path = baseFile.absolutePath, pathType = PathType.FILE,
-            providerType = ProviderType.GGUF,
+            providerType = ProviderType.VISION_CHAT,
             fileSize = if (model.sizeBytes > 0) model.sizeBytes else baseFile.length(),
         ))
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
+        _installedMmprojIds.value = _installedMmprojIds.value + model.id
     }
 
     private fun downloadTypeOf(model: HuggingFaceModel): String = when {

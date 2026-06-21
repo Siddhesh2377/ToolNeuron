@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -17,10 +18,12 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -44,6 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.repo.BackupConflict
+import com.dark.tool_neuron.repo.BackupProgress
+import com.dark.tool_neuron.repo.BackupPreview
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -67,13 +73,15 @@ fun ModelManagerScreen(
     val installed by viewModel.installedModels.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
     val backupStatus by viewModel.backupStatus.collectAsStateWithLifecycle()
+    val backupProgress by viewModel.backupProgress.collectAsStateWithLifecycle()
+    val importPreview by viewModel.backupImportPreview.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/zip"),
     ) { uri -> uri?.let { viewModel.exportModels(it) } }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
-    ) { uri -> uri?.let { viewModel.importModels(it) } }
+    ) { uri -> uri?.let { viewModel.previewImport(it) } }
     var pendingDelete by remember { mutableStateOf<ModelInfo?>(null) }
     var pendingTypeChange by remember { mutableStateOf<ModelInfo?>(null) }
     var selectedType by remember { mutableStateOf<ProviderType?>(null) }
@@ -129,6 +137,7 @@ fun ModelManagerScreen(
                 item(key = "backup-actions") {
                     BackupActionsCard(
                         status = backupStatus,
+                        progress = backupProgress,
                         onExport = {
                             exportLauncher.launch("Tool-Neuron-models.zip")
                         },
@@ -197,11 +206,78 @@ fun ModelManagerScreen(
             onDismiss = { pendingTypeChange = null },
         )
     }
+
+    importPreview?.let { preview ->
+        ImportPreviewDialog(
+            preview = preview,
+            onDismiss = viewModel::dismissImportPreview,
+            onImport = { ids, overwrite -> viewModel.confirmPreviewImport(ids, overwrite) },
+        )
+    }
+}
+
+@Composable
+private fun ImportPreviewDialog(
+    preview: BackupPreview,
+    onDismiss: () -> Unit,
+    onImport: (Set<String>, Boolean) -> Unit,
+) {
+    var selectedIds by remember(preview) { mutableStateOf(preview.models.map { it.id }.toSet()) }
+    var overwriteExisting by remember(preview) { mutableStateOf(true) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore backup") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CaptionText(text = "${preview.models.size} models found. Select what to import.")
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(preview.models, key = { it.id }) { model ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Checkbox(
+                                checked = model.id in selectedIds,
+                                onCheckedChange = { checked ->
+                                    selectedIds = if (checked) selectedIds + model.id else selectedIds - model.id
+                                },
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(model.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val conflict = if (model.conflict == BackupConflict.SAME_ID_EXISTS) " · existing ID" else ""
+                                CaptionText(text = "${providerTypeLabel(model.providerType)} · ${model.fileCount} files · ${formatBytes(model.totalBytes)}$conflict")
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = overwriteExisting, onCheckedChange = { overwriteExisting = it })
+                    Text("Overwrite existing model IDs", style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onImport(selectedIds, overwriteExisting) },
+                enabled = selectedIds.isNotEmpty(),
+            ) { Text("Import selected") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
 }
 
 @Composable
 private fun BackupActionsCard(
     status: String?,
+    progress: BackupProgress?,
     onExport: () -> Unit,
     onImport: () -> Unit,
 ) {
@@ -227,6 +303,18 @@ private fun BackupActionsCard(
             Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
                 Button(onClick = onExport) { Text("Export") }
                 Button(onClick = onImport) { Text("Import") }
+            }
+            if (progress != null) {
+                if (progress.totalBytes > 0L) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                val eta = progress.etaSeconds?.let { " · ${it}s left" }.orEmpty()
+                CaptionText(text = "${progress.label}$eta")
             }
             if (!status.isNullOrBlank()) CaptionText(text = status)
         }

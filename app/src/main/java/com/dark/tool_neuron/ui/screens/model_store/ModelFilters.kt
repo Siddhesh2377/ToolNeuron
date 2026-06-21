@@ -164,29 +164,6 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
             }
         }
 
-        FilterSection(label = "Category") {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { viewModel.filterByCategory(null) },
-                    label = { Text("All") },
-                )
-                ModelCategory.entries.forEach { category ->
-                    FilterChip(
-                        selected = selectedCategory == category,
-                        onClick = {
-                            viewModel.filterByCategory(if (selectedCategory == category) null else category)
-                        },
-                        label = { Text(category.displayName) },
-                    )
-                }
-            }
-        }
-
         // Advanced toggle
         Row(
             modifier = Modifier
@@ -220,6 +197,29 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                     .padding(horizontal = dimens.spacingLg),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
             ) {
+                FilterSection(label = "Category") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == null,
+                            onClick = { viewModel.filterByCategory(null) },
+                            label = { Text("All") },
+                        )
+                        ModelCategory.entries.forEach { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = {
+                                    viewModel.filterByCategory(if (selectedCategory == category) null else category)
+                                },
+                                label = { Text(category.displayName) },
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
