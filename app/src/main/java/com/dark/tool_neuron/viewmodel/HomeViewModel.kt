@@ -154,7 +154,12 @@ class HomeViewModel @Inject constructor(
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
 
     val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
-        .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
+        .map { list ->
+            list.filter {
+                it.providerType == ProviderType.GGUF ||
+                    it.providerType == ProviderType.VISION_CHAT
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val embeddingModelInstalled: StateFlow<Boolean> = modelRepo.models
@@ -499,6 +504,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isIngestingDocument.value = true
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.ingestDocument(chatId, uri, name, size, mimeType)
             _isIngestingDocument.value = false
             result.onSuccess { doc ->
@@ -519,6 +525,7 @@ class HomeViewModel @Inject constructor(
     fun deepIndexDocument(docId: String) {
         viewModelScope.launch {
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.deepIndex(docId)
             result.onSuccess { updated ->
                 _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
@@ -532,6 +539,7 @@ class HomeViewModel @Inject constructor(
         if (raptorBuilding.value.contains(docId)) return
         viewModelScope.launch {
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.buildRaptorTree(docId)
             result.onSuccess { updated ->
                 _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
@@ -641,6 +649,7 @@ class HomeViewModel @Inject constructor(
         if (serverController.isBusy) return
         if (_isGenerating.value) return
         if (webSearchActive.value) return
+        modelSession.markActivity()
         viewModelScope.launch { modelSession.load(model) }
     }
 
@@ -654,6 +663,7 @@ class HomeViewModel @Inject constructor(
     fun sendMessage(text: String) {
         if (serverController.isBusy) return
         if (webSearchActive.value) return
+        modelSession.markActivity()
         val trimmed = text.trim()
         val images = _pendingImages.value
         if (_isGenerating.value) return
@@ -674,6 +684,10 @@ class HomeViewModel @Inject constructor(
                 _loadModelWindow.value = true
                 return
             }
+        if (images.isNotEmpty() && active.providerType != ProviderType.VISION_CHAT) {
+            _loadModelWindow.value = true
+            return
+        }
 
         val webSearchQuery = parseWebSearchInput(trimmed)
         if (webSearchQuery != null) {
@@ -992,6 +1006,7 @@ class HomeViewModel @Inject constructor(
     }
 
     private fun runGeneration(chatId: String, isFirstTurn: Boolean, userText: String) {
+        modelSession.setGenerationBusy(true)
         _messages.value = chatRepo.getMessages(chatId)
         _streamingFragment.value = StreamingFragment(chatId, "", "")
         _isGenerating.value = true
@@ -1042,6 +1057,7 @@ class HomeViewModel @Inject constructor(
                     citations = outcome?.citations.orEmpty(),
                     wasStopped = wasStopped,
                 )
+                modelSession.setGenerationBusy(false)
             }
         }
     }

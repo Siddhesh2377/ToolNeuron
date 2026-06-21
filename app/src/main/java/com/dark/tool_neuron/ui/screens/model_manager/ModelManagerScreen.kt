@@ -1,5 +1,8 @@
 package com.dark.tool_neuron.ui.screens.model_manager
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,12 +29,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,6 +66,14 @@ fun ModelManagerScreen(
     val dimens = LocalDimens.current
     val installed by viewModel.installedModels.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
+    val backupStatus by viewModel.backupStatus.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri -> uri?.let { viewModel.exportModels(it) } }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.importModels(it) } }
     var pendingDelete by remember { mutableStateOf<ModelInfo?>(null) }
     var pendingTypeChange by remember { mutableStateOf<ModelInfo?>(null) }
     var selectedType by remember { mutableStateOf<ProviderType?>(null) }
@@ -113,6 +126,17 @@ fun ModelManagerScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
+                item(key = "backup-actions") {
+                    BackupActionsCard(
+                        status = backupStatus,
+                        onExport = {
+                            exportLauncher.launch("Tool-Neuron-models.zip")
+                        },
+                        onImport = {
+                            importLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                        },
+                    )
+                }
                 item(key = "tabs") {
                     ModelTypeTabs(
                         groups = grouped.map { it.first },
@@ -136,6 +160,12 @@ fun ModelManagerScreen(
                 }
             }
         }
+    }
+
+    LaunchedEffect(backupStatus) {
+        val status = backupStatus ?: return@LaunchedEffect
+        Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+        viewModel.clearBackupStatus()
     }
 
     pendingDelete?.let { model ->
@@ -166,6 +196,40 @@ fun ModelManagerScreen(
             },
             onDismiss = { pendingTypeChange = null },
         )
+    }
+}
+
+@Composable
+private fun BackupActionsCard(
+    status: String?,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = tnShapes.cardSmall,
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Text(
+                text = "Model backup",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            CaptionText(
+                text = "Export or restore installed models, roles, and per-model config as a ToolNeuron ZIP.",
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                Button(onClick = onExport) { Text("Export") }
+                Button(onClick = onImport) { Text("Import") }
+            }
+            if (!status.isNullOrBlank()) CaptionText(text = status)
+        }
     }
 }
 
@@ -296,6 +360,8 @@ private data class Section(
 
 private val SECTIONS = listOf(
     Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen.", "Chat"),
+    Section(ProviderType.VISION_CHAT, "Vision chat models", "Used for chat with image attachments.", "Vision"),
+    Section(ProviderType.TOOL_SEARCH, "Tool/Search models", "Used for query planning and structured tool calls.", "Tools"),
     Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG).", "RAG"),
     Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace.", "Image"),
     Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode.", "Upscale"),

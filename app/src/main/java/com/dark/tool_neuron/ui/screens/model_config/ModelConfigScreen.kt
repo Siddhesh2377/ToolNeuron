@@ -142,7 +142,7 @@ fun ModelConfigScreen(
         val loading = JSONObject()
         val inference = JSONObject()
         when (selectedProviderType) {
-            ProviderType.GGUF -> {
+            ProviderType.GGUF, ProviderType.VISION_CHAT, ProviderType.TOOL_SEARCH -> {
                 loading.put("contextSize", contextSize)
                 loading.put("threadMode", threadMode)
                 loading.put("flashAttn", flashAttn)
@@ -298,7 +298,7 @@ fun ModelConfigScreen(
                         }
                     }
                 }
-                ProviderType.GGUF -> {
+                ProviderType.GGUF, ProviderType.VISION_CHAT, ProviderType.TOOL_SEARCH -> {
                     item {
                         Spacer(Modifier.height(dimens.spacingSm))
                         StandardCard(title = "Loading") {
@@ -777,6 +777,8 @@ private val CACHE_TYPES = listOf("f16", "q8_0", "q5_0", "q4_0")
 private val MIROSTAT_LABELS = listOf("Off", "v1", "v2")
 private val MODEL_TYPES = listOf(
     ProviderType.GGUF,
+    ProviderType.VISION_CHAT,
+    ProviderType.TOOL_SEARCH,
     ProviderType.EMBEDDING,
     ProviderType.IMAGE_GEN,
     ProviderType.IMAGE_UPSCALER,
@@ -822,6 +824,8 @@ private fun ModelIdentityOption(
 
 private fun modelTypeLabel(type: ProviderType): String = when (type) {
     ProviderType.GGUF -> "Chat"
+    ProviderType.VISION_CHAT -> "Vision"
+    ProviderType.TOOL_SEARCH -> "Tool/Search"
     ProviderType.EMBEDDING -> "RAG"
     ProviderType.IMAGE_GEN -> "Image Gen"
     ProviderType.IMAGE_UPSCALER -> "Upscaler"
@@ -831,6 +835,8 @@ private fun modelTypeLabel(type: ProviderType): String = when (type) {
 
 private fun modelTypeDescription(type: ProviderType): String = when (type) {
     ProviderType.GGUF -> "Chat model: used by normal chat and OpenAI-compatible text completions."
+    ProviderType.VISION_CHAT -> "Vision chat model: used by normal chat and image-attached chat when a projector is available."
+    ProviderType.TOOL_SEARCH -> "Tool/Search model: intended for search query planning, source filtering, and structured tool-call output."
     ProviderType.EMBEDDING -> "Embedding model: used for document indexing and RAG retrieval."
     ProviderType.IMAGE_GEN -> "Image generation model: used by image create/inpaint tasks."
     ProviderType.IMAGE_UPSCALER -> "Image upscaler: used by image upscale tasks."

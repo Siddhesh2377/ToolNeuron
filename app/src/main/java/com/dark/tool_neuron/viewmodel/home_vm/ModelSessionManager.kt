@@ -14,11 +14,14 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import org.json.JSONObject
 import java.io.File
 import javax.inject.Inject
@@ -70,6 +73,8 @@ class ModelSessionManager @Inject constructor(
     val userSystemPrompt: StateFlow<String> = _userSystemPrompt.asStateFlow()
 
     private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val lastActivityMs = AtomicLong(System.currentTimeMillis())
+    private val generationBusy = AtomicBoolean(false)
 
     init {
         watchdogScope.launch {
@@ -82,9 +87,16 @@ class ModelSessionManager @Inject constructor(
                 }
             }
         }
+        watchdogScope.launch {
+            while (true) {
+                delay(IDLE_CHECK_INTERVAL_MS)
+                maybeUnloadIdleModel()
+            }
+        }
     }
 
     suspend fun load(model: ModelInfo) {
+        markActivity()
         _loadState.value = ModelLoadState.Loading(model.id)
         _vlmAutoLoadError.value = null
         if (InferenceClient.isVlmLoaded.value) {
@@ -151,6 +163,36 @@ class ModelSessionManager @Inject constructor(
         _supportsThinking.value = false
         _userSystemPrompt.value = ""
         _loadState.value = ModelLoadState.Idle
+        System.gc()
+    }
+
+    fun markActivity() {
+        lastActivityMs.set(System.currentTimeMillis())
+    }
+
+    fun setGenerationBusy(busy: Boolean) {
+        generationBusy.set(busy)
+        markActivity()
+    }
+
+    suspend fun prepareForHeavyBackgroundWork() {
+        if (generationBusy.get()) return
+        if (_loadState.value is ModelLoadState.Active || InferenceClient.isVlmLoaded.value) {
+            unload()
+        }
+    }
+
+    private suspend fun maybeUnloadIdleModel() {
+        val minutes = appPrefs.idleUnloadMinutes
+        if (minutes <= 0) return
+        if (generationBusy.get()) return
+        if (_loadState.value !is ModelLoadState.Active) return
+        if (!InferenceClient.isModelLoaded.value && !InferenceClient.isVlmLoaded.value) return
+        val idleMs = System.currentTimeMillis() - lastActivityMs.get()
+        if (idleMs >= minutes * 60_000L) {
+            Log.i(TAG, "idle timeout reached (${minutes}m); unloading chat model")
+            unload()
+        }
     }
 
     fun setThinkingEnabled(enabled: Boolean) {
@@ -222,5 +264,9 @@ class ModelSessionManager @Inject constructor(
             val key = it.next()
             dst.put(key, src.get(key))
         }
+    }
+
+    private companion object {
+        const val IDLE_CHECK_INTERVAL_MS = 60_000L
     }
 }

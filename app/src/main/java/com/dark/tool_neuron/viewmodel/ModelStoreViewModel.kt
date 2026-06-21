@@ -20,6 +20,7 @@ import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.ExplorerRepo
 import com.dark.tool_neuron.repo.HuggingFaceExplorer
 import com.dark.tool_neuron.repo.InstallProgressTracker
+import com.dark.tool_neuron.repo.ModelBackupManager
 import com.dark.tool_neuron.repo.ModelCatalog
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
@@ -74,6 +75,7 @@ class ModelStoreViewModel @Inject constructor(
     private val installProgress: InstallProgressTracker,
     private val modelSession: ModelSessionManager,
     private val downloadCoordinator: DownloadCoordinator,
+    private val modelBackup: ModelBackupManager,
 ) : ViewModel() {
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
@@ -105,6 +107,9 @@ class ModelStoreViewModel @Inject constructor(
 
     private val _deleteInProgress = MutableStateFlow<String?>(null)
     val deleteInProgress: StateFlow<String?> = _deleteInProgress.asStateFlow()
+
+    private val _backupStatus = MutableStateFlow<String?>(null)
+    val backupStatus: StateFlow<String?> = _backupStatus.asStateFlow()
 
     private val _deviceInfo = MutableStateFlow<Map<String, String>>(emptyMap())
     val deviceInfo: StateFlow<Map<String, String>> = _deviceInfo.asStateFlow()
@@ -215,6 +220,35 @@ class ModelStoreViewModel @Inject constructor(
             }
             _isRefreshing.value = false
         }
+    }
+
+    fun exportModels(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _backupStatus.value = "Exporting models..."
+            try {
+                val models = modelRepo.models.value
+                modelBackup.exportTo(uri, models)
+                _backupStatus.value = "Exported ${models.size} models"
+            } catch (t: Throwable) {
+                _backupStatus.value = "Export failed: ${t.message ?: t.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun importModels(uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            _backupStatus.value = "Importing models..."
+            try {
+                val count = modelBackup.importFrom(uri)
+                _backupStatus.value = "Imported $count models"
+            } catch (t: Throwable) {
+                _backupStatus.value = "Import failed: ${t.message ?: t.javaClass.simpleName}"
+            }
+        }
+    }
+
+    fun clearBackupStatus() {
+        _backupStatus.value = null
     }
 
     private fun loadDeviceInfo() {

@@ -208,6 +208,16 @@ class AppPreferences @Inject constructor(
             ?: DEFAULT_THREAD_MODE
         set(value) = putString(KEY_THREAD_MODE, value.coerceIn(0, 2).toString())
 
+    var idleUnloadMinutes: Int
+        get() = getString(KEY_IDLE_UNLOAD_MINUTES, DEFAULT_IDLE_UNLOAD_MINUTES.toString())
+            .toIntOrNull()
+            ?.let { if (it == 0) 0 else it.coerceIn(15, 30) }
+            ?: DEFAULT_IDLE_UNLOAD_MINUTES
+        set(value) {
+            val normalized = if (value == 0) 0 else value.coerceIn(15, 30)
+            putString(KEY_IDLE_UNLOAD_MINUTES, normalized.toString())
+        }
+
     var pluginOnnxEp: String
         get() = getString(KEY_PLUGIN_ONNX_EP, DEFAULT_PLUGIN_ONNX_EP)
         set(value) = putString(KEY_PLUGIN_ONNX_EP, value)
@@ -292,6 +302,8 @@ class AppPreferences @Inject constructor(
         const val THREAD_MODE_POWER_SAVING = 0
         const val THREAD_MODE_BALANCED = 1
         const val THREAD_MODE_PERFORMANCE = 2
+        const val KEY_IDLE_UNLOAD_MINUTES = "idle_unload_minutes"
+        const val DEFAULT_IDLE_UNLOAD_MINUTES = 20
 
         const val KEY_PLUGIN_ONNX_EP = "plugin_onnx_ep"
         const val PLUGIN_ONNX_EP_CPU = "cpu"

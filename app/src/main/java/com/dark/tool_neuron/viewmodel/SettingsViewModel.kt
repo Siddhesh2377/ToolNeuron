@@ -67,6 +67,7 @@ class SettingsViewModel @Inject constructor(
     private val _ragDeepResearch = MutableStateFlow(prefs.ragDeepResearch)
     private val _vlmImageQuality = MutableStateFlow(prefs.vlmImageQuality)
     private val _threadMode = MutableStateFlow(prefs.threadMode)
+    private val _idleUnloadMinutes = MutableStateFlow(prefs.idleUnloadMinutes)
     private val _pluginOnnxEp = MutableStateFlow(prefs.pluginOnnxEp)
     private val _serverModelRolesJson = MutableStateFlow(prefs.serverModelRolesJson)
     private val _serverRoleDefaultsJson = MutableStateFlow(prefs.serverRoleDefaultsJson)
@@ -87,6 +88,7 @@ class SettingsViewModel @Inject constructor(
         _ragDeepResearch,
         _vlmImageQuality,
         _threadMode,
+        _idleUnloadMinutes,
         _pluginOnnxEp,
         _serverModelRolesJson,
         _serverRoleDefaultsJson,
@@ -106,11 +108,12 @@ class SettingsViewModel @Inject constructor(
         val deepResearch = values[10] as Boolean
         val vlmImageQuality = values[11] as String
         val threadMode = values[12] as Int
-        val pluginOnnxEp = values[13] as String
-        val serverModelRolesJson = values[14] as String
-        val serverRoleDefaultsJson = values[15] as String
+        val idleUnloadMinutes = values[13] as Int
+        val pluginOnnxEp = values[14] as String
+        val serverModelRolesJson = values[15] as String
+        val serverRoleDefaultsJson = values[16] as String
         @Suppress("UNCHECKED_CAST")
-        val installedPlugins = values[16] as List<com.dark.plugin_exc.InstalledPlugin>
+        val installedPlugins = values[17] as List<com.dark.plugin_exc.InstalledPlugin>
         val pluginCount = installedPlugins.size
 
         SettingsState(
@@ -126,6 +129,7 @@ class SettingsViewModel @Inject constructor(
                 ragDeepResearch = deepResearch,
                 vlmImageQuality = vlmImageQuality,
                 threadMode = threadMode,
+                idleUnloadMinutes = idleUnloadMinutes,
                 pluginOnnxEp = pluginOnnxEp,
                 serverModelRolesJson = serverModelRolesJson,
                 serverRoleDefaultsJson = serverRoleDefaultsJson,
@@ -168,6 +172,7 @@ class SettingsViewModel @Inject constructor(
         ragDeepResearch: Boolean,
         vlmImageQuality: String,
         threadMode: Int,
+        idleUnloadMinutes: Int,
         pluginOnnxEp: String,
         serverModelRolesJson: String,
         serverRoleDefaultsJson: String,
@@ -177,7 +182,7 @@ class SettingsViewModel @Inject constructor(
         voiceSection(models, activeTts, activeStt),
         visionSection(vlmImageQuality),
         serverRolesSection(models, serverModelRolesJson, serverRoleDefaultsJson, activeTts, activeStt),
-        modelSection(),
+        modelSection(idleUnloadMinutes),
         performanceSection(threadMode),
         pluginsSection(pluginOnnxEp, pluginCount),
         privacySection(lockEnabled, panicPinSet),
@@ -185,12 +190,31 @@ class SettingsViewModel @Inject constructor(
         aboutSection(),
     )
 
-    private fun modelSection(): SettingsSection = SettingsSection(
+    private fun modelSection(idleUnloadMinutes: Int): SettingsSection = SettingsSection(
         id = SECTION_MODEL,
         title = "Model",
-        description = "Performance and per-model configuration.",
+        description = "Memory behavior and per-model configuration.",
         icon = TnIcons.Sliders,
         items = listOf(
+            SettingsItem.Choice(
+                id = ID_IDLE_UNLOAD_MINUTES,
+                title = "Idle unload",
+                subtitle = "Unload the active chat model after no chat activity to recover RAM.",
+                icon = TnIcons.Refresh,
+                selectedKey = idleUnloadMinutes.toString(),
+                options = listOf(
+                    SettingsChoiceOption("0", "Off", "Keep the active chat model loaded."),
+                    SettingsChoiceOption("15", "15 minutes", "Most aggressive RAM recovery."),
+                    SettingsChoiceOption("20", "20 minutes", "Balanced default."),
+                    SettingsChoiceOption("30", "30 minutes", "Less reloading, more RAM held."),
+                ),
+                onSelect = { key ->
+                    val v = key?.toIntOrNull() ?: AppPreferences.DEFAULT_IDLE_UNLOAD_MINUTES
+                    prefs.idleUnloadMinutes = v
+                    _idleUnloadMinutes.value = prefs.idleUnloadMinutes
+                    _dialog.value = null
+                },
+            ),
             SettingsItem.Action(
                 id = ID_OPEN_PERFORMANCE,
                 title = "Performance",
@@ -409,6 +433,8 @@ class SettingsViewModel @Inject constructor(
                 ServerModelRole.CHAT
             }
         }
+        ProviderType.VISION_CHAT -> ServerModelRole.VLM
+        ProviderType.TOOL_SEARCH -> ServerModelRole.CHAT
         ProviderType.EMBEDDING -> ServerModelRole.EMBEDDING
         ProviderType.TTS -> ServerModelRole.TTS
         ProviderType.STT -> ServerModelRole.STT
@@ -885,6 +911,7 @@ class SettingsViewModel @Inject constructor(
         private const val ID_SERVER_DEFAULT_PREFIX = "server_default_"
         private const val ID_SERVER_ROLE_PREFIX = "server_role_"
         private const val ID_THREAD_MODE = "thread_mode"
+        private const val ID_IDLE_UNLOAD_MINUTES = "idle_unload_minutes"
         private const val ID_OPEN_PERFORMANCE = "open_performance"
         private const val ID_OPEN_MODEL_EDITOR = "open_model_editor"
         private const val ID_OPEN_MODEL_EDITOR_FROM_SERVER = "open_model_editor_from_server"

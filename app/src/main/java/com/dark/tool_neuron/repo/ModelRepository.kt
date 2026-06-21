@@ -103,7 +103,7 @@ class ModelRepository @Inject constructor(
         val records = storage.queryString(COL_MODELS, TAG_ID, modelId)
         records.forEach { record ->
             record.putString(TAG_PROVIDER_TYPE, providerType.name)
-            if (providerType != ProviderType.GGUF) {
+            if (providerType != ProviderType.GGUF && providerType != ProviderType.VISION_CHAT) {
                 record.putBool(TAG_IS_ACTIVE, false)
             }
             storage.update(COL_MODELS, record)

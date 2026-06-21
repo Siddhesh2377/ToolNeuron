@@ -107,6 +107,8 @@ internal fun ModelTypePickerDialog(
 
 internal fun providerTypeLabel(type: ProviderType): String = when (type) {
     ProviderType.GGUF -> "Chat (GGUF)"
+    ProviderType.VISION_CHAT -> "Vision chat"
+    ProviderType.TOOL_SEARCH -> "Tool/Search"
     ProviderType.EMBEDDING -> "Embedding (RAG)"
     ProviderType.IMAGE_GEN -> "Image generation"
     ProviderType.IMAGE_UPSCALER -> "Image upscaler"
@@ -116,6 +118,8 @@ internal fun providerTypeLabel(type: ProviderType): String = when (type) {
 
 private fun providerTypeBlurb(type: ProviderType): String = when (type) {
     ProviderType.GGUF -> "Conversation models used by chat and the remote server."
+    ProviderType.VISION_CHAT -> "Chat models that can accept image input when a projector is available."
+    ProviderType.TOOL_SEARCH -> "Small instruction models used for query planning and tool-call JSON."
     ProviderType.EMBEDDING -> "Vector models for document search and RAG."
     ProviderType.IMAGE_GEN -> "Diffusion models used by the image workspace."
     ProviderType.IMAGE_UPSCALER -> "Upscaling models shown in image upscale mode."
@@ -125,6 +129,8 @@ private fun providerTypeBlurb(type: ProviderType): String = when (type) {
 
 private val PROVIDER_OPTIONS = listOf(
     ProviderType.GGUF,
+    ProviderType.VISION_CHAT,
+    ProviderType.TOOL_SEARCH,
     ProviderType.EMBEDDING,
     ProviderType.IMAGE_GEN,
     ProviderType.IMAGE_UPSCALER,

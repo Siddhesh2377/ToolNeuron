@@ -231,6 +231,8 @@ class ServerController @Inject constructor(
                     ServerEngineKind.CHAT_GGUF
                 }
             }
+            ProviderType.VISION_CHAT -> ServerEngineKind.VLM
+            ProviderType.TOOL_SEARCH -> ServerEngineKind.CHAT_GGUF
             ProviderType.EMBEDDING -> ServerEngineKind.EMBEDDING
             ProviderType.TTS -> ServerEngineKind.TTS
             ProviderType.STT -> ServerEngineKind.STT
