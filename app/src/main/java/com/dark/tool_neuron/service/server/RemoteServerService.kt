@@ -46,6 +46,11 @@ class RemoteServerService : Service() {
             scope.launch { handleStart(cfg) }
         }
 
+        override fun refreshCatalog(configJson: String) {
+            val cfg = runCatching { JSONObject(configJson) }.getOrNull() ?: return
+            scope.launch { handleRefreshCatalog(cfg) }
+        }
+
         override fun stop() {
             scope.launch { handleStop("stopped") }
         }
@@ -206,6 +211,33 @@ class RemoteServerService : Service() {
         ))
 
         Log.i(TAG, "server up host=${resolution.host} port=$effective engines=${catalog.all.size}")
+    }
+
+    private suspend fun handleRefreshCatalog(cfg: JSONObject) {
+        if (snapshot.phase != "running") return
+        val engines = cfg.optJSONArray("engines") ?: JSONArray()
+        if (engines.length() == 0) return
+        val catalog = ServerCatalog.fromJsonArray(engines)
+        if (catalog.all.isEmpty()) return
+
+        registry.setCatalog(catalog)
+        try { NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString()) } catch (_: Exception) {}
+
+        val webUiHtml = cfg.optString("webUiHtml", "")
+        val docsHtml = cfg.optString("docsHtml", "")
+        if (webUiHtml.isNotBlank()) try { NativeServer.nativeSetWebUiHtml(webUiHtml) } catch (_: Exception) {}
+        if (docsHtml.isNotBlank()) try { NativeServer.nativeSetDocsHtml(docsHtml) } catch (_: Exception) {}
+
+        val displayEntry = catalog.primary()
+            ?: catalog.all.firstOrNull { it.defaultModel }
+            ?: catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+            ?: catalog.firstOf(ServerEngineKind.VLM)
+            ?: catalog.all.first()
+        publish(snapshot.copy(
+            modelId = displayEntry.id,
+            modelName = "catalog refreshed",
+        ))
+        Log.i(TAG, "server catalog refreshed engines=${catalog.all.size}")
     }
 
     private suspend fun handleStop(reason: String) {

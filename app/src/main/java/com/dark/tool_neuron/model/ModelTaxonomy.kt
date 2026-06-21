@@ -40,6 +40,7 @@ object ModelTaxonomy {
 
         return when {
             model.modelType == "image_gen" -> ModelFamily.IMAGE_GEN
+            model.modelType == "tool_search" -> ModelFamily.SMOLLM
             model.modelType == "image_upscaler" || model.modelType == "tts" || model.modelType == "stt" -> ModelFamily.OTHER
             model.modelType == "embedding" -> ModelFamily.EMBEDDING
             model.isVlm || "vlm" in haystack || "vision" in haystack -> ModelFamily.VISION
@@ -83,6 +84,7 @@ object ModelTaxonomy {
             model.modelType == "tts" -> ModelTask.TTS
             model.modelType == "stt" -> ModelTask.STT
             model.modelType == "embedding" -> ModelTask.EMBEDDING
+            model.modelType == "tool_search" -> ModelTask.TOOL_SEARCH
             model.isVlm -> ModelTask.VISION_CHAT
             "thinking" in haystack || "reasoning" in haystack || "deepseek-r1" in haystack -> ModelTask.THINKING
             "tool" in haystack || "function" in haystack -> ModelTask.TOOL_SEARCH

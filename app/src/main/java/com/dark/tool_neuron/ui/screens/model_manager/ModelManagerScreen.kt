@@ -211,19 +211,22 @@ fun ModelManagerScreen(
         ImportPreviewDialog(
             preview = preview,
             onDismiss = viewModel::dismissImportPreview,
-            onImport = { ids, overwrite -> viewModel.confirmPreviewImport(ids, overwrite) },
+            onImport = { ids, overwrite, restoreSettings ->
+                viewModel.confirmPreviewImport(ids, overwrite, restoreSettings)
+            },
         )
     }
 }
 
 @Composable
-private fun ImportPreviewDialog(
+fun ImportPreviewDialog(
     preview: BackupPreview,
     onDismiss: () -> Unit,
-    onImport: (Set<String>, Boolean) -> Unit,
+    onImport: (Set<String>, Boolean, Boolean) -> Unit,
 ) {
     var selectedIds by remember(preview) { mutableStateOf(preview.models.map { it.id }.toSet()) }
     var overwriteExisting by remember(preview) { mutableStateOf(true) }
+    var restoreSettings by remember(preview) { mutableStateOf(preview.hasSettings) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Restore backup") },
@@ -260,16 +263,56 @@ private fun ImportPreviewDialog(
                     Checkbox(checked = overwriteExisting, onCheckedChange = { overwriteExisting = it })
                     Text("Overwrite existing model IDs", style = MaterialTheme.typography.bodySmall)
                 }
+                if (preview.hasSettings) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = restoreSettings, onCheckedChange = { restoreSettings = it })
+                        Text("Restore roles and model defaults", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                onClick = { onImport(selectedIds, overwriteExisting) },
+                onClick = { onImport(selectedIds, overwriteExisting, restoreSettings) },
                 enabled = selectedIds.isNotEmpty(),
             ) { Text("Import selected") }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+fun BackupProgressDialog(
+    progress: BackupProgress,
+    status: String?,
+    onContinueInBackground: () -> Unit,
+    onCloseStatus: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Restoring models") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (progress.totalBytes > 0L) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                val eta = progress.etaSeconds?.let { " · ${it}s left" }.orEmpty()
+                CaptionText(text = "${progress.label}$eta")
+                if (!status.isNullOrBlank()) CaptionText(text = status)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onContinueInBackground) { Text("Continue in background") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCloseStatus) { Text("Hide status") }
         },
     )
 }

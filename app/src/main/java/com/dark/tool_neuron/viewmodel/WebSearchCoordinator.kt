@@ -20,6 +20,7 @@ import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.net.URI
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -71,7 +72,12 @@ class WebSearchCoordinator @Inject constructor(
                 return
             }
 
-            val queries = generateQueries(userQuery).take(MAX_QUERIES)
+            val requestedUrl = extractUrl(userQuery)
+            val queries = if (requestedUrl != null) {
+                buildUrlFocusedQueries(userQuery, requestedUrl)
+            } else {
+                generateQueries(userQuery).take(MAX_QUERIES)
+            }
             if (queries.isEmpty()) {
                 emit(WebSearchEvent.Failed(runId, "Couldn't generate search queries"))
                 return
@@ -93,14 +99,15 @@ class WebSearchCoordinator @Inject constructor(
                 allHits.addAll(deduped)
             }
 
-            if (allHits.isEmpty()) {
+            val filteredHits = filterAndRankHits(userQuery, requestedUrl, allHits)
+            if (filteredHits.isEmpty()) {
                 emit(WebSearchEvent.Failed(runId, "No search results found"))
                 return
             }
 
             emit(WebSearchEvent.SynthesizeStart(runId))
-            val answer = runInference(WebSearchPrompts.synthesize(userQuery, allHits), SYNTHESIZE_MAX_TOKENS)
-            emit(WebSearchEvent.Done(runId, answer, allHits))
+            val answer = runInference(WebSearchPrompts.synthesize(userQuery, filteredHits), SYNTHESIZE_MAX_TOKENS)
+            emit(WebSearchEvent.Done(runId, answer, filteredHits))
         } catch (ce: CancellationException) {
             _events.tryEmit(WebSearchEvent.Cancelled(runId, ce.message ?: "Cancelled"))
             throw ce
@@ -150,6 +157,72 @@ class WebSearchCoordinator @Inject constructor(
         return out
     }
 
+    private fun extractUrl(text: String): String? =
+        Regex("""https?://[^\s<>"']+""").find(text)?.value?.trimEnd('.', ',', ')', ']')
+
+    private fun buildUrlFocusedQueries(userQuery: String, url: String): List<String> {
+        val domain = domainOf(url).orEmpty()
+        val cleaned = userQuery.replace(url, "").trim().ifBlank { "summary" }
+        return listOfNotNull(
+            url,
+            domain.takeIf { it.isNotBlank() }?.let { "site:$it $cleaned" },
+            domain.takeIf { it.isNotBlank() }?.let { "$it ${pathWords(url)} $cleaned" },
+        ).distinct().take(MAX_QUERIES)
+    }
+
+    private fun filterAndRankHits(
+        userQuery: String,
+        requestedUrl: String?,
+        hits: List<WebSearchHit>,
+    ): List<WebSearchHit> {
+        val requestedDomain = requestedUrl?.let(::domainOf)
+        val wantsPlayStore = userQuery.contains("play store", ignoreCase = true) ||
+            userQuery.contains("google play", ignoreCase = true)
+        val wantsDirectLink = userQuery.contains("link", ignoreCase = true) ||
+            userQuery.contains("download", ignoreCase = true)
+
+        val scored = hits.map { hit ->
+            val domain = domainOf(hit.url).orEmpty()
+            var score = 0
+            if (!requestedDomain.isNullOrBlank() && domain == requestedDomain) score += 100
+            if (!requestedUrl.isNullOrBlank() && hit.url.startsWith(requestedUrl, ignoreCase = true)) score += 80
+            if (wantsPlayStore && domain == "play.google.com") score += 120
+            if (wantsDirectLink && (domain.startsWith("www.") || domain.isNotBlank())) score += 10
+            if (hit.title.contains("official", ignoreCase = true) || hit.snippet.contains("official", ignoreCase = true)) score += 20
+            if (hit.url.contains("support.google.com") && wantsPlayStore) score += 20
+            hit to score
+        }
+
+        val narrowed = if (!requestedDomain.isNullOrBlank()) {
+            scored.filter { domainOf(it.first.url) == requestedDomain }.ifEmpty { scored }
+        } else if (wantsPlayStore) {
+            scored.filter { domainOf(it.first.url) == "play.google.com" || domainOf(it.first.url) == "support.google.com" }
+                .ifEmpty { scored }
+        } else {
+            scored
+        }
+
+        return narrowed
+            .sortedWith(compareByDescending<Pair<WebSearchHit, Int>> { it.second }.thenBy { it.first.sourceQueryIndex })
+            .map { it.first }
+            .distinctBy { normalizeUrl(it.url) }
+            .take(MAX_FILTERED_SOURCES)
+    }
+
+    private fun domainOf(url: String): String? = runCatching {
+        URI(url).host?.lowercase()?.removePrefix("www.")
+    }.getOrNull()
+
+    private fun pathWords(url: String): String = runCatching {
+        URI(url).path.orEmpty()
+            .replace(Regex("""[/_\-.]+"""), " ")
+            .trim()
+            .take(80)
+    }.getOrDefault("")
+
+    private fun normalizeUrl(url: String): String =
+        url.substringBefore('#').trimEnd('/')
+
     private suspend fun runInference(prompt: String, maxTokens: Int): String {
         val sb = StringBuilder()
         try {
@@ -183,5 +256,6 @@ class WebSearchCoordinator @Inject constructor(
         private const val QUERY_GEN_MAX_TOKENS = 200
         private const val SYNTHESIZE_MAX_TOKENS = 1024
         private const val SEARCH_THROTTLE_MS = 1800L
+        private const val MAX_FILTERED_SOURCES = 8
     }
 }

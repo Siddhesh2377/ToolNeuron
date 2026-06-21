@@ -37,6 +37,7 @@ private val THINK_TAGS = listOf(
     "<reasoning>" to "</reasoning>",
 )
 private val NEED_MORE_REGEX = Regex("""\[NEED_MORE:\s*(.+?)]""", RegexOption.DOT_MATCHES_ALL)
+private val NEED_MORE_LINE_REGEX = Regex("""(?im)^\s*NEED_MORE\s*:\s*(.+?)\s*$""")
 private const val DEEP_RESEARCH_INSTRUCTION =
     "Instruction: if the context above is insufficient to fully answer the user's question, " +
         "do NOT guess. Instead end your response with exactly one line: " +
@@ -237,8 +238,9 @@ class InferenceCoordinator @Inject constructor(
 
         val ragReady = ragManager.isReady.value
         val budget = computeRagBudget(messages)
+        val documentWideRequest = isDocumentWideRequest(original.content)
         val aug = if (ragReady) {
-            if (isDocumentSummaryRequest(original.content)) {
+            if (documentWideRequest) {
                 ragManager.summarizeAttachedDocuments(chatId, original.content, budget)
                     .takeIf { it.didAugment }
                     ?: ragManager.augment(chatId, original.content, original.content, budget)
@@ -254,7 +256,7 @@ class InferenceCoordinator @Inject constructor(
 
         val builder = StringBuilder()
         builder.append(if (ragApplied) aug.augmentedPrompt else original.content)
-        if (deepResearchEnabled && ragApplied && followups.isEmpty()) {
+        if (deepResearchEnabled && ragApplied && followups.isEmpty() && !documentWideRequest) {
             builder.append("\n\n").append(DEEP_RESEARCH_INSTRUCTION)
         }
         followups.forEachIndexed { idx, block ->
@@ -273,7 +275,7 @@ class InferenceCoordinator @Inject constructor(
         if (finalContent == original.content) return messages to RagAugmentation.NONE
         Log.i(
             TAG,
-            "prompt augmented (rag=$ragApplied, summary=${isDocumentSummaryRequest(original.content)}, deep=$deepResearchEnabled, followups=${followups.size}, len ${original.content.length} -> ${finalContent.length}, budget=$budget tok)",
+            "prompt augmented (rag=$ragApplied, summary=$documentWideRequest, deep=$deepResearchEnabled, followups=${followups.size}, len ${original.content.length} -> ${finalContent.length}, budget=$budget tok)",
         )
         val updated = messages.toMutableList().also {
             it[lastUserIdx] = original.copy(content = finalContent)
@@ -301,13 +303,26 @@ class InferenceCoordinator @Inject constructor(
     }
 
     private fun extractNeedMoreQuery(content: String): String? {
-        val match = NEED_MORE_REGEX.find(content) ?: return null
-        return match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+        val bracketed = NEED_MORE_REGEX.find(content)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+        if (!bracketed.isNullOrBlank()) return bracketed
+        return NEED_MORE_LINE_REGEX.find(content)
+            ?.groupValues
+            ?.getOrNull(1)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
     }
 
     private fun stripNeedMoreMarker(content: String): String {
-        if (!content.contains("[NEED_MORE")) return content
-        return NEED_MORE_REGEX.replace(content, "").trimEnd()
+        val withoutBracketed = if (content.contains("[NEED_MORE")) {
+            NEED_MORE_REGEX.replace(content, "")
+        } else {
+            content
+        }
+        return NEED_MORE_LINE_REGEX.replace(withoutBracketed, "").trimEnd()
     }
 
     private fun sanitizeRagControlText(content: String): String {
@@ -317,16 +332,27 @@ class InferenceCoordinator @Inject constructor(
             .trimStart()
     }
 
-    private fun isDocumentSummaryRequest(text: String): Boolean {
+    private fun isDocumentWideRequest(text: String): Boolean {
         val q = text.lowercase()
-        if (!q.contains("summar")) return false
-        return q.contains("file") ||
+        val mentionsDocument = q.contains("file") ||
             q.contains("pdf") ||
             q.contains("document") ||
             q.contains("doc") ||
             q.contains("attachment") ||
             q.contains("attached") ||
-            q.contains("based on")
+            q.contains("based on") ||
+            q.contains("this")
+        if (!mentionsDocument) return false
+        return q.contains("summar") ||
+            q.contains("overview") ||
+            q.contains("learn") ||
+            q.contains("teach") ||
+            q.contains("explain") ||
+            q.contains("basics") ||
+            q.contains("every aspect") ||
+            q.contains("all aspects") ||
+            q.contains("main points") ||
+            q.contains("based on this")
     }
 
     private fun computeRagBudget(messages: List<ChatMessage>): Int {

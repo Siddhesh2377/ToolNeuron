@@ -628,10 +628,11 @@ class RagManager @Inject constructor(
         if (kept.isEmpty()) return@withContext RagAugmentation.NONE
 
         val prompt = buildString {
-            append("The user asked to summarize attached document(s). ")
-            append("Use the representative excerpts below to write a useful document summary in your own words. ")
-            append("Cover the main topics, important definitions, and notable sections. ")
-            append("Do not mention that the excerpts are representative unless the user asks. ")
+            append("The user is asking a document-wide question about the attached file(s). ")
+            append("Use the excerpts below to write a useful answer in your own words. ")
+            append("If the user asks to learn, teach from the basics first, then expand into the main sections. ")
+            append("Cover the main topics, definitions, examples, and notable sections that appear in the excerpts. ")
+            append("Do not ask for a follow-up just because the excerpts are not the full file; answer from the available document context. ")
             append("Cite supporting excerpts inline using [1], [2], etc.\n\n")
             append("<document_excerpts>\n")
             kept.forEachIndexed { index, chunk ->

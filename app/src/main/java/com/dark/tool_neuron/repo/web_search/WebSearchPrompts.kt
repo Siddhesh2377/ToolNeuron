@@ -26,7 +26,8 @@ object WebSearchPrompts {
         // write a short factual summary. The sources accordion in the UI
         // already lists every URL, so the model doesn't need to repeat them.
         append("Summarize the search results below to answer the user's question. ")
-        append("Write 2 to 4 short paragraphs in plain language. ")
+        append("Write a direct answer first, then add brief context only if useful. ")
+        append("If the user asked for a link or download page, provide the best official URL from the results first. ")
         append("Use only information from the snippets — do not invent details. ")
         append("If the snippets don't cover the question, say so in one sentence.")
         append("\n\nQuestion: ")

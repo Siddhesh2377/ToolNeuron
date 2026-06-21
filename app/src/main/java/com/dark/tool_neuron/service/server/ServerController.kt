@@ -119,14 +119,7 @@ class ServerController @Inject constructor(
 
         _state.value = ServerState.Starting
         ensureBoundThen { s ->
-            val cfg = JSONObject().apply {
-                put("engines", engines)
-                put("token", ensureToken())
-                put("port", prefs.serverPort)
-                put("bindMode", prefs.serverBindMode)
-                put("webUiHtml", loadAsset("server_webui.html"))
-                put("docsHtml", loadAsset("server_docs.html"))
-            }
+            val cfg = buildServerConfig(engines)
             try { s.start(cfg.toString()) }
             catch (e: Exception) {
                 Log.e(TAG, "start failed", e)
@@ -135,10 +128,29 @@ class ServerController @Inject constructor(
         }
     }
 
+    fun refreshCatalogIfRunning() {
+        if (!isRunning) return
+        val engines = buildEnginesCatalog(modelRepo.models.value)
+        if (engines.length() == 0) return
+        ensureBoundThen { s ->
+            try { s.refreshCatalog(buildServerConfig(engines).toString()) }
+            catch (e: Exception) { Log.w(TAG, "catalog refresh failed", e) }
+        }
+    }
+
     fun stop() {
         ensureBoundThen { s ->
             try { s.stop() } catch (e: Exception) { Log.w(TAG, "stop failed", e) }
         }
+    }
+
+    private fun buildServerConfig(engines: JSONArray): JSONObject = JSONObject().apply {
+        put("engines", engines)
+        put("token", ensureToken())
+        put("port", prefs.serverPort)
+        put("bindMode", prefs.serverBindMode)
+        put("webUiHtml", loadAsset("server_webui.html"))
+        put("docsHtml", loadAsset("server_docs.html"))
     }
 
     fun ensureToken(): String {

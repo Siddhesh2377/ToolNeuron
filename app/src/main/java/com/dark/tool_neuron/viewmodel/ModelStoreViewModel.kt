@@ -86,6 +86,7 @@ class ModelStoreViewModel @Inject constructor(
 
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
     val activeDownloadCount: StateFlow<Int> = downloadCoordinator.activeCount
+    val activeDownloadLabels: StateFlow<Map<Int, com.dark.tool_neuron.repo.DownloadLabel>> = downloadCoordinator.labelsFlow
     val repositories: StateFlow<List<HFRepository>> = repoDataStore.repositories
     val defaultEmbeddingModelId: StateFlow<String?> = ragManager.defaultEmbeddingModelId
 
@@ -258,6 +259,7 @@ class ModelStoreViewModel @Inject constructor(
             _backupProgress.value = BackupProgress("Preparing import")
             try {
                 val count = modelBackup.importFrom(uri) { progress -> _backupProgress.value = progress }
+                refreshServerCatalog()
                 _backupStatus.value = "Imported $count models"
                 userNotifications.notifyBackupFinished("Model import complete", "Imported $count models.")
             } catch (t: Throwable) {
@@ -281,7 +283,11 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
-    fun confirmPreviewImport(selectedIds: Set<String>, overwriteExisting: Boolean) {
+    fun confirmPreviewImport(
+        selectedIds: Set<String>,
+        overwriteExisting: Boolean,
+        restoreSettings: Boolean = true,
+    ) {
         val uri = pendingImportUri ?: return
         viewModelScope.launch(Dispatchers.IO) {
             _backupImportPreview.value = null
@@ -292,7 +298,9 @@ class ModelStoreViewModel @Inject constructor(
                     uri = uri,
                     selectedIds = selectedIds,
                     overwriteExisting = overwriteExisting,
+                    restoreSettings = restoreSettings,
                 ) { progress -> _backupProgress.value = progress }
+                refreshServerCatalog()
                 _backupStatus.value = "Imported $count models"
                 userNotifications.notifyBackupFinished("Model import complete", "Imported $count models.")
             } catch (t: Throwable) {
@@ -313,6 +321,10 @@ class ModelStoreViewModel @Inject constructor(
 
     fun clearBackupStatus() {
         _backupStatus.value = null
+    }
+
+    private fun refreshServerCatalog() {
+        serverController.refreshCatalogIfRunning()
     }
 
     private fun loadDeviceInfo() {
@@ -674,6 +686,7 @@ class ModelStoreViewModel @Inject constructor(
                                 inferenceParamsJson = "{}",
                             ),
                         )
+                        refreshServerCatalog()
                         if (kind == VoiceKind.TTS && prefs.activeTtsModelId.isBlank()) {
                             prefs.activeTtsModelId = model.id
                         }
@@ -734,6 +747,7 @@ class ModelStoreViewModel @Inject constructor(
                         fileSize = folderSize,
                     ),
                 )
+                refreshServerCatalog()
             } catch (t: Throwable) {
                 android.util.Log.e("ModelStoreVM", "finalizeImageGenDownload threw", t)
                 _error.value = "Extraction error: ${t.message}"
@@ -762,6 +776,7 @@ class ModelStoreViewModel @Inject constructor(
                         fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
                     ),
                 )
+                refreshServerCatalog()
             } finally {
                 _downloadIds.value = _downloadIds.value - model.id
                 _downloadStates.value = _downloadStates.value - model.id
@@ -848,6 +863,7 @@ class ModelStoreViewModel @Inject constructor(
             "tts" -> ProviderType.TTS
             "stt" -> ProviderType.STT
             "embedding" -> ProviderType.EMBEDDING
+            "tool_search" -> ProviderType.TOOL_SEARCH
             else -> ProviderType.GGUF
         }
         modelRepo.insert(ModelInfo(
@@ -856,6 +872,7 @@ class ModelStoreViewModel @Inject constructor(
             providerType = provider,
             fileSize = if (model.sizeBytes > 0) model.sizeBytes else destFile.length(),
         ))
+        refreshServerCatalog()
         if (provider == ProviderType.GGUF &&
             modelRepo.models.value.none { it.providerType == ProviderType.GGUF && it.isActive && it.id != model.id }
         ) {
@@ -882,6 +899,7 @@ class ModelStoreViewModel @Inject constructor(
             providerType = ProviderType.VISION_CHAT,
             fileSize = if (model.sizeBytes > 0) model.sizeBytes else baseFile.length(),
         ))
+        refreshServerCatalog()
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
         _installedMmprojIds.value = _installedMmprojIds.value + model.id
@@ -953,6 +971,7 @@ class ModelStoreViewModel @Inject constructor(
                     providerType = providerType,
                     fileSize = localFile?.length() ?: fileSize,
                 ))
+                refreshServerCatalog()
             }.onFailure { throwable ->
                 _error.value = "Import failed: ${throwable.message ?: throwable.javaClass.simpleName}"
             }
@@ -1007,6 +1026,7 @@ class ModelStoreViewModel @Inject constructor(
         } else {
             modelRepo.updateProviderType(modelId, providerType)
         }
+        refreshServerCatalog()
     }
 
     private fun migrateLocalUriForImageModel(
@@ -1047,6 +1067,7 @@ class ModelStoreViewModel @Inject constructor(
                 updateModelProviderTypeNow(current, providerType)
             }
             modelRepo.updateConfig(config)
+            refreshServerCatalog()
             val latest = modelRepo.getModelById(config.modelId)
             if (latest?.providerType == ProviderType.GGUF && !serverController.isBusy) {
                 withContext(Dispatchers.Main) { modelSession.load(latest) }

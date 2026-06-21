@@ -2,6 +2,7 @@ package com.dark.tool_neuron.repo
 
 import android.content.Context
 import android.net.Uri
+import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
@@ -55,12 +56,14 @@ data class BackupPreview(
     val version: Int,
     val createdAt: Long,
     val models: List<BackupModelPreview>,
+    val hasSettings: Boolean = false,
 )
 
 @Singleton
 class ModelBackupManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val modelRepo: ModelRepository,
+    private val prefs: AppPreferences,
 ) {
     fun exportTo(uri: Uri, models: List<ModelInfo>, onProgress: (BackupProgress) -> Unit = {}) {
         val startedAt = System.currentTimeMillis()
@@ -103,6 +106,7 @@ class ModelBackupManager @Inject constructor(
                     .put("format", "tool-neuron-model-backup")
                     .put("version", 1)
                     .put("createdAt", System.currentTimeMillis())
+                    .put("settings", buildSettingsJson())
                     .put("models", manifestModels)
                 zip.putNextEntry(ZipEntry("manifest.json"))
                 zip.write(manifest.toString(2).toByteArray(Charsets.UTF_8))
@@ -195,6 +199,7 @@ class ModelBackupManager @Inject constructor(
             version = manifest.optInt("version", 1),
             createdAt = manifest.optLong("createdAt", 0L),
             models = models,
+            hasSettings = manifest.optJSONObject("settings") != null,
         )
     }
 
@@ -202,6 +207,7 @@ class ModelBackupManager @Inject constructor(
         uri: Uri,
         selectedIds: Set<String>? = null,
         overwriteExisting: Boolean = true,
+        restoreSettings: Boolean = true,
         onProgress: (BackupProgress) -> Unit = {},
     ): Int {
         val startedAt = System.currentTimeMillis()
@@ -273,8 +279,27 @@ class ModelBackupManager @Inject constructor(
             )
             imported++
         }
+        if (restoreSettings) {
+            restoreSettingsJson(manifest.optJSONObject("settings"))
+        }
         onProgress(BackupProgress("Import complete", totalBytes, totalBytes, startedAt))
         return imported
+    }
+
+    private fun buildSettingsJson(): JSONObject = JSONObject()
+        .put("serverSelectedModelId", prefs.serverSelectedModelId)
+        .put("serverModelRolesJson", prefs.serverModelRolesJson)
+        .put("serverRoleDefaultsJson", prefs.serverRoleDefaultsJson)
+        .put("activeTtsModelId", prefs.activeTtsModelId)
+        .put("activeSttModelId", prefs.activeSttModelId)
+
+    private fun restoreSettingsJson(settings: JSONObject?) {
+        if (settings == null) return
+        prefs.serverSelectedModelId = settings.optString("serverSelectedModelId", prefs.serverSelectedModelId)
+        prefs.serverModelRolesJson = settings.optString("serverModelRolesJson", prefs.serverModelRolesJson)
+        prefs.serverRoleDefaultsJson = settings.optString("serverRoleDefaultsJson", prefs.serverRoleDefaultsJson)
+        prefs.activeTtsModelId = settings.optString("activeTtsModelId", prefs.activeTtsModelId)
+        prefs.activeSttModelId = settings.optString("activeSttModelId", prefs.activeSttModelId)
     }
 
     private fun readManifest(uri: Uri): JSONObject {
