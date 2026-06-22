@@ -18,6 +18,7 @@ import com.dark.tool_neuron.service.server.ServerModelRole
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
 import com.dark.tool_neuron.voice.VoiceModelManager
+import com.dark.tool_neuron.voice.VoiceBackend
 import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
@@ -62,6 +63,8 @@ class SettingsViewModel @Inject constructor(
     private val _panicPinSet = MutableStateFlow(security.hasPanicPin)
     private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
     private val _activeStt = MutableStateFlow(prefs.activeSttModelId)
+    private val _voiceTtsBackend = MutableStateFlow(prefs.voiceTtsBackend)
+    private val _voiceSttBackend = MutableStateFlow(prefs.voiceSttBackend)
     private val _ragSmartRerank = MutableStateFlow(prefs.ragSmartRerank)
     private val _ragMultiQuery = MutableStateFlow(prefs.ragMultiQuery)
     private val _ragDeepResearch = MutableStateFlow(prefs.ragDeepResearch)
@@ -82,6 +85,8 @@ class SettingsViewModel @Inject constructor(
         _snackbar,
         _activeTts,
         _activeStt,
+        _voiceTtsBackend,
+        _voiceSttBackend,
         _panicPinSet,
         _ragSmartRerank,
         _ragMultiQuery,
@@ -102,18 +107,20 @@ class SettingsViewModel @Inject constructor(
         val snackbar = values[4] as String?
         val activeTts = values[5] as String
         val activeStt = values[6] as String
-        val panicSet = values[7] as Boolean
-        val rerank = values[8] as Boolean
-        val multiQuery = values[9] as Boolean
-        val deepResearch = values[10] as Boolean
-        val vlmImageQuality = values[11] as String
-        val threadMode = values[12] as Int
-        val idleUnloadMinutes = values[13] as Int
-        val pluginOnnxEp = values[14] as String
-        val serverModelRolesJson = values[15] as String
-        val serverRoleDefaultsJson = values[16] as String
+        val voiceTtsBackend = values[7] as String
+        val voiceSttBackend = values[8] as String
+        val panicSet = values[9] as Boolean
+        val rerank = values[10] as Boolean
+        val multiQuery = values[11] as Boolean
+        val deepResearch = values[12] as Boolean
+        val vlmImageQuality = values[13] as String
+        val threadMode = values[14] as Int
+        val idleUnloadMinutes = values[15] as Int
+        val pluginOnnxEp = values[16] as String
+        val serverModelRolesJson = values[17] as String
+        val serverRoleDefaultsJson = values[18] as String
         @Suppress("UNCHECKED_CAST")
-        val installedPlugins = values[17] as List<com.dark.plugin_exc.InstalledPlugin>
+        val installedPlugins = values[19] as List<com.dark.plugin_exc.InstalledPlugin>
         val pluginCount = installedPlugins.size
 
         SettingsState(
@@ -123,6 +130,8 @@ class SettingsViewModel @Inject constructor(
                 lockEnabled = lockOn,
                 activeTts = activeTts,
                 activeStt = activeStt,
+                voiceTtsBackend = voiceTtsBackend,
+                voiceSttBackend = voiceSttBackend,
                 panicPinSet = panicSet,
                 ragSmartRerank = rerank,
                 ragMultiQuery = multiQuery,
@@ -166,6 +175,8 @@ class SettingsViewModel @Inject constructor(
         lockEnabled: Boolean,
         activeTts: String,
         activeStt: String,
+        voiceTtsBackend: String,
+        voiceSttBackend: String,
         panicPinSet: Boolean,
         ragSmartRerank: Boolean,
         ragMultiQuery: Boolean,
@@ -179,7 +190,7 @@ class SettingsViewModel @Inject constructor(
         pluginCount: Int,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
-        voiceSection(models, activeTts, activeStt),
+        voiceSection(models, activeTts, activeStt, voiceTtsBackend, voiceSttBackend),
         visionSection(vlmImageQuality),
         serverRolesSection(models, serverModelRolesJson, serverRoleDefaultsJson, activeTts, activeStt),
         modelSection(idleUnloadMinutes),
@@ -602,6 +613,8 @@ class SettingsViewModel @Inject constructor(
         models: List<ModelInfo>,
         activeTts: String,
         activeStt: String,
+        voiceTtsBackend: String,
+        voiceSttBackend: String,
     ): SettingsSection {
         val ttsModels = models.filter { it.providerType == ProviderType.TTS }
         val sttModels = models.filter { it.providerType == ProviderType.STT }
@@ -613,12 +626,38 @@ class SettingsViewModel @Inject constructor(
         }
         val resolvedTts = activeTts.takeIf { it.isNotBlank() && ttsModels.any { m -> m.id == it } }
         val resolvedStt = activeStt.takeIf { it.isNotBlank() && sttModels.any { m -> m.id == it } }
+        val backendOptions = listOf(
+            SettingsChoiceOption(
+                key = VoiceBackend.AUTO.key,
+                label = VoiceBackend.AUTO.label,
+                description = "Offline model first; Android system fallback if no local voice model is installed.",
+            ),
+            SettingsChoiceOption(
+                key = VoiceBackend.OFFLINE.key,
+                label = VoiceBackend.OFFLINE.label,
+                description = "Use installed local Whisper/Piper models only.",
+            ),
+            SettingsChoiceOption(
+                key = VoiceBackend.ANDROID_SYSTEM.key,
+                label = VoiceBackend.ANDROID_SYSTEM.label,
+                description = "Uses the device/OEM speech service; it may use online Google/OEM services.",
+            ),
+        )
         return SettingsSection(
             id = "voice",
             title = "Voice",
             description = "Defaults for text-to-speech and speech-to-text.",
             icon = TnIcons.Volume,
             items = listOf(
+                SettingsItem.Choice(
+                    id = ID_TTS_BACKEND,
+                    title = "Text-to-speech backend",
+                    subtitle = "Auto keeps ToolNeuron local-first, then falls back to Android system TTS.",
+                    icon = TnIcons.Volume,
+                    selectedKey = VoiceBackend.fromKey(voiceTtsBackend).key,
+                    options = backendOptions,
+                    onSelect = { key -> applyVoiceTtsBackend(key) },
+                ),
                 SettingsItem.Choice(
                     id = ID_DEFAULT_TTS,
                     title = "Default text-to-speech model",
@@ -628,6 +667,15 @@ class SettingsViewModel @Inject constructor(
                     options = ttsOptions,
                     emptyMessage = if (ttsOptions.isEmpty()) "Install one from the Store" else "Auto-pick first",
                     onSelect = { key -> applyActiveTts(key) },
+                ),
+                SettingsItem.Choice(
+                    id = ID_STT_BACKEND,
+                    title = "Speech-to-text backend",
+                    subtitle = "Android system STT may use Google/OEM services depending on the device.",
+                    icon = TnIcons.Mic,
+                    selectedKey = VoiceBackend.fromKey(voiceSttBackend).key,
+                    options = backendOptions,
+                    onSelect = { key -> applyVoiceSttBackend(key) },
                 ),
                 SettingsItem.Choice(
                     id = ID_DEFAULT_STT,
@@ -641,6 +689,22 @@ class SettingsViewModel @Inject constructor(
                 ),
             ),
         )
+    }
+
+    private fun applyVoiceTtsBackend(key: String?) {
+        val next = VoiceBackend.fromKey(key.orEmpty()).key
+        prefs.voiceTtsBackend = next
+        _voiceTtsBackend.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadTts() }
+    }
+
+    private fun applyVoiceSttBackend(key: String?) {
+        val next = VoiceBackend.fromKey(key.orEmpty()).key
+        prefs.voiceSttBackend = next
+        _voiceSttBackend.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadStt() }
     }
 
     private fun applyActiveTts(key: String?) {
@@ -901,7 +965,9 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_ABOUT = "about"
 
         private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
+        private const val ID_TTS_BACKEND = "tts_backend"
         private const val ID_DEFAULT_TTS = "default_tts_model"
+        private const val ID_STT_BACKEND = "stt_backend"
         private const val ID_DEFAULT_STT = "default_stt_model"
         private const val ID_RAG_DEBUG = "rag_debug"
         private const val ID_RAG_RERANK = "rag_smart_rerank"

@@ -100,6 +100,25 @@ namespace tn::server {
             return true;
         }
 
+        bool ensure_text_chat_model(httplib::Response& res, std::string& model_id) {
+            if (model_id.empty()) model_id = resolve_model_id(model_id, m::Kind::ChatGguf);
+            if (model_id.empty()) model_id = resolve_model_id(model_id, m::Kind::Vlm);
+            if (model_id.empty()) {
+                std::string msg = (m::has_any_of_kind(m::Kind::ChatGguf) || m::has_any_of_kind(m::Kind::Vlm))
+                    ? "no default chat model configured"
+                    : "no chat model installed";
+                respond_error(res, 404, "model_not_found", msg, "invalid_request_error");
+                return false;
+            }
+            if (!m::has_id_of_kind(model_id, m::Kind::ChatGguf) &&
+                !m::has_id_of_kind(model_id, m::Kind::Vlm)) {
+                std::string msg = std::string("model not available for chat: ") + model_id;
+                respond_error(res, 404, "model_not_found", msg, "invalid_request_error");
+                return false;
+            }
+            return true;
+        }
+
         struct PreparedImages {
             std::vector<std::string> tmp_paths;
             ~PreparedImages() {
@@ -479,7 +498,7 @@ namespace tn::server {
             if (route_vlm) {
                 if (!ensure_model_for(res, model_id, m::Kind::Vlm, "VLM")) return;
             } else {
-                if (!ensure_model_for(res, model_id, m::Kind::ChatGguf, "chat")) return;
+                if (!ensure_text_chat_model(res, model_id)) return;
             }
 
             parsed.request.model = model_id;

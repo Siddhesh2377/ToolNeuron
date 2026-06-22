@@ -206,18 +206,19 @@ fun TNavigation(
             val backupStatus by storeVm.backupStatus.collectAsStateWithLifecycle()
             val backupProgress by storeVm.backupProgress.collectAsStateWithLifecycle()
             val importPreview by storeVm.backupImportPreview.collectAsStateWithLifecycle()
-            val activeDownloads by storeVm.activeDownloadCount.collectAsStateWithLifecycle()
+            val activeWorkCount by storeVm.activeWorkCount.collectAsStateWithLifecycle()
             val downloadLabels by storeVm.activeDownloadLabels.collectAsStateWithLifecycle()
-            var waitingForPack by remember { mutableStateOf(false) }
+            val installStates by storeVm.installStates.collectAsStateWithLifecycle()
+            val setupInProgress by storeVm.starterSetupActive.collectAsStateWithLifecycle()
             var downloadsStarted by remember { mutableStateOf(false) }
             var restoreStarted by remember { mutableStateOf(false) }
 
-            LaunchedEffect(waitingForPack, activeDownloads) {
-                if (!waitingForPack) return@LaunchedEffect
-                if (activeDownloads > 0) downloadsStarted = true
-                if (downloadsStarted && activeDownloads == 0) {
-                    waitingForPack = false
+            LaunchedEffect(setupInProgress, activeWorkCount) {
+                if (!setupInProgress) return@LaunchedEffect
+                if (activeWorkCount > 0) downloadsStarted = true
+                if (downloadsStarted && activeWorkCount == 0) {
                     downloadsStarted = false
+                    storeVm.finishStarterPackSetup(markDone = true)
                     onModelSetupComplete()
                 }
             }
@@ -234,10 +235,10 @@ fun TNavigation(
             ModelSetupScreen(
                 innerPadding = innerPadding,
                 onPackSelected = { packId ->
-                    storeVm.downloadPack(packId)
-                    waitingForPack = true
+                    storeVm.beginStarterPackSetup(packId)
                     downloadsStarted = false
                 },
+                setupBusy = setupInProgress,
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
                 onRestoreBackup = { uri ->
                     storeVm.previewImport(uri)
@@ -246,7 +247,10 @@ fun TNavigation(
                     storeVm.importLocalModel(uri, name, size, type)
                     onModelSetupComplete()
                 },
-                onSkip = { onModelSetupComplete() }
+                onSkip = {
+                    storeVm.finishStarterPackSetup(markDone = false)
+                    onModelSetupComplete()
+                }
             )
 
             importPreview?.let { preview ->
@@ -272,26 +276,30 @@ fun TNavigation(
                 )
             }
 
-            if (waitingForPack) {
+            if (setupInProgress) {
                 AlertDialog(
                     onDismissRequest = {},
                     title = { Text("Downloading starter pack") },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                            val names = downloadLabels.values.map { it.displayName }.distinct().take(4)
+                            val activeInstalls = installStates.values
+                                .filter { it.isActive }
+                                .map { "${it.phase.label}: ${it.displayName}" }
+                            val names = (downloadLabels.values.map { it.displayName } + activeInstalls)
+                                .distinct()
+                                .take(4)
                             Text(
-                                if (activeDownloads > 0 && names.isNotEmpty()) {
-                                    "Downloading ${names.joinToString(", ")}"
+                                if (activeWorkCount > 0 && names.isNotEmpty()) {
+                                    names.joinToString("\n")
                                 } else {
-                                    "Preparing downloads..."
+                                    "Preparing setup..."
                                 },
                             )
                         }
                     },
                     confirmButton = {
                         Button(onClick = {
-                            waitingForPack = false
                             downloadsStarted = false
                             onModelSetupComplete()
                         }) { Text("Explore while downloading") }

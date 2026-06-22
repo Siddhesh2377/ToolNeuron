@@ -13,6 +13,8 @@ import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.model.ModelCategory
 import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.ModelInstallPhase
+import com.dark.tool_neuron.model.ModelInstallProgress
 import com.dark.tool_neuron.model.ModelTaxonomy
 import com.dark.tool_neuron.model.SizeCategory
 import com.dark.tool_neuron.model.enums.PathType
@@ -47,10 +49,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.security.MessageDigest
 import javax.inject.Inject
@@ -138,6 +143,16 @@ class ModelStoreViewModel @Inject constructor(
 
     private val _extractingFile = MutableStateFlow<Map<String, String>>(emptyMap())
     val extractingFile: StateFlow<Map<String, String>> = _extractingFile.asStateFlow()
+    private val installMutex = Mutex()
+    private val downloadGuard = Any()
+    private val _installStates = MutableStateFlow<Map<String, ModelInstallProgress>>(emptyMap())
+    val installStates: StateFlow<Map<String, ModelInstallProgress>> = _installStates.asStateFlow()
+    val activeWorkCount: StateFlow<Int> = combine(activeDownloadCount, installStates) { downloads, installs ->
+        downloads + installs.values.count { it.isActive }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+    private val _starterSetupActive = MutableStateFlow(prefs.modelSetupInProgress)
+    val starterSetupActive: StateFlow<Boolean> = _starterSetupActive.asStateFlow()
+    private var starterSetupObservedWork = false
 
     val isModelLoaded = InferenceClient.isModelLoaded
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
@@ -200,6 +215,15 @@ class ModelStoreViewModel @Inject constructor(
     init {
         loadDeviceInfo()
         loadModels()
+        viewModelScope.launch {
+            activeWorkCount.collect { count ->
+                if (!_starterSetupActive.value) return@collect
+                if (count > 0) starterSetupObservedWork = true
+                if (starterSetupObservedWork && count == 0) {
+                    finishStarterPackSetup(markDone = true)
+                }
+            }
+        }
     }
 
     fun selectTab(tab: StoreTab) { _selectedTab.value = tab }
@@ -511,6 +535,21 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
+    fun beginStarterPackSetup(packId: String) {
+        if (_starterSetupActive.value) return
+        prefs.modelSetupInProgress = true
+        _starterSetupActive.value = true
+        starterSetupObservedWork = activeWorkCount.value > 0
+        downloadPack(packId)
+    }
+
+    fun finishStarterPackSetup(markDone: Boolean = false) {
+        prefs.modelSetupInProgress = false
+        if (markDone) prefs.modelSetupDone = true
+        _starterSetupActive.value = false
+        starterSetupObservedWork = false
+    }
+
     private fun enqueueChatModel(pool: List<HuggingFaceModel>, modelId: String) {
         val candidates = pool.filter { it.repoId == modelId || it.id.startsWith(modelId) }
         val preferred = QUICK_START_QUANT_PRIORITY.firstNotNullOfOrNull { q ->
@@ -555,39 +594,62 @@ class ModelStoreViewModel @Inject constructor(
     private data class PackEntry(val id: String, val kind: PackEntryKind)
 
     fun downloadModel(model: HuggingFaceModel) {
-        if (_downloadIds.value.containsKey(model.id)) return
-
-        val destFile = when {
-            model.isMmproj && model.repoPath.isNotBlank() ->
-                modelRepo.vlmMmprojFile(model.repoPath, model.fileName)
-            model.isVlm && model.repoPath.isNotBlank() ->
-                modelRepo.vlmModelFile(model.repoPath, model.fileName)
-            model.modelType == "tts" ->
-                modelRepo.voiceArchiveFile("tts", model.id, model.fileName)
-            model.modelType == "stt" ->
-                modelRepo.voiceArchiveFile("stt", model.id, model.fileName)
-            model.modelType == "image_gen" ->
-                modelRepo.imageModelArchive(model.id, model.fileName)
-            model.modelType == "image_upscaler" ->
-                modelRepo.imageUpscalerFile(model.id, model.fileName)
-            else ->
-                modelRepo.modelFile(model.id, model.fileName)
+        if (modelRepo.models.value.any { it.id == model.id }) {
+            setInstallState(model, destinationFileFor(model), ModelInstallPhase.INSTALLED)
+            return
         }
+
+        val destFile = destinationFileFor(model)
         destFile.parentFile?.mkdirs()
+
+        synchronized(downloadGuard) {
+            val existingInstall = _installStates.value[model.id]
+            if (existingInstall?.isActive == true && existingInstall.installKey == installKey(model, destFile)) return
+            if (_downloadIds.value.containsKey(model.id)) return
+
+            HxdManager.activeFor(model.fileUri, destFile.absolutePath)?.let { existing ->
+                downloadCoordinator.registerLabel(existing.id, model.name, downloadTypeOf(model))
+                _downloadIds.value = _downloadIds.value + (model.id to existing.id)
+                _downloadStates.value = _downloadStates.value + (model.id to existing)
+                setInstallState(model, destFile, phaseForDownload(existing.status), hxdId = existing.id)
+                observeDownload(model, destFile, existing.id)
+                return
+            }
+
+            setInstallState(model, destFile, ModelInstallPhase.QUEUED)
+        }
 
         val hxdId = HxdManager.enqueue(context, model.fileUri, destFile.absolutePath)
         downloadCoordinator.registerLabel(hxdId, model.name, downloadTypeOf(model))
         _downloadIds.value = _downloadIds.value + (model.id to hxdId)
         _downloadStates.value = _downloadStates.value + (model.id to
             HxdState(hxdId, model.fileUri, destFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
+        setInstallState(model, destFile, ModelInstallPhase.QUEUED, hxdId = hxdId)
+        observeDownload(model, destFile, hxdId)
+    }
 
+    private fun observeDownload(model: HuggingFaceModel, destFile: java.io.File, hxdId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
+            var terminalHandled = false
             HxdManager.observe(hxdId).collect { state ->
                 if (state == null) return@collect
                 _downloadStates.value = _downloadStates.value + (model.id to state)
+                if (!terminalHandled) setInstallState(
+                    model = model,
+                    destFile = destFile,
+                    phase = phaseForDownload(state.status),
+                    message = state.error.orEmpty(),
+                    hxdId = hxdId,
+                )
+
+                if (state.status in setOf(HxdStatus.COMPLETED, HxdStatus.FAILED, HxdStatus.CANCELLED) && terminalHandled) {
+                    return@collect
+                }
 
                 when (state.status) {
                     HxdStatus.COMPLETED -> {
+                        terminalHandled = true
+                        setInstallState(model, destFile, ModelInstallPhase.VERIFYING, hxdId = hxdId)
                         if (model.isMmproj) {
                             finalizeMmprojDownload(model, destFile)
                         } else if (model.isVlm && model.mmprojFileUri.isNotBlank()) {
@@ -608,9 +670,13 @@ class ModelStoreViewModel @Inject constructor(
                         }
                     }
                     HxdStatus.FAILED -> {
+                        terminalHandled = true
+                        setInstallState(model, destFile, ModelInstallPhase.FAILED, state.error ?: "Download failed", hxdId)
                         _downloadIds.value = _downloadIds.value - model.id
                     }
                     HxdStatus.CANCELLED -> {
+                        terminalHandled = true
+                        setInstallState(model, destFile, ModelInstallPhase.CANCELLED, hxdId = hxdId)
                         _downloadIds.value = _downloadIds.value - model.id
                         _downloadStates.value = _downloadStates.value - model.id
                     }
@@ -620,9 +686,58 @@ class ModelStoreViewModel @Inject constructor(
         }
     }
 
+    private fun destinationFileFor(model: HuggingFaceModel): java.io.File = when {
+        model.isMmproj && model.repoPath.isNotBlank() ->
+            modelRepo.vlmMmprojFile(model.repoPath, model.fileName)
+        model.isVlm && model.repoPath.isNotBlank() ->
+            modelRepo.vlmModelFile(model.repoPath, model.fileName)
+        model.modelType == "tts" ->
+            modelRepo.voiceArchiveFile("tts", model.id, model.fileName)
+        model.modelType == "stt" ->
+            modelRepo.voiceArchiveFile("stt", model.id, model.fileName)
+        model.modelType == "image_gen" ->
+            modelRepo.imageModelArchive(model.id, model.fileName)
+        model.modelType == "image_upscaler" ->
+            modelRepo.imageUpscalerFile(model.id, model.fileName)
+        else ->
+            modelRepo.modelFile(model.id, model.fileName)
+    }
+
+    private fun installKey(model: HuggingFaceModel, destFile: java.io.File): String =
+        "${model.id}|${destFile.absolutePath}"
+
+    private fun phaseForDownload(status: HxdStatus): ModelInstallPhase = when (status) {
+        HxdStatus.QUEUED, HxdStatus.CONNECTING -> ModelInstallPhase.QUEUED
+        HxdStatus.DOWNLOADING, HxdStatus.PAUSED -> ModelInstallPhase.DOWNLOADING
+        HxdStatus.COMPLETED -> ModelInstallPhase.VERIFYING
+        HxdStatus.FAILED -> ModelInstallPhase.FAILED
+        HxdStatus.CANCELLED -> ModelInstallPhase.CANCELLED
+    }
+
+    private fun setInstallState(
+        model: HuggingFaceModel,
+        destFile: java.io.File,
+        phase: ModelInstallPhase,
+        message: String = "",
+        hxdId: Int? = null,
+    ) {
+        _installStates.value = _installStates.value + (
+            model.id to ModelInstallProgress(
+                modelId = model.id,
+                installKey = installKey(model, destFile),
+                displayName = model.name,
+                type = downloadTypeOf(model),
+                phase = phase,
+                message = message,
+                hxdId = hxdId,
+            )
+        )
+    }
+
     private fun finalizeMmprojDownload(model: HuggingFaceModel, destFile: java.io.File) {
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
+        setInstallState(model, destFile, ModelInstallPhase.INSTALLED)
         _installedMmprojIds.value = _installedMmprojIds.value + model.id
     }
 
@@ -643,16 +758,29 @@ class ModelStoreViewModel @Inject constructor(
             HxdState(hxdId, model.mmprojFileUri, mmprojFile.absolutePath, 0L, -1L, 0L, HxdStatus.QUEUED))
 
         viewModelScope.launch(Dispatchers.IO) {
+            var terminalHandled = false
             HxdManager.observe(hxdId).collect { state ->
                 if (state == null) return@collect
                 _downloadStates.value = _downloadStates.value + (model.id to state)
+                if (!terminalHandled) setInstallState(model, mmprojFile, phaseForDownload(state.status), state.error.orEmpty(), hxdId)
+                if (state.status in setOf(HxdStatus.COMPLETED, HxdStatus.FAILED, HxdStatus.CANCELLED) && terminalHandled) {
+                    return@collect
+                }
                 when (state.status) {
-                    HxdStatus.COMPLETED -> finalizeVlmDownload(model, baseFile, mmprojFile)
+                    HxdStatus.COMPLETED -> {
+                        terminalHandled = true
+                        setInstallState(model, mmprojFile, ModelInstallPhase.VERIFYING, hxdId = hxdId)
+                        finalizeVlmDownload(model, baseFile, mmprojFile)
+                    }
                     HxdStatus.FAILED -> {
+                        terminalHandled = true
                         _error.value = "Projector download failed for ${model.name}"
+                        setInstallState(model, mmprojFile, ModelInstallPhase.FAILED, state.error ?: "Projector download failed", hxdId)
                         _downloadIds.value = _downloadIds.value - model.id
                     }
                     HxdStatus.CANCELLED -> {
+                        terminalHandled = true
+                        setInstallState(model, mmprojFile, ModelInstallPhase.CANCELLED, hxdId = hxdId)
                         _downloadIds.value = _downloadIds.value - model.id
                         _downloadStates.value = _downloadStates.value - model.id
                     }
@@ -674,20 +802,30 @@ class ModelStoreViewModel @Inject constructor(
 
     private fun finalizeVoiceDownload(model: HuggingFaceModel, archive: java.io.File) {
         viewModelScope.launch(Dispatchers.IO) {
+            installMutex.withLock {
             _extractingIds.value = _extractingIds.value + model.id
             installProgress.extractStarted(model.id)
             try {
                 if (!archive.exists()) {
                     _error.value = "Downloaded archive missing for ${model.name}"
-                    return@launch
+                    setInstallState(model, archive, ModelInstallPhase.FAILED, "Downloaded archive missing")
+                    return@withLock
                 }
+                setInstallState(model, archive, ModelInstallPhase.INSTALLING, "Preparing voice archive")
                 val kind = if (model.modelType == "tts") VoiceKind.TTS else VoiceKind.STT
                 val parent = modelRepo.voiceDir(if (kind == VoiceKind.TTS) "tts" else "stt")
+                var lastProgressAt = 0L
                 val result = VoiceArchive.extractAndBuildConfig(archive, parent, kind) { entryName ->
-                    _extractingFile.update { it + (model.id to entryName) }
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastProgressAt >= 250L) {
+                        lastProgressAt = now
+                        _extractingFile.update { it + (model.id to entryName) }
+                        setInstallState(model, archive, ModelInstallPhase.INSTALLING, "Extracting $entryName")
+                    }
                 }
                 when (result) {
                     is VoiceArchive.ExtractResult.Success -> {
+                        setInstallState(model, archive, ModelInstallPhase.VERIFYING, "Verifying voice model")
                         archive.delete()
                         val provider = if (kind == VoiceKind.TTS) ProviderType.TTS else ProviderType.STT
                         val folderSize = result.folder.walkTopDown()
@@ -712,15 +850,18 @@ class ModelStoreViewModel @Inject constructor(
                         if (kind == VoiceKind.STT && prefs.activeSttModelId.isBlank()) {
                             prefs.activeSttModelId = model.id
                         }
+                        setInstallState(model, archive, ModelInstallPhase.INSTALLED)
                     }
                     is VoiceArchive.ExtractResult.Failure -> {
                         android.util.Log.e("ModelStoreVM", "Voice extract failed: ${result.reason}")
                         _error.value = "Extraction failed: ${result.reason}"
+                        setInstallState(model, archive, ModelInstallPhase.FAILED, result.reason)
                     }
                 }
             } catch (t: Throwable) {
                 android.util.Log.e("ModelStoreVM", "finalizeVoiceDownload threw", t)
                 _error.value = "Extraction error: ${t.message}"
+                setInstallState(model, archive, ModelInstallPhase.FAILED, t.message ?: "Extraction error")
             } finally {
                 _extractingIds.value = _extractingIds.value - model.id
                 _extractingFile.value = _extractingFile.value - model.id
@@ -728,28 +869,40 @@ class ModelStoreViewModel @Inject constructor(
                 _downloadStates.value = _downloadStates.value - model.id
                 installProgress.extractFinished(model.id)
             }
+            }
         }
     }
 
     private fun finalizeImageGenDownload(model: HuggingFaceModel, archive: java.io.File) {
         viewModelScope.launch(Dispatchers.IO) {
+            installMutex.withLock {
             _extractingIds.value = _extractingIds.value + model.id
             installProgress.extractStarted(model.id)
             try {
                 if (!archive.exists()) {
                     _error.value = "Downloaded archive missing for ${model.name}"
-                    return@launch
+                    setInstallState(model, archive, ModelInstallPhase.FAILED, "Downloaded archive missing")
+                    return@withLock
                 }
+                setInstallState(model, archive, ModelInstallPhase.INSTALLING, "Preparing image model archive")
                 val targetDir = modelRepo.imageModelDir(model.id)
                 targetDir.listFiles()?.forEach { it.deleteRecursively() }
+                var lastProgressAt = 0L
                 val ok = unzipInto(archive, targetDir) { entryName ->
-                    _extractingFile.update { it + (model.id to entryName) }
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    if (now - lastProgressAt >= 250L) {
+                        lastProgressAt = now
+                        _extractingFile.update { it + (model.id to entryName) }
+                        setInstallState(model, archive, ModelInstallPhase.INSTALLING, "Extracting $entryName")
+                    }
                 }
                 if (!ok) {
                     _error.value = "Extraction failed for ${model.name}"
                     targetDir.deleteRecursively()
-                    return@launch
+                    setInstallState(model, archive, ModelInstallPhase.FAILED, "Extraction failed")
+                    return@withLock
                 }
+                setInstallState(model, archive, ModelInstallPhase.VERIFYING, "Verifying image model")
                 archive.delete()
                 // Walk down through any chain of single-subdir wrappers (xororz/sd-qnn ZIPs
                 // wrap their contents in `output_<size>/qnn_models_<bucket>/`) until we find
@@ -767,15 +920,18 @@ class ModelStoreViewModel @Inject constructor(
                     ),
                 )
                 refreshServerCatalog()
+                setInstallState(model, archive, ModelInstallPhase.INSTALLED)
             } catch (t: Throwable) {
                 android.util.Log.e("ModelStoreVM", "finalizeImageGenDownload threw", t)
                 _error.value = "Extraction error: ${t.message}"
+                setInstallState(model, archive, ModelInstallPhase.FAILED, t.message ?: "Extraction error")
             } finally {
                 _extractingIds.value = _extractingIds.value - model.id
                 _extractingFile.value = _extractingFile.value - model.id
                 _downloadIds.value = _downloadIds.value - model.id
                 _downloadStates.value = _downloadStates.value - model.id
                 installProgress.extractFinished(model.id)
+            }
             }
         }
     }
@@ -785,8 +941,10 @@ class ModelStoreViewModel @Inject constructor(
             try {
                 if (!destFile.exists()) {
                     _error.value = "Downloaded file missing for ${model.name}"
+                    setInstallState(model, destFile, ModelInstallPhase.FAILED, "Downloaded file missing")
                     return@launch
                 }
+                setInstallState(model, destFile, ModelInstallPhase.VERIFYING)
                 modelRepo.insert(
                     ModelInfo(
                         id = model.id, name = model.name,
@@ -796,6 +954,7 @@ class ModelStoreViewModel @Inject constructor(
                     ),
                 )
                 refreshServerCatalog()
+                setInstallState(model, destFile, ModelInstallPhase.INSTALLED)
             } finally {
                 _downloadIds.value = _downloadIds.value - model.id
                 _downloadStates.value = _downloadStates.value - model.id
@@ -878,6 +1037,13 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     private fun finalizeNonVlmDownload(model: HuggingFaceModel, destFile: java.io.File) {
+        if (!destFile.exists()) {
+            _error.value = "Downloaded file missing for ${model.name}"
+            setInstallState(model, destFile, ModelInstallPhase.FAILED, "Downloaded file missing")
+            _downloadIds.value = _downloadIds.value - model.id
+            return
+        }
+        setInstallState(model, destFile, ModelInstallPhase.VERIFYING)
         val provider = when (model.modelType) {
             "tts" -> ProviderType.TTS
             "stt" -> ProviderType.STT
@@ -899,6 +1065,7 @@ class ModelStoreViewModel @Inject constructor(
         }
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
+        setInstallState(model, destFile, ModelInstallPhase.INSTALLED)
     }
 
     private fun finalizeVlmDownload(
@@ -908,10 +1075,12 @@ class ModelStoreViewModel @Inject constructor(
     ) {
         if (!mmprojFile.exists() || mmprojFile.length() <= 0L) {
             _error.value = "Vision projector missing for ${model.name}"
+            setInstallState(model, baseFile, ModelInstallPhase.FAILED, "Vision projector missing")
             _downloadIds.value = _downloadIds.value - model.id
             _downloadStates.value = _downloadStates.value - model.id
             return
         }
+        setInstallState(model, baseFile, ModelInstallPhase.VERIFYING)
         modelRepo.insert(ModelInfo(
             id = model.id, name = model.name,
             path = baseFile.absolutePath, pathType = PathType.FILE,
@@ -922,6 +1091,7 @@ class ModelStoreViewModel @Inject constructor(
         _downloadIds.value = _downloadIds.value - model.id
         _downloadStates.value = _downloadStates.value - model.id
         _installedMmprojIds.value = _installedMmprojIds.value + model.id
+        setInstallState(model, baseFile, ModelInstallPhase.INSTALLED)
     }
 
     private fun downloadTypeOf(model: HuggingFaceModel): String = when {

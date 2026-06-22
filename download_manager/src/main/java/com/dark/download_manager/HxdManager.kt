@@ -77,6 +77,22 @@ object HxdManager {
         return id
     }
 
+    fun activeFor(url: String, destPath: String): HxdState? {
+        val activeStatuses = setOf(
+            HxdStatus.QUEUED,
+            HxdStatus.CONNECTING,
+            HxdStatus.DOWNLOADING,
+            HxdStatus.PAUSED,
+        )
+        return _tasks.value.values.firstOrNull { state ->
+            state.destPath == destPath &&
+                state.url == url &&
+                state.status in activeStatuses
+        }
+    }
+
+    fun snapshot(): List<HxdState> = _tasks.value.values.toList()
+
     fun pause(id: Int) {
         HxdNative.nativePause(id)
         updateStatus(id, HxdStatus.PAUSED)

@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.download_manager.HxdState
 import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.HuggingFaceModel
+import com.dark.tool_neuron.model.ModelInstallProgress
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -50,6 +51,7 @@ internal fun BrowseModelsTab(
     isLoading: Boolean,
     error: String?,
     downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
     extractingIds: Set<String>,
     extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
@@ -101,9 +103,9 @@ internal fun BrowseModelsTab(
                     label = "repo_nav"
                 ) { repoKey ->
                     if (repoKey == null) {
-                        RepoCardListView(viewModel, isLoading, downloadStates)
+                        RepoCardListView(viewModel, isLoading, downloadStates, installStates)
                     } else {
-                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload)
+                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, installStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload)
                     }
                 }
             }
@@ -119,7 +121,8 @@ internal fun BrowseModelsTab(
 internal fun RepoCardListView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
-    downloadStates: Map<String, HxdState>
+    downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
 ) {
     val dimens = LocalDimens.current
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
@@ -134,7 +137,9 @@ internal fun RepoCardListView(
             val repoModels = remember(filteredModels, repoKey) { viewModel.getModelsForRepo(repoKey) }
             val hasActiveDownload = repoModels.any { model ->
                 val state = downloadStates[model.id]
-                state != null && state.status in listOf(HxdStatus.QUEUED, HxdStatus.CONNECTING, HxdStatus.DOWNLOADING)
+                val install = installStates[model.id]
+                (state != null && state.status in listOf(HxdStatus.QUEUED, HxdStatus.CONNECTING, HxdStatus.DOWNLOADING)) ||
+                    install?.isActive == true
             }
 
             StoreRepoCard(info, hasActiveDownload) { viewModel.selectRepository(repoKey) }
@@ -199,6 +204,7 @@ internal fun RepoDetailView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
     downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
     extractingIds: Set<String>,
     extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
@@ -253,6 +259,7 @@ internal fun RepoDetailView(
                         model = model,
                         isInstalled = model.id in installedModelIds,
                         downloadState = downloadStates[model.id],
+                        installProgress = installStates[model.id],
                         isExtracting = model.id in extractingIds,
                         extractingEntryName = extractingFile[model.id],
                         onDownload = { onDownload(model) },

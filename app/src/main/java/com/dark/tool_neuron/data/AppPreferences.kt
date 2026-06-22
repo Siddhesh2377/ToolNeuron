@@ -120,6 +120,10 @@ class AppPreferences @Inject constructor(
         get() = getBoolean(KEY_MODEL_SETUP_DONE)
         set(value) = putBoolean(KEY_MODEL_SETUP_DONE, value)
 
+    var modelSetupInProgress: Boolean
+        get() = getBoolean(KEY_MODEL_SETUP_IN_PROGRESS)
+        set(value) = putBoolean(KEY_MODEL_SETUP_IN_PROGRESS, value)
+
     var guideShown: Boolean
         get() = getBoolean(KEY_GUIDE_SHOWN)
         set(value) = putBoolean(KEY_GUIDE_SHOWN, value)
@@ -186,6 +190,14 @@ class AppPreferences @Inject constructor(
     var activeSttModelId: String
         get() = getString(KEY_ACTIVE_STT_MODEL)
         set(value) = putString(KEY_ACTIVE_STT_MODEL, value)
+
+    var voiceTtsBackend: String
+        get() = getString(KEY_VOICE_TTS_BACKEND, VOICE_BACKEND_AUTO)
+        set(value) = putString(KEY_VOICE_TTS_BACKEND, value)
+
+    var voiceSttBackend: String
+        get() = getString(KEY_VOICE_STT_BACKEND, VOICE_BACKEND_AUTO)
+        set(value) = putString(KEY_VOICE_STT_BACKEND, value)
 
     var ragSmartRerank: Boolean
         get() = getBoolean(KEY_RAG_SMART_RERANK)
@@ -277,6 +289,7 @@ class AppPreferences @Inject constructor(
         const val KEY_SETUP_DONE = "setup_done"
         const val KEY_SECURITY_SETUP_DONE = "security_setup_done"
         const val KEY_MODEL_SETUP_DONE = "model_setup_done"
+        const val KEY_MODEL_SETUP_IN_PROGRESS = "model_setup_in_progress"
         const val KEY_GUIDE_SHOWN = "guide_shown"
         const val KEY_ROOT_WARNING_SHOWN = "root_warning_shown"
         const val KEY_SERVER_TOKEN = "server_token"
@@ -292,6 +305,11 @@ class AppPreferences @Inject constructor(
         const val KEY_HF_TAGS_CATALOG_AT = "hf_tags_catalog_v1_at"
         const val KEY_ACTIVE_TTS_MODEL = "active_tts_model"
         const val KEY_ACTIVE_STT_MODEL = "active_stt_model"
+        const val KEY_VOICE_TTS_BACKEND = "voice_tts_backend"
+        const val KEY_VOICE_STT_BACKEND = "voice_stt_backend"
+        const val VOICE_BACKEND_AUTO = "auto"
+        const val VOICE_BACKEND_OFFLINE = "offline"
+        const val VOICE_BACKEND_ANDROID_SYSTEM = "android_system"
         const val KEY_RAG_SMART_RERANK = "rag_smart_rerank"
         const val KEY_RAG_MULTI_QUERY = "rag_multi_query"
         const val KEY_RAG_DEEP_RESEARCH = "rag_deep_research"

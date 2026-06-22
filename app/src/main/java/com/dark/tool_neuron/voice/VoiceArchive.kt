@@ -38,9 +38,10 @@ object VoiceArchive {
             .removeSuffix(".tar.bz2")
             .removeSuffix(".tbz2")
             .removeSuffix(".tar")
-        val dest = File(destParent, folderName)
-        if (dest.exists()) dest.deleteRecursively()
-        dest.mkdirs()
+        val finalDest = File(destParent, folderName)
+        val tempDest = File(destParent, "$folderName.installing-${System.currentTimeMillis()}")
+        tempDest.deleteRecursively()
+        tempDest.mkdirs()
 
         try {
             runBlocking {
@@ -77,7 +78,7 @@ object VoiceArchive {
                                         val entry = tarIn.nextEntry ?: break
                                         if (!tarIn.canReadEntryData(entry)) continue
                                         val relative = entry.name.trimStart('/')
-                                        val target = safeResolve(dest, relative) ?: continue
+                                        val target = safeResolve(tempDest, relative) ?: continue
                                         if (entry.isDirectory) {
                                             target.mkdirs()
                                         } else {
@@ -104,18 +105,18 @@ object VoiceArchive {
                 writer.join()
             }
         } catch (t: Throwable) {
-            dest.deleteRecursively()
+            tempDest.deleteRecursively()
             return ExtractResult.Failure(t.message ?: "Extraction failed")
         }
 
-        val actualRoot = pickRoot(dest)
-        val (files, subdirs) = collectTree(actualRoot)
+        val extractedRoot = pickRoot(tempDest)
+        val (files, subdirs) = collectTree(extractedRoot)
 
-        val config = when (kind) {
+        val valid = when (kind) {
             VoiceKind.TTS -> buildTtsConfig(files, subdirs)
             VoiceKind.STT -> buildSttConfig(files)
         } ?: run {
-            dest.deleteRecursively()
+            tempDest.deleteRecursively()
             return ExtractResult.Failure(
                 when (kind) {
                     VoiceKind.TTS -> "Archive missing model.onnx + tokens.txt"
@@ -123,7 +124,31 @@ object VoiceArchive {
                 }
             )
         }
-        return ExtractResult.Success(actualRoot, config.toString())
+        if (valid.length() <= 0) {
+            tempDest.deleteRecursively()
+            return ExtractResult.Failure("Archive validation failed")
+        }
+
+        try {
+            finalDest.deleteRecursively()
+            finalDest.parentFile?.mkdirs()
+            val moved = extractedRoot.renameTo(finalDest)
+            if (!moved) {
+                extractedRoot.copyRecursively(finalDest, overwrite = true)
+            }
+            tempDest.deleteRecursively()
+        } catch (t: Throwable) {
+            finalDest.deleteRecursively()
+            tempDest.deleteRecursively()
+            return ExtractResult.Failure(t.message ?: "Failed to finalize install")
+        }
+
+        val (finalFiles, finalSubdirs) = collectTree(finalDest)
+        val config = when (kind) {
+            VoiceKind.TTS -> buildTtsConfig(finalFiles, finalSubdirs)
+            VoiceKind.STT -> buildSttConfig(finalFiles)
+        } ?: return ExtractResult.Failure("Installed voice model could not be verified")
+        return ExtractResult.Success(finalDest, config.toString())
     }
 
     private fun pickRoot(dest: File): File {

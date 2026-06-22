@@ -29,7 +29,7 @@ class ServerEngineRegistry(private val app: Context) {
 
     suspend fun chatFor(modelId: String): ServerEngine? = chatLock.withLock {
         val entry = catalog.byId(modelId) ?: return@withLock null
-        if (entry.kind != ServerEngineKind.CHAT_GGUF) return@withLock null
+        if (entry.kind != ServerEngineKind.CHAT_GGUF && entry.kind != ServerEngineKind.VLM) return@withLock null
         if (chat.isLoaded && chat.loadedId() == entry.id) return@withLock chat
         if (chat.isLoaded) chat.unload()
         val ok = chat.load(entry.id, entry.path, entry.configJson)

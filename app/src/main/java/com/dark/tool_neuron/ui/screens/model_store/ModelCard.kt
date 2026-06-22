@@ -29,6 +29,8 @@ import androidx.compose.ui.unit.dp
 import com.dark.download_manager.HxdState
 import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.HuggingFaceModel
+import com.dark.tool_neuron.model.ModelInstallPhase
+import com.dark.tool_neuron.model.ModelInstallProgress
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionProgressButton
 import com.dark.tool_neuron.ui.components.TnIndeterminateProgressBar
@@ -44,6 +46,7 @@ fun CatalogModelCard(
     model: HuggingFaceModel,
     isInstalled: Boolean,
     downloadState: HxdState?,
+    installProgress: ModelInstallProgress? = null,
     isExtracting: Boolean = false,
     extractingEntryName: String? = null,
     onDownload: () -> Unit,
@@ -53,7 +56,12 @@ fun CatalogModelCard(
     val shapes = LocalTnShapes.current
     val isActive = downloadState != null &&
         downloadState.status in listOf(HxdStatus.QUEUED, HxdStatus.CONNECTING, HxdStatus.DOWNLOADING)
-    val isFailed = downloadState != null && downloadState.status == HxdStatus.FAILED
+    val isInstallActive = installProgress?.isActive == true
+    val isInstalling = isExtracting ||
+        installProgress?.phase == ModelInstallPhase.INSTALLING ||
+        installProgress?.phase == ModelInstallPhase.VERIFYING
+    val isFailed = downloadState?.status == HxdStatus.FAILED ||
+        installProgress?.phase == ModelInstallPhase.FAILED
 
     Surface(
         shape = shapes.cardSmall,
@@ -114,14 +122,14 @@ fun CatalogModelCard(
                             modifier = Modifier.size(24.dp)
                         )
                     }
-                    isExtracting -> {
+                    isInstalling -> {
                         CircularProgressIndicator(
                             modifier = Modifier.size(24.dp),
                             strokeWidth = 2.dp,
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }
-                    isActive -> {
+                    isActive || isInstallActive -> {
                         ActionProgressButton(
                             onClickListener = onCancel,
                             contentDescription = "Cancel"
@@ -196,7 +204,7 @@ fun CatalogModelCard(
             }
 
             AnimatedVisibility(
-                visible = isActive,
+                visible = isActive || installProgress?.phase == ModelInstallPhase.DOWNLOADING || installProgress?.phase == ModelInstallPhase.QUEUED,
                 enter = Motion.Enter,
                 exit = Motion.Exit
             ) {
@@ -206,7 +214,7 @@ fun CatalogModelCard(
             }
 
             AnimatedVisibility(
-                visible = isExtracting,
+                visible = isInstalling,
                 enter = Motion.Enter,
                 exit = Motion.Exit,
             ) {
@@ -220,7 +228,10 @@ fun CatalogModelCard(
                         strokeWidth = 2.dp,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    val label = extractingEntryName?.let { "Extracting $it" } ?: "Extracting…"
+                    val label = installProgress?.message?.takeIf { it.isNotBlank() }
+                        ?: extractingEntryName?.let { "Extracting $it" }
+                        ?: installProgress?.phase?.label
+                        ?: "Installing..."
                     Text(
                         text = label,
                         style = MaterialTheme.typography.labelSmall,
@@ -234,7 +245,7 @@ fun CatalogModelCard(
 
             AnimatedVisibility(visible = isFailed) {
                 Text(
-                    text = "Download failed: ${downloadState?.error ?: "Unknown error"}",
+                    text = "Install failed: ${installProgress?.message?.takeIf { it.isNotBlank() } ?: downloadState?.error ?: "Unknown error"}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(top = dimens.spacingXs)

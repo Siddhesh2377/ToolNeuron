@@ -461,6 +461,17 @@ class InferenceCoordinator @Inject constructor(
                 .filter { it.first >= 0 }
                 .minByOrNull { it.first }
             if (next == null) {
+                val closeOnly = THINK_TAGS
+                    .map { (_, close) -> raw.indexOf(close, i) to close }
+                    .filter { it.first >= 0 }
+                    .minByOrNull { it.first }
+                if (closeOnly != null) {
+                    val (end, closeTag) = closeOnly
+                    if (thinking.isNotEmpty()) thinking.append("\n\n")
+                    thinking.append(raw, i, end)
+                    i = end + closeTag.length
+                    continue
+                }
                 content.append(raw, i, raw.length)
                 break
             }
