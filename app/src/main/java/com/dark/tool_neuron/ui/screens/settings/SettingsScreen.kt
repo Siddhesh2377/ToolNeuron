@@ -1,31 +1,24 @@
 package com.dark.tool_neuron.ui.screens.settings
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.ui.components.StandardCard
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
-import com.dark.tool_neuron.ui.theme.Motion
-import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -33,9 +26,6 @@ fun SettingsScreen(
     onNavigate: (route: String) -> Unit,
 ) {
     val dimens = LocalDimens.current
-
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(40); visible = true }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -45,49 +35,30 @@ fun SettingsScreen(
             top = innerPadding.calculateTopPadding() + dimens.spacingSm,
             bottom = innerPadding.calculateBottomPadding() + dimens.spacingSm,
         ),
-        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
     ) {
-        SETTING_GROUPS.forEachIndexed { groupIndex, group ->
-            item(key = "group-${group.title}") {
-                Text(
-                    text = group.title,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            }
-            itemsIndexed(group.cards, key = { _, card -> "${group.title}-${card.route}" }) { index, card ->
-                AnimatedSettingsCard(
-                    visible = visible,
-                    stagger = (groupIndex * 80) + (index * 35),
-                ) {
-                    SettingsLandingCard(card = card, onClick = { onNavigate(card.route) })
-                }
-            }
+        items(SETTING_GROUPS, key = { it.title }) { group ->
+            SettingsGroupBlock(group = group, onNavigate = onNavigate)
         }
     }
 }
 
 @Composable
-private fun AnimatedSettingsCard(
-    visible: Boolean,
-    stagger: Int,
-    content: @Composable () -> Unit,
-) {
-    var ready by remember { mutableStateOf(false) }
-    LaunchedEffect(visible) {
-        if (visible) {
-            if (stagger > 0) delay(stagger.toLong())
-            ready = true
-        } else {
-            ready = false
-        }
-    }
-    AnimatedVisibility(
-        visible = ready,
-        enter = fadeIn(Motion.entrance()) +
-            slideInVertically(Motion.entrance()) { it / 8 },
+private fun SettingsGroupBlock(group: SettingsGroup, onNavigate: (String) -> Unit) {
+    val dimens = LocalDimens.current
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
     ) {
-        content()
+        Text(
+            text = group.title,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(start = dimens.spacingXxs),
+        )
+        group.cards.forEach { card ->
+            SettingsLandingCard(card = card, onClick = { onNavigate(card.route) })
+        }
     }
 }
 
