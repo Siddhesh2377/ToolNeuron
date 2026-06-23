@@ -31,6 +31,7 @@ sealed class NavScreens(val route: String) {
     object ModelManager : NavScreens("model_manager")
     object Settings : NavScreens("settings")
     object SettingsChatRag : NavScreens("settings_chat_rag")
+    object SettingsWebSearch : NavScreens("settings_web_search")
     object SettingsVoice : NavScreens("settings_voice")
     object SettingsTheming : NavScreens("settings_theming")
     object SettingsPrivacy : NavScreens("settings_privacy")

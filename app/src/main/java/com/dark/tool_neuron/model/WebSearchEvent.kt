@@ -6,6 +6,20 @@ sealed class WebSearchEvent {
     data class Plan(
         override val runId: String,
         val userQuery: String,
+        val mode: String = "",
+    ) : WebSearchEvent()
+
+    data class RoundStart(
+        override val runId: String,
+        val round: Int,
+        val maxRounds: Int,
+        val focus: String = "",
+    ) : WebSearchEvent()
+
+    data class Status(
+        override val runId: String,
+        val message: String,
+        val coverage: Int = -1,
     ) : WebSearchEvent()
 
     data class QueriesGenerated(

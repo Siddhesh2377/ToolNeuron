@@ -206,6 +206,7 @@ fun ModelStoreScreen(
                         viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { viewModel.cancelDownload(it) },
+                        onClearDownload = { viewModel.clearDownloadState(it) },
                         onRetry = { viewModel.loadModels() }
                     )
                     StoreTab.INSTALLED -> InstalledModelsTab(

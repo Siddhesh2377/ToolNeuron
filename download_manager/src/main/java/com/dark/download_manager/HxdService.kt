@@ -92,13 +92,24 @@ class HxdService : Service() {
     }
 
     private suspend fun executeDownload(task: HxdTask) = withContext(Dispatchers.IO) {
+        val maxAttempts = task.options.maxAttempts.coerceAtLeast(1)
+        var attempt = 1
+        while (attempt <= maxAttempts && HxdManager.isRegistered(task.id)) {
+            HxdManager.updateAttempt(task.id, attempt)
+            val retry = executeAttempt(task, attempt, maxAttempts)
+            if (!retry) return@withContext
+            attempt++
+        }
+    }
+
+    private suspend fun executeAttempt(task: HxdTask, attempt: Int, maxAttempts: Int): Boolean = withContext(Dispatchers.IO) {
         val id = task.id
-        HxdManager.updateStatus(id, HxdStatus.CONNECTING)
+        HxdManager.updateStatus(id, HxdStatus.CONNECTING, retryMessage(attempt, maxAttempts))
 
         val resumeOffset = HxdNative.nativePrepare(id, task.destPath)
         if (resumeOffset < 0) {
             HxdManager.updateStatus(id, HxdStatus.FAILED, "Cannot create destination file")
-            return@withContext
+            return@withContext false
         }
 
         val digest: MessageDigest? = task.options.expectedSha256
@@ -111,8 +122,7 @@ class HxdService : Service() {
 
             if (code != 200 && code != 206) {
                 HxdNative.nativeFail(id)
-                HxdManager.updateStatus(id, HxdStatus.FAILED, "HTTP $code")
-                return@withContext
+                return@withContext retryOrFail(id, attempt, maxAttempts, "HTTP $code", isTransientHttp(code))
             }
 
             val contentLen = conn.contentLengthLong
@@ -150,7 +160,7 @@ class HxdService : Service() {
                 } else {
                     HxdManager.updateStatus(id, HxdStatus.PAUSED)
                 }
-                return@withContext
+                return@withContext false
             }
 
             if (digest != null) {
@@ -158,7 +168,7 @@ class HxdService : Service() {
                 if (!actual.equals(task.options.expectedSha256, ignoreCase = true)) {
                     HxdNative.nativeFail(id)
                     HxdManager.updateStatus(id, HxdStatus.FAILED, "Checksum mismatch")
-                    return@withContext
+                    return@withContext false
                 }
             }
 
@@ -167,14 +177,46 @@ class HxdService : Service() {
             } else {
                 HxdManager.updateStatus(id, HxdStatus.FAILED, "Failed to finalize file")
             }
+            false
 
         } catch (e: Exception) {
             HxdNative.nativeFail(id)
-            HxdManager.updateStatus(id, HxdStatus.FAILED, e.message ?: "Network error")
+            retryOrFail(id, attempt, maxAttempts, e.message ?: "Network error", transient = true)
         } finally {
             conn?.disconnect()
         }
     }
+
+    private suspend fun retryOrFail(
+        id: Int,
+        attempt: Int,
+        maxAttempts: Int,
+        reason: String,
+        transient: Boolean,
+    ): Boolean {
+        if (!transient || attempt >= maxAttempts) {
+            HxdManager.updateStatus(id, HxdStatus.FAILED, reason)
+            return false
+        }
+        val delayMs = retryDelayMs(attempt)
+        val next = System.currentTimeMillis() + delayMs
+        HxdManager.updateAttempt(id, attempt, next, "$reason · retrying")
+        HxdManager.updateStatus(id, HxdStatus.QUEUED, "$reason · retrying")
+        delay(delayMs)
+        return HxdManager.isRegistered(id)
+    }
+
+    private fun retryMessage(attempt: Int, maxAttempts: Int): String? =
+        if (attempt > 1) "Retry $attempt/$maxAttempts" else null
+
+    private fun retryDelayMs(attempt: Int): Long = when (attempt) {
+        1 -> 2_000L
+        2 -> 6_000L
+        else -> 15_000L
+    }
+
+    private fun isTransientHttp(code: Int): Boolean =
+        code == 408 || code == 425 || code == 429 || code in 500..599
 
     private fun openConnection(task: HxdTask, resumeOffset: Long): HttpURLConnection {
         return (URL(task.url).openConnection() as HttpURLConnection).apply {

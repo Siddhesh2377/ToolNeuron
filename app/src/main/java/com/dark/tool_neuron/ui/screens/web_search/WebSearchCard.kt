@@ -72,7 +72,7 @@ fun WebSearchCard(
             .padding(vertical = dimens.spacingXs),
     ) {
         Column(modifier = Modifier.padding(dimens.spacingMd)) {
-            Header(userQuery = message.content)
+            Header(userQuery = message.content, mode = state.mode)
             Spacer(Modifier.size(dimens.spacingSm))
 
             QueriesStrip(state)
@@ -84,7 +84,10 @@ fun WebSearchCard(
             ) { phase ->
                 when (phase) {
                     WebSearchUiState.PHASE_PLAN -> StatusRow(TnIcons.Sparkles, "Planning search…")
-                    WebSearchUiState.PHASE_QUERIES -> StatusRow(TnIcons.Search, "Generated 3 queries")
+                    WebSearchUiState.PHASE_QUERIES -> StatusRow(
+                        TnIcons.Search,
+                        "Generated ${state.queries.size} ${if (state.queries.size == 1) "query" else "queries"}",
+                    )
                     WebSearchUiState.PHASE_SEARCH -> SearchProgressRow(state)
                     WebSearchUiState.PHASE_SYNTHESIZE -> StatusRow(TnIcons.Sparkles, "Writing answer from sources…")
                     WebSearchUiState.PHASE_STOPPING -> StatusRow(TnIcons.PlayerStop, "Stopping…")
@@ -156,7 +159,7 @@ fun WebSearchCard(
 }
 
 @Composable
-private fun Header(userQuery: String) {
+private fun Header(userQuery: String, mode: String) {
     val dimens = LocalDimens.current
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
@@ -167,12 +170,18 @@ private fun Header(userQuery: String) {
         )
         Spacer(Modifier.size(dimens.spacingXs))
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                text = "Web search",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.SemiBold,
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = "Web search",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (mode.isNotBlank()) {
+                    Spacer(Modifier.size(dimens.spacingXs))
+                    ModeBadge(mode)
+                }
+            }
             if (userQuery.isNotBlank()) {
                 Text(
                     text = userQuery,
@@ -269,11 +278,35 @@ private fun StatusRow(icon: androidx.compose.ui.graphics.vector.ImageVector, lab
 }
 
 @Composable
+private fun ModeBadge(mode: String) {
+    val dimens = LocalDimens.current
+    Surface(
+        shape = LocalTnShapes.current.full,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
+    ) {
+        Text(
+            text = mode,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.padding(horizontal = dimens.spacingSm, vertical = 1.dp),
+        )
+    }
+}
+
+@Composable
 private fun SearchProgressRow(state: WebSearchUiState) {
-    val idx = state.currentQueryIndex.coerceAtLeast(0)
-    val current = state.queries.getOrNull(idx).orEmpty()
-    val total = state.queries.size
-    val label = if (current.isBlank()) "Searching…" else "Searching ${idx + 1}/$total: $current"
+    val label = when {
+        state.status.isNotBlank() && state.maxRounds > 1 ->
+            "Round ${state.round.coerceAtLeast(1)}/${state.maxRounds} · ${state.status}"
+        state.status.isNotBlank() -> state.status
+        else -> {
+            val idx = state.currentQueryIndex.coerceAtLeast(0)
+            val current = state.queries.getOrNull(idx).orEmpty()
+            val total = state.queries.size
+            if (current.isBlank()) "Searching…" else "Searching ${idx + 1}/$total: $current"
+        }
+    }
     StatusRow(TnIcons.Search, label)
 }
 

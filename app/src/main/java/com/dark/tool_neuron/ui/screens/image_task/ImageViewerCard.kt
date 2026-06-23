@@ -51,6 +51,8 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.ImageExport
+import java.io.File
+import java.io.FileInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -65,6 +67,9 @@ fun ImageViewerCard(
     saveNamePrefix: String = "tool_neuron",
     showUpscale: Boolean = false,
     onUpscaleClick: (() -> Unit)? = null,
+    sourceFilePath: String? = null,
+    displayWidth: Int = bitmap.width,
+    displayHeight: Int = bitmap.height,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -74,6 +79,7 @@ fun ImageViewerCard(
     var saving by remember { mutableStateOf(false) }
     var savingAs by remember { mutableStateOf(false) }
     var pendingSaveAsBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pendingSaveAsFile by remember { mutableStateOf<File?>(null) }
     val saveAsLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("image/png"),
     ) { uri ->
@@ -85,10 +91,12 @@ fun ImageViewerCard(
         val pending = pendingSaveAsBitmap ?: bitmap
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                writeBitmapToUri(context, pending, outUri)
+                pendingSaveAsFile?.let { copyFileToUri(context, it, outUri) }
+                    ?: writeBitmapToUri(context, pending, outUri)
             }
             savingAs = false
             pendingSaveAsBitmap = null
+            pendingSaveAsFile = null
             toast(
                 context,
                 if (result.isSuccess) "Saved image"
@@ -124,7 +132,7 @@ fun ImageViewerCard(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "${bitmap.width}×${bitmap.height}",
+                    text = "${displayWidth}×${displayHeight}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -147,11 +155,20 @@ fun ImageViewerCard(
                     onClickListener = {
                         saving = true
                         scope.launch {
-                            val result = ImageExport.saveBitmapToGallery(
-                                context = context,
-                                bitmap = bitmap,
-                                displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
-                            )
+                            val file = sourceFilePath?.let(::File)?.takeIf { it.exists() }
+                            val result = if (file != null) {
+                                ImageExport.savePngFileToGallery(
+                                    context = context,
+                                    source = file,
+                                    displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
+                                )
+                            } else {
+                                ImageExport.saveBitmapToGallery(
+                                    context = context,
+                                    bitmap = bitmap,
+                                    displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
+                                )
+                            }
                             saving = false
                             toast(
                                 context,
@@ -169,7 +186,8 @@ fun ImageViewerCard(
                 ActionTextButton(
                     onClickListener = {
                         savingAs = true
-                        pendingSaveAsBitmap = bitmap
+                        pendingSaveAsFile = sourceFilePath?.let(::File)?.takeIf { it.exists() }
+                        pendingSaveAsBitmap = if (pendingSaveAsFile == null) bitmap else null
                         saveAsLauncher.launch("${saveNamePrefix}_${System.currentTimeMillis()}.png")
                     },
                     icon = TnIcons.Download,
@@ -189,7 +207,7 @@ fun ImageViewerCard(
                     ActionTextButton(
                         onClickListener = onUpscaleClick,
                         icon = TnIcons.Sparkles,
-                        text = "Upscale 4×",
+                        text = "Upscale",
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -211,6 +229,13 @@ private fun writeBitmapToUri(context: Context, bitmap: Bitmap, uri: Uri): Result
         if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
             throw IllegalStateException("Bitmap.compress returned false")
         }
+    }
+}
+
+private fun copyFileToUri(context: Context, source: File, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        FileInputStream(source).use { input -> input.copyTo(out) }
     }
 }
 

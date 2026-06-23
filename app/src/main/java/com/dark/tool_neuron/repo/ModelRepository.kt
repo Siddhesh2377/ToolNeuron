@@ -40,6 +40,26 @@ class ModelRepository @Inject constructor(
     }
 
     fun refresh() {
+        val records = storage.getAll(COL_MODELS)
+        val removed = records.filter { it.getString(TAG_PROVIDER_TYPE) in REMOVED_IMAGE_OPERATION_TYPES }
+        val toolSearch = records.filter { it.getString(TAG_PROVIDER_TYPE) == LEGACY_TOOL_SEARCH_PROVIDER }
+        if (removed.isNotEmpty()) {
+            removed.forEach { record ->
+                val modelId = record.getString(TAG_ID)
+                storage.delete(COL_MODELS, record.id)
+                storage.queryString(COL_CONFIG, TAG_CONFIG_MODEL_ID, modelId)
+                    .forEach { storage.delete(COL_CONFIG, it.id) }
+            }
+            storage.flushAll()
+            File(context.filesDir, "image_onnx").deleteRecursively()
+        }
+        if (toolSearch.isNotEmpty()) {
+            toolSearch.forEach { record ->
+                record.putString(TAG_PROVIDER_TYPE, ProviderType.GGUF.name)
+                storage.update(COL_MODELS, record)
+            }
+            storage.flush(COL_MODELS)
+        }
         val all = storage.getAll(COL_MODELS).map { it.toModelInfo() }
         val seen = HashSet<String>(all.size)
         _models.value = all.filter { seen.add(it.id) }
@@ -183,11 +203,15 @@ class ModelRepository @Inject constructor(
         return File(parent, leaf)
     }
 
-
-
     companion object {
         private const val COL_MODELS = "models"
         private const val COL_CONFIG = "model_config"
+        private val REMOVED_IMAGE_OPERATION_TYPES = setOf(
+            "IMAGE_BACKGROUND_REMOVAL",
+            "IMAGE_SEGMENTATION",
+            "IMAGE_INPAINTER",
+        )
+        private const val LEGACY_TOOL_SEARCH_PROVIDER = "TOOL_SEARCH"
 
         private const val TAG_ID = 1
         private const val TAG_NAME = 2

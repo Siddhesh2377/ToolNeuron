@@ -234,6 +234,10 @@ class AppPreferences @Inject constructor(
         get() = getString(KEY_PLUGIN_ONNX_EP, DEFAULT_PLUGIN_ONNX_EP)
         set(value) = putString(KEY_PLUGIN_ONNX_EP, value)
 
+    var webSearchMode: String
+        get() = getString(KEY_WEB_SEARCH_MODE, DEFAULT_WEB_SEARCH_MODE)
+        set(value) = putString(KEY_WEB_SEARCH_MODE, value)
+
     fun readAuthState(): AuthState {
         val sealed = getBytes(KEY_AUTH_STATE) ?: return AuthState.DEFAULT
         val plaintext = try {
@@ -322,6 +326,9 @@ class AppPreferences @Inject constructor(
         const val THREAD_MODE_PERFORMANCE = 2
         const val KEY_IDLE_UNLOAD_MINUTES = "idle_unload_minutes"
         const val DEFAULT_IDLE_UNLOAD_MINUTES = 20
+
+        const val KEY_WEB_SEARCH_MODE = "web_search_mode"
+        const val DEFAULT_WEB_SEARCH_MODE = "auto"
 
         const val KEY_PLUGIN_ONNX_EP = "plugin_onnx_ep"
         const val PLUGIN_ONNX_EP_CPU = "cpu"

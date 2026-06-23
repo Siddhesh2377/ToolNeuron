@@ -64,6 +64,11 @@ fun AppTopBar(
             title = "Chat & RAG",
             subtitle = "Defaults for indexing and retrieval",
         )
+        NavScreens.SettingsWebSearch.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Web search",
+            subtitle = "Default search depth",
+        )
         NavScreens.SettingsVoice.route -> SettingsTopBar(
             onBack = onBack,
             title = "Voice",

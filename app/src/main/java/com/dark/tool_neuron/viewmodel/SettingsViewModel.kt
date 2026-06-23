@@ -14,6 +14,7 @@ import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.repo.web_search.WebSearchMode
 import com.dark.tool_neuron.service.server.ServerModelRole
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
@@ -74,6 +75,7 @@ class SettingsViewModel @Inject constructor(
     private val _pluginOnnxEp = MutableStateFlow(prefs.pluginOnnxEp)
     private val _serverModelRolesJson = MutableStateFlow(prefs.serverModelRolesJson)
     private val _serverRoleDefaultsJson = MutableStateFlow(prefs.serverRoleDefaultsJson)
+    private val _webSearchMode = MutableStateFlow(WebSearchMode.sanitizePref(prefs.webSearchMode))
     private val _installedPluginCount = pluginExecutor.registry.installed
     private val appVersion: String = resolveVersion()
 
@@ -98,6 +100,7 @@ class SettingsViewModel @Inject constructor(
         _serverModelRolesJson,
         _serverRoleDefaultsJson,
         _installedPluginCount,
+        _webSearchMode,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -122,6 +125,7 @@ class SettingsViewModel @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         val installedPlugins = values[19] as List<com.dark.plugin_exc.InstalledPlugin>
         val pluginCount = installedPlugins.size
+        val webSearchMode = values[20] as String
 
         SettingsState(
             sections = buildSections(
@@ -143,6 +147,7 @@ class SettingsViewModel @Inject constructor(
                 serverModelRolesJson = serverModelRolesJson,
                 serverRoleDefaultsJson = serverRoleDefaultsJson,
                 pluginCount = pluginCount,
+                webSearchMode = webSearchMode,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -188,8 +193,10 @@ class SettingsViewModel @Inject constructor(
         serverModelRolesJson: String,
         serverRoleDefaultsJson: String,
         pluginCount: Int,
+        webSearchMode: String,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
+        webSearchSection(webSearchMode),
         voiceSection(models, activeTts, activeStt, voiceTtsBackend, voiceSttBackend),
         visionSection(vlmImageQuality),
         serverRolesSection(models, serverModelRolesJson, serverRoleDefaultsJson, activeTts, activeStt),
@@ -432,7 +439,7 @@ class SettingsViewModel @Inject constructor(
         role == wanted
     }
 
-    private fun defaultServerRole(model: ModelInfo): ServerModelRole = when (model.providerType) {
+    private fun defaultServerRole(model: ModelInfo): ServerModelRole? = when (model.providerType) {
         ProviderType.GGUF -> {
             inferRoleFromName(model)?.let { return it }
             val modelsRoot = modelRepo.getModelsDir()
@@ -607,6 +614,47 @@ class SettingsViewModel @Inject constructor(
                 ),
             ),
         )
+    }
+
+    private fun webSearchSection(webSearchMode: String): SettingsSection {
+        val current = WebSearchMode.sanitizePref(webSearchMode)
+        val options = WebSearchMode.SELECTABLE_KEYS.map { key ->
+            SettingsChoiceOption(
+                key = key,
+                label = WebSearchMode.labelForKey(key),
+                description = webSearchModeDescription(key),
+            )
+        }
+        return SettingsSection(
+            id = SECTION_WEB_SEARCH,
+            title = "Web search",
+            description = "How deep web searches go by default.",
+            icon = TnIcons.Globe,
+            items = listOf(
+                SettingsItem.Choice(
+                    id = ID_WEB_SEARCH_DEPTH,
+                    title = "Default search depth",
+                    subtitle = "Auto picks per question. Slash commands (/deep, /exhaustive) override per message.",
+                    icon = TnIcons.Globe,
+                    selectedKey = current,
+                    options = options,
+                    onSelect = { key ->
+                        val k = WebSearchMode.sanitizePref(key)
+                        prefs.webSearchMode = k
+                        _webSearchMode.value = k
+                        _dialog.value = null
+                    },
+                ),
+            ),
+        )
+    }
+
+    private fun webSearchModeDescription(key: String): String = when (key) {
+        "quick" -> "Fastest, simple lookups"
+        "normal" -> "Balanced search"
+        "deep" -> "More rounds, may read pages (slower)"
+        "exhaustive" -> "Maximum research, slowest"
+        else -> "Pick depth from the question"
     }
 
     private fun voiceSection(
@@ -954,6 +1002,7 @@ class SettingsViewModel @Inject constructor(
 
     companion object {
         const val SECTION_CHAT_RAG = "chat_rag"
+        const val SECTION_WEB_SEARCH = "web_search"
         const val SECTION_VOICE = "voice"
         const val SECTION_VISION = "vision"
         const val SECTION_SERVER_ROLES = "server_roles"
@@ -974,6 +1023,7 @@ class SettingsViewModel @Inject constructor(
         private const val ID_RAG_MULTI_QUERY = "rag_multi_query"
         private const val ID_RAG_DEEP_RESEARCH = "rag_deep_research"
         private const val ID_VLM_IMAGE_QUALITY = "vlm_image_quality"
+        private const val ID_WEB_SEARCH_DEPTH = "web_search_depth"
         private const val ID_SERVER_DEFAULT_PREFIX = "server_default_"
         private const val ID_SERVER_ROLE_PREFIX = "server_role_"
         private const val ID_THREAD_MODE = "thread_mode"

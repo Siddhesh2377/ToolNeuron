@@ -10,4 +10,6 @@ std::string decode(const std::string& in);
 
 std::string unwrap_ddg_redirect(const std::string& href);
 
+std::string unwrap_bing_redirect(const std::string& href);
+
 }

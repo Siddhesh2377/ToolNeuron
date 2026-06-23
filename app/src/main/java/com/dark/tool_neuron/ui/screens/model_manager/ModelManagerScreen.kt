@@ -492,7 +492,6 @@ private data class Section(
 private val SECTIONS = listOf(
     Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen.", "Chat"),
     Section(ProviderType.VISION_CHAT, "Vision chat models", "Used for chat with image attachments.", "Vision"),
-    Section(ProviderType.TOOL_SEARCH, "Tool/Search models", "Used for query planning and structured tool calls.", "Tools"),
     Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG).", "RAG"),
     Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace.", "Image"),
     Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode.", "Upscale"),

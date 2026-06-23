@@ -949,6 +949,10 @@ object InferenceClient {
         }
     }
 
+    fun sdResetUpscaleState() {
+        _sdUpscaleState.value = UpscaleState.Idle
+    }
+
     fun sdStop() {
         try { _service.value?.sdStop() } catch (_: Throwable) {}
     }

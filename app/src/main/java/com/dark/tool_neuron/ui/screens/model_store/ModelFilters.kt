@@ -83,6 +83,16 @@ private val SORT_OPTIONS = listOf(
     FilterOption("Recent", SortOption.RECENTLY_ADDED),
 )
 
+private val UPSCALER_USE_CASE_OPTIONS: List<FilterOption<String?>> = listOf(
+    FilterOption("Manual", null),
+    FilterOption("General", "General"),
+    FilterOption("Photo", "Photo"),
+    FilterOption("Portrait", "Portrait"),
+    FilterOption("Anime", "Anime"),
+    FilterOption("Sharp cleanup", "Sharp cleanup"),
+    FilterOption("Other", "Other"),
+)
+
 private val PARAMETER_BUCKETS = listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B")
 private val QUANT_BUCKETS = listOf("Q4_0", "Q5_0", "Q8_0", "Q4_K_M", "Q5_K_M", "Q6_K")
 
@@ -121,6 +131,7 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     val selectedQuantizations by viewModel.selectedQuantizations.collectAsStateWithLifecycle()
     val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsStateWithLifecycle()
     val selectedTags by viewModel.selectedTags.collectAsStateWithLifecycle()
+    val selectedUpscalerUseCase by viewModel.selectedUpscalerUseCase.collectAsStateWithLifecycle()
     val showNsfw by viewModel.showNsfw.collectAsStateWithLifecycle()
     val showOver2GbModels by viewModel.showOver2GbModels.collectAsStateWithLifecycle()
     val executionTarget by viewModel.executionTarget.collectAsStateWithLifecycle()
@@ -138,6 +149,7 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
         !showNsfw,
         showOver2GbModels,
         executionTarget != null,
+        selectedUpscalerUseCase != null,
         sortBy != SortOption.NAME,
     ).count { it }
 
@@ -190,6 +202,32 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                     checked = !showOver2GbModels,
                     onCheckedChange = { checked -> viewModel.setShowOver2GbModels(!checked) },
                 )
+            }
+        }
+
+        if (selectedModelType == "image_upscaler") {
+            Column(
+                modifier = Modifier.padding(horizontal = dimens.spacingLg),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Text(
+                    text = "Upscale use case",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                ) {
+                    UPSCALER_USE_CASE_OPTIONS.forEach { option ->
+                        FilterChip(
+                            selected = selectedUpscalerUseCase == option.value,
+                            onClick = { viewModel.setUpscalerUseCase(option.value) },
+                            label = { Text(option.label) },
+                        )
+                    }
+                }
             }
         }
 

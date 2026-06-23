@@ -123,6 +123,7 @@ class RemoteServerService : Service() {
         val bindModeS  = cfg.optString("bindMode", BindMode.ALL_INTERFACES.name)
         val bindMode   = runCatching { BindMode.valueOf(bindModeS) }.getOrDefault(BindMode.ALL_INTERFACES)
         val webUiHtml  = cfg.optString("webUiHtml", "")
+        val webUiCss   = cfg.optString("webUiCss", "")
         val docsHtml   = cfg.optString("docsHtml", "")
         val engines    = cfg.optJSONArray("engines") ?: JSONArray()
 
@@ -185,6 +186,7 @@ class RemoteServerService : Service() {
         NativeServer.nativeSetToken(token)
         NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString())
         if (webUiHtml.isNotBlank()) NativeServer.nativeSetWebUiHtml(webUiHtml)
+        if (webUiCss.isNotBlank()) NativeServer.nativeSetWebUiCss(webUiCss)
         if (docsHtml.isNotBlank()) NativeServer.nativeSetDocsHtml(docsHtml)
 
         val ok = NativeServer.nativeStart(resolution.host, port)
@@ -224,8 +226,10 @@ class RemoteServerService : Service() {
         try { NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString()) } catch (_: Exception) {}
 
         val webUiHtml = cfg.optString("webUiHtml", "")
+        val webUiCss = cfg.optString("webUiCss", "")
         val docsHtml = cfg.optString("docsHtml", "")
         if (webUiHtml.isNotBlank()) try { NativeServer.nativeSetWebUiHtml(webUiHtml) } catch (_: Exception) {}
+        if (webUiCss.isNotBlank()) try { NativeServer.nativeSetWebUiCss(webUiCss) } catch (_: Exception) {}
         if (docsHtml.isNotBlank()) try { NativeServer.nativeSetDocsHtml(docsHtml) } catch (_: Exception) {}
 
         val displayEntry = catalog.primary()

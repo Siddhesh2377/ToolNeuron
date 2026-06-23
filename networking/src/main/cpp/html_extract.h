@@ -13,6 +13,10 @@ struct Entry {
 
 std::vector<Entry> extract_ddg_results(const std::string& html, int max_results);
 
+std::vector<Entry> extract_bing_results(const std::string& html, int max_results);
+
+std::vector<Entry> extract_mojeek_results(const std::string& html, int max_results);
+
 std::string strip_tags(const std::string& html);
 
 std::string decode_entities(const std::string& in);

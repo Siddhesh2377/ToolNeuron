@@ -6,6 +6,11 @@ import org.json.JSONObject
 data class WebSearchUiState(
     val phase: String = PHASE_PLAN,
     val userQuery: String = "",
+    val mode: String = "",
+    val round: Int = 0,
+    val maxRounds: Int = 0,
+    val status: String = "",
+    val coverage: Int = -1,
     val queries: List<String> = emptyList(),
     val perQueryHits: Map<Int, List<WebSearchHit>> = emptyMap(),
     val currentQueryIndex: Int = -1,
@@ -34,7 +39,21 @@ data class WebSearchUiState(
     }
 
     private fun applyEventInternal(event: WebSearchEvent): WebSearchUiState = when (event) {
-        is WebSearchEvent.Plan -> copy(phase = PHASE_PLAN, userQuery = event.userQuery)
+        is WebSearchEvent.Plan -> copy(
+            phase = PHASE_PLAN,
+            userQuery = event.userQuery,
+            mode = event.mode.ifBlank { mode },
+        )
+        is WebSearchEvent.RoundStart -> copy(
+            phase = PHASE_SEARCH,
+            round = event.round,
+            maxRounds = event.maxRounds,
+            status = event.focus,
+        )
+        is WebSearchEvent.Status -> copy(
+            status = event.message,
+            coverage = if (event.coverage in 0..100) event.coverage else coverage,
+        )
         is WebSearchEvent.QueriesGenerated -> copy(
             phase = PHASE_QUERIES,
             queries = event.queries,
@@ -62,6 +81,11 @@ data class WebSearchUiState(
         val obj = JSONObject()
         obj.put("phase", phase)
         if (userQuery.isNotEmpty()) obj.put("uq", userQuery)
+        if (mode.isNotEmpty()) obj.put("mode", mode)
+        if (round > 0) obj.put("rnd", round)
+        if (maxRounds > 0) obj.put("mr", maxRounds)
+        if (status.isNotEmpty()) obj.put("st", status)
+        if (coverage in 0..100) obj.put("cov", coverage)
         if (queries.isNotEmpty()) {
             val arr = JSONArray()
             queries.forEach { arr.put(it) }
@@ -132,6 +156,11 @@ data class WebSearchUiState(
                 WebSearchUiState(
                     phase = o.optString("phase", PHASE_PLAN).ifBlank { PHASE_PLAN },
                     userQuery = o.optString("uq"),
+                    mode = o.optString("mode"),
+                    round = o.optInt("rnd", 0),
+                    maxRounds = o.optInt("mr", 0),
+                    status = o.optString("st"),
+                    coverage = o.optInt("cov", -1),
                     queries = queries,
                     perQueryHits = perQueryHits,
                     currentQueryIndex = o.optInt("cqi", -1),

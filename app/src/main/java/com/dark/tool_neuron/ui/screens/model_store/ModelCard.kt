@@ -51,6 +51,7 @@ fun CatalogModelCard(
     extractingEntryName: String? = null,
     onDownload: () -> Unit,
     onCancel: () -> Unit,
+    onClear: () -> Unit = {},
 ) {
     val dimens = LocalDimens.current
     val shapes = LocalTnShapes.current
@@ -136,11 +137,18 @@ fun CatalogModelCard(
                         )
                     }
                     isFailed -> {
-                        ActionButton(
-                            onClickListener = onDownload,
-                            icon = TnIcons.Refresh,
-                            contentDescription = "Retry"
-                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                            ActionButton(
+                                onClickListener = onDownload,
+                                icon = TnIcons.Refresh,
+                                contentDescription = "Retry"
+                            )
+                            ActionButton(
+                                onClickListener = onClear,
+                                icon = TnIcons.Trash,
+                                contentDescription = "Clear failed download"
+                            )
+                        }
                     }
                     else -> {
                         ActionButton(
@@ -188,7 +196,11 @@ fun CatalogModelCard(
                     )
                 }
 
-                model.tags.take(2).forEach { tag ->
+                val displayTags = buildList {
+                    if (model.isVlm) add("projector auto")
+                    addAll(model.tags)
+                }.distinct().take(3)
+                displayTags.forEach { tag ->
                     Text(
                         text = tag,
                         style = MaterialTheme.typography.labelSmall,

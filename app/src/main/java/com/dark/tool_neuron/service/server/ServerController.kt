@@ -150,6 +150,7 @@ class ServerController @Inject constructor(
         put("port", prefs.serverPort)
         put("bindMode", prefs.serverBindMode)
         put("webUiHtml", loadAsset("server_webui.html"))
+        put("webUiCss", loadAsset("server_webui.css"))
         put("docsHtml", loadAsset("server_docs.html"))
     }
 

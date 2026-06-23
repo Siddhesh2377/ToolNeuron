@@ -466,6 +466,14 @@ namespace tn::server {
         server_->Get("/", serve_webui);
         server_->Get("/index.html", serve_webui);
         server_->Get("/webui", serve_webui);
+        server_->Get("/webui.css", [](const httplib::Request&, httplib::Response& res) {
+            if (!webui::has_css()) {
+                res.status = 503;
+                res.set_content("Web UI CSS not configured", "text/plain");
+                return;
+            }
+            res.set_content(webui::get_css(), "text/css; charset=utf-8");
+        });
 
         auto serve_docs = [](const httplib::Request&, httplib::Response& res) {
             if (!docs::has_html()) {

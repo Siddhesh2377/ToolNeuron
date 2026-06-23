@@ -6,7 +6,7 @@ Project memory for this repo. **When you change anything that affects future wor
 
 ## Project scope
 
-Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer, **on-device image generation / img2img / inpaint / 4× upscale via the `:ai_sd` AAR (re-pivoted in 2026-05-08)**, **first-party plugin system with ONNX inference + capability-gated APIs (re-pivoted in 2026-05-11)**. Out of scope: tool calling, Termux integration. (Image generation was originally cut on 2026-04-20 and re-added on 2026-05-08. Plugin marketplace was also originally cut on 2026-04-20 and re-added on 2026-05-11 as a first-party plugin runtime — DexClassLoader, Plugin contract with @Composable Content(), capability-gated OnnxApi/HxsApi/NetworkApi, floating plugin dock with smooth switch transitions.)
+Privacy-first, offline-only on-device AI assistant. No Google Play services, no network telemetry, no analytics. In-scope pillars: on-device LLM chat, RAG over user documents, vision-language models (VLM), voice (TTS+STT), Remote Server with bundled web UI, HF Explorer, **on-device image generation / img2img / inpaint / adaptive upscale via the `:ai_sd` AAR (re-pivoted in 2026-05-08; upscale expanded 2026-06-23)**, **first-party plugin system with ONNX inference + capability-gated APIs (re-pivoted in 2026-05-11)**. Out of scope: tool calling, Termux integration, background-removal / segmentation / object-erase image operations. (Image generation was originally cut on 2026-04-20 and re-added on 2026-05-08. Plugin marketplace was also originally cut on 2026-04-20 and re-added on 2026-05-11 as a first-party plugin runtime — DexClassLoader, Plugin contract with @Composable Content(), capability-gated OnnxApi/HxsApi/NetworkApi, floating plugin dock with smooth switch transitions.)
 
 Package: `com.dark.tool_neuron` · minSdk 29 · targetSdk 36 · abiFilters `arm64-v8a`, `x86_64`.
 
@@ -45,7 +45,7 @@ Prebuilt AARs in `libs/`:
 6. **Commit hygiene:** conventional commits, no `Co-Authored-By` trailer, never push without explicit ask, never skip hooks. Don't commit unless the user explicitly asks.
 7. **Research / exploration subagents run on Sonnet at low effort** — not Opus — unless the user overrides.
 8. **No TODOs, stubs, or half-implementations.** Every task is coded end-to-end.
-9. **When you change security-affecting state, update CLAUDE.md in the same change.**
+9. **When you change security-affecting state, update AGENTS.md in the same change.**
 10. **One Scaffold only** — the root `AppScaffold`. Screens take `innerPadding: PaddingValues` and render plain `Column`/`LazyColumn`/`Box`. Per-route top bars go in `AppTopBar.kt`'s `when`, bottom bars in `AppBottomBar.kt`'s `when`.
 11. **Library modules must NOT minify.** Only `:app` minifies. R8 collides on `Type a.a is defined multiple times` against pre-minified prebuilt jars (e.g. `gguf_lib-release-runtime.jar`) if libraries also pre-minify. Library rules go in each module's `consumer-rules.pro`.
 12. **No spec/plan/research docs in the repo.** Project memory belongs here. Implementation roadmaps belong in conversation context, not in `*.md` files at the repo root.
@@ -284,6 +284,8 @@ void generateVlm(String messagesJson, in ParcelFileDescriptor[] imageFds, int ma
 ### Catalog + downloads
 
 `ModelCatalog.fetchRepo` flags any repo whose tree contains a `*mmproj*.gguf` file; non-mmproj `.gguf` rows get `isVlm=true`, `repoPath`, `mmprojFileName`, `mmprojFileUri`, `mmprojSizeBytes`. Tag list adds "VLM". `ModelStoreViewModel.downloadModel` routes VLM base into `vlmModelFile(repoPath, fileName)`; on completion, enqueues mmproj into the same folder under the same `modelId`. Finalize inserts a single `ModelInfo` whose path is the base `.gguf`.
+
+Store VLM browsing is provider-only: Qwen, LFM, Gemma, SmolVLM, MiniCPM, LLaVA, and Other vision. Do not bring back expandable VLM file-group cards in the Store; users pick the base model row and the Store auto-downloads the matching projector internally. HF Explorer may still use grouped file display for raw repo inspection, but the Store must stay provider-first and simple.
 
 ### UI
 
@@ -649,47 +651,17 @@ The PlusMenu's old "Documents" button is gone — attachments live entirely in t
 
 ## Web search
 
-**Adaptive iterative researcher (re-pivoted 2026-06-22).** Was a single-pass "3 queries → snippets → answer" run; rebuilt — at the user's explicit direction ("need things functioning right", waiving the prior no-iteration / no-page-fetch rule) — into a controlled multi-round research loop with depth modes, a multi-engine search backend, per-round query refinement + evidence compaction, and page-fetching in the deep modes. This deliberately supersedes the 2026-05-15 deletion of the old Research pipeline; the key difference from that pipeline is that the loop is **mechanically bounded** (round/query/time caps + low-new-source-gain), so it can't run away on a weak on-device model.
+Replaces the prior Research pipeline (2026-05-15). Single-shot LLM-driven web search. User flips the Web Search toggle on the bottom action bar (or types `/search <query>`); next chat send becomes a web-search run.
 
-User flips the Web Search toggle (or types a slash command); the next send becomes a web-search run.
+Flow (`viewmodel/WebSearchCoordinator.kt`):
 
-### Depth modes (`repo/web_search/WebSearchMode.kt`)
+1. **Plan** — coordinator emits `WebSearchEvent.Plan(userQuery)` so the card renders immediately.
+2. **GenerateQueries** — one LLM call (`WebSearchPrompts.generateQueries`) asking for exactly 3 numbered queries. Regex-parsed via `QUERY_LINE_REGEX = ^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$`. Failures fall through to `WebSearchEvent.Failed`.
+3. **Search** — for each of the 3 queries, `WebSearcher.search(query, maxResults=5, idx)` via `WebNative.search` (DDG HTML). Per-query results are deduped against a session-wide `seenUrls` set so cross-query overlap doesn't double-feed the synthesizer. Total cap: 3 queries × 5 results = 15 unique snippets.
+4. **Synthesize** — one LLM call (`WebSearchPrompts.synthesize`) with the user query + numbered `[i]` snippet list. Output is markdown with inline `[1]/[2]/[3]` citations and a trailing Sources section.
+5. **Done** — emits `WebSearchEvent.Done(answer, sources)`; card renders the markdown answer + collapsible tappable source list (chip → `LocalUriHandler.openUri`).
 
-| Mode | Trigger | Rounds | Total queries | Page fetch |
-|------|---------|-------:|--------------:|------------|
-| Quick | auto: short factual ask (≤5 words, no deep signal) | 1 | 3 | no |
-| Normal | auto: default | 3 | 10 | no |
-| Deep | auto: compare/vs/latest/best/research/in-depth/… or `/deep`,`/research` | 10 | 40 | top 6/round |
-| Exhaustive | `/exhaustive`, or text "exhaustive"/"deep research" | 20 | 80 | top 8/round |
-
-`WebSearchMode.resolve(rawText, default)` → `(mode, cleanedQuery)`. **Priority: slash command > saved UI/Settings mode (`default`) > Auto-classify.** `classify` is a **pure heuristic** (no LLM call) on `?`-count / deep-signal keywords / word-count; the "exhaustive"/"deep research" keyword bump lives in `classifyAuto`, which only fires when `default == null` (Auto). `HomeViewModel.parseWebSearchInput` recognizes `/search`,`/deep`,`/research`,`/exhaustive` and the toggle, and passes `WebSearchMode.fromPref(_webSearchMode.value)` as the default.
-
-### Depth control UI (visible + persisted)
-
-Default depth is a persisted preference, **stored as a stable lowercase key, never a display label** (`auto`/`quick`/`normal`/`deep`/`exhaustive`; `AppPreferences.webSearchMode`, default `auto`). `WebSearchMode` owns the key↔mode↔label mapping: `key`, `SELECTABLE_KEYS`, `fromPref` (key→mode, null=Auto), `sanitizePref` (coerce unknown→`auto`), `labelForKey`.
-
-- **Chat** (`ToolsPickerWindow`): a "Search depth" `ActionToggleGroup` over `SELECTABLE_KEYS` sits under the Web-search card — **always visible but `enabled = webSearchEnabled`** (dimmed until web search is on). Selecting calls `HomeViewModel.setWebSearchMode`.
-- **Settings** (`SettingsViewModel.webSearchSection`, section id `web_search`, route `NavScreens.SettingsWebSearch`): a "Default search depth" `SettingsItem.Choice` with the same keys + speed-aware descriptions.
-- Both write the **same** `appPrefs.webSearchMode` — one source of truth. The card mode badge shows the **resolved concrete** mode (Auto resolves to Quick/Normal/Deep before `start`), never "Auto".
-
-### The loop (`viewmodel/WebSearchCoordinator.kt`)
-
-1. **Plan** — emit `WebSearchEvent.Plan(userQuery, mode)`. One LLM call (`WebSearchPrompts.initialQueries`) for the round-0 queries (count = `mode.initialQueries`); URL-in-query and Play-Store asks bypass the LLM with built queries; parse failure falls back to the raw user query.
-2. **Round loop** (`while round < maxRounds && nextQueries.isNotEmpty() && totalQueries < maxQueries && !timeUp`):
-   - `RoundStart(round, maxRounds, focus)`; queries capped to remaining budget; `QueriesGenerated` emits the **cumulative** query list (global query index across rounds).
-   - per query: `delay(SEARCH_THROTTLE_MS=1200)`, `WebSearcher.search(q, mode.resultsPerQuery, idx)`, dedupe vs `seenUrls` (normalized), `SearchHits`. Accumulate into the evidence pool.
-   - Deep/Exhaustive: `Status("Reading pages…")`, fetch top-N ranked not-yet-fetched URLs via `PageFetcher` (concurrent, `HtmlText.extract` → ≤2500-char excerpts).
-   - Quick (or `followUpQueries==0`): break after one round, no digest.
-   - **Digest** (one LLM call, `WebSearchPrompts.roundDigest`): updated running summary + still-missing + up-to-K follow-up queries + coverage(0-100). Tolerant `SUMMARY:/MISSING:/QUERIES:/COVERAGE:` section parse; follow-ups parsed only from the `QUERIES:` block (avoids capturing summary prose), deduped against all prior queries.
-   - **Stop** if: coverage ≥ 85 · new-unique-sources < 2 for 2 consecutive rounds · no follow-up queries · budget/time hit.
-3. **Synthesize** — `SynthesizeStart`; `WebSearchPrompts.synthesize(userQuery, summary, top-6 sources, excerpts)` (grounded, may cite `[n]`). Link/download asks short-circuit via `directAnswerIfPossible`.
-4. **Done** — `Done(answer, sources)` (sources = ranked pool, ≤12); card renders markdown + collapsible source list.
-
-**Control flow is mechanical-first**: the LLM coverage score can only *early-stop*, never force-continue. Quick = plan + synth (2 LLM calls); Deep/Exhaustive add one digest call per round.
-
-### Multi-engine backend (`:networking`)
-
-`WebNative.search` → native `net::ddg::search` is now a **multi-engine chain: DuckDuckGo-html → Bing → Mojeek → DuckDuckGo-lite** (despite the legacy `net::ddg` name). Accumulates unique results, **stops early** once `max_results` is reached: DDG-ok = one request (same cost as before), DDG-blocked (202/429) = falls through to Bing/Mojeek instead of returning nothing. JNI/`nativeSearch` signatures unchanged. Parsers: `html::extract_ddg_results` / `extract_bing_results` (unwraps `bing.com/ck/a?…&u=a1<base64url>` via `url::unwrap_bing_redirect`) / `extract_mojeek_results` (direct URLs). GET engines use a chrome116-consistent header set.
+No URL fetching. No document extraction. No iteration loop. The user-visible difference vs. old Research: seconds instead of minutes, single inline result instead of a "research document" archive screen.
 
 ### Persistence
 
@@ -703,34 +675,32 @@ The card message stores the user's original query in `msg.content` (read by the 
 
 ### Lockdown
 
-Same pattern as the old research lockdown — `webSearchActive: StateFlow<Boolean>` is derived from `webSearchCoordinator.activeRuns.isNotEmpty()`. `sendMessage`, `loadModel`, and `unloadModel` all early-return while a run is active because the chat LLM is borrowed for every plan / digest / synthesis call in the loop.
+Same pattern as the old research lockdown — `webSearchActive: StateFlow<Boolean>` is derived from `webSearchCoordinator.activeRuns.isNotEmpty()`. `sendMessage`, `loadModel`, and `unloadModel` all early-return while a run is active because the chat LLM is borrowed for both the GenerateQueries and Synthesize calls.
 
 ### Card UI
 
 `ui/screens/web_search/WebSearchCard.kt` is a single Surface with:
-- Header (Globe icon, "Web search", a **mode badge** chip when `state.mode` is set, user query)
-- Queries strip (grows across rounds; per-query progress indicators — Circle / spinner / Check + hit count)
-- AnimatedContent for current phase; the Search row shows `Round n/N · <status>` (status carries "Reading pages…" / "Round n reviewed", and coverage via `WebSearchEvent.Status.coverage`)
-- Stop button while in flight (cancels the loop mid-round)
+- Header (Globe icon, "Web search", user query)
+- Queries strip (3 rows with per-query progress indicators — Circle / spinner / Check + hit count)
+- AnimatedContent for current phase (Plan / Queries / Search / Synthesize / Done / Cancelled / Failed)
+- Stop button while in flight
 - For Done: markdown answer + collapsible `N sources` accordion with `[i]` chips opening URLs externally
 
 ### File map
 
-- `model/WebSearchEvent.kt` — sealed events (+ `Plan.mode`, `RoundStart`, `Status(message, coverage)`) + `WebSearchHit`.
-- `model/WebSearchUiState.kt` — phase machine + JSON serde (+ `mode`/`round`/`maxRounds`/`status`/`coverage`; `fromJson` zero-fills, TAG 15 unchanged).
-- `repo/web_search/WebSearchMode.kt` — depth enum + per-mode budgets + `resolve`/`classify` heuristic.
-- `repo/web_search/WebSearcher.kt` — thin wrapper over `WebNative.search` (multi-engine).
-- `repo/web_search/PageFetcher.kt` + `HtmlText.kt` — concurrent page fetch + readable-text extraction (Deep/Exhaustive only).
-- `repo/web_search/WebSearchPrompts.kt` — `initialQueries` / `roundDigest` / `synthesize` + `QUERY_LINE_REGEX`.
-- `viewmodel/WebSearchCoordinator.kt` — the iterative controller (injects `WebSearcher` + `PageFetcher`).
+- `model/WebSearchEvent.kt` — sealed event class + `WebSearchHit` data class.
+- `model/WebSearchUiState.kt` — phase machine + JSON serde.
+- `repo/web_search/WebSearcher.kt` — thin wrapper over `WebNative.search`.
+- `repo/web_search/WebSearchPrompts.kt` — prompt templates + `QUERY_LINE_REGEX`.
+- `viewmodel/WebSearchCoordinator.kt` — single coordinator (no repository, stateless across runs).
 - `ui/screens/web_search/WebSearchCard.kt` — the only UI.
-- Modified: `ChatMessage` (webSearchRunId, webSearchState), `HomeViewModel` (slash parse → `WebSearchMode`, coordinator wiring, event mirror), `HomeScreen{Body,BottomBar}` + `ToolsPickerWindow` (toggle), `ChatMessageList` (WebSearchCard render).
+- Modified: `ChatMessage` (+ webSearchRunId, webSearchState), `ChatRepository` (TAG 14/15 renamed), `HomeViewModel` (toggle, slash parse, coordinator wiring, event mirror), `HomeScreen{Body,BottomBar}` + `ToolsPickerWindow` (Web search toggle), `ChatMessageList` (WebSearchCard render).
 
 ---
 
 ## Image generation (`:ai_sd` AAR)
 
-Re-pivoted into scope on 2026-05-08. Drop-in port of LocalDream's catalog (xororz/sd-qnn + xororz/sd-mnn + xororz/sdxl-qnn + xororz/upscaler) onto the existing TN model store. Four user-facing tasks: **Generate (txt2img)**, **Edit (img2img)**, **Inpaint**, **Upscale 4×**. Tasks #5–#8 from the SDK's surface (LaMa fast removal, MobileSAM segmentation, depth, AdaIN style transfer) are implemented in the AAR's C++ but not yet bound through JNI — out of scope until the bindings ship.
+Re-pivoted into scope on 2026-05-08. Drop-in port of LocalDream's catalog (xororz/sd-qnn + xororz/sd-mnn + xororz/sdxl-qnn + xororz/upscaler) onto the existing TN model store. SD tasks stay under `:ai_sd`: **Generate (txt2img)**, **Edit (img2img)**, **Inpaint**, **Upscale**. Background removal, segmentation/matting, and object erase were removed from current scope on 2026-06-23.
 
 ### SoC bucket policy (mirrors LocalDream)
 
@@ -748,13 +718,13 @@ non-Qualcomm                                                           → null 
 
 ### Catalog wiring
 
-`ModelCatalog.imageModels()` is computed per-call (not in `BUILT_IN_MODELS` const) so the `Build.SOC_MODEL` read picks up cleanly. When a Snapdragon bucket is available it emits 5 SD 1.5 NPU rows (AnythingV5, QteaMix, AbsoluteReality, CuteYukiMix, ChilloutMix), the 2 SDXL rows (gated on `isSdxlCapable`), and 2 upscaler rows (Real-ESRGAN x4 anime + UltraSharp v2 Lite). On non-Snapdragon devices it instead emits 5 SD 1.5 CPU/MNN rows from `xororz/sd-mnn`. `qnn2.28` is baked into the URL as the SDK version token; if the AAR ever upgrades to `qnn2.30` both the URL constant and the `v3` upgrade marker need to bump together.
+`ModelCatalog.imageModels()` is computed per-call (not in `BUILT_IN_MODELS` const) so the `Build.SOC_MODEL` read picks up cleanly. When a Snapdragon bucket is available it emits 5 SD 1.5 NPU rows (AnythingV5, QteaMix, AbsoluteReality, CuteYukiMix, ChilloutMix), the 2 SDXL rows (gated on `isSdxlCapable`), and QNN upscaler rows. On non-Snapdragon devices it instead emits 5 SD 1.5 CPU/MNN rows from `xororz/sd-mnn`. The built-in Store also carries MNN-compatible upscalers from `tumuyan2/realsr-models`, tagged by use case (`Use: General`, `Photo`, `Portrait`, `Anime`, `Sharp cleanup`, `Other`), `runtime=MNN`, and `scale=...`; do not add unsupported `.pth` / ONNX upscalers as installable rows. `qnn2.28` is baked into the URL as the SDK version token; if the AAR ever upgrades to `qnn2.30` both the URL constant and the `v3` upgrade marker need to bump together.
 
 `HuggingFaceModel` carries new image-gen fields (`isSdxl`, `requiresNpu`, `isUpscaler`, `featureLabel`, `defaultPrompt`, `defaultNegativePrompt`, `generationSize`); `modelType ∈ {"image_gen", "image_upscaler"}` switches the download finalize path. `ProviderType.IMAGE_GEN` and `ProviderType.IMAGE_UPSCALER` are the canonical categories on `ModelInfo` after install.
 
 ### Download + extraction
 
-`ModelStoreViewModel.finalizeImageGenDownload` extracts the QNN/MNN ZIP into `<filesDir>/sd_models/<id>/` via `java.util.zip.ZipFile` with a hardened path-traversal check (entry's canonical path must start with the target's canonical path + `File.separator`). Archive deleted after extraction, `ModelInfo` inserted with `path` = the dir. `finalizeImageUpscalerDownload` is simpler: the upscaler is a single `.bin` file at `<filesDir>/sd_upscalers/<id>/upscaler_<bucket>.bin`, no extraction.
+`ModelStoreViewModel.finalizeImageGenDownload` extracts the QNN/MNN ZIP into `<filesDir>/sd_models/<id>/` via `java.util.zip.ZipFile` with a hardened path-traversal check (entry's canonical path must start with the target's canonical path + `File.separator`). Archive deleted after extraction, `ModelInfo` inserted with `path` = the dir. `finalizeImageUpscalerDownload` installs a single `.bin` or `.mnn` file under `<filesDir>/sd_upscalers/<id>/`. Old ONNX image-operation model records are deleted during `ModelRepository.refresh()` and `<filesDir>/image_onnx/` is removed. Legacy `TOOL_SEARCH` provider records are migrated to `GGUF` during refresh; Tool/Search is not a visible model class unless a real dedicated routing path is added later.
 
 ### Runtime singleton
 
@@ -764,7 +734,7 @@ non-Qualcomm                                                           → null 
 
 `ui/screens/image_task/ImageTaskScreen.kt` + `ImageTaskTopBar.kt` + `viewmodel/ImageTaskViewModel.kt`. Route: `NavScreens.ImageTask` (`"image_task"`). Reachable from the chat drawer's "Images" quick-link. The screen is one LazyColumn of cards:
 
-- **Task** — `ActionToggleGroup` segmented switch (Generate / Edit / Inpaint / Upscale).
+- **Task** — mode switch for Generate / Inpaint / Upscale.
 - **Image model / Upscaler** — list of installed models for the picked task; tapping a row triggers `loadDiffusionModel` or `loadUpscaler`.
 - **Prompt** — TnTextField for prompt + negative prompt (hidden in Upscale mode).
 - **Settings** — `ActionToggleGroup` rows for Steps, CFG, Scheduler, Resolution, Denoise (img2img / inpaint only).
@@ -795,7 +765,7 @@ Dedicated screen aggregating every queued / downloading download plus a persiste
 
 Two singletons sit between `HxdManager` and the UI:
 
-- **`DownloadCoordinator`** (`@Singleton`, in `repo/`) — subscribes to `HxdManager.tasks` once at first construction. Holds an in-memory `ConcurrentHashMap<Int, DownloadLabel>` (hxdId → displayName + type). On every emission, recomputes `activeCount: StateFlow<Int>` (count of QUEUED/CONNECTING/DOWNLOADING/PAUSED tasks) and detects per-task terminal transitions (COMPLETED/FAILED/CANCELLED). On a first-time terminal transition it removes the label, then writes a `DownloadHistoryEntry` via the repo. `recordedTerminals: Set<Int>` dedupes so a task that bounces between flow emissions only gets one history row. `DownloadLabel.fromUrl(url)` provides a fallback when the label was never registered (e.g. a download that survived process restart).
+- **`DownloadCoordinator`** (`@Singleton`, in `repo/`) — subscribes to `HxdManager.tasks` once at first construction. Holds an in-memory `ConcurrentHashMap<Int, DownloadLabel>` (hxdId → displayName + type). On every emission, recomputes `activeCount: StateFlow<Int>` (count of QUEUED/CONNECTING/DOWNLOADING/PAUSED tasks) and detects per-task terminal transitions (COMPLETED/FAILED/CANCELLED). On a first-time terminal transition it removes the label, then writes a `DownloadHistoryEntry` via the repo. `recordedTerminals: Set<Int>` dedupes so a task that bounces between flow emissions only gets one history row. `DownloadLabel.fromUrl(url)` provides a fallback when the label was never registered (e.g. a download that survived process restart). `HxdService` retries transient HTTP/network failures up to 3 attempts with short backoff and preserves `.hxd_tmp` for resume; explicit cancel/clear deletes the temp file.
 - **`DownloadHistoryRepository`** (`@Singleton`, in `repo/`) — HXS-backed at `<filesDir>/download_history_v1/`. Sealed under `HKDF(DEK, salt=signerHash, info="tn.download_history.user_key.v2")` — same v2-signer-bound pattern as every other vault. Collection name `download_history`. TAG layout `1=id (UUID), 2=displayName, 3=type, 4=status (ord), 5=totalBytes, 6=completedAt, 7=error`. `insert()` writes + caps to MAX_ENTRIES=50 newest + flushes + refreshes the StateFlow. `clearAll()` deletes every record. Capping happens inside `insert()` so the vault can't grow unbounded.
 
 Every enqueue site MUST call `coordinator.registerLabel(hxdId, displayName, type)` immediately after `HxdManager.enqueue(...)`. Current sites:
@@ -810,18 +780,19 @@ Any new download path that calls `HxdManager.enqueue` MUST register a label too,
 
 ### ViewModel + screen
 
-- **`DownloadsViewModel`** (`@HiltViewModel`) — exposes `activeDownloads: StateFlow<List<ActiveDownloadItem>>` (joined HxdManager.tasks + coordinator labels, filtered to non-terminal, sorted by hxdId) and `history: StateFlow<List<DownloadHistoryEntry>>` (passthrough from repo). Methods: `cancel(hxdId)`, `clearHistory()`. `ActiveDownloadItem(hxdId, displayName, type, state)`.
-- **`DownloadsScreen`** at `ui/screens/downloads/DownloadsScreen.kt` — single `LazyColumn` with section headers (`Active · N` then `History · N` with trash icon to clear). Uses `LocalDimens` / `LocalTnShapes` / `TnIcons` throughout; no inline `dp` constants for theme tokens. Empty state when both are empty (Download icon + "No downloads yet").
+- **`DownloadsViewModel`** (`@HiltViewModel`) — exposes `activeDownloads: StateFlow<List<ActiveDownloadItem>>` (joined HxdManager.tasks + coordinator labels, filtered to active or failed attention-needed rows, sorted by hxdId) and `history: StateFlow<List<DownloadHistoryEntry>>` (passthrough from repo). Methods: `cancel(hxdId)`, `retry(hxdId)`, `clear(hxdId)`, `clearHistory()`. `ActiveDownloadItem(hxdId, displayName, type, state)`.
+- **`DownloadsScreen`** at `ui/screens/downloads/DownloadsScreen.kt` — single `LazyColumn` with section headers (`Active · N` then `History · N` with trash icon to clear). Failed active rows expose Retry and Clear; Retry resumes the preserved partial file and Clear deletes the temp state. Uses `LocalDimens` / `LocalTnShapes` / `TnIcons` throughout; no inline `dp` constants for theme tokens. Empty state when both are empty (Download icon + "No downloads yet").
 - **`DownloadsTopBar`** — minimal GuideTopBar-style top bar; dispatched from `AppTopBar.kt`'s `when` block on `NavScreens.Downloads.route`.
 
 ### Active row
 
 For each `ActiveDownloadItem`:
-- Header row: type-icon badge (mapped from `type` string) + display name + cancel icon (X).
+- Header row: type-icon badge (mapped from `type` string) + display name + cancel icon (X), or Retry/Clear for failed rows.
 - Body switches on `HxdStatus`:
   - QUEUED → "Queued" text
   - CONNECTING → `TnIndeterminateProgressBar` + "Connecting…"
   - PAUSED → `TnProgressBar` (if totalBytes > 0) + "Paused"
+  - FAILED → error text + Retry/Clear actions
   - DOWNLOADING → `TnProgressBar` (or indeterminate if totalBytes ≤ 0) + `"<pct>%  ·  <downloaded> / <total>"` left, `state.speedFormatted` right.
 
 ### History row
@@ -830,6 +801,16 @@ For each `DownloadHistoryEntry`:
 - Status icon (CircleCheck primary / AlertTriangle error / X muted) + display name.
 - Subtitle: `"<status>  ·  <relative time>  ·  <size>"` (size omitted if ≤ 0). Failed/cancelled rows append the first 48 chars of the error string when present.
 - Relative time via `android.text.format.DateUtils.getRelativeTimeSpanString(..., MINUTE_IN_MILLIS, FORMAT_ABBREV_RELATIVE)`.
+
+## Storage maintenance
+
+`StorageScreen` includes a maintenance card above the category list. `StorageInspector.maintenance(mode)` owns the scan logic:
+
+- `QUICK_CLEAN` removes `.hxd_tmp`, `_archive_*`, and cache leftovers, then recreates `cacheDir`.
+- `DETAILED_CHECK` verifies installed model records point to existing non-empty files/folders and reports likely orphan model files.
+- `DEEP_MODEL_TEST` adds lightweight local validation: GGUF magic header, VLM colocated mmproj, image model layout signals, voice config presence, and model config JSON validity. It must not load large models into inference just to run a storage check.
+
+Maintenance reports return checked / issue / fixed / skipped counts plus capped issue rows. Destructive broad category clearing still uses the existing confirmation dialog; quick-clean is limited to temp/archive/cache leftovers.
 
 ### Top-bar badge
 
@@ -1087,16 +1068,12 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't fan out `RemoteCallbackList` broadcasts from `InferenceService` without holding `sdBroadcastLock`. `RemoteCallbackList.beginBroadcast()` is not nestable — calling it from one thread while another is between `beginBroadcast()` and `finishBroadcast()` throws `IllegalStateException: beginBroadcast() called while already in a broadcast` and kills `:inference`. `startSdForwarding` launches five parallel collectors (backend / generation / isGenerating / upscale / runtimeSetup) on `Dispatchers.IO` — without serialisation they race on `sdClients.beginBroadcast()` and the service crash-loops immediately. The fix is `synchronized(sdBroadcastLock)` around the entire `fanoutSd` body; the same lock can serve `tnClients` if a similar pattern is ever added there.
 - Don't bump `TAG_MSG_WEBSEARCH_RUN` away from `14` or `TAG_MSG_WEBSEARCH_STATE` away from `15`. Older messages without these tags decode with `webSearchRunId = null` and `webSearchState = ""`. New chat-message fields must use TAG ≥ 16.
 - Don't reintroduce a runtime-only `webSearchEvents: Map<String, WebSearchEvent>` in HomeViewModel. The card's state must come from `WebSearchUiState.fromJson(message.webSearchState)` because (a) opening a different chat while a run is in flight should NOT bleed the running run's state into a completed chat's card; (b) after process restart, completed web-search cards must keep showing their Done state. `HomeViewModel.handleWebSearchEvent` is the single write point — looks up `(chatId, messageId)` via `webSearchMessages[runId]`, reads the message, applies the event, writes back.
-- Don't lift the web-search lockdown. While `webSearchActive.value`, `HomeViewModel.sendMessage / loadModel / unloadModel` all early-return — the chat LLM is borrowed for every plan / per-round digest / synthesis call in the loop.
+- Don't lift the web-search lockdown. While `webSearchActive.value`, `HomeViewModel.sendMessage / loadModel / unloadModel` all early-return — the chat LLM is borrowed for both the GenerateQueries and Synthesize calls.
 - Don't drop the web-search content swap in `InferenceCoordinator.buildMessagesJson`. Web-search cards store the user's query in `msg.content` (used by the card Header) and the synthesized answer in `msg.webSearchState`. The single point of LLM-history assembly MUST swap `content` for `WebSearchUiState.fromJson(webSearchState).answer.trim()` when `webSearchRunId != null`, and SKIP the message entirely when the answer is blank (in-flight / cancelled / failed). Without the swap the model sees `assistant: "<echoed user query>"` instead of the actual research, and the next chat turn proceeds as if the search never happened. Without the skip, in-flight / failed cards inject an empty assistant turn that confuses the model.
-- Don't replace `WebNative.search` with `HttpURLConnection` or any other client. The `:networking` curl-impersonate Chrome116 fingerprint is the single allowed pipe — for `WebNative.search` (DDG→Bing→Mojeek→DDG-lite) AND `WebNative.fetch` (Deep/Exhaustive page fetch). Same applies to any new engine: it goes inside `net::ddg::search`'s chain, not a new HTTP client.
-- Don't make the web-search loop unbounded. It is iterative now (re-pivoted 2026-06-22, user-directed, superseding the 2026-05-15 single-pass deletion), but EVERY run must stay bounded by `WebSearchMode`'s `maxRounds` / `maxQueries` / `timeBudgetMs` plus the low-new-source-gain stop. The LLM coverage score may only *early-stop*, never extend — a weak on-device model must not be able to wedge the loop. Quick mode stays single-round (plan + synth, no digest).
-- Don't gate page-fetching on anything but `WebSearchMode.fetchPages` (Deep/Exhaustive only). Quick/Normal are snippet-only and must stay fast. `PageFetcher` excerpts are capped (`HtmlText.extract`, ≤2500 chars) and the synthesis prompt re-caps per source — don't feed whole pages into the prompt (context blowup on small models).
-- Don't break `WebSearchMode.resolve`/`classify` being a pure heuristic (no LLM call). Mode selection must be instant. Slash triggers are `/search` (auto-classify), `/deep`+`/research` (Deep), `/exhaustive` (Exhaustive); `HomeViewModel.SEARCH_SLASHES` must list all four. Resolution priority is fixed: **slash > saved mode (`default`) > Auto-classify**.
-- Don't store web-search depth as a display label or split it across two prefs. The single source of truth is `AppPreferences.webSearchMode`, holding a **stable lowercase key** (`auto/quick/normal/deep/exhaustive`); the chat `ToolsPickerWindow` selector and Settings `web_search` section both read/write it. Convert key→label only at render via `WebSearchMode.labelForKey`; run any saved value through `WebSearchMode.sanitizePref` (unknown → `auto`) so old/hand-edited values never crash. The card badge shows the resolved concrete mode, not "Auto".
-- Don't make the chat depth selector appear only when web search is on. It's always rendered with `enabled = webSearchEnabled` (dimmed when off) for discoverability. Adding a new Settings section needs all four wiring points: `NavScreens`, the `SETTINGS_LANDING_CARDS` card, the `TNavigation` composable (sectionId = `SettingsViewModel.SECTION_*`), and the `AppTopBar` `when` case.
+- Don't replace `WebNative.search` with `HttpURLConnection` or any other client. The `:networking` curl-impersonate Chrome116 fingerprint is the single allowed pipe for DDG. The 3 queries × 5 results contract assumes that backend.
+- Don't expand the web-search flow back into a multi-iteration pipeline. The user-facing contract is "3 queries, snippets, answer, done". Adding iterations / fetches / per-page extraction is what the old Research pipeline was; it was deleted on 2026-05-15 because it was minutes-slow and barely better than snippet-only synthesis.
 - Don't switch `WebSearchCoordinator` from `tryEmit` to suspending `emit(...)` in the `catch (CancellationException)` / `catch (Throwable)` blocks. The catch fires on a cancelled Job, and `withContext(Dispatchers.Default)` throws CE immediately on a cancelled context — so the Cancelled event never reaches the SharedFlow and the card freezes mid-flight. `_events` has 64-slot buffer; tryEmit always succeeds.
-- Don't change `WebSearchPrompts.QUERY_LINE_REGEX`. The query prompts ask for numbered lines (`1. <query>`) and the regex `^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$` parses that AND tolerates `-`/`*`/`•` bullets + `:` after the number. The `roundDigest` parser also depends on it (parsed only from the `QUERIES:` block so summary prose isn't captured as queries). Tightening breaks small models; loosening picks up preamble.
+- Don't change `WebSearchPrompts.QUERY_LINE_REGEX`. The synthesis prompt asks for the format `1. <query>` / `2. <query>` / `3. <query>` and the regex `^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$` parses that AND tolerates common LLM deviations (`-`/`*`/`•` bullets, `:` after the number). Tightening the regex breaks smaller models that don't follow numbered-list instructions perfectly; loosening it picks up the LLM's preamble lines.
 - Don't fall back to `java.net.HttpURLConnection` for any HuggingFace API call — search, model info, tree, raw README, tags-by-type, trending, quicksearch, resolve. Every HF request goes through `:networking` (`WebNative.fetch`) so it inherits the curl-impersonate Chrome116 fingerprint + bundled `cacert.pem` + strict cert verify. The hub is `repo/HuggingFaceApi.kt` (Hilt singleton class, not an object); `repo/hf/HfClient.kt` builds typed endpoints on top. `ModelCatalog` and `RepositoryValidator` inject `HuggingFaceApi`. Same rule applies for any future HF or non-HF HTTP target — `:networking` is the only allowed pipe.
 - Don't change `WebNative.fetch` back to `Result<String>`. The contract is `Result<WebResponse>` where `WebResponse(status: Int, body: String, error: String?)`. Result.failure is reserved for transport-layer issues (DNS, TLS handshake, native call collapse). HTTP non-2xx comes back as `Result.success(WebResponse(status=4xx, ...))` — callers can react to 429 (rate limited) vs 404 (not found) vs 401/403 (auth). Old behavior of returning `null` on non-2xx silently masked HF API bugs (e.g. invalid `expand=` params returning 400) for years.
 - Don't log full URLs (with query string) to `ANDROID_LOG_WARN` from `net_jni.cpp`. Use the `host_of(url)` helper. Search queries are user PII (typed model names, sometimes sensitive). Status code + host is the maximum log surface.
@@ -1115,7 +1092,7 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't open a fresh `StableDiffusionManager` per request. It's a process singleton (`getInstance(context)`), wrapped by Hilt's `ImageGenManager`. The init-mutex inside `ensureRuntime()` covers the qnnlibs.tar.xz extraction. Calling `initialize()` twice is a no-op but rebuilding the manager would tear down the persistent native sessions used across generations.
 - Don't ship the release AAR yet. `ai_sd-release.aar` ran R8 on the SDK side and renamed `StableDiffusionManager.Companion.getInstance` past Kotlin's compile-time visibility. Keep `ai_sd-debug.aar` copied as `libs/ai_sd-release.aar` until `:ai_sd`'s `consumer-rules.pro` adds `-keep class com.dark.ai_sd.StableDiffusionManager$Companion { *; }` and the AAR is rebuilt.
 - Don't remove the standalone QNN upscaler implementation. The original AAR's `nativeLoadUpscaler` for QNN was a stub that only stashed the model path — `nativeUpscaleImage` would then fail with "Upscaler model not provided" because the QnnModel was never built. Filled in 2026-05-08 by porting LocalDream's per-request load pattern: `sd_pipeline::loadStandaloneQnnUpscaler(modelPath)` in `model_loader.cpp` calls `createQnnModel(path, "upscaler")` + `initializeQnnApp("Upscaler", upscalerApp)` and assigns to the global `upscalerApp`, mirroring `main.cpp:3203` in LocalDream. Prerequisite: `sd_pipeline::ensureQnnSystemReady(systemLibPath, backendPath)` must be called first to populate `g_qnnSystemFuncs` + `g_backendPathCmd` — `ai_sd_jni.cpp::nativeInitRuntime` does this best-effort using `<libDir>/libQnn{System,Htp}.so`. The Kotlin caller (`ImageGenManager.loadUpscaler`) just calls `sdk.loadUpscaler(path, useMnn=path.endsWith(".mnn"), useOpenCL=...)` and the AAR's JNI dispatches to the right load path. Don't restore the .mnn-only IllegalStateException guard — the QNN path works now.
-- Don't lift the upscaler input cap above 1024 max-edge in `ImageTaskViewModel.runUpscale`. 4× output of 2048² is 8192²×4 ≈ 256 MB which OOMs on bitmap allocation in `DiffusionManager.createBitmapFromRgb` even with `largeHeap=true`. The 1024 cap produces 4096²×4 ≈ 64 MB which fits comfortably. Combined with `android:largeHeap="true"` in the manifest, larger inputs MIGHT work on flagship devices, but the failure mode (OOM during bitmap return) is silent + crashy, so keep the cap and let users downscale beforehand if they need higher fidelity.
+- Don't remove the adaptive upscale pipeline. `ImageUpscalePipeline` wraps the fixed native 4× primitive with scale presets (2× / 4× / 8× / custom), Auto / Fast / Safe tiled processing, memory estimation, tiled region decode, overlap trim, and file-backed PNG output for large results. Native upscaler input tiles must stay at or below 1024 max-edge; final output has no hard resolution cap and should route through tiled/file-backed output when one-shot is risky.
 - Don't declare `commons-compress` and `xz` as anything weaker than `implementation` in `app/build.gradle.kts`. They are required by the AAR's runtime extraction path; `implementation(files(...))` AAR consumption does NOT pull transitive POM deps, so without explicit declarations the app crashes with `NoClassDefFoundError: org.tukaani.xz.XZInputStream` on first init.
 - Don't switch image-gen tasks to a separate ViewModel per task. `ImageTaskViewModel` is the single VM for all four modes (Generate, Img2Img, Inpaint, Upscale) — sharing prompt / model selection / preview state across modes is intentional so the user can tweak a prompt then quickly switch from Generate to Edit without re-typing.
 - Don't reuse the chat model picker for image-gen models. They're separate `ProviderType` rows (`IMAGE_GEN`, `IMAGE_UPSCALER`) on `ModelInfo` and live in `<filesDir>/sd_models/` / `<filesDir>/sd_upscalers/`, never in the GGUF chat model dir. The store routes them through `finalizeImageGenDownload` / `finalizeImageUpscalerDownload` and they should not appear in `chatModels` filters anywhere.
@@ -1168,4 +1145,4 @@ Whenever you change anything on the list below, update **this file** as part of 
 - Anything in "Things still deferred" moving in or out of scope
 - Any new "Things NOT to regress" item discovered along the way
 
-If the CLAUDE.md update isn't part of your diff, the change isn't finished.
+If the AGENTS.md update isn't part of your diff, the change isn't finished.

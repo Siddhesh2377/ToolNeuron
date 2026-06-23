@@ -52,6 +52,7 @@ namespace tn::server::auth {
                path == "/" ||
                path == "/index.html" ||
                path == "/webui" ||
+               path == "/webui.css" ||
                path == "/docs" ||
                path == "/docs/" ||
                path == "/docs/index.html";

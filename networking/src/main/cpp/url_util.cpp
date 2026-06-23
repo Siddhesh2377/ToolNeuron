@@ -66,4 +66,51 @@ std::string unwrap_ddg_redirect(const std::string& href) {
     return decode(encoded);
 }
 
+namespace {
+
+int b64_value(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a' + 26;
+    if (c >= '0' && c <= '9') return c - '0' + 52;
+    if (c == '+' || c == '-') return 62;
+    if (c == '/' || c == '_') return 63;
+    return -1;
+}
+
+std::string base64url_decode(const std::string& in) {
+    std::string out;
+    out.reserve(in.size() * 3 / 4 + 1);
+    int buf = 0;
+    int bits = 0;
+    for (char c : in) {
+        if (c == '=' || c == '\0') break;
+        int v = b64_value(c);
+        if (v < 0) continue;
+        buf = (buf << 6) | v;
+        bits += 6;
+        if (bits >= 8) {
+            bits -= 8;
+            out.push_back(static_cast<char>((buf >> bits) & 0xFF));
+        }
+    }
+    return out;
+}
+
+}
+
+std::string unwrap_bing_redirect(const std::string& href) {
+    if (href.find("/ck/a") == std::string::npos) return href;
+    const std::string marker = "u=a1";
+    auto pos = href.find(marker);
+    if (pos == std::string::npos) return href;
+    pos += marker.size();
+    auto end = href.find('&', pos);
+    std::string payload = (end == std::string::npos)
+        ? href.substr(pos)
+        : href.substr(pos, end - pos);
+    std::string decoded = base64url_decode(payload);
+    if (decoded.rfind("http", 0) == 0) return decoded;
+    return href;
+}
+
 }

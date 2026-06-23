@@ -363,6 +363,15 @@ fun TNavigation(
                 onNavigate = { route -> navController.navigate(route) },
             )
         }
+        composable(NavScreens.SettingsWebSearch.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_WEB_SEARCH,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
         composable(NavScreens.SettingsVoice.route) {
             val viewModel: SettingsViewModel = hiltViewModel()
             SettingsSectionScreen(

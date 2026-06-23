@@ -25,7 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -58,6 +60,7 @@ internal fun BrowseModelsTab(
     viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit,
+    onClearDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
     val dimens = LocalDimens.current
@@ -105,7 +108,7 @@ internal fun BrowseModelsTab(
                     if (repoKey == null) {
                         RepoCardListView(viewModel, isLoading, downloadStates, installStates)
                     } else {
-                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, installStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload)
+                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, installStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload, onClearDownload)
                     }
                 }
             }
@@ -209,7 +212,8 @@ internal fun RepoDetailView(
     extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
     onDownload: (HuggingFaceModel) -> Unit,
-    onCancelDownload: (String) -> Unit
+    onCancelDownload: (String) -> Unit,
+    onClearDownload: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
@@ -263,7 +267,8 @@ internal fun RepoDetailView(
                         isExtracting = model.id in extractingIds,
                         extractingEntryName = extractingFile[model.id],
                         onDownload = { onDownload(model) },
-                        onCancel = { onCancelDownload(model.id) }
+                        onCancel = { onCancelDownload(model.id) },
+                        onClear = { onClearDownload(model.id) },
                     )
                 }
             }

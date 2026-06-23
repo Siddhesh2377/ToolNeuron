@@ -3,51 +3,92 @@ package com.dark.tool_neuron.repo.web_search
 import com.dark.tool_neuron.model.WebSearchHit
 
 object WebSearchPrompts {
-
-    fun generateQueries(userQuery: String): String = buildString {
+    fun initialQueries(userQuery: String, count: Int): String = buildString {
+        val n = count.coerceIn(1, 8)
         append("You are a search-query generator. The user wants information about the topic below.")
-        append("\n\nWrite exactly THREE concise web search queries that, together, will surface the most useful pages to answer the user.")
-        append(" Each query should target a different angle (e.g. overview, recent news, specific examples).")
-        append(" Each query should be 3-8 words. Do not repeat the same query in different words.")
-        append("\n\nReturn ONLY the queries as a numbered list, one per line, in this exact format:")
-        append("\n1. <first query>")
-        append("\n2. <second query>")
-        append("\n3. <third query>")
+        append("\n\nWrite exactly $n concise web search queries that together surface the most useful pages to answer the user.")
+        append(" Each query should target a different angle (overview, specifics, recent/latest, comparisons, official source).")
+        append(" Each query should be 3-8 words. Keep the user's key terms. Do not repeat a query in different words.")
+        append("\n\nReturn ONLY the queries as a numbered list, one per line:")
+        for (i in 1..n) append("\n$i. <query>")
         append("\n\nNo preamble, no explanation, no extra text.")
         append("\n\nUser topic: ")
         append(userQuery.trim())
     }
 
-    fun synthesize(userQuery: String, hits: List<WebSearchHit>): String = buildString {
-        // Small chat models (LFM2-350M, Qwen 0.5B, etc.) struggle when asked
-        // to write markdown AND emit inline citations AND append a sources
-        // section all at once — they typically output only the sources block
-        // or a 1-line deflection. Strip the prompt down to a single task:
-        // write a short factual summary. The sources accordion in the UI
-        // already lists every URL, so the model doesn't need to repeat them.
-        append("Summarize the search results below to answer the user's question. ")
-        append("Write a direct answer first, then add brief context only if useful. ")
-        append("If the user asked for a link or download page, provide the best official URL from the results first. ")
-        append("Use only information from the snippets — do not invent details. ")
-        append("If the snippets don't cover the question, say so in one sentence.")
+    fun roundDigest(
+        userQuery: String,
+        priorSummary: String,
+        findings: List<WebSearchHit>,
+        excerpts: Map<String, String>,
+        followUpCount: Int,
+    ): String = buildString {
+        val k = followUpCount.coerceIn(1, 8)
+        append("You are researching a question using web search results.")
         append("\n\nQuestion: ")
         append(userQuery.trim())
-        append("\n\nSearch results:\n")
+        append("\n\nWhat we already know:\n")
+        append(priorSummary.ifBlank { "(nothing yet)" })
+        append("\n\nNew findings from the latest search:\n")
+        findings.forEachIndexed { i, h ->
+            append("\n")
+            append(i + 1)
+            append(". ")
+            append(h.title.ifBlank { h.url })
+            val body = excerpts[h.url]?.takeIf { it.isNotBlank() } ?: h.snippet
+            if (body.isNotBlank()) {
+                append(" — ")
+                append(body.trim().replace('\n', ' ').take(EVIDENCE_CHAR_CAP))
+            }
+            append('\n')
+        }
+        append("\nUsing ONLY these findings (do not invent facts), reply in EXACTLY this format:")
+        append("\nSUMMARY:")
+        append("\n<updated summary of facts that help answer the question>")
+        append("\nMISSING:")
+        append("\n<what is still missing, or 'none'>")
+        append("\nQUERIES:")
+        append("\n<up to $k new 3-8 word search queries for the missing parts, numbered; or 'none'>")
+        append("\nCOVERAGE:")
+        append("\n<a number 0-100 for how fully the question is answered so far>")
+    }
+
+    fun synthesize(
+        userQuery: String,
+        summary: String,
+        hits: List<WebSearchHit>,
+        excerpts: Map<String, String>,
+    ): String = buildString {
+        append("Answer the user's question using the research notes and sources below. ")
+        append("Write a direct, complete answer first, then add useful context. ")
+        append("If the user asked for a link or download page, give the best official URL first. ")
+        append("Use only the information provided — do not invent details. ")
+        append("You may cite sources inline as [1], [2] where helpful. ")
+        append("If the sources don't fully cover the question, answer what you can and say what's missing.")
+        append("\n\nQuestion: ")
+        append(userQuery.trim())
+        if (summary.isNotBlank()) {
+            append("\n\nResearch notes:\n")
+            append(summary.trim().take(SUMMARY_CHAR_CAP))
+        }
+        append("\n\nSources:\n")
         hits.forEachIndexed { i, h ->
             append("\n")
             append(i + 1)
             append(". ")
             append(h.title.ifBlank { h.url })
-            if (h.snippet.isNotBlank()) {
+            val body = excerpts[h.url]?.takeIf { it.isNotBlank() } ?: h.snippet
+            if (body.isNotBlank()) {
                 append(" — ")
-                append(h.snippet.trim().replace('\n', ' ').take(SNIPPET_CHAR_CAP))
+                append(body.trim().replace('\n', ' ').take(EVIDENCE_CHAR_CAP))
             }
             append('\n')
         }
-        append("\nSummary:\n")
+        append("\nAnswer:\n")
     }
 
-    private const val SNIPPET_CHAR_CAP = 320
+    private const val EVIDENCE_CHAR_CAP = 700
+    private const val SUMMARY_CHAR_CAP = 1600
 
     val QUERY_LINE_REGEX = Regex("^\\s*(?:\\d+[.)\\-:]|[-*•])\\s+(.+)$")
 }

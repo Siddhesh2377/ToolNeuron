@@ -5,10 +5,13 @@
 #include "url_util.h"
 
 #include <algorithm>
+#include <unordered_set>
 
 namespace net::ddg {
 
 namespace {
+
+using Parser = std::vector<html::Entry> (*)(const std::string&, int);
 
 constexpr const char* kHtmlHost = "https://html.duckduckgo.com/html/";
 constexpr const char* kLiteHost = "https://lite.duckduckgo.com/lite/";
@@ -20,12 +23,6 @@ HttpRequest build_post(const std::string& host, const std::string& query,
     req.method = "POST";
     std::string kl = locale.empty() ? "wt-wt" : locale;
     req.body = "q=" + url::encode(query) + "&kl=" + url::encode(kl) + "&kd=-1&b=";
-    // Header set must agree with the curl-impersonate "chrome116" TLS
-    // fingerprint we set globally. Missing Sec-CH-UA + Sec-CH-UA-Mobile +
-    // Sec-CH-UA-Platform on a Chrome 116 TLS handshake is itself a tell —
-    // DDG returns the anomaly page when these disagree. Sec-Fetch-Site is
-    // "same-origin" because we're POSTing back to the same site we
-    // referred from (the DDG search form).
     req.headers = {
         {"User-Agent", ua},
         {"Content-Type", "application/x-www-form-urlencoded"},
@@ -62,10 +59,32 @@ std::vector<Result> to_results(std::vector<html::Entry>&& entries) {
     return out;
 }
 
-SearchOutcome try_host(const std::string& host, const std::string& query, const std::string& ua,
-                       int max_results, const std::string& locale) {
+HttpRequest build_get(const std::string& url, const std::string& ua) {
+    HttpRequest req;
+    req.url = url;
+    req.method = "GET";
+    req.headers = {
+        {"User-Agent", ua},
+        {"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8"},
+        {"Accept-Language", "en-US,en;q=0.9"},
+        {"Accept-Encoding", "gzip, deflate, br"},
+        {"Sec-CH-UA", "\"Not_A Brand\";v=\"8\", \"Chromium\";v=\"116\", \"Google Chrome\";v=\"116\""},
+        {"Sec-CH-UA-Mobile", "?0"},
+        {"Sec-CH-UA-Platform", "\"Windows\""},
+        {"Sec-Fetch-Dest", "document"},
+        {"Sec-Fetch-Mode", "navigate"},
+        {"Sec-Fetch-Site", "none"},
+        {"Sec-Fetch-User", "?1"},
+        {"Upgrade-Insecure-Requests", "1"},
+    };
+    req.timeout_ms = 15000;
+    req.follow_redirects = true;
+    return req;
+}
+
+SearchOutcome run_engine(const HttpRequest& req, Parser parse, int max_results) {
     SearchOutcome out;
-    auto resp = http_execute(build_post(host, query, ua, locale));
+    auto resp = http_execute(req);
     if (!resp.has_value()) {
         out.error = {"http backend unavailable"};
         return out;
@@ -82,40 +101,73 @@ SearchOutcome try_host(const std::string& host, const std::string& query, const 
         out.error = {"http status " + std::to_string(resp->status)};
         return out;
     }
-    auto entries = html::extract_ddg_results(resp->body, max_results);
-    out.results = to_results(std::move(entries));
+    out.results = to_results(parse(resp->body, max_results));
     out.ok = true;
     return out;
+}
+
+std::string bing_url(const std::string& query, int count) {
+    return "https://www.bing.com/search?q=" + url::encode(query) +
+           "&count=" + std::to_string(count) + "&setlang=en-US";
+}
+
+std::string mojeek_url(const std::string& query) {
+    return "https://www.mojeek.com/search?q=" + url::encode(query);
 }
 
 }
 
 SearchOutcome search(const std::string& query, const std::string& user_agent,
                      int max_results, const std::string& locale) {
+    SearchOutcome merged;
     if (query.empty()) {
-        SearchOutcome out;
-        out.error = {"empty query"};
-        return out;
+        merged.error = {"empty query"};
+        return merged;
     }
 
-    int capped = std::clamp(max_results, 1, 30);
+    const int capped = std::clamp(max_results, 1, 30);
+    std::unordered_set<std::string> seen;
+    std::string last_error;
 
-    auto primary = try_host(kHtmlHost, query, user_agent, capped, locale);
-    if (primary.ok) return primary;
+    auto enough = [&]() { return static_cast<int>(merged.results.size()) >= capped; };
+    auto absorb = [&](SearchOutcome eo) {
+        if (!eo.ok) {
+            if (!eo.error.message.empty()) last_error = eo.error.message;
+            return;
+        }
+        for (auto& r : eo.results) {
+            if (r.url.empty()) continue;
+            if (!seen.insert(r.url).second) continue;
+            merged.results.push_back(std::move(r));
+        }
+    };
 
-    // If DDG answered with the 202 anti-bot challenge, it set a tracking
-    // cookie on the response. The CURLSH-shared cookie jar in http_curl.cpp
-    // captured it, so an immediate retry against the same host carries the
-    // cookie and almost always clears the challenge.
-    if (primary.error.message.find("status 202") != std::string::npos) {
-        auto retry = try_host(kHtmlHost, query, user_agent, capped, locale);
-        if (retry.ok) return retry;
+    absorb(run_engine(build_post(kHtmlHost, query, user_agent, locale),
+                      html::extract_ddg_results, capped));
+    if (merged.results.empty() && last_error.find("status 202") != std::string::npos) {
+        absorb(run_engine(build_post(kHtmlHost, query, user_agent, locale),
+                          html::extract_ddg_results, capped));
     }
 
-    auto fallback = try_host(kLiteHost, query, user_agent, capped, locale);
-    if (fallback.ok) return fallback;
+    if (!enough()) {
+        absorb(run_engine(build_get(bing_url(query, capped), user_agent),
+                          html::extract_bing_results, capped));
+    }
+    if (!enough()) {
+        absorb(run_engine(build_get(mojeek_url(query), user_agent),
+                          html::extract_mojeek_results, capped));
+    }
+    if (merged.results.empty()) {
+        absorb(run_engine(build_post(kLiteHost, query, user_agent, locale),
+                          html::extract_ddg_results, capped));
+    }
 
-    return primary.error.message.empty() ? fallback : primary;
+    if (static_cast<int>(merged.results.size()) > capped) merged.results.resize(capped);
+    merged.ok = !merged.results.empty();
+    if (!merged.ok) {
+        merged.error = {last_error.empty() ? "no results" : last_error};
+    }
+    return merged;
 }
 
 }

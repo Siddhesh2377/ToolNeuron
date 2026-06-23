@@ -179,6 +179,9 @@ class ModelStoreViewModel @Inject constructor(
     private val _selectedTags = MutableStateFlow<Set<String>>(emptySet())
     val selectedTags: StateFlow<Set<String>> = _selectedTags.asStateFlow()
 
+    private val _selectedUpscalerUseCase = MutableStateFlow<String?>(null)
+    val selectedUpscalerUseCase: StateFlow<String?> = _selectedUpscalerUseCase.asStateFlow()
+
     private val _showNsfw = MutableStateFlow(true)
     val showNsfw: StateFlow<Boolean> = _showNsfw.asStateFlow()
 
@@ -405,6 +408,14 @@ class ModelStoreViewModel @Inject constructor(
             }
         }
 
+        if (_selectedModelType.value == "image_upscaler") {
+            _selectedUpscalerUseCase.value?.let { useCase ->
+                filtered = filtered.filter { model ->
+                    model.tags.any { it.equals("Use: $useCase", ignoreCase = true) }
+                }
+            }
+        }
+
         if (!_showNsfw.value) {
             filtered = filtered.filter { "NSFW" !in it.tags }
         }
@@ -442,7 +453,11 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun filterModels(query: String) { _searchQuery.value = query; applyAllFilters() }
-    fun filterByModelType(type: String?) { _selectedModelType.value = type; applyAllFilters() }
+    fun filterByModelType(type: String?) {
+        _selectedModelType.value = type
+        if (type != "image_upscaler") _selectedUpscalerUseCase.value = null
+        applyAllFilters()
+    }
     fun filterByCategory(cat: ModelCategory?) { _selectedCategory.value = cat; applyAllFilters() }
     fun toggleParameterFilter(p: String) {
         _selectedParameters.value = if (p in _selectedParameters.value) _selectedParameters.value - p else _selectedParameters.value + p
@@ -458,6 +473,7 @@ class ModelStoreViewModel @Inject constructor(
         _selectedTags.value = if (tag in _selectedTags.value) _selectedTags.value - tag else _selectedTags.value + tag
         applyAllFilters()
     }
+    fun setUpscalerUseCase(useCase: String?) { _selectedUpscalerUseCase.value = useCase; applyAllFilters() }
     fun setShowNsfw(show: Boolean) { _showNsfw.value = show; applyAllFilters() }
     fun setShowOver2GbModels(show: Boolean) { _showOver2GbModels.value = show; applyAllFilters() }
     fun setExecutionTarget(t: String?) { _executionTarget.value = t; applyAllFilters() }
@@ -465,7 +481,7 @@ class ModelStoreViewModel @Inject constructor(
         _selectedModelType.value = null; _selectedCategory.value = null
         _selectedParameters.value = emptySet(); _selectedQuantizations.value = emptySet()
         _selectedSizeCategory.value = null; _selectedTags.value = emptySet()
-        _showNsfw.value = true; _executionTarget.value = null
+        _showNsfw.value = true; _executionTarget.value = null; _selectedUpscalerUseCase.value = null
         _showOver2GbModels.value = false
         _sortBy.value = SortOption.NAME; _searchQuery.value = ""
         applyAllFilters()
@@ -482,7 +498,7 @@ class ModelStoreViewModel @Inject constructor(
     fun getGroupedRepos(): Map<String, RepoGroupInfo> {
         val grouped = mutableMapOf<String, RepoGroupInfo>()
 
-        _filteredModels.value.groupBy { ModelTaxonomy.groupKey(it) }.forEach { (key, models) ->
+        _filteredModels.value.filterNot { it.isMmproj }.groupBy { ModelTaxonomy.groupKey(it) }.forEach { (key, models) ->
             val family = ModelTaxonomy.family(models.first())
             val taskSummary = models
                 .map { ModelTaxonomy.task(it).displayName }
@@ -502,7 +518,7 @@ class ModelStoreViewModel @Inject constructor(
     }
 
     fun getModelsForRepo(repoKey: String): List<HuggingFaceModel> =
-        _filteredModels.value.filter { ModelTaxonomy.groupKey(it) == repoKey }
+        _filteredModels.value.filter { !it.isMmproj && ModelTaxonomy.groupKey(it) == repoKey }
             .sortedWith(compareBy<HuggingFaceModel> { ModelTaxonomy.task(it).ordinal }
                 .thenBy { sizeBytesOf(it).takeIf { bytes -> bytes > 0 } ?: Long.MAX_VALUE }
                 .thenBy { it.name.lowercase() })
@@ -511,7 +527,6 @@ class ModelStoreViewModel @Inject constructor(
         getModelsForRepo(repoKey)
             .groupBy { ModelTaxonomy.task(it).displayName }
             .map { (task, items) -> task to items }
-
 
     fun downloadByQuickStartId(modelId: String) {
         viewModelScope.launch {
@@ -661,6 +676,8 @@ class ModelStoreViewModel @Inject constructor(
                             _downloadStates.value = _downloadStates.value - model.id
                         } else if (model.modelType == "tts" || model.modelType == "stt") {
                             finalizeVoiceDownload(model, destFile)
+                } else if (model.modelType == "image_gen") {
+                    finalizeImageGenDownload(model, destFile)
                         } else if (model.modelType == "image_gen") {
                             finalizeImageGenDownload(model, destFile)
                         } else if (model.modelType == "image_upscaler") {
@@ -1044,13 +1061,7 @@ class ModelStoreViewModel @Inject constructor(
             return
         }
         setInstallState(model, destFile, ModelInstallPhase.VERIFYING)
-        val provider = when (model.modelType) {
-            "tts" -> ProviderType.TTS
-            "stt" -> ProviderType.STT
-            "embedding" -> ProviderType.EMBEDDING
-            "tool_search" -> ProviderType.TOOL_SEARCH
-            else -> ProviderType.GGUF
-        }
+        val provider = providerForModelType(model.modelType)
         modelRepo.insert(ModelInfo(
             id = model.id, name = model.name,
             path = destFile.absolutePath, pathType = PathType.FILE,
@@ -1101,10 +1112,24 @@ class ModelStoreViewModel @Inject constructor(
         else -> "gguf"
     }
 
+    private fun providerForModelType(modelType: String): ProviderType = when (modelType) {
+        "tts" -> ProviderType.TTS
+        "stt" -> ProviderType.STT
+        "embedding" -> ProviderType.EMBEDDING
+        else -> ProviderType.GGUF
+    }
+
     fun cancelDownload(modelId: String) {
         _downloadIds.value[modelId]?.let { HxdManager.cancel(it) }
         _downloadIds.value = _downloadIds.value - modelId
         _downloadStates.value = _downloadStates.value - modelId
+    }
+
+    fun clearDownloadState(modelId: String) {
+        _downloadIds.value[modelId]?.let { HxdManager.clear(it) }
+        _downloadIds.value = _downloadIds.value - modelId
+        _downloadStates.value = _downloadStates.value - modelId
+        _installStates.value = _installStates.value - modelId
     }
 
 

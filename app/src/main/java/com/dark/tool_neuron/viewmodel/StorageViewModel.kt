@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.repo.StorageCategoryId
 import com.dark.tool_neuron.repo.StorageInspector
+import com.dark.tool_neuron.repo.StorageMaintenanceMode
+import com.dark.tool_neuron.repo.StorageMaintenanceReport
 import com.dark.tool_neuron.repo.StorageSnapshot
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -15,7 +17,9 @@ import javax.inject.Inject
 data class StorageUiState(
     val snapshot: StorageSnapshot? = null,
     val isLoading: Boolean = true,
+    val isMaintaining: Boolean = false,
     val pendingClear: StorageCategoryId? = null,
+    val maintenanceReport: StorageMaintenanceReport? = null,
     val message: String? = null,
 )
 
@@ -66,6 +70,31 @@ class StorageViewModel @Inject constructor(
         _state.value = _state.value.copy(message = null)
     }
 
+    fun runQuickClean() = runMaintenance(StorageMaintenanceMode.QUICK_CLEAN)
+
+    fun runDetailedCheck() = runMaintenance(StorageMaintenanceMode.DETAILED_CHECK)
+
+    fun runDeepModelTest() = runMaintenance(StorageMaintenanceMode.DEEP_MODEL_TEST)
+
+    fun clearMaintenanceReport() {
+        _state.value = _state.value.copy(maintenanceReport = null)
+    }
+
+    private fun runMaintenance(mode: StorageMaintenanceMode) {
+        viewModelScope.launch {
+            _state.value = _state.value.copy(isMaintaining = true, maintenanceReport = null)
+            val report = inspector.maintenance(mode)
+            val snap = inspector.snapshot()
+            _state.value = _state.value.copy(
+                snapshot = snap,
+                isLoading = false,
+                isMaintaining = false,
+                maintenanceReport = report,
+                message = maintenanceMessage(report),
+            )
+        }
+    }
+
     private fun clearedMessage(id: StorageCategoryId): String = when (id) {
         StorageCategoryId.CHAT_MODELS -> "Chat models cleared"
         StorageCategoryId.VLM -> "Vision models cleared"
@@ -74,5 +103,11 @@ class StorageViewModel @Inject constructor(
         StorageCategoryId.CHATS -> "Chat history cleared"
         StorageCategoryId.CACHE -> "Cache cleared"
         StorageCategoryId.SYSTEM -> ""
+    }
+
+    private fun maintenanceMessage(report: StorageMaintenanceReport): String = when (report.mode) {
+        StorageMaintenanceMode.QUICK_CLEAN -> "Cleaned ${report.fixedCount} item${if (report.fixedCount == 1) "" else "s"}"
+        StorageMaintenanceMode.DETAILED_CHECK -> "Check found ${report.issueCount} issue${if (report.issueCount == 1) "" else "s"}"
+        StorageMaintenanceMode.DEEP_MODEL_TEST -> "Deep test found ${report.issueCount} issue${if (report.issueCount == 1) "" else "s"}"
     }
 }

@@ -7,13 +7,17 @@ enum class ModelFamily(val displayName: String, val priority: Int) {
     LFM("LFM", 10),
     QWEN("Qwen", 20),
     GEMMA("Google Gemma", 30),
+    SMOLVLM("SmolVLM", 35),
+    MINICPM("MiniCPM", 36),
+    LLAVA("LLaVA", 37),
     SMOLLM("SmolLM", 40),
     PHI("Phi", 50),
     DEEPSEEK("DeepSeek", 60),
     MISTRAL("Mistral", 70),
     EMBEDDING("Embedding / RAG", 80),
-    VISION("Vision", 90),
+    VISION("Other vision", 90),
     IMAGE_GEN("Image generation", 100),
+    UPSCALER("Upscalers", 110),
     OTHER("Other models", 200),
 }
 
@@ -21,7 +25,6 @@ enum class ModelTask(val displayName: String) {
     CHAT("Chat"),
     INSTRUCT("Instruct"),
     THINKING("Thinking"),
-    TOOL_SEARCH("Tool/Search"),
     VISION_CHAT("Vision chat"),
     EMBEDDING("Embedding"),
     TTS("Text-to-speech"),
@@ -39,10 +42,11 @@ object ModelTaxonomy {
             .lowercase()
 
         return when {
-            model.modelType == "image_gen" -> ModelFamily.IMAGE_GEN
-            model.modelType == "image_upscaler" || model.modelType == "tts" || model.modelType == "stt" -> ModelFamily.OTHER
+            model.isVlm || "vlm" in haystack || "vision" in haystack -> visionFamily(haystack)
+            model.modelType in IMAGE_MODEL_TYPES -> ModelFamily.IMAGE_GEN
+            model.modelType == "image_upscaler" -> ModelFamily.UPSCALER
+            model.modelType == "tts" || model.modelType == "stt" -> ModelFamily.OTHER
             model.modelType == "embedding" -> ModelFamily.EMBEDDING
-            model.isVlm || "vlm" in haystack || "vision" in haystack -> ModelFamily.VISION
             "lfm" in haystack -> ModelFamily.LFM
             "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "qwen" in haystack -> ModelFamily.QWEN
@@ -50,7 +54,6 @@ object ModelTaxonomy {
             "smollm" in haystack || "smallm" in haystack -> ModelFamily.SMOLLM
             "phi" in haystack -> ModelFamily.PHI
             "mistral" in haystack -> ModelFamily.MISTRAL
-            model.modelType == "tool_search" -> ModelFamily.OTHER
             else -> ModelFamily.OTHER
         }
     }
@@ -58,10 +61,11 @@ object ModelTaxonomy {
     fun family(model: ModelInfo): ModelFamily {
         val haystack = listOf(model.id, model.name, model.providerType.name).joinToString(" ").lowercase()
         return when {
-            model.providerType == ProviderType.IMAGE_GEN -> ModelFamily.IMAGE_GEN
-            model.providerType in setOf(ProviderType.TTS, ProviderType.STT, ProviderType.IMAGE_UPSCALER) -> ModelFamily.OTHER
+            model.providerType == ProviderType.VISION_CHAT || "vl" in haystack || "vision" in haystack -> visionFamily(haystack)
+            model.providerType in IMAGE_PROVIDER_TYPES -> ModelFamily.IMAGE_GEN
+            model.providerType == ProviderType.IMAGE_UPSCALER -> ModelFamily.UPSCALER
+            model.providerType in setOf(ProviderType.TTS, ProviderType.STT) -> ModelFamily.OTHER
             model.providerType == ProviderType.EMBEDDING -> ModelFamily.EMBEDDING
-            model.providerType == ProviderType.VISION_CHAT || "vl" in haystack || "vision" in haystack -> ModelFamily.VISION
             "lfm" in haystack -> ModelFamily.LFM
             "deepseek" in haystack -> ModelFamily.DEEPSEEK
             "qwen" in haystack -> ModelFamily.QWEN
@@ -84,10 +88,8 @@ object ModelTaxonomy {
             model.modelType == "tts" -> ModelTask.TTS
             model.modelType == "stt" -> ModelTask.STT
             model.modelType == "embedding" -> ModelTask.EMBEDDING
-            model.modelType == "tool_search" -> ModelTask.TOOL_SEARCH
             model.isVlm -> ModelTask.VISION_CHAT
             "thinking" in haystack || "reasoning" in haystack || "deepseek-r1" in haystack -> ModelTask.THINKING
-            "tool" in haystack || "function" in haystack -> ModelTask.TOOL_SEARCH
             "instruct" in haystack || "it" in haystack -> ModelTask.INSTRUCT
             model.modelType == "gguf" -> ModelTask.CHAT
             else -> ModelTask.OTHER
@@ -97,7 +99,7 @@ object ModelTaxonomy {
     fun task(model: ModelInfo): ModelTask = when (model.providerType) {
         ProviderType.GGUF -> ModelTask.CHAT
         ProviderType.VISION_CHAT -> ModelTask.VISION_CHAT
-        ProviderType.TOOL_SEARCH -> ModelTask.TOOL_SEARCH
+        ProviderType.TOOL_SEARCH -> ModelTask.CHAT
         ProviderType.TTS -> ModelTask.TTS
         ProviderType.STT -> ModelTask.STT
         ProviderType.EMBEDDING -> ModelTask.EMBEDDING
@@ -106,4 +108,22 @@ object ModelTaxonomy {
     }
 
     fun groupKey(model: HuggingFaceModel): String = family(model).name
+
+    private fun visionFamily(haystack: String): ModelFamily = when {
+        "qwen" in haystack -> ModelFamily.QWEN
+        "lfm" in haystack || "liquid" in haystack -> ModelFamily.LFM
+        "gemma" in haystack -> ModelFamily.GEMMA
+        "smolvlm" in haystack || "smol-vlm" in haystack -> ModelFamily.SMOLVLM
+        "minicpm" in haystack || "mini-cpm" in haystack -> ModelFamily.MINICPM
+        "llava" in haystack || "llava" in haystack -> ModelFamily.LLAVA
+        else -> ModelFamily.VISION
+    }
+
+    private val IMAGE_MODEL_TYPES = setOf(
+        "image_gen",
+    )
+
+    private val IMAGE_PROVIDER_TYPES = setOf(
+        ProviderType.IMAGE_GEN,
+    )
 }

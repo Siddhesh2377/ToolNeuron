@@ -6,7 +6,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
-import androidx.core.graphics.scale
 import java.io.File
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -20,7 +19,11 @@ import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ImageGenManager
+import com.dark.tool_neuron.repo.FastUpscaleBlockedException
+import com.dark.tool_neuron.repo.ImageUpscalePipeline
 import com.dark.tool_neuron.repo.ModelRepository
+import com.dark.tool_neuron.repo.UpscaleProcessingMode
+import com.dark.tool_neuron.repo.UpscaleScalePreset
 import com.dark.tool_neuron.util.ImageExport
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -38,6 +41,15 @@ import javax.inject.Inject
 enum class ImageTaskMode { GENERATE, INPAINT, UPSCALE }
 enum class ImageOutputAction { KEEP, REPLACE_INPUT, SAVE_PHOTOS, SAVE_ELSEWHERE }
 
+data class UpscaleOutput(
+    val preview: Bitmap,
+    val fullWidth: Int,
+    val fullHeight: Int,
+    val outputPath: String?,
+    val scale: Float,
+    val tiled: Boolean,
+)
+
 private data class ImageTaskInputs(
     val mode: ImageTaskMode = ImageTaskMode.GENERATE,
     val prompt: String = "",
@@ -54,6 +66,15 @@ private data class ImageTaskInputs(
     val maskImagePath: String? = null,
     val activeModelId: String = "",
     val activeUpscalerId: String = "",
+    val upscaleScalePreset: UpscaleScalePreset = UpscaleScalePreset.X4,
+    val customUpscaleScale: Float = 4f,
+    val upscaleProcessingMode: UpscaleProcessingMode = UpscaleProcessingMode.AUTO,
+    val upscaleProgressLabel: String = "",
+    val upscaleProgress: Float = 0f,
+    val upscaleTileCurrent: Int = 0,
+    val upscaleTileTotal: Int = 0,
+    val upscalePassCurrent: Int = 0,
+    val upscalePassTotal: Int = 0,
     val localStatus: String = "",
     val localError: String? = null,
     val pendingLoadModelId: String = "",
@@ -68,6 +89,7 @@ private data class ImageTaskInputs(
     val outputToken: String = "",
     val generationStartedAtMs: Long = 0L,
     val upscaleStartedAtMs: Long = 0L,
+    val upscaleBusy: Boolean = false,
     val lastUpscaleEstimateMs: Long = 45_000L,
     val processedOutputToken: String = "",
     /**
@@ -128,6 +150,16 @@ data class ImageTaskUi(
     val installedUpscalers: List<ModelInfo> = emptyList(),
     val activeModelId: String = "",
     val activeUpscalerId: String = "",
+    val upscaleScalePreset: UpscaleScalePreset = UpscaleScalePreset.X4,
+    val customUpscaleScale: Float = 4f,
+    val upscaleScale: Float = 4f,
+    val upscaleProcessingMode: UpscaleProcessingMode = UpscaleProcessingMode.AUTO,
+    val upscaleProgressLabel: String = "",
+    val upscaleTileCurrent: Int = 0,
+    val upscaleTileTotal: Int = 0,
+    val upscalePassCurrent: Int = 0,
+    val upscalePassTotal: Int = 0,
+    val upscaleOutput: UpscaleOutput? = null,
     val isBusy: Boolean = false,
     val runtimeReady: Boolean = false,
     val runtimePhase: RuntimePhase = RuntimePhase.NEEDS_DOWNLOAD,
@@ -164,6 +196,7 @@ class ImageTaskViewModel @Inject constructor(
     // image and a blank slot. Holds onto the most recent non-null preview;
     // resets when generation starts / completes / errors.
     private val cachedPreview = MutableStateFlow<Bitmap?>(null)
+    private val upscaleOutput = MutableStateFlow<UpscaleOutput?>(null)
     private val clock = MutableStateFlow(System.currentTimeMillis())
 
     private val context: Context get() = getApplication()
@@ -233,18 +266,6 @@ class ImageTaskViewModel @Inject constructor(
             }
         }
 
-        viewModelScope.launch {
-            imageGen.upscaleState.collect { state ->
-                if (state is UpscaleState.Complete) {
-                    handleCompletedOutput(
-                        token = "up_${state.width}_${state.height}_${state.timeMs}_${System.nanoTime()}",
-                        bitmap = state.bitmap,
-                        prefix = "tn_upscale",
-                        finalUpscaleTimeMs = state.timeMs.toLong().coerceAtLeast(1L),
-                    )
-                }
-            }
-        }
     }
 
     val ui: StateFlow<ImageTaskUi> = combine(
@@ -256,6 +277,7 @@ class ImageTaskViewModel @Inject constructor(
         imageGen.backendState,
         imageGen.runtimeDownload,
         cachedPreview,
+        upscaleOutput,
         clock,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
@@ -268,7 +290,8 @@ class ImageTaskViewModel @Inject constructor(
         val backend = values[5] as DiffusionBackendState
         val runtimeDl = values[6] as HxdState?
         val sticky = values[7] as Bitmap?
-        val now = values[8] as Long
+        val upscaleOut = values[8] as UpscaleOutput?
+        val now = values[9] as Long
 
         val archivePresent = imageGen.isRuntimeArchivePresent()
         val runtimeReady = runtime is RuntimeSetupState.Complete
@@ -302,7 +325,7 @@ class ImageTaskViewModel @Inject constructor(
                 val name = models.firstOrNull { it.id == i.loadedUpscalerId }?.name ?: i.loadedUpscalerId
                 ModelLoadPhase.Loaded(name)
             }
-            i.mode != ImageTaskMode.UPSCALE && i.loadedDiffusionId.isNotBlank() -> {
+            i.mode in setOf(ImageTaskMode.GENERATE, ImageTaskMode.INPAINT) && i.loadedDiffusionId.isNotBlank() -> {
                 val name = models.firstOrNull { it.id == i.loadedDiffusionId }?.name ?: i.loadedDiffusionId
                 ModelLoadPhase.Loaded(name)
             }
@@ -311,7 +334,6 @@ class ImageTaskViewModel @Inject constructor(
 
         val sdkProgress = (gen as? DiffusionGenerationState.Progress)?.progress ?: 0f
         val diffusionResult = (gen as? DiffusionGenerationState.Complete)?.bitmap
-        val upscaleResult = (upscale as? UpscaleState.Complete)?.bitmap
         val metrics = progressMetrics(i, gen, upscale, now)
 
         val sdkError = (gen as? DiffusionGenerationState.Error)?.message
@@ -339,8 +361,18 @@ class ImageTaskViewModel @Inject constructor(
             installedUpscalers = models.filter { it.providerType == ProviderType.IMAGE_UPSCALER },
             activeModelId = i.activeModelId,
             activeUpscalerId = i.activeUpscalerId,
+            upscaleScalePreset = i.upscaleScalePreset,
+            customUpscaleScale = i.customUpscaleScale,
+            upscaleScale = i.upscaleScale(),
+            upscaleProcessingMode = i.upscaleProcessingMode,
+            upscaleProgressLabel = i.upscaleProgressLabel,
+            upscaleTileCurrent = i.upscaleTileCurrent,
+            upscaleTileTotal = i.upscaleTileTotal,
+            upscalePassCurrent = i.upscalePassCurrent,
+            upscalePassTotal = i.upscalePassTotal,
             diffusionResultImage = diffusionResult,
-            upscaleResultImage = upscaleResult,
+            upscaleResultImage = upscaleOut?.preview,
+            upscaleOutput = upscaleOut,
             previewImage = sticky,
             progress = metrics.progress.takeIf { it > 0f } ?: sdkProgress,
             metrics = metrics,
@@ -353,7 +385,8 @@ class ImageTaskViewModel @Inject constructor(
                 || runtime is RuntimeSetupState.Extracting
                 || runtime is RuntimeSetupState.InitializingRuntime
                 || backend is DiffusionBackendState.Starting
-                || i.pendingLoadModelId.isNotBlank(),
+                || i.pendingLoadModelId.isNotBlank()
+                || i.upscaleBusy,
             runtimePhase = runtimePhase,
             runtimeDownloadProgress = dlProgress,
             runtimeDownloadBytes = runtimeDl?.downloadedBytes ?: 0L,
@@ -399,8 +432,17 @@ class ImageTaskViewModel @Inject constructor(
         inputs.update { it.copy(denoiseStrength = value.coerceIn(0f, 1f)) }
     fun setOutputAction(action: ImageOutputAction) =
         inputs.update { it.copy(outputAction = action, outputStatus = "") }
+    fun setUpscaleScalePreset(value: UpscaleScalePreset) =
+        inputs.update { it.copy(upscaleScalePreset = value, localError = null) }
+    fun setCustomUpscaleScale(value: Float) =
+        inputs.update { it.copy(customUpscaleScale = value.coerceIn(1.25f, 8f), localError = null) }
+    fun setUpscaleProcessingMode(value: UpscaleProcessingMode) =
+        inputs.update { it.copy(upscaleProcessingMode = value, localError = null) }
+    fun switchToSafeTiled() =
+        inputs.update { it.copy(upscaleProcessingMode = UpscaleProcessingMode.SAFE_TILED, localError = null) }
 
     fun setInputImage(uri: Uri) {
+        upscaleOutput.value = null
         inputs.update {
             it.copy(
                 inputImagePath = uri.toString(),
@@ -433,32 +475,24 @@ class ImageTaskViewModel @Inject constructor(
                         maskImagePath = null,
                         localError = if (installedUpscalers == 0)
                             "Install an upscaler from the Store first"
-                        else "Pick an upscaler — then tap Upscale 4×",
+                        else "Pick an upscaler, then choose a scale.",
                     )
                 }
             }
             return
         }
-        val maxEdge = maxOf(bitmap.width, bitmap.height)
-        val targetEdge = maxEdge.coerceAtMost(1024)
-        val safe = if (maxEdge == targetEdge) bitmap else {
-            val scale = targetEdge.toFloat() / maxEdge.toFloat()
-            bitmap.scale(
-                (bitmap.width * scale).toInt(),
-                (bitmap.height * scale).toInt(),
-            )
-        }
         viewModelScope.launch(Dispatchers.IO) {
             val path = saveBitmapToCache(bitmap)
+            upscaleOutput.value = null
             inputs.update {
                 it.copy(
                     mode = ImageTaskMode.UPSCALE,
                     inputImagePath = path,
                     maskImagePath = null,
                     localError = null,
+                    localStatus = "Ready to upscale",
                 )
             }
-            imageGen.upscale(safe)
         }
     }
 
@@ -757,32 +791,81 @@ class ImageTaskViewModel @Inject constructor(
             return
         }
         viewModelScope.launch(Dispatchers.IO) {
-            val bitmap = decodeBitmap(path) ?: run {
-                inputs.update { it.copy(localError = "Couldn't read input image") }
-                return@launch
-            }
-            // Cap input at 1024 max-edge: 4× output = 4096² ≈ 64 MB which fits
-            // the default JVM heap. The SDK can technically take 2048² but that
-            // produces an 8192² ≈ 256 MB bitmap which OOMs the heap on result
-            // delivery (bitmap allocation in DiffusionManager.createBitmapFromRgb).
-            val maxEdge = maxOf(bitmap.width, bitmap.height)
-            val targetEdge = maxEdge.coerceAtMost(1024)
-            val safe = if (maxEdge == targetEdge) bitmap else {
-                val scale = targetEdge.toFloat() / maxEdge.toFloat()
-                bitmap.scale(
-                    (bitmap.width * scale).toInt(),
-                    (bitmap.height * scale).toInt(),
-                )
-            }
+            val pipeline = ImageUpscalePipeline(context, imageGen)
             inputs.update {
                 it.copy(
                     localError = null,
                     outputStatus = "",
                     upscaleStartedAtMs = System.currentTimeMillis(),
+                    upscaleBusy = true,
+                    upscaleProgressLabel = "Preparing",
+                    upscaleProgress = 0.02f,
+                    upscaleTileCurrent = 0,
+                    upscaleTileTotal = 0,
+                    upscalePassCurrent = 0,
+                    upscalePassTotal = 0,
                     processedOutputToken = "",
                 )
             }
-            imageGen.upscale(safe)
+            runCatching {
+                pipeline.run(
+                    imagePath = path,
+                    scale = s.upscaleScale(),
+                    mode = s.upscaleProcessingMode,
+                    outputDir = File(context.cacheDir, "upscale_outputs"),
+                ) { progress ->
+                    inputs.update { current ->
+                        current.copy(
+                            localStatus = progress.label,
+                            upscaleProgressLabel = progress.label,
+                            upscaleProgress = progress.progress,
+                            upscaleTileCurrent = progress.currentTile,
+                            upscaleTileTotal = progress.totalTiles,
+                            upscalePassCurrent = progress.currentPass,
+                            upscalePassTotal = progress.totalPasses,
+                        )
+                    }
+                }
+            }.onSuccess { result ->
+                val output = UpscaleOutput(
+                    preview = result.preview,
+                    fullWidth = result.fullWidth,
+                    fullHeight = result.fullHeight,
+                    outputPath = result.outputFile?.absolutePath,
+                    scale = result.scale,
+                    tiled = result.tiled,
+                )
+                upscaleOutput.value = output
+                handleCompletedOutput(
+                    token = "up_${result.fullWidth}_${result.fullHeight}_${System.nanoTime()}",
+                    bitmap = result.preview,
+                    prefix = "tn_upscale",
+                    finalUpscaleTimeMs = result.elapsedMs,
+                    outputFile = result.outputFile,
+                )
+                inputs.update { current ->
+                    current.copy(
+                        upscaleBusy = false,
+                        localStatus = "Upscale done",
+                        localError = null,
+                        upscaleProgressLabel = "",
+                        upscaleProgress = 1f,
+                    )
+                }
+            }.onFailure { error ->
+                inputs.update { state ->
+                    state.copy(
+                        upscaleBusy = false,
+                        upscaleProgressLabel = "",
+                        upscaleProgress = 0f,
+                        localStatus = "",
+                        localError = when (error) {
+                            is FastUpscaleBlockedException -> error.message
+                            else -> error.message ?: "Upscale failed"
+                        },
+                    )
+                }
+            }
         }
     }
 
@@ -791,6 +874,7 @@ class ImageTaskViewModel @Inject constructor(
         bitmap: Bitmap,
         prefix: String,
         finalUpscaleTimeMs: Long? = null,
+        outputFile: File? = null,
     ) {
         val state = inputs.value
         if (state.processedOutputToken == token) return
@@ -807,7 +891,7 @@ class ImageTaskViewModel @Inject constructor(
                 }
             }
             ImageOutputAction.REPLACE_INPUT -> {
-                val path = withContext(Dispatchers.IO) { saveBitmapToCache(bitmap) }
+                val path = outputFile?.absolutePath ?: withContext(Dispatchers.IO) { saveBitmapToCache(bitmap) }
                 inputs.update {
                     it.copy(
                         inputImagePath = path,
@@ -818,11 +902,15 @@ class ImageTaskViewModel @Inject constructor(
                 }
             }
             ImageOutputAction.SAVE_PHOTOS -> {
-                val result = ImageExport.saveBitmapToGallery(
-                    context = context,
-                    bitmap = bitmap,
-                    displayName = "${prefix}_${System.currentTimeMillis()}",
-                )
+                val result = if (outputFile != null) {
+                    ImageExport.savePngFileToGallery(context, outputFile, "${prefix}_${System.currentTimeMillis()}")
+                } else {
+                    ImageExport.saveBitmapToGallery(
+                        context = context,
+                        bitmap = bitmap,
+                        displayName = "${prefix}_${System.currentTimeMillis()}",
+                    )
+                }
                 inputs.update {
                     it.copy(
                         processedOutputToken = token,
@@ -866,10 +954,11 @@ class ImageTaskViewModel @Inject constructor(
         runtime is RuntimeSetupState.CopyingSafetyChecker -> "Setting up runtime: safety checker"
         runtime is RuntimeSetupState.InitializingRuntime -> "Initializing native runtime…"
         backend is DiffusionBackendState.Starting -> "Loading model…"
+        i.upscaleBusy -> i.upscaleProgressLabel.ifBlank { i.localStatus }
         gen is DiffusionGenerationState.Progress ->
             "Step ${gen.currentStep}/${gen.totalSteps} (${"%.0f".format(gen.progress * 100)}%)"
         gen is DiffusionGenerationState.Complete -> "Done"
-        upscale is UpscaleState.Processing -> "Upscaling…"
+        upscale is UpscaleState.Processing -> i.upscaleProgressLabel.ifBlank { "Upscaling…" }
         upscale is UpscaleState.Complete -> "Upscale done"
         else -> i.localStatus
     }
@@ -903,19 +992,21 @@ class ImageTaskViewModel @Inject constructor(
                 detail = "Real step progress from native engine",
             )
         }
-        upscale is UpscaleState.Processing -> {
+        i.upscaleBusy -> {
             val started = i.upscaleStartedAtMs.takeIf { it > 0L } ?: now
             val elapsed = (now - started).coerceAtLeast(0L)
             val estimate = i.lastUpscaleEstimateMs.coerceAtLeast(8_000L)
+            val progress = i.upscaleProgress.takeIf { it > 0f }
+                ?: (elapsed.toFloat() / estimate.toFloat()).coerceIn(0.03f, 0.97f)
             ImageTaskMetrics(
                 active = true,
-                progress = (elapsed.toFloat() / estimate.toFloat()).coerceIn(0.03f, 0.97f),
+                progress = progress.coerceIn(0.03f, 0.98f),
                 elapsedMs = elapsed,
                 etaMs = (estimate - elapsed).coerceAtLeast(0L),
-                width = i.width * 4,
-                height = i.height * 4,
-                label = "Upscaling",
-                detail = "Estimated from this device's last upscale time",
+                currentStep = i.upscaleTileCurrent.takeIf { it > 0 } ?: i.upscalePassCurrent.takeIf { it > 0 },
+                totalSteps = i.upscaleTileTotal.takeIf { it > 0 } ?: i.upscalePassTotal.takeIf { it > 0 },
+                label = i.upscaleProgressLabel.ifBlank { "Upscaling" },
+                detail = "Adaptive upscale pipeline",
             )
         }
         upscale is UpscaleState.Complete -> ImageTaskMetrics(
@@ -949,4 +1040,11 @@ class ImageTaskViewModel @Inject constructor(
 
 private inline fun <T> MutableStateFlow<T>.update(transform: (T) -> T) {
     value = transform(value)
+}
+
+private fun ImageTaskInputs.upscaleScale(): Float = when (upscaleScalePreset) {
+    UpscaleScalePreset.X2 -> 2f
+    UpscaleScalePreset.X4 -> 4f
+    UpscaleScalePreset.X8 -> 8f
+    UpscaleScalePreset.CUSTOM -> customUpscaleScale
 }
