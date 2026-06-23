@@ -26,6 +26,11 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       New chat
     </button>
+    <div class="wsswitch" role="tablist" aria-label="Workspace">
+      <button class="wsbtn on" data-ws="chat" role="tab" aria-selected="true" type="button">Chat</button>
+      <button class="wsbtn" data-ws="embed" role="tab" aria-selected="false" type="button">Embeddings</button>
+      <button class="wsbtn" data-ws="image" role="tab" aria-selected="false" type="button">Image</button>
+    </div>
     <div class="find">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
       <input id="threadSearch" placeholder="Search chats" aria-label="Search chats" />
@@ -115,6 +120,69 @@
       </form>
       <div class="hint"><b>Enter</b> to send · <b>Shift+Enter</b> for a new line · everything stays on your device</div>
     </div>
+
+    <section id="studioEmbed" class="studio" hidden>
+      <div class="studio-wrap">
+        <div class="studio-head">
+          <h2>Embeddings</h2>
+          <p>POST <code>/v1/embeddings</code> · one input per line</p>
+        </div>
+        <label class="f"><span>Model</span>
+          <select id="embedModel"><option value="">No embedding models</option></select>
+        </label>
+        <label class="f"><span>Input</span>
+          <textarea id="embedInput" rows="5" placeholder="One text per line…"></textarea>
+        </label>
+        <button id="embedRun" class="btn fill" type="button">Run embeddings</button>
+        <div id="embedStatus" class="studio-status"></div>
+        <pre id="embedOutput" class="studio-out"></pre>
+      </div>
+    </section>
+
+    <section id="studioImage" class="studio" hidden>
+      <div class="studio-wrap">
+        <div class="studio-head">
+          <h2>Image</h2>
+          <p>Generate · Edit · Inpaint · Upscale</p>
+        </div>
+        <div id="imageMode" class="seg-group" role="tablist" aria-label="Image mode">
+          <button class="seg on" data-mode="generate" type="button">Generate</button>
+          <button class="seg" data-mode="edit" type="button">Edit</button>
+          <button class="seg" data-mode="inpaint" type="button">Inpaint</button>
+          <button class="seg" data-mode="upscale" type="button">Upscale</button>
+        </div>
+        <label class="f"><span>Model</span>
+          <select id="imageModel"><option value="">No image models</option></select>
+        </label>
+        <div id="imagePromptWrap">
+          <label class="f"><span>Prompt</span>
+            <textarea id="imagePrompt" rows="2" placeholder="Describe the image…"></textarea>
+          </label>
+          <label class="f"><span>Negative prompt</span>
+            <input id="imageNeg" type="text" placeholder="Optional" />
+          </label>
+        </div>
+        <div id="imageInputWrap" hidden>
+          <label class="f"><span>Input image</span>
+            <input id="imageInput" type="file" accept="image/*" />
+          </label>
+        </div>
+        <div id="imageMaskWrap" hidden>
+          <label class="f"><span>Mask image</span>
+            <input id="imageMask" type="file" accept="image/*" />
+          </label>
+        </div>
+        <div class="four">
+          <label class="f"><span>Steps</span><input id="imageSteps" type="number" min="1" max="50" value="20" /></label>
+          <label class="f"><span>CFG</span><input id="imageCfg" type="number" min="1" max="15" step="0.5" value="7" /></label>
+          <label class="f"><span>Width</span><input id="imageWidth" type="number" min="64" max="2048" step="64" value="512" /></label>
+          <label class="f"><span>Height</span><input id="imageHeight" type="number" min="64" max="2048" step="64" value="512" /></label>
+        </div>
+        <button id="imageRun" class="btn fill" type="button">Generate</button>
+        <div id="imageStatus" class="studio-status"></div>
+        <div id="imagePreview" class="studio-image"></div>
+      </div>
+    </section>
   </main>
 </div>
 
@@ -183,14 +251,14 @@
   var $=function(id){return document.getElementById(id);};
   var KEY="tn.webui.v4";
   var state=load();
-  var chatModels=[],ttsModels=[],sttModels=[];
+  var chatModels=[],ttsModels=[],sttModels=[],embedModels=[],imageModels=[];
   var active=null,abort=null,generating=false;
   var atts=[];
   var pendingVoiceReply=false;
-  var mq=window.matchMedia("(max-width:880px)");
+  var mq=window.matchMedia("(max-width:980px), (pointer:coarse) and (max-width:1180px)");
 
   function defaults(){return{serverUrl:location.origin,token:"",model:"",systemPrompt:"",maxTokens:1024,temp:0.7,stream:true,theme:"",
-    sttModel:"",ttsModel:"",ttsVoice:0,ttsSpeed:1,tucked:false,chats:[]};}
+    sttModel:"",ttsModel:"",ttsVoice:0,ttsSpeed:1,tucked:false,chats:[],workspace:"chat",embedModel:"",imageModel:""};}
   function load(){try{return Object.assign(defaults(),JSON.parse(localStorage.getItem(KEY)||"{}"));}catch(e){return defaults();}}
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
   function uid(){return "c"+Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
@@ -418,6 +486,95 @@
   }
   function note(text,kind){$("note").className="note"+(kind?" "+kind:"");$("noteText").textContent=text;}
 
+  /* ---------- studio: embeddings + image ---------- */
+  function fillModelSelect(sel,arr,cur,emptyLabel){
+    if(!sel)return;sel.innerHTML="";
+    if(!arr.length){var e=document.createElement("option");e.value="";e.textContent=emptyLabel;sel.appendChild(e);return;}
+    arr.forEach(function(m){var o=document.createElement("option");o.value=m.id;o.textContent=m.id+(m.type==="image_upscaler"?" · upscaler":"");if(m.id===cur)o.selected=true;sel.appendChild(o);});
+  }
+  function fillStudioSelects(){
+    fillModelSelect($("embedModel"),embedModels,state.embedModel,"No embedding models");
+    fillModelSelect($("imageModel"),imageModels,state.imageModel,"No image models");
+  }
+  function switchWorkspace(ws){
+    state.workspace=ws;save();
+    Array.prototype.forEach.call(document.querySelectorAll(".wsbtn"),function(b){
+      var on=b.getAttribute("data-ws")===ws;b.classList.toggle("on",on);b.setAttribute("aria-selected",on?"true":"false");
+    });
+    var chatMain=$("stream"),dock=document.querySelector(".dock");
+    var showChat=ws==="chat";
+    chatMain.style.display=showChat?"":"none";
+    if(dock)dock.style.display=showChat?"":"none";
+    $("studioEmbed").hidden=ws!=="embed";
+    $("studioImage").hidden=ws!=="image";
+    $("mtrigger").style.display=showChat?"":"none";
+    $("exportChat").style.display=showChat?"":"none";
+    if(ws!=="chat")loadModels();
+    closeRail();
+  }
+  function currentImageMode(){var el=document.querySelector("#imageMode .seg.on");return el?el.getAttribute("data-mode"):"generate";}
+  function applyImageMode(){
+    var mode=currentImageMode();
+    $("imagePromptWrap").hidden=(mode==="upscale");
+    $("imageInputWrap").hidden=(mode==="generate");
+    $("imageMaskWrap").hidden=(mode!=="inpaint");
+    $("imageRun").textContent=mode==="upscale"?"Upscale":(mode==="generate"?"Generate":(mode==="edit"?"Edit":"Inpaint"));
+  }
+  function runEmbeddings(){
+    var model=$("embedModel").value;
+    var lines=($("embedInput").value||"").split("\n").map(function(s){return s.trim();}).filter(function(s){return s.length>0;});
+    var status=$("embedStatus"),out=$("embedOutput");
+    if(!model){status.className="studio-status err";status.textContent="Select an embedding model";return;}
+    if(!lines.length){status.className="studio-status err";status.textContent="Enter at least one line";return;}
+    status.className="studio-status";status.textContent="Running…";out.textContent="";
+    fetch(base()+"/v1/embeddings",{method:"POST",headers:headers(),body:JSON.stringify({model:model,input:lines})}).then(function(r){
+      return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&(j.error.message||j.error))||("HTTP "+r.status));return j;});
+    }).then(function(j){
+      var data=j.data||[];
+      var dim=(data[0]&&data[0].embedding)?data[0].embedding.length:0;
+      status.className="studio-status ok";status.textContent=data.length+" vector"+(data.length===1?"":"s")+" · dim="+dim;
+      out.textContent=data.map(function(d,i){
+        var preview=(d.embedding||[]).slice(0,8).map(function(v){return v.toFixed(4);}).join(", ");
+        return "["+i+"] dim="+(d.embedding||[]).length+" → ["+preview+" …]";
+      }).join("\n");
+    }).catch(function(e){status.className="studio-status err";status.textContent=e.message||"Failed";});
+  }
+  function runImage(){
+    var mode=currentImageMode(),model=$("imageModel").value;
+    var status=$("imageStatus"),preview=$("imagePreview");
+    var inputEl=$("imageInput"),maskEl=$("imageMask");
+    if(!model){status.className="studio-status err";status.textContent="Select an image model";return;}
+    status.className="studio-status";status.textContent="Running…";preview.innerHTML="";
+    var p;
+    try{
+      if(mode==="generate"){
+        var body={model:model,prompt:$("imagePrompt").value,negative_prompt:$("imageNeg").value,
+          steps:parseInt($("imageSteps").value,10)||20,cfg:parseFloat($("imageCfg").value)||7,
+          width:parseInt($("imageWidth").value,10)||512,height:parseInt($("imageHeight").value,10)||512};
+        p=fetch(base()+"/v1/images/generations",{method:"POST",headers:headers(),body:JSON.stringify(body)});
+      }else if(mode==="upscale"){
+        if(!inputEl.files||!inputEl.files[0])throw new Error("Select an input image");
+        var fd=new FormData();fd.append("model",model);fd.append("image",inputEl.files[0],inputEl.files[0].name);
+        p=fetch(base()+"/v1/images/upscale",{method:"POST",headers:authMultipart(),body:fd});
+      }else{
+        if(!inputEl.files||!inputEl.files[0])throw new Error("Select an input image");
+        var fd2=new FormData();fd2.append("model",model);fd2.append("image",inputEl.files[0],inputEl.files[0].name);
+        if(mode==="inpaint"){if(!maskEl.files||!maskEl.files[0])throw new Error("Select a mask image");fd2.append("mask",maskEl.files[0],maskEl.files[0].name);}
+        fd2.append("prompt",$("imagePrompt").value);fd2.append("negative_prompt",$("imageNeg").value);
+        fd2.append("steps",$("imageSteps").value);fd2.append("cfg",$("imageCfg").value);
+        fd2.append("width",$("imageWidth").value);fd2.append("height",$("imageHeight").value);
+        p=fetch(base()+"/v1/images/edits",{method:"POST",headers:authMultipart(),body:fd2});
+      }
+    }catch(e){status.className="studio-status err";status.textContent=e.message;return;}
+    p.then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error((j.error&&(j.error.message||j.error))||("HTTP "+r.status));return j;});}).then(function(j){
+      var b64=j.data&&j.data[0]&&j.data[0].b64_json;
+      if(!b64)throw new Error("No image in response");
+      var img=document.createElement("img");img.src="data:image/png;base64,"+b64;preview.appendChild(img);
+      status.className="studio-status ok";status.textContent="Done";
+    }).catch(function(e){status.className="studio-status err";status.textContent=e.message||"Failed";});
+  }
+  function authMultipart(){var h={};if(state.token)h.Authorization="Bearer "+state.token;return h;}
+
   function loadModels(){
     setConn("wait","Connecting…",hostShort());
     if(!state.token){setConn("bad","Not connected","Add your token in settings");note("Paste the token shown on the app's Server screen, then connect.","bad");renderModelMenu();return Promise.resolve();}
@@ -430,7 +587,10 @@
       chatModels=all.filter(function(m){return m.type==="gguf"||m.type==="vlm";});
       ttsModels=all.filter(function(m){return m.type==="tts";});
       sttModels=all.filter(function(m){return m.type==="stt";});
+      embedModels=all.filter(function(m){return m.type==="embedding";});
+      imageModels=all.filter(function(m){return m.type==="image_gen"||m.type==="image_upscaler";});
       fillVoiceSelects();
+      fillStudioSelects();
       if(!chatModels.length){setConn("bad","No chat models","Assign one in the app");note("Linked, but no chat or vision models are exposed. Assign one in the app.","bad");renderModelMenu();render();return;}
       if(!state.model||!chatModels.some(function(m){return m.id===state.model;})){var d=chatModels.find(function(m){return m.default;});setModel(d?d.id:chatModels[0].id);}
       else setModel(state.model);
@@ -679,7 +839,14 @@
     if(mq.matches){if($("side").classList.contains("open"))closeRail();else openRail();}
     else{state.tucked=!state.tucked;$("app").classList.toggle("tucked",state.tucked);save();}
   }
-  function applyTuck(){if(!mq.matches)$("app").classList.toggle("tucked",!!state.tucked);else $("app").classList.remove("tucked");}
+  function applyTuck(){
+    if(!mq.matches){
+      $("side").classList.remove("open");$("scrim").classList.remove("show");
+      $("app").classList.toggle("tucked",!!state.tucked);
+    }else{
+      $("app").classList.remove("tucked");
+    }
+  }
 
   /* ---------- settings ---------- */
   function openSettings(){
@@ -745,6 +912,20 @@
       c.onclick=function(){$("prompt").value=c.getAttribute("data-p");autosize();syncSend();$("prompt").focus();};
     });
 
+    Array.prototype.forEach.call(document.querySelectorAll(".wsbtn"),function(b){
+      b.onclick=function(){switchWorkspace(b.getAttribute("data-ws"));};
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("#imageMode .seg"),function(s){
+      s.onclick=function(){
+        Array.prototype.forEach.call(document.querySelectorAll("#imageMode .seg"),function(x){x.classList.remove("on");});
+        s.classList.add("on");applyImageMode();
+      };
+    });
+    $("embedRun").onclick=runEmbeddings;
+    $("imageRun").onclick=runImage;
+    $("embedModel").onchange=function(){state.embedModel=$("embedModel").value;save();};
+    $("imageModel").onchange=function(){state.imageModel=$("imageModel").value;save();};
+
     var dragN=0;
     window.addEventListener("dragenter",function(e){if(e.dataTransfer&&Array.prototype.indexOf.call(e.dataTransfer.types||[],"Files")>=0){dragN++;$("drop").classList.add("show");}});
     window.addEventListener("dragover",function(e){if($("drop").classList.contains("show"))e.preventDefault();});
@@ -774,6 +955,8 @@
 
   /* ---------- boot ---------- */
   applyTheme();applyTuck();wire();autosize();syncSend();
+  applyImageMode();
+  switchWorkspace(state.workspace||"chat");
   $("mname").textContent=state.model||"Select a model";
   if(state.chats.length)active=state.chats[0];
   render();
