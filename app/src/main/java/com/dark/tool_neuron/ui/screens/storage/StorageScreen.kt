@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -38,6 +39,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.download_manager.formatBytes
 import com.dark.tool_neuron.repo.StorageCategoryId
 import com.dark.tool_neuron.repo.StorageCategorySnapshot
+import com.dark.tool_neuron.repo.StorageIssueSeverity
+import com.dark.tool_neuron.repo.StorageMaintenanceMode
+import com.dark.tool_neuron.repo.StorageMaintenanceReport
 import com.dark.tool_neuron.repo.StorageSnapshot
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.SectionHeader
@@ -79,6 +83,17 @@ fun StorageScreen(
         ) {
             item(key = "hero") {
                 HeroCard(snapshot = state.snapshot, isLoading = state.isLoading)
+            }
+
+            item(key = "maintenance") {
+                MaintenanceCard(
+                    isRunning = state.isMaintaining,
+                    report = state.maintenanceReport,
+                    onQuickClean = viewModel::runQuickClean,
+                    onDetailedCheck = viewModel::runDetailedCheck,
+                    onDeepTest = viewModel::runDeepModelTest,
+                    onDismissReport = viewModel::clearMaintenanceReport,
+                )
             }
 
             item(key = "warning") { DangerStrip() }
@@ -179,6 +194,124 @@ private fun HeroCard(snapshot: StorageSnapshot?, isLoading: Boolean) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f),
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaintenanceCard(
+    isRunning: Boolean,
+    report: StorageMaintenanceReport?,
+    onQuickClean: () -> Unit,
+    onDetailedCheck: () -> Unit,
+    onDeepTest: () -> Unit,
+    onDismissReport: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = shapes.card,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(TnIcons.Search, null, Modifier.size(dimens.iconMd), MaterialTheme.colorScheme.primary)
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Maintenance", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "Clean leftovers, check model files, and verify installed records.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (isRunning) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Button(onClick = onQuickClean, enabled = !isRunning, modifier = Modifier.weight(1f)) {
+                    Text("Quick clean", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                Button(onClick = onDetailedCheck, enabled = !isRunning, modifier = Modifier.weight(1f)) {
+                    Text("Detailed check", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            TextButton(onClick = onDeepTest, enabled = !isRunning) {
+                Text("Deep model test")
+            }
+            if (report != null) {
+                MaintenanceReportCard(report = report, onDismiss = onDismissReport)
+            }
+        }
+    }
+}
+
+@Composable
+private fun MaintenanceReportCard(report: StorageMaintenanceReport, onDismiss: () -> Unit) {
+    val dimens = LocalDimens.current
+    val title = when (report.mode) {
+        StorageMaintenanceMode.QUICK_CLEAN -> "Quick clean"
+        StorageMaintenanceMode.DETAILED_CHECK -> "Detailed check"
+        StorageMaintenanceMode.DEEP_MODEL_TEST -> "Deep model test"
+    }
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = LocalTnShapes.current.cardSmall,
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.7f),
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.spacingMd),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "$title result",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onDismiss) { Text("Dismiss") }
+            }
+            Text(
+                "Checked ${report.checkedCount} · Issues ${report.issueCount} · Fixed ${report.fixedCount} · Skipped ${report.skippedCount}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            report.issues.take(6).forEach { issue ->
+                val color = when (issue.severity) {
+                    StorageIssueSeverity.INFO -> MaterialTheme.colorScheme.primary
+                    StorageIssueSeverity.WARNING -> MaterialTheme.colorScheme.tertiary
+                    StorageIssueSeverity.ERROR -> MaterialTheme.colorScheme.error
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 6.dp)
+                            .size(7.dp)
+                            .clip(CircleShape)
+                            .background(color),
+                    )
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(issue.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            issue.detail,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
             }
         }
     }

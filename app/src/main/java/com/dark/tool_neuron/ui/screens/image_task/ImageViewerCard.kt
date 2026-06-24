@@ -2,7 +2,10 @@ package com.dark.tool_neuron.ui.screens.image_task
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -48,7 +51,11 @@ import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.ImageExport
+import java.io.File
+import java.io.FileInputStream
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 private const val MIN_ZOOM = 1f
 private const val MAX_ZOOM = 6f
@@ -60,6 +67,9 @@ fun ImageViewerCard(
     saveNamePrefix: String = "tool_neuron",
     showUpscale: Boolean = false,
     onUpscaleClick: (() -> Unit)? = null,
+    sourceFilePath: String? = null,
+    displayWidth: Int = bitmap.width,
+    displayHeight: Int = bitmap.height,
 ) {
     val dimens = LocalDimens.current
     val tnShapes = LocalTnShapes.current
@@ -67,6 +77,33 @@ fun ImageViewerCard(
     val scope = rememberCoroutineScope()
     var fullscreen by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    var savingAs by remember { mutableStateOf(false) }
+    var pendingSaveAsBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pendingSaveAsFile by remember { mutableStateOf<File?>(null) }
+    val saveAsLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val outUri = uri ?: run {
+            savingAs = false
+            pendingSaveAsBitmap = null
+            return@rememberLauncherForActivityResult
+        }
+        val pending = pendingSaveAsBitmap ?: bitmap
+        scope.launch {
+            val result = withContext(Dispatchers.IO) {
+                pendingSaveAsFile?.let { copyFileToUri(context, it, outUri) }
+                    ?: writeBitmapToUri(context, pending, outUri)
+            }
+            savingAs = false
+            pendingSaveAsBitmap = null
+            pendingSaveAsFile = null
+            toast(
+                context,
+                if (result.isSuccess) "Saved image"
+                else "Save failed: ${result.exceptionOrNull()?.message}",
+            )
+        }
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -95,7 +132,7 @@ fun ImageViewerCard(
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    text = "${bitmap.width}×${bitmap.height}",
+                    text = "${displayWidth}×${displayHeight}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -118,11 +155,20 @@ fun ImageViewerCard(
                     onClickListener = {
                         saving = true
                         scope.launch {
-                            val result = ImageExport.saveBitmapToGallery(
-                                context = context,
-                                bitmap = bitmap,
-                                displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
-                            )
+                            val file = sourceFilePath?.let(::File)?.takeIf { it.exists() }
+                            val result = if (file != null) {
+                                ImageExport.savePngFileToGallery(
+                                    context = context,
+                                    source = file,
+                                    displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
+                                )
+                            } else {
+                                ImageExport.saveBitmapToGallery(
+                                    context = context,
+                                    bitmap = bitmap,
+                                    displayName = "${saveNamePrefix}_${System.currentTimeMillis()}",
+                                )
+                            }
                             saving = false
                             toast(
                                 context,
@@ -132,8 +178,21 @@ fun ImageViewerCard(
                         }
                     },
                     icon = TnIcons.Download,
-                    text = if (saving) "Saving…" else "Save",
+                    text = if (saving) "Saving…" else "Save Photos",
                     enabled = !saving,
+                    modifier = Modifier.weight(1f),
+                )
+
+                ActionTextButton(
+                    onClickListener = {
+                        savingAs = true
+                        pendingSaveAsFile = sourceFilePath?.let(::File)?.takeIf { it.exists() }
+                        pendingSaveAsBitmap = if (pendingSaveAsFile == null) bitmap else null
+                        saveAsLauncher.launch("${saveNamePrefix}_${System.currentTimeMillis()}.png")
+                    },
+                    icon = TnIcons.Download,
+                    text = if (savingAs) "Saving…" else "Save as…",
+                    enabled = !savingAs,
                     modifier = Modifier.weight(1f),
                 )
 
@@ -148,7 +207,7 @@ fun ImageViewerCard(
                     ActionTextButton(
                         onClickListener = onUpscaleClick,
                         icon = TnIcons.Sparkles,
-                        text = "Upscale 4×",
+                        text = "Upscale",
                         modifier = Modifier.weight(1f),
                     )
                 }
@@ -161,6 +220,22 @@ fun ImageViewerCard(
             bitmap = bitmap,
             onDismiss = { fullscreen = false },
         )
+    }
+}
+
+private fun writeBitmapToUri(context: Context, bitmap: Bitmap, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+            throw IllegalStateException("Bitmap.compress returned false")
+        }
+    }
+}
+
+private fun copyFileToUri(context: Context, source: File, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        FileInputStream(source).use { input -> input.copyTo(out) }
     }
 }
 

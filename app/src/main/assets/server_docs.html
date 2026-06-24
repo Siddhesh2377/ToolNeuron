@@ -4,975 +4,351 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <meta name="color-scheme" content="dark light" />
-<meta name="theme-color" content="#0A0A0A" media="(prefers-color-scheme: dark)" />
-<meta name="theme-color" content="#FAFAF9" media="(prefers-color-scheme: light)" />
 <title>ToolNeuron · API Docs</title>
 <style>
-:root {
-  color-scheme: dark light;
-  --bg:#0A0A0A; --bg-soft:#141414; --surface:#181818; --surface-2:#1F1F1F;
-  --fg:#F5F5F4; --fg-dim:#D4D4D8; --muted:#A1A1AA;
-  --border:#27272A; --border-2:#3F3F46;
-  --accent:#3FE08C; --accent-on:#0A0A0A;
-  --accent-soft:rgba(63,224,140,0.10); --accent-edge:rgba(63,224,140,0.28);
-  --warn:#F59E0B; --warn-soft:rgba(245,158,11,0.12);
-  --kw:#FF7AB2; --str:#6BDF95; --num:#FF8866; --comment:#71717A;
-  --code-bg:#161616;
-  --r-xs:6px; --r-sm:8px; --r-md:10px; --r-lg:14px;
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-top: env(safe-area-inset-top, 0px);
+:root{
+  color-scheme:dark light;
+  --bg:#f4f6fc;--bg-glow-1:rgba(99,102,241,.10);--bg-glow-2:rgba(139,92,246,.08);
+  --panel:rgba(255,255,255,.72);--panel-solid:#ffffff;--panel-2:rgba(99,102,241,.06);
+  --text:#0f172a;--muted:#64748b;
+  --line:rgba(15,23,42,.10);--line-2:rgba(15,23,42,.16);
+  --brand:#6366f1;--brand-2:rgba(99,102,241,.12);--brand-ink:#ffffff;
+  --grad:linear-gradient(135deg,#6366f1,#8b5cf6 55%,#a855f7);
+  --ok:#16a34a;--warn:#d97706;
+  --shadow:0 20px 60px rgba(30,27,75,.14);--shadow-sm:0 4px 14px rgba(30,27,75,.08);
+  --blur:saturate(150%) blur(18px);
 }
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg:#FAFAF9; --bg-soft:#F4F4F5; --surface:#FFFFFF; --surface-2:#F8F8F8;
-    --fg:#0A0A0A; --fg-dim:#27272A; --muted:#71717A;
-    --border:#E4E4E7; --border-2:#D4D4D8;
-    --accent:#10A656; --accent-on:#FFFFFF;
-    --accent-soft:rgba(16,166,86,0.10); --accent-edge:rgba(16,166,86,0.30);
-    --warn-soft:rgba(245,158,11,0.10);
-    --kw:#AD3DA4; --str:#0E7C3F; --num:#AA3731; --comment:#71717A;
-    --code-bg:#F4F4F6;
-  }
+@media (prefers-color-scheme:dark){
+  :root{--bg:#070912;--bg-glow-1:rgba(99,102,241,.22);--bg-glow-2:rgba(168,85,247,.16);--panel:rgba(22,26,40,.66);--panel-solid:#11131f;--panel-2:rgba(255,255,255,.05);--text:#eef2fb;--muted:#94a3b8;--line:rgba(255,255,255,.09);--line-2:rgba(255,255,255,.16);--brand:#a5b4fc;--brand-2:rgba(129,140,248,.18);--brand-ink:#0b0f1d;--ok:#4ade80;--warn:#fbbf24;--shadow:0 28px 80px rgba(0,0,0,.55);--shadow-sm:0 6px 22px rgba(0,0,0,.4)}
 }
+html[data-theme=light]{color-scheme:light;--bg:#f4f6fc;--bg-glow-1:rgba(99,102,241,.10);--bg-glow-2:rgba(139,92,246,.08);--panel:rgba(255,255,255,.72);--panel-solid:#ffffff;--panel-2:rgba(99,102,241,.06);--text:#0f172a;--muted:#64748b;--line:rgba(15,23,42,.10);--line-2:rgba(15,23,42,.16);--brand:#6366f1;--brand-2:rgba(99,102,241,.12);--brand-ink:#fff;--ok:#16a34a;--warn:#d97706;--shadow:0 20px 60px rgba(30,27,75,.14);--shadow-sm:0 4px 14px rgba(30,27,75,.08)}
+html[data-theme=dark]{color-scheme:dark;--bg:#070912;--bg-glow-1:rgba(99,102,241,.22);--bg-glow-2:rgba(168,85,247,.16);--panel:rgba(22,26,40,.66);--panel-solid:#11131f;--panel-2:rgba(255,255,255,.05);--text:#eef2fb;--muted:#94a3b8;--line:rgba(255,255,255,.09);--line-2:rgba(255,255,255,.16);--brand:#a5b4fc;--brand-2:rgba(129,140,248,.18);--brand-ink:#0b0f1d;--ok:#4ade80;--warn:#fbbf24;--shadow:0 28px 80px rgba(0,0,0,.55);--shadow-sm:0 6px 22px rgba(0,0,0,.4)}
+*{box-sizing:border-box}
+::selection{background:var(--brand-2);color:var(--text)}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.6 ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Arial,sans-serif;letter-spacing:.01em;-webkit-font-smoothing:antialiased;min-height:100vh}
+body:before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+  radial-gradient(1100px 700px at 8% -8%,var(--bg-glow-1),transparent 60%),
+  radial-gradient(900px 600px at 100% 0%,var(--bg-glow-2),transparent 55%),
+  radial-gradient(800px 800px at 50% 120%,var(--bg-glow-1),transparent 60%)}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:999px;border:3px solid transparent;background-clip:content-box}
+a{color:var(--brand);text-decoration:none}
+a:hover{text-decoration:underline}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:.88em;background:var(--panel-2);border:1px solid var(--line);padding:2px 6px;border-radius:6px}
+pre{margin:0;background:#0b1020;color:#e5edf7;border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:16px 18px;overflow:auto;box-shadow:var(--shadow-sm);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;line-height:1.6}
+pre code{background:transparent;border:0;padding:0;font-size:inherit}
 
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-*:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: var(--r-xs); }
-*:focus:not(:focus-visible) { outline: none; }
+/* ---- layout ---- */
+.wrap{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:240px minmax(0,1fr);gap:36px;padding:0 24px}
+.side{position:sticky;top:0;align-self:start;height:100dvh;padding:26px 0;display:flex;flex-direction:column;gap:18px;overflow:auto}
+.brand{display:flex;align-items:center;gap:11px;font-weight:800;font-size:17px;letter-spacing:.02em}
+.brand-mark{width:32px;height:32px;border-radius:10px;background:var(--grad);color:#fff;display:grid;place-items:center;font-weight:900;font-size:12px;box-shadow:0 6px 16px rgba(99,102,241,.4)}
+.toc{display:flex;flex-direction:column;gap:2px}
+.toc a{color:var(--muted);font-weight:600;font-size:14px;padding:8px 12px;border-radius:10px;border-left:2px solid transparent;transition:color .15s,background .15s}
+.toc a:hover{color:var(--text);background:var(--panel-2);text-decoration:none}
+.toc .grp{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:800;padding:12px 12px 4px;opacity:.7}
+.main{padding:48px 0 120px;min-width:0}
 
-html, body {
-  margin: 0; padding: 0; min-height: 100%;
-  background: var(--bg); color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  font-size: 15px; line-height: 1.6;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  letter-spacing: -0.005em;
-}
-body { padding-top: var(--safe-top); }
-::selection { background: var(--accent); color: var(--accent-on); }
-::-webkit-scrollbar { width: 10px; height: 10px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 5px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+/* ---- hero ---- */
+.hero{margin-bottom:40px}
+.hero h1{font-size:clamp(34px,6vw,52px);line-height:1.05;margin:0 0 14px;font-weight:800;letter-spacing:-.02em;background:var(--grad);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.hero p{font-size:18px;color:var(--muted);margin:0 0 20px;max-width:60ch}
+.cta{display:flex;flex-wrap:wrap;gap:10px}
+.btn{display:inline-flex;align-items:center;gap:8px;border-radius:13px;padding:11px 18px;font-weight:700;transition:transform .12s,filter .15s,border-color .15s}
+.btn:hover{text-decoration:none;transform:translateY(-1px)}
+.btn.primary{background:var(--grad);color:#fff;box-shadow:0 10px 26px rgba(99,102,241,.32)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.ghost{background:var(--panel);border:1px solid var(--line-2);color:var(--text);backdrop-filter:var(--blur)}
+.btn.ghost:hover{border-color:var(--brand)}
 
-button, input { font: inherit; color: inherit; }
-a { color: var(--accent); text-underline-offset: 3px; }
+/* ---- cards / sections ---- */
+section{margin-bottom:48px;scroll-margin-top:24px}
+h2{font-size:26px;font-weight:800;letter-spacing:-.01em;margin:0 0 6px;display:flex;align-items:center;gap:10px}
+h2 .hash{color:var(--muted);opacity:0;font-weight:400;transition:opacity .15s}
+h2:hover .hash{opacity:.6}
+.lead{color:var(--muted);margin:0 0 20px;max-width:70ch}
+.card{background:var(--panel);backdrop-filter:var(--blur);-webkit-backdrop-filter:var(--blur);border:1px solid var(--line);border-radius:18px;padding:22px;box-shadow:var(--shadow-sm)}
+.grid{display:grid;gap:16px}
+.grid.two{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.feature h3{margin:0 0 6px;font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
+.feature p{margin:0;color:var(--muted);font-size:14px}
+.fico{width:34px;height:34px;border-radius:10px;background:var(--brand-2);color:var(--brand);display:grid;place-items:center;font-size:17px;flex:none}
 
-.app {
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  min-height: 100vh;
-}
-@media (max-width: 880px) {
-  .app { grid-template-columns: 1fr; }
-  .sidebar {
-    position: fixed; inset: 0 auto 0 0;
-    width: min(86vw, 320px);
-    transform: translateX(-100%);
-    z-index: 30;
-    transition: transform 220ms cubic-bezier(.22,1,.36,1);
-    box-shadow: 0 0 0 1px var(--border), 24px 0 60px -20px rgba(0,0,0,0.5);
-  }
-  .sidebar.open { transform: translateX(0); }
-  .scrim {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.42);
-    backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px);
-    z-index: 20; opacity: 0; pointer-events: none;
-    transition: opacity 200ms;
-  }
-  .scrim.open { opacity: 1; pointer-events: auto; }
-  .topbar-mobile-only { display: flex !important; }
-}
+/* ---- endpoints ---- */
+.ep{border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:14px;background:var(--panel);backdrop-filter:var(--blur)}
+.ep-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--line)}
+.verb{font-size:12px;font-weight:800;letter-spacing:.04em;padding:4px 10px;border-radius:8px;flex:none}
+.verb.get{background:color-mix(in oklab,var(--ok) 16%,transparent);color:var(--ok)}
+.verb.post{background:var(--brand-2);color:var(--brand)}
+.path{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-weight:600;font-size:14px;overflow:auto}
+.ep-tag{margin-left:auto;font-size:11px;font-weight:700;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 9px;white-space:nowrap}
+.ep-tag.auth{color:var(--warn);border-color:color-mix(in oklab,var(--warn) 40%,transparent)}
+.ep-tag.open{color:var(--ok);border-color:color-mix(in oklab,var(--ok) 40%,transparent)}
+.ep-body{padding:18px}
+.ep-body p{margin:0 0 14px;color:var(--muted)}
+.ep-body p:last-child{margin-bottom:0}
 
-.sidebar {
-  background: var(--bg-soft);
-  border-right: 1px solid var(--border);
-  padding: 18px 12px 16px;
-  overflow-y: auto;
-  height: 100vh;
-  position: sticky; top: 0;
-}
-.brand {
-  display: flex; flex-direction: column; gap: 4px;
-  padding: 0 8px 12px;
-}
-.brand-row { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 14px; letter-spacing: -0.01em; }
-.brand-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.brand-meta {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
-  text-transform: uppercase; margin-left: 16px;
-}
+/* ---- params table ---- */
+table{border-collapse:collapse;width:100%;font-size:13.5px;margin:0 0 4px}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+td code{white-space:nowrap}
+.req{color:var(--brand);font-weight:700;font-size:11px}
+.opt{color:var(--muted);font-size:11px}
 
-.sidebar .group {
-  margin-top: 20px;
-  padding: 0 8px 6px;
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
+.note{display:flex;gap:12px;border:1px solid var(--line);border-left:3px solid var(--brand);background:var(--panel-2);border-radius:12px;padding:14px 16px;margin:16px 0}
+.note b{color:var(--text)}
+.note p{margin:0;color:var(--muted);font-size:14px}
 
-.sidebar a {
-  display: flex; align-items: center; gap: 10px;
-  padding: 8px 10px;
-  margin: 1px 0;
-  border-radius: var(--r-sm);
-  color: var(--fg-dim);
-  text-decoration: none;
-  font-size: 14px;
-  cursor: pointer;
-  border: 1px solid transparent;
-  transition: background-color 100ms, color 100ms, border-color 100ms;
-}
-.sidebar a:hover { background: var(--surface); color: var(--fg); }
-.sidebar a.active {
-  background: var(--accent-soft);
-  border-color: var(--accent-edge);
-  color: var(--fg);
-  font-weight: 600;
-}
-.sidebar a .dot {
-  width: 5px; height: 5px; border-radius: 50%;
-  background: var(--muted);
-  flex-shrink: 0;
-  transition: background-color 100ms, box-shadow 100ms;
-}
-.sidebar a.active .dot {
-  background: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
-}
+footer{border-top:1px solid var(--line);padding:28px 0;color:var(--muted);font-size:13px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:10px}
 
-.main { min-width: 0; padding: 28px 32px 96px; }
-@media (max-width: 880px) { .main { padding: 16px 18px 96px; } }
-
-.topbar-mobile-only {
-  display: none;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  margin: -16px -18px 18px;
-  background: color-mix(in oklab, var(--bg) 85%, transparent);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  backdrop-filter: saturate(160%) blur(10px);
-  -webkit-backdrop-filter: saturate(160%) blur(10px);
-}
-.menu-btn {
-  width: 36px; height: 36px;
-  border-radius: var(--r-sm);
-  border: 1px solid var(--border);
-  background: var(--surface); color: var(--fg);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center; justify-content: center;
-  flex-shrink: 0;
-  transition: border-color 120ms, background-color 120ms;
-}
-.menu-btn:hover { background: var(--surface-2); border-color: var(--border-2); }
-.topbar-title { font-weight: 600; }
-
-.page { display: none; max-width: 820px; }
-.page.active { display: block; animation: fadein 200ms cubic-bezier(.22,1,.36,1); }
-@keyframes fadein { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-.eyebrow {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px; letter-spacing: 0.16em;
-  color: var(--accent);
-  text-transform: uppercase;
-  padding: 4px 10px; border-radius: 999px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-edge);
-  margin-bottom: 12px;
-}
-
-h1.title {
-  margin: 0 0 6px;
-  font-size: clamp(28px, 4.5vw, 36px);
-  line-height: 1.1;
-  font-weight: 600;
-  letter-spacing: -0.025em;
-}
-.lead {
-  color: var(--muted);
-  margin: 0 0 28px;
-  font-size: clamp(15px, 2vw, 17px);
-  line-height: 1.55;
-  max-width: 60ch;
-}
-h2 {
-  margin: 36px 0 12px;
-  font-size: 20px;
-  font-weight: 600;
-  letter-spacing: -0.018em;
-}
-h3 {
-  margin: 24px 0 10px;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-p { margin: 0 0 12px; }
-ul, ol { margin: 0 0 14px; padding-left: 22px; }
-li { margin: 4px 0; }
-hr { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
-
-code {
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  background: var(--code-bg);
-  color: var(--fg);
-  padding: 1.5px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border);
-}
-pre {
-  margin: 12px 0 16px;
-  padding: 14px 16px;
-  background: var(--code-bg);
-  color: var(--fg);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  overflow-x: auto;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 12.5px;
-  line-height: 1.6;
-  position: relative;
-}
-pre code { background: transparent; padding: 0; border: none; }
-.copy-btn {
-  position: absolute; top: 8px; right: 8px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--muted);
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 11px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  cursor: pointer;
-  opacity: 0;
-  letter-spacing: 0.02em;
-  transition: opacity 120ms, color 120ms, border-color 120ms;
-}
-pre:hover .copy-btn, pre:focus-within .copy-btn { opacity: 1; }
-.copy-btn.copied { color: var(--accent); border-color: var(--accent-edge); }
-
-.kw { color: var(--kw); }
-.str { color: var(--str); }
-.num { color: var(--num); }
-.comment { color: var(--comment); font-style: italic; }
-
-.endpoint {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  margin: 0 0 12px;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-  font-size: 13px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  padding: 8px 12px;
-}
-.method {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 5px;
-  font-weight: 700;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: var(--accent-on);
-}
-.method.get { background: var(--accent); }
-.method.post { background: var(--warn); color: #0A0A0A; }
-
-.table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-  margin: 6px 0 16px;
-}
-.table th, .table td {
-  text-align: left;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
-  vertical-align: top;
-}
-.table th {
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
-.table tr:last-child td { border-bottom: none; }
-
-.callout {
-  border: 1px solid var(--accent-edge);
-  background: var(--accent-soft);
-  padding: 12px 14px;
-  border-radius: var(--r-sm);
-  margin: 14px 0;
-  font-size: 14px;
-  line-height: 1.55;
-}
-.callout.warn {
-  border-color: rgba(245,158,11,0.32);
-  background: var(--warn-soft);
-}
-
-.pager {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-top: 44px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border);
-}
-.pager a {
-  text-decoration: none;
-  color: var(--fg);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  padding: 14px 16px;
-  transition: border-color 120ms, background-color 120ms, transform 120ms;
-  cursor: pointer;
-  display: flex; flex-direction: column; gap: 4px;
-}
-.pager a:hover {
-  background: var(--surface-2);
-  border-color: var(--accent-edge);
-  transform: translateY(-1px);
-}
-.pager a.right { text-align: right; }
-.pager a .label {
-  font-size: 11px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.06em;
-  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-}
-.pager a .target { font-weight: 600; }
-.pager .empty { visibility: hidden; }
-
-@media (max-width: 540px) {
-  .pager { grid-template-columns: 1fr; }
-  .pager .empty { display: none; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+@media (max-width:920px){
+  .wrap{grid-template-columns:1fr;gap:0}
+  .side{position:static;height:auto;padding:24px 0 0;flex-direction:row;flex-wrap:wrap;align-items:center}
+  .toc{flex-direction:row;flex-wrap:wrap}
+  .toc .grp{display:none}
+  .main{padding:28px 0 90px}
 }
 </style>
 </head>
 <body>
-<div class="scrim" id="scrim" onclick="closeNav()"></div>
-<div class="app">
-  <aside class="sidebar" id="sidebar" aria-label="Documentation">
-    <div class="brand">
-      <div class="brand-row">
-        <span class="brand-dot" aria-hidden="true"></span>
-        <span>ToolNeuron</span>
-      </div>
-      <div class="brand-meta">OpenAI-compatible · v1</div>
-    </div>
-
-    <div class="group">Getting started</div>
-    <a data-page="overview"><span class="dot"></span>Overview</a>
-    <a data-page="auth"><span class="dot"></span>Authentication</a>
-
-    <div class="group">Endpoints</div>
-    <a data-page="models"><span class="dot"></span>List models</a>
-    <a data-page="chat"><span class="dot"></span>Chat completions</a>
-    <a data-page="vlm"><span class="dot"></span>Vision (chat + images)</a>
-    <a data-page="embeddings"><span class="dot"></span>Embeddings</a>
-    <a data-page="speech"><span class="dot"></span>Speech (TTS)</a>
-    <a data-page="transcriptions"><span class="dot"></span>Transcriptions (STT)</a>
-    <a data-page="images"><span class="dot"></span>Images (gen / edit / upscale)</a>
-    <a data-page="streaming"><span class="dot"></span>Streaming (SSE)</a>
-    <a data-page="health"><span class="dot"></span>Health</a>
-
-    <div class="group">Reference</div>
-    <a data-page="errors"><span class="dot"></span>Errors</a>
-    <a data-page="ratelimits"><span class="dot"></span>Rate limits &amp; bans</a>
-    <a data-page="examples"><span class="dot"></span>Examples</a>
-    <a data-page="security"><span class="dot"></span>Security notes</a>
-
-    <div class="group">App</div>
-    <a href="/" target="_blank" rel="noopener"><span class="dot"></span>↗ Open Web UI</a>
+<div class="wrap">
+  <aside class="side">
+    <div class="brand"><div class="brand-mark">TN</div><span>ToolNeuron</span></div>
+    <nav class="toc">
+      <span class="grp">Start</span>
+      <a href="#overview">Overview</a>
+      <a href="#base-url">Base URL</a>
+      <a href="#auth">Authentication</a>
+      <a href="#quickstart">Quickstart</a>
+      <span class="grp">Endpoints</span>
+      <a href="#health">Health</a>
+      <a href="#models">Models</a>
+      <a href="#chat">Chat completions</a>
+      <a href="#embeddings">Embeddings</a>
+      <a href="#audio">Audio</a>
+      <a href="#images">Images</a>
+      <span class="grp">More</span>
+      <a href="#errors">Errors</a>
+    </nav>
   </aside>
 
   <main class="main">
-    <div class="topbar-mobile-only">
-      <button class="menu-btn" onclick="toggleNav()" type="button" aria-label="Open menu">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-      </button>
-      <span class="topbar-title" id="mobileTitle">Overview</span>
+    <div class="hero">
+      <h1>ToolNeuron API</h1>
+      <p>A local, OpenAI-compatible inference server running on your device. Point any OpenAI client at it, add your token, and chat with on-device models — no cloud required.</p>
+      <div class="cta">
+        <a class="btn primary" href="/">Open Web Chat →</a>
+        <a class="btn ghost" href="#quickstart">Quickstart</a>
+      </div>
     </div>
 
-    <section class="page" data-page="overview">
-      <span class="eyebrow">Overview</span>
-      <h1 class="title">Local OpenAI-compatible API</h1>
-      <p class="lead">An HTTP API running entirely on your device. No cloud, no telemetry — just the model you loaded in the app, exposed over your LAN.</p>
-
-      <h2>Base URL</h2>
-      <p>The server screen in the app shows two URLs:</p>
-      <ul>
-        <li><strong>From this device:</strong> <code>http://127.0.0.1:&lt;port&gt;</code> — always reachable from the phone's own browser, regardless of Wi-Fi state.</li>
-        <li><strong>From LAN:</strong> <code>http://&lt;wifi-ip&gt;:&lt;port&gt;</code> — visible to any device on the same Wi-Fi network when the bind mode is <code>ALL_INTERFACES</code> or <code>WIFI_ONLY</code>.</li>
-      </ul>
-
-      <h2>Compatibility</h2>
-      <p>Endpoints follow OpenAI's wire format, so most clients (the OpenAI Python SDK, OpenWebUI, llama-index, LangChain, etc.) work by pointing them at this base URL with the bearer token from the app.</p>
-
-      <h2>Endpoints at a glance</h2>
-      <div class="endpoint"><span class="method get">GET</span><code>/health</code></div>
-      <div class="endpoint"><span class="method get">GET</span><code>/v1/models</code></div>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
-
-      <div class="callout">Only <code>/health</code> and the bundled web pages (<code>/</code>, <code>/webui</code>, <code>/docs</code>) are public. Every other route requires a bearer token.</div>
-
-      <div class="pager">
-        <a class="empty"></a>
-        <a class="right" data-page="auth"><div class="label">Next</div><div class="target">Authentication →</div></a>
+    <section id="overview">
+      <h2><a class="hash" href="#overview">#</a> Overview</h2>
+      <p class="lead">ToolNeuron exposes a subset of the OpenAI API surface so existing tooling and SDKs work unchanged. Everything runs on the device hosting the Android app.</p>
+      <div class="grid two">
+        <div class="card feature"><h3><span class="fico">⚡</span> OpenAI-compatible</h3><p>Drop-in <code>/v1/*</code> routes. Use the official SDKs by overriding the base URL.</p></div>
+        <div class="card feature"><h3><span class="fico">🔒</span> Token-secured</h3><p>Every <code>/v1/*</code> route requires a bearer token generated in the app.</p></div>
+        <div class="card feature"><h3><span class="fico">🧠</span> Multi-modal</h3><p>Chat, vision, embeddings, speech, transcription and image generation.</p></div>
+        <div class="card feature"><h3><span class="fico">📡</span> Streaming</h3><p>Server-sent events for token-by-token chat responses.</p></div>
       </div>
     </section>
 
-    <section class="page" data-page="auth">
-      <span class="eyebrow">Authentication</span>
-      <h1 class="title">Bearer token auth</h1>
-      <p class="lead">All non-public endpoints require a bearer token. The token is generated on the device and never leaves it.</p>
-
-      <h2>Where to get the token</h2>
-      <ol>
-        <li>Open the ToolNeuron app on the device running the server.</li>
-        <li>Go to the <strong>Server</strong> screen.</li>
-        <li>Tap the eye icon on the token card to reveal the token (requires the app to be unlocked).</li>
-        <li>Tap the copy icon, or rotate to generate a new one.</li>
-      </ol>
-
-      <h2>Sending the token</h2>
-      <p>Include it as a standard <code>Authorization: Bearer &lt;token&gt;</code> header on every request.</p>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>What happens if it's missing</h2>
-      <p>The server replies <code>401 Unauthorized</code> with body <code>{ "error": { "code": 401, "message": "missing or invalid bearer token" } }</code> and a <code>WWW-Authenticate: Bearer</code> header.</p>
-
-      <div class="callout warn">After 20 consecutive auth failures from the same client address, the server bans that address for 1 hour and replies <code>403</code>.</div>
-
-      <h2>Rotating the token</h2>
-      <p>Tap <em>Rotate</em> in the Server screen. The previous token is immediately invalidated in native memory; subsequent requests with the old token return 401 and count toward the ban threshold.</p>
-
-      <div class="pager">
-        <a data-page="overview"><div class="label">Previous</div><div class="target">← Overview</div></a>
-        <a class="right" data-page="models"><div class="label">Next</div><div class="target">List models →</div></a>
-      </div>
+    <section id="base-url">
+      <h2><a class="hash" href="#base-url">#</a> Base URL</h2>
+      <p class="lead">The server listens on the device's local address. Find the exact URL on the app's <b>Server</b> screen.</p>
+      <pre><code>http://&lt;device-ip&gt;:&lt;port&gt;        e.g. http://192.168.1.42:11434</code></pre>
+      <div class="note"><div>📶</div><p>The client device must be on the <b>same network</b> as the host. If you opened this page from the server itself, requests can target the current origin directly.</p></div>
     </section>
 
-    <section class="page" data-page="models">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">List models</h1>
-      <p class="lead">Returns the catalog of models currently loaded by the server.</p>
-
-      <div class="endpoint"><span class="method get">GET</span><code>/v1/models</code></div>
-
-      <h2>Request</h2>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/models \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span></code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>Response</h2>
-      <pre><code>{
-  <span class="str">"object"</span>: <span class="str">"list"</span>,
-  <span class="str">"data"</span>: [
-    {
-      <span class="str">"id"</span>: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
-      <span class="str">"object"</span>: <span class="str">"model"</span>,
-      <span class="str">"created"</span>: <span class="num">1714080000</span>,
-      <span class="str">"owned_by"</span>: <span class="str">"tool-neuron"</span>
-    }
-  ]
-}</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <div class="callout">The catalog only contains the model the server currently has loaded. Switch models from inside the app before starting the server — dynamic load over the wire is intentionally not exposed.</div>
-
-      <div class="pager">
-        <a data-page="auth"><div class="label">Previous</div><div class="target">← Authentication</div></a>
-        <a class="right" data-page="chat"><div class="label">Next</div><div class="target">Chat completions →</div></a>
-      </div>
+    <section id="auth">
+      <h2><a class="hash" href="#auth">#</a> Authentication</h2>
+      <p class="lead">All <code>/v1/*</code> endpoints require a bearer token. Generate and copy it from the app's <b>Server</b> screen, then send it on every request.</p>
+      <pre><code>Authorization: Bearer tn_sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxx</code></pre>
+      <p style="color:var(--muted);margin:14px 0 0">Public routes that need <b>no</b> token: <code>/health</code>, <code>/</code>, <code>/index.html</code>, <code>/webui</code>, and <code>/docs</code>. A missing or wrong token on a protected route returns <code>401</code>.</p>
     </section>
 
-    <section class="page" data-page="chat">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Chat completions</h1>
-      <p class="lead">Send a list of messages, get the assistant's response.</p>
-
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
-
-      <h2>Request body</h2>
-      <table class="table">
-        <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
-        <tbody>
-          <tr><td><code>model</code></td><td>string</td><td>Required. Must match an <code>id</code> from <code>/v1/models</code>.</td></tr>
-          <tr><td><code>messages</code></td><td>array</td><td>Required. Each item is <code>{role, content}</code> where <code>role</code> is one of <code>system / user / assistant</code>.</td></tr>
-          <tr><td><code>stream</code></td><td>boolean</td><td>Optional, default <code>false</code>. When <code>true</code>, response is SSE.</td></tr>
-          <tr><td><code>max_tokens</code></td><td>integer</td><td>Optional. Cap on tokens generated.</td></tr>
-          <tr><td><code>temperature</code></td><td>number</td><td>Optional. <code>0.0</code>–<code>2.0</code>.</td></tr>
-          <tr><td><code>top_p</code></td><td>number</td><td>Optional. Nucleus sampling.</td></tr>
-          <tr><td><code>frequency_penalty</code></td><td>number</td><td>Optional.</td></tr>
-          <tr><td><code>presence_penalty</code></td><td>number</td><td>Optional.</td></tr>
-        </tbody>
-      </table>
-
-      <h2>Non-streaming example</h2>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/chat/completions \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -d <span class="str">'{
-    "model": "qwen2.5-7b-instruct-q4_k_m",
-    "messages": [
-      { "role": "user", "content": "Hello!" }
-    ]
-  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>Response</h2>
-      <pre><code>{
-  <span class="str">"id"</span>: <span class="str">"chatcmpl-..."</span>,
-  <span class="str">"object"</span>: <span class="str">"chat.completion"</span>,
-  <span class="str">"created"</span>: <span class="num">1714080000</span>,
-  <span class="str">"model"</span>: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
-  <span class="str">"choices"</span>: [{
-    <span class="str">"index"</span>: <span class="num">0</span>,
-    <span class="str">"message"</span>: { <span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: <span class="str">"Hi!"</span> },
-    <span class="str">"finish_reason"</span>: <span class="str">"stop"</span>
-  }]
-}</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <div class="pager">
-        <a data-page="models"><div class="label">Previous</div><div class="target">← List models</div></a>
-        <a class="right" data-page="vlm"><div class="label">Next</div><div class="target">Vision →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="vlm">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Vision (chat + images)</h1>
-      <p class="lead">The same <code>/v1/chat/completions</code> endpoint accepts <code>image_url</code> message parts. The server auto-routes to a VLM model when any user message contains an image.</p>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/chat/completions</code></div>
-      <h2>Image parts (base64 data URLs only — offline)</h2>
-      <p>Network URLs are rejected. Encode images as <code>data:image/png;base64,...</code> (or jpeg / webp).</p>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/chat/completions \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -d <span class="str">'{
-    "model": "qwen3-vl-2b",
-    "messages": [{
-      "role": "user",
-      "content": [
-        {"type": "text", "text": "What is in this picture?"},
-        {"type": "image_url", "image_url": {"url": "data:image/png;base64,iVBORw0KGgo..."}}
-      ]
-    }]
-  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <p>Use <code>"stream": true</code> for token streaming. Mmproj is auto-loaded.</p>
-      <div class="pager">
-        <a data-page="chat"><div class="label">Previous</div><div class="target">← Chat completions</div></a>
-        <a class="right" data-page="embeddings"><div class="label">Next</div><div class="target">Embeddings →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="embeddings">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Embeddings</h1>
-      <p class="lead">Dense vector embeddings from a loaded embedding GGUF.</p>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/embeddings</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/embeddings \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -d <span class="str">'{ "model": "nomic-embed-text", "input": ["hello world", "foo"] }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <p>Response is the standard OpenAI shape: <code>{ object: "list", data: [{embedding: [...]}], model, usage }</code>.</p>
-      <div class="pager">
-        <a data-page="vlm"><div class="label">Previous</div><div class="target">← Vision</div></a>
-        <a class="right" data-page="speech"><div class="label">Next</div><div class="target">Speech →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="speech">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Speech (TTS)</h1>
-      <p class="lead">Text to speech via sherpa-onnx VITS. Returns a WAV body (audio/wav).</p>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/audio/speech</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/audio/speech \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -d <span class="str">'{ "model": "vits-piper-amy", "input": "Hello world", "voice": 0, "speed": 1.0 }'</span> \
-  --output speech.wav</code><button class="copy-btn" type="button">Copy</button></pre>
-      <p><code>voice</code> is a speaker id (integer); <code>speed</code> is 0.5–2.0.</p>
-      <div class="pager">
-        <a data-page="embeddings"><div class="label">Previous</div><div class="target">← Embeddings</div></a>
-        <a class="right" data-page="transcriptions"><div class="label">Next</div><div class="target">Transcriptions →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="transcriptions">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Transcriptions (STT)</h1>
-      <p class="lead">Speech to text via sherpa-onnx Whisper. WAV PCM input only (16-bit or 32-bit float).</p>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/audio/transcriptions</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/audio/transcriptions \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -F <span class="str">model=whisper-tiny-en</span> \
-  -F <span class="str">file=@audio.wav</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <p>Response: <code>{ "text": "..." }</code>.</p>
-      <div class="pager">
-        <a data-page="speech"><div class="label">Previous</div><div class="target">← Speech</div></a>
-        <a class="right" data-page="images"><div class="label">Next</div><div class="target">Images →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="images">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Images</h1>
-      <p class="lead">Stable Diffusion via the on-device QNN / MNN backend. Base64 PNG output.</p>
-      <h2>Generate (txt2img)</h2>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/generations</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/generations \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -H <span class="str">"Content-Type: application/json"</span> \
-  -d <span class="str">'{
-    "model": "anything-v5",
-    "prompt": "a city skyline at sunset",
-    "negative_prompt": "blurry",
-    "steps": 20, "cfg": 7, "width": 512, "height": 512
-  }'</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <h2>Edit (img2img) / Inpaint</h2>
-      <p>Multipart form. Include a <code>mask</code> part for inpaint.</p>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/edits</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/edits \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -F <span class="str">model=anything-v5</span> \
-  -F <span class="str">image=@input.png</span> \
-  -F <span class="str">mask=@mask.png</span> \
-  -F <span class="str">prompt=replace masked area with grass</span> \
-  -F <span class="str">denoise=0.7</span> \
-  -F <span class="str">steps=20</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <h2>Upscale 4×</h2>
-      <div class="endpoint"><span class="method post">POST</span><code>/v1/images/upscale</code></div>
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/v1/images/upscale \
-  -H <span class="str">"Authorization: Bearer tn_sk_..."</span> \
-  -F <span class="str">model=real-esrgan-x4</span> \
-  -F <span class="str">image=@input.png</span></code><button class="copy-btn" type="button">Copy</button></pre>
-      <p>Response: <code>{ "created": ..., "data": [{ "b64_json": "..." }] }</code>.</p>
-      <div class="pager">
-        <a data-page="transcriptions"><div class="label">Previous</div><div class="target">← Transcriptions</div></a>
-        <a class="right" data-page="streaming"><div class="label">Next</div><div class="target">Streaming →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="streaming">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Streaming (SSE)</h1>
-      <p class="lead">Set <code>"stream": true</code> to receive tokens as they're generated.</p>
-
-      <h2>Wire format</h2>
-      <p>Server-Sent Events. Each chunk arrives as <code>data: {json}\n\n</code>. The stream terminates with the literal line <code>data: [DONE]\n\n</code>.</p>
-
-      <pre><code><span class="comment">// First chunk announces the role</span>
-data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"object"</span>:<span class="str">"chat.completion.chunk"</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"role"</span>:<span class="str">"assistant"</span>}}]}
-
-<span class="comment">// Subsequent chunks carry deltas</span>
-data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"content"</span>:<span class="str">"Hi"</span>}}]}
-data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{<span class="str">"content"</span>:<span class="str">"!"</span>}}]}
-
-<span class="comment">// Final chunk includes finish_reason and an empty delta</span>
-data: {<span class="str">"id"</span>:<span class="str">"chatcmpl-..."</span>,<span class="str">"choices"</span>:[{<span class="str">"index"</span>:<span class="num">0</span>,<span class="str">"delta"</span>:{},<span class="str">"finish_reason"</span>:<span class="str">"stop"</span>}]}
-data: [DONE]</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>JavaScript example</h2>
-      <pre><code><span class="kw">const</span> r = <span class="kw">await</span> fetch(<span class="str">"/v1/chat/completions"</span>, {
-  method: <span class="str">"POST"</span>,
-  headers: {
-    <span class="str">"Authorization"</span>: <span class="str">"Bearer "</span> + token,
-    <span class="str">"Content-Type"</span>: <span class="str">"application/json"</span>,
-  },
-  body: <span class="kw">JSON</span>.stringify({ model, messages, stream: <span class="kw">true</span> }),
-});
-<span class="kw">const</span> reader = r.body.getReader();
-<span class="kw">const</span> dec = <span class="kw">new</span> <span class="kw">TextDecoder</span>();
-<span class="kw">let</span> buf = <span class="str">""</span>;
-<span class="kw">while</span> (<span class="kw">true</span>) {
-  <span class="kw">const</span> { value, done } = <span class="kw">await</span> reader.read();
-  <span class="kw">if</span> (done) <span class="kw">break</span>;
-  buf += dec.decode(value, { stream: <span class="kw">true</span> });
-  <span class="kw">for</span> (<span class="kw">const</span> line <span class="kw">of</span> buf.split(<span class="str">"\n\n"</span>)) {
-    <span class="kw">if</span> (!line.startsWith(<span class="str">"data: "</span>)) <span class="kw">continue</span>;
-    <span class="kw">const</span> json = line.slice(<span class="num">6</span>);
-    <span class="kw">if</span> (json === <span class="str">"[DONE]"</span>) <span class="kw">return</span>;
-    <span class="kw">const</span> chunk = <span class="kw">JSON</span>.parse(json);
-    onDelta(chunk.choices[<span class="num">0</span>]?.delta?.content ?? <span class="str">""</span>);
-  }
-}</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <div class="callout">Streaming chunks intentionally omit <code>usage</code> per OpenAI's spec. Token counts are not reported on the wire.</div>
-
-      <div class="pager">
-        <a data-page="images"><div class="label">Previous</div><div class="target">← Images</div></a>
-        <a class="right" data-page="health"><div class="label">Next</div><div class="target">Health →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="health">
-      <span class="eyebrow">Endpoints</span>
-      <h1 class="title">Health</h1>
-      <p class="lead">Cheap public ping. No auth needed, returns immediately.</p>
-
-      <div class="endpoint"><span class="method get">GET</span><code>/health</code></div>
-
-      <pre><code><span class="kw">curl</span> http://127.0.0.1:11434/health</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>Response</h2>
-      <pre><code>{ <span class="str">"status"</span>: <span class="str">"ok"</span>, <span class="str">"service"</span>: <span class="str">"tool-neuron"</span>, <span class="str">"version"</span>: <span class="str">"0.18.5"</span> }</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <p>The bundled web UI uses this as a connection probe — it polls every 30 seconds and shows a green dot when the server is reachable.</p>
-
-      <div class="pager">
-        <a data-page="streaming"><div class="label">Previous</div><div class="target">← Streaming</div></a>
-        <a class="right" data-page="errors"><div class="label">Next</div><div class="target">Errors →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="errors">
-      <span class="eyebrow">Reference</span>
-      <h1 class="title">Errors</h1>
-      <p class="lead">All errors return a JSON envelope with <code>error.code</code>, <code>error.message</code>, and (where applicable) <code>error.type</code>.</p>
-
-      <h2>Codes</h2>
-      <table class="table">
-        <thead><tr><th>Status</th><th>Type</th><th>Cause</th></tr></thead>
-        <tbody>
-          <tr><td><code>400</code></td><td>invalid_request_error</td><td>Malformed JSON, missing required fields.</td></tr>
-          <tr><td><code>401</code></td><td>authentication_error</td><td>Missing or invalid <code>Bearer</code> token.</td></tr>
-          <tr><td><code>403</code></td><td>permission_error</td><td>Client banned (20 auth fails / hour).</td></tr>
-          <tr><td><code>404</code></td><td>invalid_request_error</td><td>Model id not in <code>/v1/models</code>.</td></tr>
-          <tr><td><code>429</code></td><td>rate_limit_error</td><td>Per-client token bucket exhausted; retry after the <code>Retry-After</code> header.</td></tr>
-          <tr><td><code>499</code></td><td>server_error</td><td>Client cancelled mid-generation.</td></tr>
-          <tr><td><code>500</code></td><td>server_error</td><td>Inference engine error or unexpected exception.</td></tr>
-          <tr><td><code>503</code></td><td>server_error</td><td>Inference bridge not attached or refused to start.</td></tr>
-        </tbody>
-      </table>
-
-      <h2>Envelope shape</h2>
-      <pre><code>{
-  <span class="str">"error"</span>: {
-    <span class="str">"code"</span>: <span class="num">401</span>,
-    <span class="str">"message"</span>: <span class="str">"missing or invalid bearer token"</span>,
-    <span class="str">"type"</span>: <span class="str">"authentication_error"</span>
-  }
-}</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <div class="pager">
-        <a data-page="health"><div class="label">Previous</div><div class="target">← Health</div></a>
-        <a class="right" data-page="ratelimits"><div class="label">Next</div><div class="target">Rate limits &amp; bans →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="ratelimits">
-      <span class="eyebrow">Reference</span>
-      <h1 class="title">Rate limits &amp; bans</h1>
-      <p class="lead">Defaults are conservative for a phone serving a LAN; tune them in app code if you control the build.</p>
-
-      <h2>Token bucket (per-client IP)</h2>
-      <table class="table">
-        <thead><tr><th>Default</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Bucket capacity</td><td><code>30</code> tokens</td></tr>
-          <tr><td>Refill rate</td><td><code>1.0</code> tokens / second</td></tr>
-        </tbody>
-      </table>
-      <p>Each request takes one token. When the bucket empties the server returns <code>429</code> with <code>Retry-After: 1</code>.</p>
-
-      <h2>Auth-fail ban list</h2>
-      <table class="table">
-        <thead><tr><th>Default</th><th>Value</th></tr></thead>
-        <tbody>
-          <tr><td>Threshold</td><td><code>20</code> consecutive auth fails</td></tr>
-          <tr><td>Ban duration</td><td><code>3,600,000 ms</code> (1 hour)</td></tr>
-        </tbody>
-      </table>
-      <p>Banned clients receive <code>403</code> for the duration. The list is stored in memory only and clears on server restart.</p>
-
-      <div class="pager">
-        <a data-page="errors"><div class="label">Previous</div><div class="target">← Errors</div></a>
-        <a class="right" data-page="examples"><div class="label">Next</div><div class="target">Examples →</div></a>
-      </div>
-    </section>
-
-    <section class="page" data-page="examples">
-      <span class="eyebrow">Reference</span>
-      <h1 class="title">Examples</h1>
-      <p class="lead">Drop-in snippets for common clients.</p>
-
-      <h2>OpenAI Python SDK</h2>
-      <pre><code><span class="kw">from</span> openai <span class="kw">import</span> OpenAI
+    <section id="quickstart">
+      <h2><a class="hash" href="#quickstart">#</a> Quickstart</h2>
+      <p class="lead">Send your first chat completion with curl. Swap in your base URL, token and a model id from <code>/v1/models</code>.</p>
+      <pre><code>curl http://192.168.1.42:11434/v1/chat/completions \
+  -H "Authorization: Bearer $TN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "your-model-id",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "stream": true
+  }'</code></pre>
+      <p style="color:var(--muted);margin:16px 0 8px">Using the OpenAI Python SDK:</p>
+      <pre><code>from openai import OpenAI
 
 client = OpenAI(
-    base_url=<span class="str">"http://127.0.0.1:11434/v1"</span>,
-    api_key=<span class="str">"tn_sk_..."</span>,
+    base_url="http://192.168.1.42:11434/v1",
+    api_key="tn_sk_...",            # your ToolNeuron token
 )
 
 resp = client.chat.completions.create(
-    model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
-    messages=[{<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: <span class="str">"Hello!"</span>}],
+    model="your-model-id",
+    messages=[{"role": "user", "content": "Hello!"}],
 )
-<span class="kw">print</span>(resp.choices[<span class="num">0</span>].message.content)</code><button class="copy-btn" type="button">Copy</button></pre>
+print(resp.choices[0].message.content)</code></pre>
+    </section>
 
-      <h2>OpenWebUI</h2>
-      <p>In OpenWebUI's <strong>Settings → Connections → OpenAI</strong>, set the base URL to <code>http://&lt;phone-lan-ip&gt;:11434/v1</code> and paste the bearer token. The connected chat dropdown auto-detects the loaded model.</p>
-
-      <h2>Plain fetch (Node / Bun)</h2>
-      <pre><code><span class="kw">const</span> r = <span class="kw">await</span> fetch(<span class="str">"http://127.0.0.1:11434/v1/chat/completions"</span>, {
-  method: <span class="str">"POST"</span>,
-  headers: {
-    <span class="str">"Authorization"</span>: <span class="str">"Bearer tn_sk_..."</span>,
-    <span class="str">"Content-Type"</span>: <span class="str">"application/json"</span>,
-  },
-  body: <span class="kw">JSON</span>.stringify({
-    model: <span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
-    messages: [{ role: <span class="str">"user"</span>, content: <span class="str">"Hi!"</span> }],
-  }),
-});
-<span class="kw">const</span> data = <span class="kw">await</span> r.json();
-console.log(data.choices[<span class="num">0</span>].message.content);</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <h2>llama-index</h2>
-      <pre><code><span class="kw">from</span> llama_index.llms.openai_like <span class="kw">import</span> OpenAILike
-
-llm = OpenAILike(
-    api_base=<span class="str">"http://127.0.0.1:11434/v1"</span>,
-    api_key=<span class="str">"tn_sk_..."</span>,
-    model=<span class="str">"qwen2.5-7b-instruct-q4_k_m"</span>,
-)
-<span class="kw">print</span>(llm.complete(<span class="str">"Hi"</span>).text)</code><button class="copy-btn" type="button">Copy</button></pre>
-
-      <div class="pager">
-        <a data-page="ratelimits"><div class="label">Previous</div><div class="target">← Rate limits</div></a>
-        <a class="right" data-page="security"><div class="label">Next</div><div class="target">Security notes →</div></a>
+    <section id="health">
+      <h2><a class="hash" href="#health">#</a> Health</h2>
+      <div class="ep">
+        <div class="ep-head"><span class="verb get">GET</span><span class="path">/health</span><span class="ep-tag open">No auth</span></div>
+        <div class="ep-body">
+          <p>Lightweight liveness probe. Returns <code>200</code> when the server is up.</p>
+          <pre><code>curl http://192.168.1.42:11434/health</code></pre>
+        </div>
       </div>
     </section>
 
-    <section class="page" data-page="security">
-      <span class="eyebrow">Reference</span>
-      <h1 class="title">Security notes</h1>
-      <p class="lead">What you can rely on, and what's intentionally not in scope yet.</p>
-
-      <h2>What's enforced</h2>
-      <ul>
-        <li><strong>Bearer auth on every non-public route.</strong> Constant-time comparison.</li>
-        <li><strong>Per-client rate limit + ban list</strong> on auth failures.</li>
-        <li><strong>Token rotation</strong> from the app invalidates the previous token in native memory immediately.</li>
-        <li><strong>Token storage on device</strong> rides the encrypted HXS vault — same key as the rest of app preferences.</li>
-        <li><strong>App lockdown while server runs</strong> — chat-side model load/unload is gated so the server's loaded model isn't yanked mid-request.</li>
-        <li><strong>Static model catalog</strong> per server lifetime — dynamic load over the wire is not exposed.</li>
-      </ul>
-
-      <h2>What's not enforced (yet)</h2>
-      <ul>
-        <li><strong>HTTPS / TLS.</strong> Phase 1 is plain HTTP. The server is intended for trusted LANs. If you need TLS, place a reverse proxy in front (nginx / caddy on a workstation on the same LAN), or wait for a TLS build flavor.</li>
-        <li><strong>mDNS / Bonjour discovery.</strong> Paste the IP manually for now.</li>
-        <li><strong>Per-user / per-key auth.</strong> One token, all-or-nothing.</li>
-        <li><strong>Audit log persistence.</strong> The audit ring buffer is in-memory only; restart clears it.</li>
-        <li><strong>Streaming usage metrics.</strong> Token counts are not reported on the wire (per OpenAI spec for <code>chat.completion.chunk</code>).</li>
-      </ul>
-
-      <div class="callout warn">Treat the bearer token like a password. Anyone on the LAN with the token can drive your model.</div>
-
-      <div class="pager">
-        <a data-page="examples"><div class="label">Previous</div><div class="target">← Examples</div></a>
-        <a class="empty"></a>
+    <section id="models">
+      <h2><a class="hash" href="#models">#</a> Models</h2>
+      <div class="ep">
+        <div class="ep-head"><span class="verb get">GET</span><span class="path">/v1/models</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Lists models currently exposed by the app. Each entry includes a <code>type</code> describing its role.</p>
+          <pre><code>{
+  "object": "list",
+  "data": [
+    {
+      "id": "your-model-id",
+      "object": "model",
+      "created": 1718000000,
+      "owned_by": "toolneuron",
+      "type": "gguf",
+      "default": true
+    }
+  ]
+}</code></pre>
+          <table>
+            <tr><th>Field</th><th>Description</th></tr>
+            <tr><td><code>id</code></td><td>Model identifier to pass as <code>model</code>.</td></tr>
+            <tr><td><code>type</code></td><td>Role: <code>gguf</code> (chat), <code>vlm</code> (vision), <code>embedding</code>, etc.</td></tr>
+            <tr><td><code>default</code></td><td>Present and <code>true</code> for the suggested default model.</td></tr>
+          </table>
+        </div>
       </div>
     </section>
 
+    <section id="chat">
+      <h2><a class="hash" href="#chat">#</a> Chat completions</h2>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/chat/completions</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Generate a chat response. Set <code>stream: true</code> for token-by-token server-sent events; otherwise a single JSON object is returned. Vision models accept image content parts.</p>
+          <table>
+            <tr><th>Parameter</th><th>Type</th><th>Description</th></tr>
+            <tr><td><code>model</code> <span class="req">required</span></td><td>string</td><td>A model id from <code>/v1/models</code>.</td></tr>
+            <tr><td><code>messages</code> <span class="req">required</span></td><td>array</td><td>Conversation turns with <code>role</code> and <code>content</code>. Content may be a string or an array of text / <code>image_url</code> parts.</td></tr>
+            <tr><td><code>stream</code> <span class="opt">optional</span></td><td>boolean</td><td>Stream the reply as SSE chunks. Default <code>false</code>.</td></tr>
+            <tr><td><code>max_tokens</code> <span class="opt">optional</span></td><td>integer</td><td>Maximum tokens to generate.</td></tr>
+            <tr><td><code>temperature</code> <span class="opt">optional</span></td><td>number</td><td>Sampling temperature.</td></tr>
+            <tr><td><code>top_p</code> <span class="opt">optional</span></td><td>number</td><td>Nucleus sampling probability.</td></tr>
+            <tr><td><code>presence_penalty</code> <span class="opt">optional</span></td><td>number</td><td>Penalize tokens already present.</td></tr>
+            <tr><td><code>frequency_penalty</code> <span class="opt">optional</span></td><td>number</td><td>Penalize frequent tokens.</td></tr>
+            <tr><td><code>stop</code> <span class="opt">optional</span></td><td>string / array</td><td>Stop sequence(s).</td></tr>
+          </table>
+          <p style="margin-top:18px">Request:</p>
+          <pre><code>POST /v1/chat/completions
+{
+  "model": "your-model-id",
+  "messages": [
+    {"role": "system", "content": "You are concise."},
+    {"role": "user", "content": "Explain embeddings in one line."}
+  ],
+  "max_tokens": 256,
+  "temperature": 0.7,
+  "stream": false
+}</code></pre>
+          <p style="margin-top:16px">Streaming chunks arrive as <code>data:</code> lines, terminated by <code>data: [DONE]</code>:</p>
+          <pre><code>data: {"choices":[{"delta":{"content":"Embeddings"}}]}
+data: {"choices":[{"delta":{"content":" map text to vectors."}}]}
+data: [DONE]</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="embeddings">
+      <h2><a class="hash" href="#embeddings">#</a> Embeddings</h2>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/embeddings</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Turn text into vectors with an embedding model. Pass a single string or an array of strings in <code>input</code>.</p>
+          <pre><code>POST /v1/embeddings
+{
+  "model": "your-embedding-model",
+  "input": ["first text", "second text"]
+}</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="audio">
+      <h2><a class="hash" href="#audio">#</a> Audio</h2>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/audio/speech</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Text-to-speech. Returns synthesized audio for the given <code>input</code> text.</p>
+          <pre><code>POST /v1/audio/speech
+{ "model": "your-tts-model", "input": "Hello from ToolNeuron", "voice": "default" }</code></pre>
+        </div>
+      </div>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/audio/transcriptions</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Speech-to-text. Send audio as <code>multipart/form-data</code> and receive a transcript.</p>
+          <pre><code>curl http://192.168.1.42:11434/v1/audio/transcriptions \
+  -H "Authorization: Bearer $TN_TOKEN" \
+  -F model="your-stt-model" \
+  -F file=@clip.wav</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <section id="images">
+      <h2><a class="hash" href="#images">#</a> Images</h2>
+      <p class="lead">Generate, edit, and upscale images with an image model.</p>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/images/generations</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body">
+          <p>Create an image from a text prompt.</p>
+          <pre><code>POST /v1/images/generations
+{ "model": "your-image-model", "prompt": "a neon city skyline at dusk" }</code></pre>
+        </div>
+      </div>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/images/edits</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body"><p>Edit an existing image guided by a prompt (and optional mask).</p></div>
+      </div>
+      <div class="ep">
+        <div class="ep-head"><span class="verb post">POST</span><span class="path">/v1/images/upscale</span><span class="ep-tag auth">Bearer</span></div>
+        <div class="ep-body"><p>Increase the resolution of a source image.</p></div>
+      </div>
+    </section>
+
+    <section id="errors">
+      <h2><a class="hash" href="#errors">#</a> Errors</h2>
+      <p class="lead">The server uses standard HTTP status codes.</p>
+      <table>
+        <tr><th>Status</th><th>Meaning</th></tr>
+        <tr><td><code>200</code></td><td>Success.</td></tr>
+        <tr><td><code>400</code></td><td>Malformed request body or missing required fields.</td></tr>
+        <tr><td><code>401</code></td><td>Missing or invalid bearer token.</td></tr>
+        <tr><td><code>404</code></td><td>Unknown route.</td></tr>
+        <tr><td><code>503</code></td><td>Feature not configured (e.g. no model assigned for that role).</td></tr>
+      </table>
+    </section>
+
+    <footer>
+      <span>ToolNeuron · on-device OpenAI-compatible server</span>
+      <span><a href="/">Web Chat</a> · <a href="#overview">Back to top</a></span>
+    </footer>
   </main>
 </div>
-
-<script>
-  var pages = document.querySelectorAll('section.page');
-  var mobileTitle = document.getElementById('mobileTitle');
-  var sidebar = document.getElementById('sidebar');
-  var scrim = document.getElementById('scrim');
-
-  function setPage(name, push) {
-    var title = name;
-    pages.forEach(function(p) {
-      var match = p.getAttribute('data-page') === name;
-      p.classList.toggle('active', match);
-      if (match) {
-        var h = p.querySelector('h1.title');
-        if (h) title = h.textContent;
-      }
-    });
-    document.querySelectorAll('.sidebar a[data-page]').forEach(function(a) {
-      a.classList.toggle('active', a.getAttribute('data-page') === name);
-    });
-    mobileTitle.textContent = title;
-    document.title = 'ToolNeuron · ' + title;
-    closeNav();
-    window.scrollTo(0, 0);
-    if (push !== false) history.replaceState(null, '', '#/' + name);
-  }
-
-  function readHash() {
-    var m = (location.hash || '').match(/^#\/(\w+)/);
-    return m ? m[1] : 'overview';
-  }
-
-  document.querySelectorAll('a[data-page]').forEach(function(a) {
-    a.addEventListener('click', function(e) {
-      e.preventDefault();
-      setPage(a.getAttribute('data-page'));
-    });
-  });
-  window.addEventListener('hashchange', function() { setPage(readHash(), false); });
-
-  document.querySelectorAll('.copy-btn').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var pre = btn.closest('pre');
-      var code = pre.querySelector('code');
-      var text = code.innerText;
-      navigator.clipboard.writeText(text).then(function() {
-        btn.classList.add('copied');
-        var orig = btn.textContent;
-        btn.textContent = 'Copied';
-        setTimeout(function() {
-          btn.classList.remove('copied');
-          btn.textContent = orig;
-        }, 1200);
-      });
-    });
-  });
-
-  function toggleNav() {
-    sidebar.classList.toggle('open');
-    scrim.classList.toggle('open');
-  }
-  function closeNav() {
-    sidebar.classList.remove('open');
-    scrim.classList.remove('open');
-  }
-  document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && sidebar.classList.contains('open')) closeNav();
-  });
-  window.toggleNav = toggleNav;
-  window.closeNav = closeNav;
-
-  setPage(readHash(), false);
-</script>
 </body>
 </html>

@@ -649,17 +649,47 @@ The PlusMenu's old "Documents" button is gone — attachments live entirely in t
 
 ## Web search
 
-Replaces the prior Research pipeline (2026-05-15). Single-shot LLM-driven web search. User flips the Web Search toggle on the bottom action bar (or types `/search <query>`); next chat send becomes a web-search run.
+**Adaptive iterative researcher (re-pivoted 2026-06-22).** Was a single-pass "3 queries → snippets → answer" run; rebuilt — at the user's explicit direction ("need things functioning right", waiving the prior no-iteration / no-page-fetch rule) — into a controlled multi-round research loop with depth modes, a multi-engine search backend, per-round query refinement + evidence compaction, and page-fetching in the deep modes. This deliberately supersedes the 2026-05-15 deletion of the old Research pipeline; the key difference from that pipeline is that the loop is **mechanically bounded** (round/query/time caps + low-new-source-gain), so it can't run away on a weak on-device model.
 
-Flow (`viewmodel/WebSearchCoordinator.kt`):
+User flips the Web Search toggle (or types a slash command); the next send becomes a web-search run.
 
-1. **Plan** — coordinator emits `WebSearchEvent.Plan(userQuery)` so the card renders immediately.
-2. **GenerateQueries** — one LLM call (`WebSearchPrompts.generateQueries`) asking for exactly 3 numbered queries. Regex-parsed via `QUERY_LINE_REGEX = ^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$`. Failures fall through to `WebSearchEvent.Failed`.
-3. **Search** — for each of the 3 queries, `WebSearcher.search(query, maxResults=5, idx)` via `WebNative.search` (DDG HTML). Per-query results are deduped against a session-wide `seenUrls` set so cross-query overlap doesn't double-feed the synthesizer. Total cap: 3 queries × 5 results = 15 unique snippets.
-4. **Synthesize** — one LLM call (`WebSearchPrompts.synthesize`) with the user query + numbered `[i]` snippet list. Output is markdown with inline `[1]/[2]/[3]` citations and a trailing Sources section.
-5. **Done** — emits `WebSearchEvent.Done(answer, sources)`; card renders the markdown answer + collapsible tappable source list (chip → `LocalUriHandler.openUri`).
+### Depth modes (`repo/web_search/WebSearchMode.kt`)
 
-No URL fetching. No document extraction. No iteration loop. The user-visible difference vs. old Research: seconds instead of minutes, single inline result instead of a "research document" archive screen.
+| Mode | Trigger | Rounds | Total queries | Page fetch |
+|------|---------|-------:|--------------:|------------|
+| Quick | auto: short factual ask (≤5 words, no deep signal) | 1 | 3 | no |
+| Normal | auto: default | 3 | 10 | no |
+| Deep | auto: compare/vs/latest/best/research/in-depth/… or `/deep`,`/research` | 10 | 40 | top 6/round |
+| Exhaustive | `/exhaustive`, or text "exhaustive"/"deep research" | 20 | 80 | top 8/round |
+
+`WebSearchMode.resolve(rawText, default)` → `(mode, cleanedQuery)`. **Priority: slash command > saved UI/Settings mode (`default`) > Auto-classify.** `classify` is a **pure heuristic** (no LLM call) on `?`-count / deep-signal keywords / word-count; the "exhaustive"/"deep research" keyword bump lives in `classifyAuto`, which only fires when `default == null` (Auto). `HomeViewModel.parseWebSearchInput` recognizes `/search`,`/deep`,`/research`,`/exhaustive` and the toggle, and passes `WebSearchMode.fromPref(_webSearchMode.value)` as the default.
+
+### Depth control UI (visible + persisted)
+
+Default depth is a persisted preference, **stored as a stable lowercase key, never a display label** (`auto`/`quick`/`normal`/`deep`/`exhaustive`; `AppPreferences.webSearchMode`, default `auto`). `WebSearchMode` owns the key↔mode↔label mapping: `key`, `SELECTABLE_KEYS`, `fromPref` (key→mode, null=Auto), `sanitizePref` (coerce unknown→`auto`), `labelForKey`.
+
+- **Chat** (`ToolsPickerWindow`): a "Search depth" `ActionToggleGroup` over `SELECTABLE_KEYS` sits under the Web-search card — **always visible but `enabled = webSearchEnabled`** (dimmed until web search is on). Selecting calls `HomeViewModel.setWebSearchMode`.
+- **Settings** (`SettingsViewModel.webSearchSection`, section id `web_search`, route `NavScreens.SettingsWebSearch`): a "Default search depth" `SettingsItem.Choice` with the same keys + speed-aware descriptions.
+- Both write the **same** `appPrefs.webSearchMode` — one source of truth. The card mode badge shows the **resolved concrete** mode (Auto resolves to Quick/Normal/Deep before `start`), never "Auto".
+
+### The loop (`viewmodel/WebSearchCoordinator.kt`)
+
+1. **Plan** — emit `WebSearchEvent.Plan(userQuery, mode)`. One LLM call (`WebSearchPrompts.initialQueries`) for the round-0 queries (count = `mode.initialQueries`); URL-in-query and Play-Store asks bypass the LLM with built queries; parse failure falls back to the raw user query.
+2. **Round loop** (`while round < maxRounds && nextQueries.isNotEmpty() && totalQueries < maxQueries && !timeUp`):
+   - `RoundStart(round, maxRounds, focus)`; queries capped to remaining budget; `QueriesGenerated` emits the **cumulative** query list (global query index across rounds).
+   - per query: `delay(SEARCH_THROTTLE_MS=1200)`, `WebSearcher.search(q, mode.resultsPerQuery, idx)`, dedupe vs `seenUrls` (normalized), `SearchHits`. Accumulate into the evidence pool.
+   - Deep/Exhaustive: `Status("Reading pages…")`, fetch top-N ranked not-yet-fetched URLs via `PageFetcher` (concurrent, `HtmlText.extract` → ≤2500-char excerpts).
+   - Quick (or `followUpQueries==0`): break after one round, no digest.
+   - **Digest** (one LLM call, `WebSearchPrompts.roundDigest`): updated running summary + still-missing + up-to-K follow-up queries + coverage(0-100). Tolerant `SUMMARY:/MISSING:/QUERIES:/COVERAGE:` section parse; follow-ups parsed only from the `QUERIES:` block (avoids capturing summary prose), deduped against all prior queries.
+   - **Stop** if: coverage ≥ 85 · new-unique-sources < 2 for 2 consecutive rounds · no follow-up queries · budget/time hit.
+3. **Synthesize** — `SynthesizeStart`; `WebSearchPrompts.synthesize(userQuery, summary, top-6 sources, excerpts)` (grounded, may cite `[n]`). Link/download asks short-circuit via `directAnswerIfPossible`.
+4. **Done** — `Done(answer, sources)` (sources = ranked pool, ≤12); card renders markdown + collapsible source list.
+
+**Control flow is mechanical-first**: the LLM coverage score can only *early-stop*, never force-continue. Quick = plan + synth (2 LLM calls); Deep/Exhaustive add one digest call per round.
+
+### Multi-engine backend (`:networking`)
+
+`WebNative.search` → native `net::ddg::search` is now a **multi-engine chain: DuckDuckGo-html → Bing → Mojeek → DuckDuckGo-lite** (despite the legacy `net::ddg` name). Accumulates unique results, **stops early** once `max_results` is reached: DDG-ok = one request (same cost as before), DDG-blocked (202/429) = falls through to Bing/Mojeek instead of returning nothing. JNI/`nativeSearch` signatures unchanged. Parsers: `html::extract_ddg_results` / `extract_bing_results` (unwraps `bing.com/ck/a?…&u=a1<base64url>` via `url::unwrap_bing_redirect`) / `extract_mojeek_results` (direct URLs). GET engines use a chrome116-consistent header set.
 
 ### Persistence
 
@@ -673,26 +703,28 @@ The card message stores the user's original query in `msg.content` (read by the 
 
 ### Lockdown
 
-Same pattern as the old research lockdown — `webSearchActive: StateFlow<Boolean>` is derived from `webSearchCoordinator.activeRuns.isNotEmpty()`. `sendMessage`, `loadModel`, and `unloadModel` all early-return while a run is active because the chat LLM is borrowed for both the GenerateQueries and Synthesize calls.
+Same pattern as the old research lockdown — `webSearchActive: StateFlow<Boolean>` is derived from `webSearchCoordinator.activeRuns.isNotEmpty()`. `sendMessage`, `loadModel`, and `unloadModel` all early-return while a run is active because the chat LLM is borrowed for every plan / digest / synthesis call in the loop.
 
 ### Card UI
 
 `ui/screens/web_search/WebSearchCard.kt` is a single Surface with:
-- Header (Globe icon, "Web search", user query)
-- Queries strip (3 rows with per-query progress indicators — Circle / spinner / Check + hit count)
-- AnimatedContent for current phase (Plan / Queries / Search / Synthesize / Done / Cancelled / Failed)
-- Stop button while in flight
+- Header (Globe icon, "Web search", a **mode badge** chip when `state.mode` is set, user query)
+- Queries strip (grows across rounds; per-query progress indicators — Circle / spinner / Check + hit count)
+- AnimatedContent for current phase; the Search row shows `Round n/N · <status>` (status carries "Reading pages…" / "Round n reviewed", and coverage via `WebSearchEvent.Status.coverage`)
+- Stop button while in flight (cancels the loop mid-round)
 - For Done: markdown answer + collapsible `N sources` accordion with `[i]` chips opening URLs externally
 
 ### File map
 
-- `model/WebSearchEvent.kt` — sealed event class + `WebSearchHit` data class.
-- `model/WebSearchUiState.kt` — phase machine + JSON serde.
-- `repo/web_search/WebSearcher.kt` — thin wrapper over `WebNative.search`.
-- `repo/web_search/WebSearchPrompts.kt` — prompt templates + `QUERY_LINE_REGEX`.
-- `viewmodel/WebSearchCoordinator.kt` — single coordinator (no repository, stateless across runs).
+- `model/WebSearchEvent.kt` — sealed events (+ `Plan.mode`, `RoundStart`, `Status(message, coverage)`) + `WebSearchHit`.
+- `model/WebSearchUiState.kt` — phase machine + JSON serde (+ `mode`/`round`/`maxRounds`/`status`/`coverage`; `fromJson` zero-fills, TAG 15 unchanged).
+- `repo/web_search/WebSearchMode.kt` — depth enum + per-mode budgets + `resolve`/`classify` heuristic.
+- `repo/web_search/WebSearcher.kt` — thin wrapper over `WebNative.search` (multi-engine).
+- `repo/web_search/PageFetcher.kt` + `HtmlText.kt` — concurrent page fetch + readable-text extraction (Deep/Exhaustive only).
+- `repo/web_search/WebSearchPrompts.kt` — `initialQueries` / `roundDigest` / `synthesize` + `QUERY_LINE_REGEX`.
+- `viewmodel/WebSearchCoordinator.kt` — the iterative controller (injects `WebSearcher` + `PageFetcher`).
 - `ui/screens/web_search/WebSearchCard.kt` — the only UI.
-- Modified: `ChatMessage` (+ webSearchRunId, webSearchState), `ChatRepository` (TAG 14/15 renamed), `HomeViewModel` (toggle, slash parse, coordinator wiring, event mirror), `HomeScreen{Body,BottomBar}` + `ToolsPickerWindow` (Web search toggle), `ChatMessageList` (WebSearchCard render).
+- Modified: `ChatMessage` (webSearchRunId, webSearchState), `HomeViewModel` (slash parse → `WebSearchMode`, coordinator wiring, event mirror), `HomeScreen{Body,BottomBar}` + `ToolsPickerWindow` (toggle), `ChatMessageList` (WebSearchCard render).
 
 ---
 
@@ -1055,12 +1087,16 @@ Hub + 7 detail screens, all **single-Scaffold** (accept `innerPadding: PaddingVa
 - Don't fan out `RemoteCallbackList` broadcasts from `InferenceService` without holding `sdBroadcastLock`. `RemoteCallbackList.beginBroadcast()` is not nestable — calling it from one thread while another is between `beginBroadcast()` and `finishBroadcast()` throws `IllegalStateException: beginBroadcast() called while already in a broadcast` and kills `:inference`. `startSdForwarding` launches five parallel collectors (backend / generation / isGenerating / upscale / runtimeSetup) on `Dispatchers.IO` — without serialisation they race on `sdClients.beginBroadcast()` and the service crash-loops immediately. The fix is `synchronized(sdBroadcastLock)` around the entire `fanoutSd` body; the same lock can serve `tnClients` if a similar pattern is ever added there.
 - Don't bump `TAG_MSG_WEBSEARCH_RUN` away from `14` or `TAG_MSG_WEBSEARCH_STATE` away from `15`. Older messages without these tags decode with `webSearchRunId = null` and `webSearchState = ""`. New chat-message fields must use TAG ≥ 16.
 - Don't reintroduce a runtime-only `webSearchEvents: Map<String, WebSearchEvent>` in HomeViewModel. The card's state must come from `WebSearchUiState.fromJson(message.webSearchState)` because (a) opening a different chat while a run is in flight should NOT bleed the running run's state into a completed chat's card; (b) after process restart, completed web-search cards must keep showing their Done state. `HomeViewModel.handleWebSearchEvent` is the single write point — looks up `(chatId, messageId)` via `webSearchMessages[runId]`, reads the message, applies the event, writes back.
-- Don't lift the web-search lockdown. While `webSearchActive.value`, `HomeViewModel.sendMessage / loadModel / unloadModel` all early-return — the chat LLM is borrowed for both the GenerateQueries and Synthesize calls.
+- Don't lift the web-search lockdown. While `webSearchActive.value`, `HomeViewModel.sendMessage / loadModel / unloadModel` all early-return — the chat LLM is borrowed for every plan / per-round digest / synthesis call in the loop.
 - Don't drop the web-search content swap in `InferenceCoordinator.buildMessagesJson`. Web-search cards store the user's query in `msg.content` (used by the card Header) and the synthesized answer in `msg.webSearchState`. The single point of LLM-history assembly MUST swap `content` for `WebSearchUiState.fromJson(webSearchState).answer.trim()` when `webSearchRunId != null`, and SKIP the message entirely when the answer is blank (in-flight / cancelled / failed). Without the swap the model sees `assistant: "<echoed user query>"` instead of the actual research, and the next chat turn proceeds as if the search never happened. Without the skip, in-flight / failed cards inject an empty assistant turn that confuses the model.
-- Don't replace `WebNative.search` with `HttpURLConnection` or any other client. The `:networking` curl-impersonate Chrome116 fingerprint is the single allowed pipe for DDG. The 3 queries × 5 results contract assumes that backend.
-- Don't expand the web-search flow back into a multi-iteration pipeline. The user-facing contract is "3 queries, snippets, answer, done". Adding iterations / fetches / per-page extraction is what the old Research pipeline was; it was deleted on 2026-05-15 because it was minutes-slow and barely better than snippet-only synthesis.
+- Don't replace `WebNative.search` with `HttpURLConnection` or any other client. The `:networking` curl-impersonate Chrome116 fingerprint is the single allowed pipe — for `WebNative.search` (DDG→Bing→Mojeek→DDG-lite) AND `WebNative.fetch` (Deep/Exhaustive page fetch). Same applies to any new engine: it goes inside `net::ddg::search`'s chain, not a new HTTP client.
+- Don't make the web-search loop unbounded. It is iterative now (re-pivoted 2026-06-22, user-directed, superseding the 2026-05-15 single-pass deletion), but EVERY run must stay bounded by `WebSearchMode`'s `maxRounds` / `maxQueries` / `timeBudgetMs` plus the low-new-source-gain stop. The LLM coverage score may only *early-stop*, never extend — a weak on-device model must not be able to wedge the loop. Quick mode stays single-round (plan + synth, no digest).
+- Don't gate page-fetching on anything but `WebSearchMode.fetchPages` (Deep/Exhaustive only). Quick/Normal are snippet-only and must stay fast. `PageFetcher` excerpts are capped (`HtmlText.extract`, ≤2500 chars) and the synthesis prompt re-caps per source — don't feed whole pages into the prompt (context blowup on small models).
+- Don't break `WebSearchMode.resolve`/`classify` being a pure heuristic (no LLM call). Mode selection must be instant. Slash triggers are `/search` (auto-classify), `/deep`+`/research` (Deep), `/exhaustive` (Exhaustive); `HomeViewModel.SEARCH_SLASHES` must list all four. Resolution priority is fixed: **slash > saved mode (`default`) > Auto-classify**.
+- Don't store web-search depth as a display label or split it across two prefs. The single source of truth is `AppPreferences.webSearchMode`, holding a **stable lowercase key** (`auto/quick/normal/deep/exhaustive`); the chat `ToolsPickerWindow` selector and Settings `web_search` section both read/write it. Convert key→label only at render via `WebSearchMode.labelForKey`; run any saved value through `WebSearchMode.sanitizePref` (unknown → `auto`) so old/hand-edited values never crash. The card badge shows the resolved concrete mode, not "Auto".
+- Don't make the chat depth selector appear only when web search is on. It's always rendered with `enabled = webSearchEnabled` (dimmed when off) for discoverability. Adding a new Settings section needs all four wiring points: `NavScreens`, the `SETTINGS_LANDING_CARDS` card, the `TNavigation` composable (sectionId = `SettingsViewModel.SECTION_*`), and the `AppTopBar` `when` case.
 - Don't switch `WebSearchCoordinator` from `tryEmit` to suspending `emit(...)` in the `catch (CancellationException)` / `catch (Throwable)` blocks. The catch fires on a cancelled Job, and `withContext(Dispatchers.Default)` throws CE immediately on a cancelled context — so the Cancelled event never reaches the SharedFlow and the card freezes mid-flight. `_events` has 64-slot buffer; tryEmit always succeeds.
-- Don't change `WebSearchPrompts.QUERY_LINE_REGEX`. The synthesis prompt asks for the format `1. <query>` / `2. <query>` / `3. <query>` and the regex `^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$` parses that AND tolerates common LLM deviations (`-`/`*`/`•` bullets, `:` after the number). Tightening the regex breaks smaller models that don't follow numbered-list instructions perfectly; loosening it picks up the LLM's preamble lines.
+- Don't change `WebSearchPrompts.QUERY_LINE_REGEX`. The query prompts ask for numbered lines (`1. <query>`) and the regex `^\s*(?:\d+[.)\-:]|[-*•])\s+(.+)$` parses that AND tolerates `-`/`*`/`•` bullets + `:` after the number. The `roundDigest` parser also depends on it (parsed only from the `QUERIES:` block so summary prose isn't captured as queries). Tightening breaks small models; loosening picks up preamble.
 - Don't fall back to `java.net.HttpURLConnection` for any HuggingFace API call — search, model info, tree, raw README, tags-by-type, trending, quicksearch, resolve. Every HF request goes through `:networking` (`WebNative.fetch`) so it inherits the curl-impersonate Chrome116 fingerprint + bundled `cacert.pem` + strict cert verify. The hub is `repo/HuggingFaceApi.kt` (Hilt singleton class, not an object); `repo/hf/HfClient.kt` builds typed endpoints on top. `ModelCatalog` and `RepositoryValidator` inject `HuggingFaceApi`. Same rule applies for any future HF or non-HF HTTP target — `:networking` is the only allowed pipe.
 - Don't change `WebNative.fetch` back to `Result<String>`. The contract is `Result<WebResponse>` where `WebResponse(status: Int, body: String, error: String?)`. Result.failure is reserved for transport-layer issues (DNS, TLS handshake, native call collapse). HTTP non-2xx comes back as `Result.success(WebResponse(status=4xx, ...))` — callers can react to 429 (rate limited) vs 404 (not found) vs 401/403 (auth). Old behavior of returning `null` on non-2xx silently masked HF API bugs (e.g. invalid `expand=` params returning 400) for years.
 - Don't log full URLs (with query string) to `ANDROID_LOG_WARN` from `net_jni.cpp`. Use the `host_of(url)` helper. Search queries are user PII (typed model names, sometimes sensitive). Status code + host is the maximum log surface.

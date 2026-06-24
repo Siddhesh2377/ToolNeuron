@@ -126,6 +126,7 @@ dependencies {
     implementation(files("../libs/ai_sd-release.aar"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.onnxruntime.android)
 
     // DI
     implementation(libs.hilt.android)

@@ -8,9 +8,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
@@ -27,6 +37,8 @@ import com.dark.tool_neuron.ui.screens.home_screen.HomeScreen
 import com.dark.tool_neuron.ui.screens.image_task.ImageTaskScreen
 import com.dark.tool_neuron.ui.screens.intro_screen.IntroScreen
 import com.dark.tool_neuron.ui.screens.model_config.ModelConfigScreen
+import com.dark.tool_neuron.ui.screens.model_manager.BackupProgressDialog
+import com.dark.tool_neuron.ui.screens.model_manager.ImportPreviewDialog
 import com.dark.tool_neuron.ui.screens.model_manager.ModelManagerScreen
 import com.dark.tool_neuron.ui.screens.rag_debug.RagDebugScreen
 import com.dark.tool_neuron.ui.screens.settings.SettingsScreen
@@ -191,20 +203,114 @@ fun TNavigation(
         composable(NavScreens.ModelSetup.route) {
             val activity = LocalContext.current as ComponentActivity
             val storeVm: ModelStoreViewModel = hiltViewModel(activity)
+            val backupStatus by storeVm.backupStatus.collectAsStateWithLifecycle()
+            val backupProgress by storeVm.backupProgress.collectAsStateWithLifecycle()
+            val importPreview by storeVm.backupImportPreview.collectAsStateWithLifecycle()
+            val activeWorkCount by storeVm.activeWorkCount.collectAsStateWithLifecycle()
+            val downloadLabels by storeVm.activeDownloadLabels.collectAsStateWithLifecycle()
+            val installStates by storeVm.installStates.collectAsStateWithLifecycle()
+            val setupInProgress by storeVm.starterSetupActive.collectAsStateWithLifecycle()
+            var downloadsStarted by remember { mutableStateOf(false) }
+            var restoreStarted by remember { mutableStateOf(false) }
+
+            LaunchedEffect(setupInProgress, activeWorkCount) {
+                if (!setupInProgress) return@LaunchedEffect
+                if (activeWorkCount > 0) downloadsStarted = true
+                if (downloadsStarted && activeWorkCount == 0) {
+                    downloadsStarted = false
+                    storeVm.finishStarterPackSetup(markDone = true)
+                    onModelSetupComplete()
+                }
+            }
+
+            LaunchedEffect(backupStatus) {
+                val status = backupStatus.orEmpty()
+                if (restoreStarted && status.startsWith("Imported")) {
+                    restoreStarted = false
+                    storeVm.clearBackupStatus()
+                    onModelSetupComplete()
+                }
+            }
 
             ModelSetupScreen(
                 innerPadding = innerPadding,
                 onPackSelected = { packId ->
-                    storeVm.downloadPack(packId)
-                    onModelSetupComplete()
+                    storeVm.beginStarterPackSetup(packId)
+                    downloadsStarted = false
                 },
+                setupBusy = setupInProgress,
                 onOpenStore = { navController.navigate(NavScreens.ModelStore.route) },
+                onRestoreBackup = { uri ->
+                    storeVm.previewImport(uri)
+                },
                 onLocalImport = { uri, name, size, type ->
                     storeVm.importLocalModel(uri, name, size, type)
                     onModelSetupComplete()
                 },
-                onSkip = { onModelSetupComplete() }
+                onSkip = {
+                    storeVm.finishStarterPackSetup(markDone = false)
+                    onModelSetupComplete()
+                }
             )
+
+            importPreview?.let { preview ->
+                ImportPreviewDialog(
+                    preview = preview,
+                    onDismiss = storeVm::dismissImportPreview,
+                    onImport = { ids, overwrite, restoreSettings ->
+                        restoreStarted = true
+                        storeVm.confirmPreviewImport(ids, overwrite, restoreSettings)
+                    },
+                )
+            }
+
+            backupProgress?.let { progress ->
+                BackupProgressDialog(
+                    progress = progress,
+                    status = backupStatus,
+                    onContinueInBackground = {
+                        restoreStarted = false
+                        onModelSetupComplete()
+                    },
+                    onCloseStatus = storeVm::clearBackupStatus,
+                )
+            }
+
+            if (setupInProgress) {
+                AlertDialog(
+                    onDismissRequest = {},
+                    title = { Text("Downloading starter pack") },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                            val activeInstalls = installStates.values
+                                .filter { it.isActive }
+                                .map { "${it.phase.label}: ${it.displayName}" }
+                            val names = (downloadLabels.values.map { it.displayName } + activeInstalls)
+                                .distinct()
+                                .take(4)
+                            Text(
+                                if (activeWorkCount > 0 && names.isNotEmpty()) {
+                                    names.joinToString("\n")
+                                } else {
+                                    "Preparing setup..."
+                                },
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        Button(onClick = {
+                            downloadsStarted = false
+                            onModelSetupComplete()
+                        }) { Text("Explore while downloading") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { navController.navigate(NavScreens.Downloads.route) }) {
+                            Text("View downloads")
+                        }
+                    },
+                )
+            }
         }
         composable(NavScreens.AppGuide.route) {
             AppGuideScreen(
@@ -257,6 +363,15 @@ fun TNavigation(
                 onNavigate = { route -> navController.navigate(route) },
             )
         }
+        composable(NavScreens.SettingsWebSearch.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_WEB_SEARCH,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
         composable(NavScreens.SettingsVoice.route) {
             val viewModel: SettingsViewModel = hiltViewModel()
             SettingsSectionScreen(
@@ -278,6 +393,15 @@ fun TNavigation(
             SettingsSectionScreen(
                 innerPadding = innerPadding,
                 sectionId = SettingsViewModel.SECTION_VISION,
+                viewModel = viewModel,
+                onNavigate = { route -> navController.navigate(route) },
+            )
+        }
+        composable(NavScreens.SettingsServerRoles.route) {
+            val viewModel: SettingsViewModel = hiltViewModel()
+            SettingsSectionScreen(
+                innerPadding = innerPadding,
+                sectionId = SettingsViewModel.SECTION_SERVER_ROLES,
                 viewModel = viewModel,
                 onNavigate = { route -> navController.navigate(route) },
             )
@@ -401,8 +525,8 @@ fun TNavigation(
                     ModelConfigScreen(
                         modelInfo = model,
                         initialConfig = initialConfig,
-                        onSave = { config ->
-                            viewModel.saveModelConfig(config)
+                        onSave = { config, providerType ->
+                            viewModel.saveModelConfig(config, providerType)
                             navController.popBackStack()
                         },
                         onBack = { navController.popBackStack() },

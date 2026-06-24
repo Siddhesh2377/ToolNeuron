@@ -6,18 +6,21 @@ import com.dark.hxs_encryptor.PolicyEngine
 import com.dark.native_server.BindMode
 import com.dark.tool_neuron.data.SessionHolder
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.server.ServerRequestEvent
 import com.dark.tool_neuron.service.server.ServerState
+import com.dark.tool_neuron.util.VlmPaths
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -39,37 +42,29 @@ class ServerViewModel @Inject constructor(
     private val _tokenVisible = MutableStateFlow(false)
     val tokenVisible: StateFlow<Boolean> = _tokenVisible.asStateFlow()
 
-    val installedChatModels: StateFlow<List<ModelInfo>> = modelRepo.models
-        .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
-
     val anyEngineInstalled: StateFlow<Boolean> = modelRepo.models
-        .map { it.isNotEmpty() }
+        .map { list -> list.any { it.pathType == PathType.FILE } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
-    private val _selectedModelId = MutableStateFlow(controller.selectedModelId().ifBlank { null })
-    val selectedModelId: StateFlow<String?> = _selectedModelId.asStateFlow()
-
-    init {
-        ensureSelectionValid()
-    }
-
-    private fun ensureSelectionValid() {
-        val current = _selectedModelId.value
-        val installed = installedChatModels.value
-        if (current != null && installed.none { it.id == current }) {
-            _selectedModelId.value = null
-            controller.setSelectedModelId("")
+    val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
+        .map { list ->
+            list.filter {
+                it.pathType == PathType.FILE &&
+                    it.providerType == ProviderType.GGUF &&
+                    !isVlmCandidate(it)
+            }
         }
-        if (_selectedModelId.value == null && installed.size == 1) {
-            selectModel(installed.first().id)
-        }
-    }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    fun selectModel(modelId: String) {
-        _selectedModelId.value = modelId
-        controller.setSelectedModelId(modelId)
-    }
+    val vlmModels: StateFlow<List<ModelInfo>> = modelRepo.models
+        .map { list -> list.filter { it.pathType == PathType.FILE && isVlmCandidate(it) } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _selectedChatModelId = MutableStateFlow(controller.selectedModelId())
+    val selectedChatModelId: StateFlow<String> = _selectedChatModelId.asStateFlow()
+
+    private val _selectedVlmModelId = MutableStateFlow(controller.selectedVlmModelId())
+    val selectedVlmModelId: StateFlow<String> = _selectedVlmModelId.asStateFlow()
 
     fun start() {
         controller.setPort(_port.value)
@@ -92,6 +87,16 @@ class ServerViewModel @Inject constructor(
     fun setBindMode(mode: BindMode) {
         _bindMode.value = mode
         controller.setBindMode(mode)
+    }
+
+    fun setChatDefaultModel(modelId: String) {
+        _selectedChatModelId.value = modelId
+        controller.setChatDefaultModelId(modelId)
+    }
+
+    fun setVlmDefaultModel(modelId: String) {
+        _selectedVlmModelId.value = modelId
+        controller.setVlmDefaultModelId(modelId)
     }
 
     fun revealToken(): Boolean {
@@ -118,5 +123,12 @@ class ServerViewModel @Inject constructor(
         if (raw.isBlank()) return ""
         val head = raw.take(6)
         return "$head${"•".repeat(8)}"
+    }
+
+    private fun isVlmCandidate(model: ModelInfo): Boolean {
+        if (model.providerType == ProviderType.VISION_CHAT) return true
+        if (model.providerType != ProviderType.GGUF) return false
+        return VlmPaths.isInsideVlmFolder(model.path, modelRepo.getModelsDir()) &&
+            VlmPaths.colocatedMmproj(File(model.path)) != null
     }
 }

@@ -76,7 +76,12 @@ fun DownloadsScreen(
                 if (active.isNotEmpty()) {
                     item { SectionHeader(label = "Active", count = active.size) }
                     items(active, key = { it.hxdId }) { item ->
-                        ActiveRow(item = item, onCancel = { viewModel.cancel(item.hxdId) })
+                        ActiveRow(
+                            item = item,
+                            onCancel = { viewModel.cancel(item.hxdId) },
+                            onRetry = { viewModel.retry(item.hxdId) },
+                            onClear = { viewModel.clear(item.hxdId) },
+                        )
                     }
                     item { Spacer(Modifier.height(dimens.spacingSm)) }
                 }
@@ -131,7 +136,12 @@ private fun SectionHeader(
 }
 
 @Composable
-private fun ActiveRow(item: ActiveDownloadItem, onCancel: () -> Unit) {
+private fun ActiveRow(
+    item: ActiveDownloadItem,
+    onCancel: () -> Unit,
+    onRetry: () -> Unit,
+    onClear: () -> Unit,
+) {
     val dimens = LocalDimens.current
     val shapes = LocalTnShapes.current
     val state = item.state
@@ -158,11 +168,24 @@ private fun ActiveRow(item: ActiveDownloadItem, onCancel: () -> Unit) {
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                ActionButton(
-                    onClickListener = onCancel,
-                    icon = TnIcons.X,
-                    contentDescription = "Cancel download",
-                )
+                if (state.status == HxdStatus.FAILED) {
+                    ActionButton(
+                        onClickListener = onRetry,
+                        icon = TnIcons.Refresh,
+                        contentDescription = "Retry download",
+                    )
+                    ActionButton(
+                        onClickListener = onClear,
+                        icon = TnIcons.Trash,
+                        contentDescription = "Clear failed download",
+                    )
+                } else {
+                    ActionButton(
+                        onClickListener = onCancel,
+                        icon = TnIcons.X,
+                        contentDescription = "Cancel download",
+                    )
+                }
             }
             ActiveProgress(state = state)
         }
@@ -199,6 +222,13 @@ private fun ActiveProgress(state: HxdState) {
                 text = "Paused",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        HxdStatus.FAILED -> {
+            Text(
+                text = state.error ?: "Download failed",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
         }
         else -> {

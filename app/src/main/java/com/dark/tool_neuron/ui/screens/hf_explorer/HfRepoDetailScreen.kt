@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.ui.screens.hf_explorer
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -26,6 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
@@ -41,6 +45,7 @@ import com.dark.tool_neuron.repo.hf.HfGated
 import com.dark.tool_neuron.repo.hf.HfGgufMeta
 import com.dark.tool_neuron.repo.hf.HfModelDetail
 import com.dark.tool_neuron.repo.hf.HfSibling
+import com.dark.tool_neuron.model.VlmFileGroup
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.ActionTextButton
 import com.dark.tool_neuron.ui.components.CaptionText
@@ -102,6 +107,7 @@ fun HfRepoDetailScreen(
             bucket = bucket,
             isAdded = existing.contains(s.detail.summary.id.lowercase()),
             visibleFiles = vm.visibleFiles(s.detail),
+            visibleFileGroups = vm.visibleFileGroups(s.detail),
             onAdd = { vm.addRepository(s.detail.summary.id, s.detail.summary.id.substringAfter("/")) },
             onFilterChange = vm::setFileFilter,
             onBucketChange = vm::setFileSizeBucket,
@@ -174,6 +180,7 @@ private fun DetailContent(
     bucket: HfFileSizeBucket,
     isAdded: Boolean,
     visibleFiles: List<HfSibling>,
+    visibleFileGroups: List<VlmFileGroup>,
     onAdd: () -> Unit,
     onFilterChange: (HfFileFilter) -> Unit,
     onBucketChange: (HfFileSizeBucket) -> Unit,
@@ -213,8 +220,21 @@ private fun DetailContent(
                     },
                 )
             }
-            items(visibleFiles, key = { it.path }) { file ->
-                FileRow(file = file)
+            if (visibleFileGroups.isNotEmpty()) {
+                items(visibleFileGroups, key = { it.key }) { group ->
+                    VlmFileGroupRow(group = group)
+                }
+                val groupedPaths = visibleFileGroups.flatMap { group ->
+                    group.baseFiles.map { it.path } + group.projectorFiles.map { it.path }
+                }.toSet()
+                val remaining = visibleFiles.filterNot { it.path in groupedPaths }
+                items(remaining, key = { it.path }) { file ->
+                    FileRow(file = file)
+                }
+            } else {
+                items(visibleFiles, key = { it.path }) { file ->
+                    FileRow(file = file)
+                }
             }
             if (visibleFiles.isEmpty()) {
                 item { CaptionText("No files match the current filter.") }
@@ -243,6 +263,67 @@ private fun DetailContent(
                 }
             }
             item { Spacer(Modifier.size(dimens.spacingLg)) }
+        }
+    }
+}
+
+@Composable
+private fun VlmFileGroupRow(group: VlmFileGroup) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    var expanded by remember(group.key) { mutableStateOf(false) }
+    val baseCount = group.baseFiles.size
+    val projectorCount = group.projectorFiles.size
+    Surface(
+        shape = tnShapes.cardSmall,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.07f),
+        modifier = Modifier.fillMaxWidth(),
+        onClick = { expanded = !expanded },
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.spacingSm),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                Icon(
+                    imageVector = TnIcons.Eye,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(18.dp),
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = group.displayName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    CaptionText(
+                        text = buildList {
+                            add("$baseCount model ${if (baseCount == 1) "file" else "files"}")
+                            if (projectorCount > 0) add("$projectorCount projector ${if (projectorCount == 1) "file" else "files"}")
+                            if (group.quantizations.isNotEmpty()) add(group.quantizations.joinToString(", "))
+                        }.joinToString(" · "),
+                    )
+                }
+                CaptionText(text = formatBytes(group.totalSizeBytes))
+                Icon(
+                    imageVector = if (expanded) TnIcons.ChevronUp else TnIcons.ChevronDown,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            AnimatedVisibility(visible = expanded) {
+                Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                    group.baseFiles.forEach { file -> FileRow(file) }
+                    group.projectorFiles.forEach { file -> FileRow(file) }
+                }
+            }
         }
     }
 }

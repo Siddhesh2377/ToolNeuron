@@ -1,12 +1,12 @@
 package com.dark.tool_neuron.repo
 
 import android.content.Context
+import com.dark.download_manager.formatBytes
 import com.dark.tool_neuron.data.SocBucket
 import com.dark.tool_neuron.model.HFRepository
 import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.util.extractQuantization
-import com.dark.download_manager.formatBytes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -226,6 +226,7 @@ class ModelCatalog @Inject constructor(
             val likes = meta.optInt("likes", 0)
             val gated = meta.opt("gated")
             val isGated = gated != null && gated != false && gated.toString() != "false"
+            val repoModelType = inferModelType(repo, meta)
 
             val allFiles = (0 until tree.length()).mapNotNull { i ->
                 val file = tree.getJSONObject(i)
@@ -242,6 +243,7 @@ class ModelCatalog @Inject constructor(
 
                 val isMmproj = VlmPaths.isMmprojFileName(path)
                 val quant = if (isMmproj) "mmproj" else (extractQuantization(path) ?: "")
+                val modelType = if (isMmproj) "gguf" else repoModelType
 
                 models.add(HuggingFaceModel(
                     id = "${repo.id}__$path",
@@ -257,10 +259,14 @@ class ModelCatalog @Inject constructor(
                         add(author)
                         if (isGated) add("Gated")
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
+                        if (modelType == "embedding") {
+                            add("Embedding")
+                            add("RAG")
+                        }
                         if (isVlmRepo) add("VLM")
                         if (isMmproj) add("mmproj")
                     },
-                    modelType = "gguf",
+                    modelType = modelType,
                     isVlm = isVlmRepo,
                     isMmproj = isMmproj,
                     mmprojFileName = mmprojFile?.first.orEmpty(),
@@ -270,8 +276,31 @@ class ModelCatalog @Inject constructor(
                     mmprojSizeBytes = mmprojFile?.second ?: 0L,
                 ))
             }
-            models.sortedWith(compareByDescending<HuggingFaceModel> { it.isMmproj }.thenBy { it.sizeBytes })
+            models.sortedWith(
+                compareBy<HuggingFaceModel> { it.name.lowercase() }
+                    .thenBy { it.isMmproj }
+                    .thenBy { it.quantization }
+                    .thenBy { it.fileName.lowercase() }
+            )
         }
+
+    private fun inferModelType(repo: HFRepository, meta: JSONObject): String {
+        val haystack = buildString {
+            append(repo.id).append(' ')
+            append(repo.name).append(' ')
+            append(repo.repoPath).append(' ')
+            append(meta.optString("pipeline_tag")).append(' ')
+            meta.optJSONArray("tags")?.let { tags ->
+                for (i in 0 until tags.length()) append(tags.optString(i)).append(' ')
+            }
+        }.lowercase()
+
+        val embeddingHints = listOf(
+            "sentence-similarity", "feature-extraction", "embedding", "embeddings",
+            "embed", "bge", "e5-", "gte-", "nomic-embed", "qwen3-embedding",
+        )
+        return if (embeddingHints.any { it in haystack }) "embedding" else "gguf"
+    }
 
     private fun buildDisplayName(repoName: String, quant: String, fileName: String): String {
         if (quant.isNotBlank()) return "$repoName $quant"
@@ -400,6 +429,134 @@ class ModelCatalog @Inject constructor(
                 quantization = "Q4_K_M",
                 tags = listOf("Embedding", "RAG", "Matryoshka", "Apache-2.0", "Nomic"),
                 modelType = "embedding",
+            ),
+            HuggingFaceModel(
+                id = "bge-small-en-v1.5-q8_0",
+                name = "BGE Small EN v1.5 (Q8)",
+                fileName = "bge-small-en-v1.5-q8_0.gguf",
+                fileUri = "${HuggingFaceApi.BASE}/ggml-org/bge-small-en-v1.5-Q8_0-GGUF/resolve/main/bge-small-en-v1.5-q8_0.gguf",
+                approximateSize = "~133 MB",
+                sizeBytes = 133_000_000L,
+                repoId = "embedding-built-in",
+                quantization = "Q8_0",
+                tags = listOf("Embedding", "RAG", "BGE", "Small"),
+                modelType = "embedding",
+            ),
+            HuggingFaceModel(
+                id = "e5-small-v2-q8_0",
+                name = "E5 Small v2 (Q8)",
+                fileName = "e5-small-v2-q8_0.gguf",
+                fileUri = "${HuggingFaceApi.BASE}/ggml-org/e5-small-v2-Q8_0-GGUF/resolve/main/e5-small-v2-q8_0.gguf",
+                approximateSize = "~133 MB",
+                sizeBytes = 133_000_000L,
+                repoId = "embedding-built-in",
+                quantization = "Q8_0",
+                tags = listOf("Embedding", "RAG", "E5", "Small"),
+                modelType = "embedding",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-nmkd-upgiflite-v2-x2",
+                name = "NMKD UpgifLiteV2 x2 (MNN)",
+                fileName = "2x_NMKD-UpgifLiteV2_210k.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/2x_NMKD-UpgifLiteV2_210k.mnn",
+                approximateSize = "~20 MB",
+                sizeBytes = 20_170_128L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "2x", "Use: General", "Style: Natural", "runtime=MNN", "scale=2x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 2x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-nmkd-upgiflite-v2-x4",
+                name = "NMKD UpgifLiteV2 x4 (MNN)",
+                fileName = "4x_NMKD-UpgifLiteV2_210k.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/4x_NMKD-UpgifLiteV2_210k.mnn",
+                approximateSize = "~20 MB",
+                sizeBytes = 20_207_664L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: General", "Style: Balanced", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-realesrgan-anime-x4",
+                name = "RealESRGAN Anime x4 (MNN)",
+                fileName = "RealESRGAN_x4plus_anime_6B-x4.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/RealESRGAN_x4plus_anime_6B-x4.mnn",
+                approximateSize = "~18 MB",
+                sizeBytes = 17_934_208L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Anime", "Style: Line art", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-nomos8ksc-x4",
+                name = "ESRGAN Nomos8kSC x4 (MNN)",
+                fileName = "ESRGAN-Nomos8kSC-x4.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/ESRGAN-Nomos8kSC-x4.mnn",
+                approximateSize = "~34 MB",
+                sizeBytes = 33_566_440L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Photo", "Style: Natural detail", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-realesrgan-sourcebook-x4",
+                name = "RealESRGAN SourceBook x4 (MNN)",
+                fileName = "RealESRGAN-SourceBook-latest.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/RealESRGAN-SourceBook-latest.mnn",
+                approximateSize = "~34 MB",
+                sizeBytes = 33_648_656L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Portrait", "Style: Soft realistic", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-wtp-colords-x4",
+                name = "ESRGAN WTP ColorDS x4 (MNN)",
+                fileName = "ESRGAN-WTP-ColorDS-x4.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/ESRGAN-WTP-ColorDS-x4.mnn",
+                approximateSize = "~34 MB",
+                sizeBytes = 33_637_744L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Sharp cleanup", "Style: Crisp", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-moesr-illustration-fix1-x4",
+                name = "MoeSR Illustration fix1 x4 (MNN)",
+                fileName = "MoeSR-ESRGAN-jp_Illustration-fix1-d-x4.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/MoeSR-ESRGAN-jp_Illustration-fix1-d-x4.mnn",
+                approximateSize = "~34 MB",
+                sizeBytes = 33_637_600L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Anime", "Style: Illustration", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
+            ),
+            HuggingFaceModel(
+                id = "mnn-upscaler-moesr-illustration-fix2-x4",
+                name = "MoeSR Illustration fix2 x4 (MNN)",
+                fileName = "MoeSR-ESRGAN-jp_Illustration-fix2-x4.mnn",
+                fileUri = "${HuggingFaceApi.BASE}/tumuyan2/realsr-models/resolve/main/models-MNNSR/MoeSR-ESRGAN-jp_Illustration-fix2-x4.mnn",
+                approximateSize = "~34 MB",
+                sizeBytes = 33_637_600L,
+                repoId = "upscaler-built-in",
+                tags = listOf("Upscaler", "MNN", "4x", "Use: Other", "Style: Illustration", "runtime=MNN", "scale=4x"),
+                modelType = "image_upscaler",
+                isUpscaler = true,
+                featureLabel = "Upscale 4x",
             ),
         )
     }

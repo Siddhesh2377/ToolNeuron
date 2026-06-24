@@ -235,9 +235,18 @@ Java_com_dark_native_1server_NativeServer_nativeSetWebUiHtml(
 }
 
 JNIEXPORT void JNICALL
+Java_com_dark_native_1server_NativeServer_nativeSetWebUiCss(
+        JNIEnv* env, jobject, jstring css) {
+    std::string c = jstringToStd(env, css);
+    if (c.empty()) tn::server::webui::clear_css();
+    else tn::server::webui::set_css(c);
+}
+
+JNIEXPORT void JNICALL
 Java_com_dark_native_1server_NativeServer_nativeClearWebUi(
         JNIEnv*, jobject) {
     tn::server::webui::clear_html();
+    tn::server::webui::clear_css();
 }
 
 JNIEXPORT void JNICALL

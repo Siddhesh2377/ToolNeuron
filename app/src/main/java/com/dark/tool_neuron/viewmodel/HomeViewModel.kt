@@ -18,7 +18,11 @@ import com.dark.tool_neuron.model.WebSearchEvent
 import com.dark.tool_neuron.model.WebSearchUiState
 import com.dark.gguf_lib.ImageQuality
 import com.dark.tool_neuron.data.AppPreferences
+import com.dark.tool_neuron.data.AppVisibility
+import com.dark.tool_neuron.data.UserNotificationManager
+import com.dark.tool_neuron.repo.web_search.WebSearchMode
 import com.dark.tool_neuron.repo.ChatRepository
+import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
 import com.dark.tool_neuron.repo.VlmVisionCacheRepository
@@ -79,6 +83,9 @@ class HomeViewModel @Inject constructor(
     private val webSearchCoordinator: WebSearchCoordinator,
     private val appPrefs: AppPreferences,
     private val vlmCache: VlmVisionCacheRepository,
+    private val downloadCoordinator: DownloadCoordinator,
+    private val appVisibility: AppVisibility,
+    private val userNotifications: UserNotificationManager,
 ) : ViewModel() {
 
     val speakingMessageId: StateFlow<String?> = voiceManager.speakingId
@@ -154,7 +161,12 @@ class HomeViewModel @Inject constructor(
     val installedModels: StateFlow<List<ModelInfo>> = modelRepo.models
 
     val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
-        .map { list -> list.filter { it.providerType == ProviderType.GGUF } }
+        .map { list ->
+            list.filter {
+                it.providerType == ProviderType.GGUF ||
+                    it.providerType == ProviderType.VISION_CHAT
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val embeddingModelInstalled: StateFlow<Boolean> = modelRepo.models
@@ -182,6 +194,9 @@ class HomeViewModel @Inject constructor(
 
     private val _webSearchEnabled = MutableStateFlow(false)
     val webSearchEnabled = _webSearchEnabled.asStateFlow()
+
+    private val _webSearchMode = MutableStateFlow(WebSearchMode.sanitizePref(appPrefs.webSearchMode))
+    val webSearchMode = _webSearchMode.asStateFlow()
 
     val webSearchActive: StateFlow<Boolean> = webSearchCoordinator.activeRuns
         .map { it.isNotEmpty() }
@@ -280,6 +295,8 @@ class HomeViewModel @Inject constructor(
     private val _contextUsage = MutableStateFlow(0f)
     val contextUsage: StateFlow<Float> = _contextUsage.asStateFlow()
 
+    private val _manualGenerationStatus = MutableStateFlow<GenerationStatus?>(null)
+
     val pillState: StateFlow<PillState> = combine(
         InferenceClient.isModelLoaded,
         modelSession.loadState,
@@ -307,6 +324,7 @@ class HomeViewModel @Inject constructor(
         _messages,
         _streamingFragment,
         _contextUsage,
+        _manualGenerationStatus,
     ) { args ->
         val isLoaded = args[0] as Boolean
         val loadState = args[1] as ModelLoadState
@@ -317,9 +335,11 @@ class HomeViewModel @Inject constructor(
         val msgs = @Suppress("UNCHECKED_CAST") (args[6] as List<ChatMessage>)
         val streaming = args[7] as StreamingFragment?
         val ctxUsage = args[8] as Float
+        val manualStatus = args[9] as GenerationStatus?
 
         val modelName = active?.name ?: streaming?.let { "Model" } ?: ""
         when {
+            manualStatus != null -> manualStatus
             loadState is ModelLoadState.Loading -> GenerationStatus.ModelLoading(modelName.ifBlank { "Model" })
             loadState is ModelLoadState.Error -> GenerationStatus.Error(loadState.message, modelName.ifBlank { null })
             generating -> {
@@ -335,6 +355,14 @@ class HomeViewModel @Inject constructor(
             else -> GenerationStatus.Hidden
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, GenerationStatus.Welcome)
+
+    private fun showTemporaryStatus(status: GenerationStatus, durationMs: Long = 4_500L) {
+        _manualGenerationStatus.value = status
+        viewModelScope.launch {
+            delay(durationMs)
+            if (_manualGenerationStatus.value == status) _manualGenerationStatus.value = null
+        }
+    }
 
     private var generationJob: Job? = null
 
@@ -374,6 +402,12 @@ class HomeViewModel @Inject constructor(
         val next = !_webSearchEnabled.value
         _webSearchEnabled.value = next
         if (next) _thinkingEnabled.value = false
+    }
+
+    fun setWebSearchMode(key: String) {
+        val k = WebSearchMode.sanitizePref(key)
+        appPrefs.webSearchMode = k
+        _webSearchMode.value = k
     }
 
     fun toggleThinking() {
@@ -499,6 +533,7 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             _isIngestingDocument.value = true
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.ingestDocument(chatId, uri, name, size, mimeType)
             _isIngestingDocument.value = false
             result.onSuccess { doc ->
@@ -519,6 +554,7 @@ class HomeViewModel @Inject constructor(
     fun deepIndexDocument(docId: String) {
         viewModelScope.launch {
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.deepIndex(docId)
             result.onSuccess { updated ->
                 _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
@@ -532,6 +568,7 @@ class HomeViewModel @Inject constructor(
         if (raptorBuilding.value.contains(docId)) return
         viewModelScope.launch {
             _documentError.value = null
+            modelSession.prepareForHeavyBackgroundWork()
             val result = ragManager.buildRaptorTree(docId)
             result.onSuccess { updated ->
                 _chatDocuments.value = _chatDocuments.value.map { if (it.id == updated.id) updated else it }
@@ -641,6 +678,7 @@ class HomeViewModel @Inject constructor(
         if (serverController.isBusy) return
         if (_isGenerating.value) return
         if (webSearchActive.value) return
+        modelSession.markActivity()
         viewModelScope.launch { modelSession.load(model) }
     }
 
@@ -654,6 +692,7 @@ class HomeViewModel @Inject constructor(
     fun sendMessage(text: String) {
         if (serverController.isBusy) return
         if (webSearchActive.value) return
+        modelSession.markActivity()
         val trimmed = text.trim()
         val images = _pendingImages.value
         if (_isGenerating.value) return
@@ -671,13 +710,24 @@ class HomeViewModel @Inject constructor(
         val active = activeModel.value
             ?: chatModels.value.firstOrNull()?.also { modelRepo.setActive(it.id) }
             ?: run {
+                val message = if (downloadCoordinator.activeCount.value > 0) {
+                    "A model is still downloading. Wait for it to finish, then send again."
+                } else {
+                    "Install or import a chat model before sending a message."
+                }
+                showTemporaryStatus(GenerationStatus.Error(message))
                 _loadModelWindow.value = true
                 return
             }
+        if (images.isNotEmpty() && active.providerType != ProviderType.VISION_CHAT) {
+            showTemporaryStatus(GenerationStatus.Error("Image chat requires a Vision chat model."))
+            _loadModelWindow.value = true
+            return
+        }
 
-        val webSearchQuery = parseWebSearchInput(trimmed)
-        if (webSearchQuery != null) {
-            startWebSearch(active, webSearchQuery)
+        val webSearch = parseWebSearchInput(trimmed)
+        if (webSearch != null) {
+            startWebSearch(active, webSearch.mode, webSearch.query)
             return
         }
 
@@ -713,19 +763,46 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    private fun parseWebSearchInput(text: String): String? {
-        if (text.startsWith("/search", ignoreCase = true)) {
-            val q = text.removePrefix("/search").removePrefix("/SEARCH").trim()
-            return q.ifBlank { null }
+    private fun parseWebSearchInput(text: String): WebSearchMode.Resolved? {
+        val lower = text.trimStart().lowercase()
+        val isSlash = SEARCH_SLASHES.any { lower == it || lower.startsWith("$it ") || lower.startsWith("$it\n") }
+        val default = WebSearchMode.fromPref(_webSearchMode.value)
+        if (isSlash) {
+            val resolved = WebSearchMode.resolve(text, default)
+            return if (resolved.query.isBlank()) null else resolved
         }
-        if (_webSearchEnabled.value) return text
+        if (_webSearchEnabled.value) return WebSearchMode.resolve(text, default)
         return null
     }
 
-    private fun startWebSearch(active: ModelInfo, userQuery: String) {
+    private fun webSearchQueryWithContext(messages: List<ChatMessage>, userQuery: String): String {
+        val normalized = userQuery.trim()
+        val lowInformationFollowUp = normalized.split(Regex("\\s+")).size <= 4 &&
+            (normalized.contains("link", ignoreCase = true) ||
+                normalized.contains("url", ignoreCase = true) ||
+                normalized.contains("download", ignoreCase = true) ||
+                normalized.contains("exact", ignoreCase = true))
+        if (!lowInformationFollowUp) return normalized
+
+        val priorTopic = messages.asReversed()
+            .asSequence()
+            .filter { it.role == ROLE_USER }
+            .map { it.content.trim() }
+            .firstOrNull { content ->
+                content.isNotBlank() &&
+                    content.length > normalized.length &&
+                    !content.equals(normalized, ignoreCase = true)
+            }
+            ?: return normalized
+        return "$priorTopic $normalized"
+    }
+
+    private fun startWebSearch(active: ModelInfo, mode: WebSearchMode, userQuery: String) {
         if (webSearchActive.value) return
         val chatId = ensureChat(active)
-        val isFirstTurn = chatRepo.getMessages(chatId).count { it.role == ROLE_USER } == 1
+        val previousMessages = chatRepo.getMessages(chatId)
+        val searchQuery = webSearchQueryWithContext(previousMessages, userQuery)
+        val isFirstTurn = previousMessages.count { it.role == ROLE_USER } == 1
         val userMessage = ChatMessage(
             id = UUID.randomUUID().toString(),
             chatId = chatId,
@@ -743,18 +820,23 @@ class HomeViewModel @Inject constructor(
             id = cardMessageId,
             chatId = chatId,
             role = ROLE_ASSISTANT,
-            content = userQuery,
+            content = searchQuery,
             timestamp = System.currentTimeMillis() + 1,
             kind = MessageKind.Text,
             modelName = active.name,
             webSearchRunId = placeholderRunId,
-            webSearchState = WebSearchUiState(userQuery = userQuery).toJson(),
+            webSearchState = WebSearchUiState(
+                userQuery = searchQuery,
+                mode = mode.label,
+                maxRounds = mode.maxRounds,
+            ).toJson(),
         )
         chatRepo.addMessage(cardMessage)
 
         val runId = webSearchCoordinator.start(
             scope = viewModelScope,
-            userQuery = userQuery,
+            userQuery = searchQuery,
+            mode = mode,
         )
         webSearchMessages[runId] = chatId to cardMessageId
 
@@ -779,12 +861,15 @@ class HomeViewModel @Inject constructor(
         // as a plain chat send).
         if (lastAssistant.webSearchRunId != null) {
             val query = lastAssistant.content
+            val priorMode = WebSearchUiState.fromJson(lastAssistant.webSearchState).mode
+            val mode = WebSearchMode.entries.firstOrNull { it.label == priorMode }
+                ?: WebSearchMode.classify(query)
             chatRepo.deleteMessage(lastAssistant.id)
             val msgs = chatRepo.getMessages(chatId)
             val lastUser = msgs.lastOrNull { it.role == ROLE_USER }
             if (lastUser != null) chatRepo.deleteMessage(lastUser.id)
             _messages.value = chatRepo.getMessages(chatId)
-            startWebSearch(active, query)
+            startWebSearch(active, mode, query)
             return
         }
         chatRepo.deleteMessage(lastAssistant.id)
@@ -989,9 +1074,12 @@ class HomeViewModel @Inject constructor(
         // mid-range device. We never let the bar exceed 97% before Done so
         // a fast summary doesn't visibly "finish then re-snap" at completion.
         private const val GEN_PHASE_TARGET_MS = 12_000L
+
+        private val SEARCH_SLASHES = listOf("/search", "/deep", "/research", "/exhaustive")
     }
 
     private fun runGeneration(chatId: String, isFirstTurn: Boolean, userText: String) {
+        modelSession.setGenerationBusy(true)
         _messages.value = chatRepo.getMessages(chatId)
         _streamingFragment.value = StreamingFragment(chatId, "", "")
         _isGenerating.value = true
@@ -1042,6 +1130,7 @@ class HomeViewModel @Inject constructor(
                     citations = outcome?.citations.orEmpty(),
                     wasStopped = wasStopped,
                 )
+                modelSession.setGenerationBusy(false)
             }
         }
     }
@@ -1093,6 +1182,10 @@ class HomeViewModel @Inject constructor(
         chatRepo.addMessage(finalMessage)
         if (isFirstTurn) chatRepo.autoTitle(chatId, userText)
         _messages.value = chatRepo.getMessages(chatId)
+        if (!wasStopped && error == null && !appVisibility.isForeground) {
+            val chatTitle = chats.value.firstOrNull { it.id == chatId }?.title.orEmpty()
+            userNotifications.notifyAssistantResponse(chatTitle, finalContent)
+        }
         _streamingFragment.value = null
         _isGenerating.value = false
     }

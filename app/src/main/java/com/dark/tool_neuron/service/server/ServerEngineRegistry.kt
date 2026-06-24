@@ -28,9 +28,8 @@ class ServerEngineRegistry(private val app: Context) {
     }
 
     suspend fun chatFor(modelId: String): ServerEngine? = chatLock.withLock {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.CHAT_GGUF)
-        entry ?: return@withLock null
-        if (entry.kind != ServerEngineKind.CHAT_GGUF) return@withLock null
+        val entry = catalog.byId(modelId) ?: return@withLock null
+        if (entry.kind != ServerEngineKind.CHAT_GGUF && entry.kind != ServerEngineKind.VLM) return@withLock null
         if (chat.isLoaded && chat.loadedId() == entry.id) return@withLock chat
         if (chat.isLoaded) chat.unload()
         val ok = chat.load(entry.id, entry.path, entry.configJson)
@@ -38,23 +37,21 @@ class ServerEngineRegistry(private val app: Context) {
     }
 
     suspend fun vlmFor(modelId: String): ServerVlmEngine? = vlmLock.withLock {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.VLM)
-        entry ?: return@withLock null
+        val entry = catalog.byId(modelId) ?: return@withLock null
         if (entry.kind != ServerEngineKind.VLM) return@withLock null
         val ok = vlm.ensureLoaded(entry.id, entry.path, entry.mmprojPath, entry.configJson)
         if (ok) vlm else null
     }
 
     suspend fun embedFor(modelId: String): ServerEmbeddingEngine? = embedLock.withLock {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.EMBEDDING)
-        entry ?: return@withLock null
+        val entry = catalog.byId(modelId) ?: return@withLock null
         if (entry.kind != ServerEngineKind.EMBEDDING) return@withLock null
         val ok = embed.ensureLoaded(entry.id, entry.path, entry.configJson)
         if (ok) embed else null
     }
 
     fun ttsFor(modelId: String): ServerTtsEngine? {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.TTS) ?: return null
+        val entry = catalog.byId(modelId) ?: return null
         if (entry.kind != ServerEngineKind.TTS) return null
         return synchronized(ttsLockObj) {
             try {
@@ -67,7 +64,7 @@ class ServerEngineRegistry(private val app: Context) {
     }
 
     fun sttFor(modelId: String): ServerSttEngine? {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.STT) ?: return null
+        val entry = catalog.byId(modelId) ?: return null
         if (entry.kind != ServerEngineKind.STT) return null
         return synchronized(sttLockObj) {
             try {
@@ -81,14 +78,14 @@ class ServerEngineRegistry(private val app: Context) {
 
     suspend fun imageGenFor(modelId: String, width: Int, height: Int): Pair<ServerImageEngine, ServerCatalogEntry>? =
         imgLock.withLock {
-            val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.IMAGE_GEN) ?: return@withLock null
+            val entry = catalog.byId(modelId) ?: return@withLock null
             if (entry.kind != ServerEngineKind.IMAGE_GEN) return@withLock null
             val ok = img.loadDiffusion(entry.id, entry.name, entry.path, width, height)
             if (ok) img to entry else null
         }
 
     suspend fun upscalerFor(modelId: String): Pair<ServerImageEngine, ServerCatalogEntry>? = imgLock.withLock {
-        val entry = catalog.byId(modelId) ?: catalog.firstOf(ServerEngineKind.IMAGE_UPSCALER) ?: return@withLock null
+        val entry = catalog.byId(modelId) ?: return@withLock null
         if (entry.kind != ServerEngineKind.IMAGE_UPSCALER) return@withLock null
         val ok = img.loadUpscaler(entry.id, entry.path)
         if (ok) img to entry else null

@@ -1,5 +1,8 @@
 package com.dark.tool_neuron.ui.screens.model_manager
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -7,15 +10,20 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -24,12 +32,14 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -37,9 +47,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
+import com.dark.tool_neuron.repo.BackupConflict
+import com.dark.tool_neuron.repo.BackupProgress
+import com.dark.tool_neuron.repo.BackupPreview
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.icons.TnIcons
+import com.dark.tool_neuron.ui.screens.model_store.ModelTypePickerDialog
+import com.dark.tool_neuron.ui.screens.model_store.providerTypeLabel
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
 import com.dark.tool_neuron.util.extractParameterCount
@@ -57,7 +72,19 @@ fun ModelManagerScreen(
     val dimens = LocalDimens.current
     val installed by viewModel.installedModels.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
+    val backupStatus by viewModel.backupStatus.collectAsStateWithLifecycle()
+    val backupProgress by viewModel.backupProgress.collectAsStateWithLifecycle()
+    val importPreview by viewModel.backupImportPreview.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/zip"),
+    ) { uri -> uri?.let { viewModel.exportModels(it) } }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri -> uri?.let { viewModel.previewImport(it) } }
     var pendingDelete by remember { mutableStateOf<ModelInfo?>(null) }
+    var pendingTypeChange by remember { mutableStateOf<ModelInfo?>(null) }
+    var selectedType by remember { mutableStateOf<ProviderType?>(null) }
 
     Scaffold(
         topBar = {
@@ -66,7 +93,7 @@ fun ModelManagerScreen(
                     Column {
                         Text("Model Settings", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Edit configs, delete installed models",
+                            "Edit configs, categories, delete installed models",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -94,6 +121,9 @@ fun ModelManagerScreen(
                     if (items.isEmpty()) null else section to items
                 }
             }
+            val visibleGroups = remember(grouped, selectedType) {
+                if (selectedType == null) grouped else grouped.filter { it.first.type == selectedType }
+            }
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -104,7 +134,26 @@ fun ModelManagerScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingSm),
             ) {
-                grouped.forEach { (section, items) ->
+                item(key = "backup-actions") {
+                    BackupActionsCard(
+                        status = backupStatus,
+                        progress = backupProgress,
+                        onExport = {
+                            exportLauncher.launch("Tool-Neuron-models.zip")
+                        },
+                        onImport = {
+                            importLauncher.launch(arrayOf("application/zip", "application/octet-stream"))
+                        },
+                    )
+                }
+                item(key = "tabs") {
+                    ModelTypeTabs(
+                        groups = grouped.map { it.first },
+                        selectedType = selectedType,
+                        onSelect = { selectedType = it },
+                    )
+                }
+                visibleGroups.forEach { (section, items) ->
                     item(key = "header-${section.type.name}") {
                         SectionHeader(label = section.label, count = items.size, blurb = section.blurb)
                     }
@@ -113,12 +162,19 @@ fun ModelManagerScreen(
                             model = model,
                             isDeleting = deleteInProgress == model.id,
                             onEdit = { onEditModel(model.id) },
+                            onChangeType = { pendingTypeChange = model },
                             onDelete = { pendingDelete = model },
                         )
                     }
                 }
             }
         }
+    }
+
+    LaunchedEffect(backupStatus) {
+        val status = backupStatus ?: return@LaunchedEffect
+        Toast.makeText(context, status, Toast.LENGTH_SHORT).show()
+        viewModel.clearBackupStatus()
     }
 
     pendingDelete?.let { model ->
@@ -137,6 +193,175 @@ fun ModelManagerScreen(
             },
         )
     }
+
+    pendingTypeChange?.let { model ->
+        ModelTypePickerDialog(
+            title = "Model type",
+            fileName = model.name,
+            selectedType = model.providerType,
+            onPick = { type ->
+                viewModel.updateModelProviderType(model.id, type)
+                pendingTypeChange = null
+            },
+            onDismiss = { pendingTypeChange = null },
+        )
+    }
+
+    importPreview?.let { preview ->
+        ImportPreviewDialog(
+            preview = preview,
+            onDismiss = viewModel::dismissImportPreview,
+            onImport = { ids, overwrite, restoreSettings ->
+                viewModel.confirmPreviewImport(ids, overwrite, restoreSettings)
+            },
+        )
+    }
+}
+
+@Composable
+fun ImportPreviewDialog(
+    preview: BackupPreview,
+    onDismiss: () -> Unit,
+    onImport: (Set<String>, Boolean, Boolean) -> Unit,
+) {
+    var selectedIds by remember(preview) { mutableStateOf(preview.models.map { it.id }.toSet()) }
+    var overwriteExisting by remember(preview) { mutableStateOf(true) }
+    var restoreSettings by remember(preview) { mutableStateOf(preview.hasSettings) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Restore backup") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                CaptionText(text = "${preview.models.size} models found. Select what to import.")
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    items(preview.models, key = { it.id }) { model ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            Checkbox(
+                                checked = model.id in selectedIds,
+                                onCheckedChange = { checked ->
+                                    selectedIds = if (checked) selectedIds + model.id else selectedIds - model.id
+                                },
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(model.name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                val conflict = if (model.conflict == BackupConflict.SAME_ID_EXISTS) " · existing ID" else ""
+                                CaptionText(text = "${providerTypeLabel(model.providerType)} · ${model.fileCount} files · ${formatBytes(model.totalBytes)}$conflict")
+                            }
+                        }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Checkbox(checked = overwriteExisting, onCheckedChange = { overwriteExisting = it })
+                    Text("Overwrite existing model IDs", style = MaterialTheme.typography.bodySmall)
+                }
+                if (preview.hasSettings) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = restoreSettings, onCheckedChange = { restoreSettings = it })
+                        Text("Restore roles and model defaults", style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = { onImport(selectedIds, overwriteExisting, restoreSettings) },
+                enabled = selectedIds.isNotEmpty(),
+            ) { Text("Import selected") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
+@Composable
+fun BackupProgressDialog(
+    progress: BackupProgress,
+    status: String?,
+    onContinueInBackground: () -> Unit,
+    onCloseStatus: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text("Restoring models") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (progress.totalBytes > 0L) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                val eta = progress.etaSeconds?.let { " · ${it}s left" }.orEmpty()
+                CaptionText(text = "${progress.label}$eta")
+                if (!status.isNullOrBlank()) CaptionText(text = status)
+            }
+        },
+        confirmButton = {
+            Button(onClick = onContinueInBackground) { Text("Continue in background") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCloseStatus) { Text("Hide status") }
+        },
+    )
+}
+
+@Composable
+private fun BackupActionsCard(
+    status: String?,
+    progress: BackupProgress?,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    val tnShapes = LocalTnShapes.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f),
+        shape = tnShapes.cardSmall,
+    ) {
+        Column(
+            modifier = Modifier.padding(dimens.cardPadding),
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        ) {
+            Text(
+                text = "Model backup",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            CaptionText(
+                text = "Export or restore installed models, roles, and per-model config as a ToolNeuron ZIP.",
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+                Button(onClick = onExport) { Text("Export") }
+                Button(onClick = onImport) { Text("Import") }
+            }
+            if (progress != null) {
+                if (progress.totalBytes > 0L) {
+                    LinearProgressIndicator(
+                        progress = { progress.fraction },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                }
+                val eta = progress.etaSeconds?.let { " · ${it}s left" }.orEmpty()
+                CaptionText(text = "${progress.label}$eta")
+            }
+            if (!status.isNullOrBlank()) CaptionText(text = status)
+        }
+    }
 }
 
 @Composable
@@ -144,6 +369,7 @@ private fun ModelManagerCard(
     model: ModelInfo,
     isDeleting: Boolean,
     onEdit: () -> Unit,
+    onChangeType: () -> Unit,
     onDelete: () -> Unit,
 ) {
     val dimens = LocalDimens.current
@@ -187,14 +413,7 @@ private fun ModelManagerCard(
                     if (!params.isNullOrBlank()) Tag(text = params)
                     if (!quant.isNullOrBlank()) Tag(text = quant)
                 }
-                val typeLabel = when (model.providerType) {
-                    ProviderType.GGUF -> "Chat (GGUF)"
-                    ProviderType.TTS -> "Text-to-Speech"
-                    ProviderType.STT -> "Speech-to-Text"
-                    ProviderType.EMBEDDING -> "Embedding (RAG)"
-                    ProviderType.IMAGE_GEN -> "Image Generation"
-                    ProviderType.IMAGE_UPSCALER -> "Upscale 4×"
-                }
+                val typeLabel = providerTypeLabel(model.providerType)
                 val sourceLabel = if (model.pathType == PathType.CONTENT_URI) "Local" else "Downloaded"
                 CaptionText(
                     text = if (model.fileSize > 0)
@@ -220,6 +439,11 @@ private fun ModelManagerCard(
                     contentDescription = "Edit config",
                 )
                 ActionButton(
+                    onClickListener = onChangeType,
+                    icon = TnIcons.Settings,
+                    contentDescription = "Change type",
+                )
+                ActionButton(
                     onClickListener = onDelete,
                     icon = TnIcons.Trash,
                     contentDescription = "Delete model",
@@ -229,13 +453,50 @@ private fun ModelManagerCard(
     }
 }
 
-private data class Section(val type: ProviderType, val label: String, val blurb: String)
+@Composable
+private fun ModelTypeTabs(
+    groups: List<Section>,
+    selectedType: ProviderType?,
+    onSelect: (ProviderType?) -> Unit,
+) {
+    val dimens = LocalDimens.current
+    LazyRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+        contentPadding = PaddingValues(vertical = dimens.spacingXs),
+    ) {
+        item(key = "all") {
+            FilterChip(
+                selected = selectedType == null,
+                onClick = { onSelect(null) },
+                label = { Text("All") },
+            )
+        }
+        items(groups, key = { it.type.name }) { section ->
+            FilterChip(
+                selected = selectedType == section.type,
+                onClick = { onSelect(section.type) },
+                label = { Text(section.tabLabel) },
+            )
+        }
+    }
+}
+
+private data class Section(
+    val type: ProviderType,
+    val label: String,
+    val blurb: String,
+    val tabLabel: String,
+)
 
 private val SECTIONS = listOf(
-    Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen."),
-    Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG)."),
-    Section(ProviderType.TTS,       "Text-to-Speech",    "Reads model replies aloud."),
-    Section(ProviderType.STT,       "Speech-to-Text",    "Transcribes voice input."),
+    Section(ProviderType.GGUF,      "Chat models",       "Used for the conversation in the chat screen.", "Chat"),
+    Section(ProviderType.VISION_CHAT, "Vision chat models", "Used for chat with image attachments.", "Vision"),
+    Section(ProviderType.EMBEDDING, "Embedding models",  "Used to index documents you attach to chats (RAG).", "RAG"),
+    Section(ProviderType.IMAGE_GEN, "Image generation",  "Used by the local image workspace.", "Image"),
+    Section(ProviderType.IMAGE_UPSCALER, "Image upscalers", "Used by image upscale mode.", "Upscale"),
+    Section(ProviderType.TTS,       "Text-to-Speech",    "Reads model replies aloud.", "TTS"),
+    Section(ProviderType.STT,       "Speech-to-Text",    "Transcribes voice input.", "STT"),
 )
 
 @Composable

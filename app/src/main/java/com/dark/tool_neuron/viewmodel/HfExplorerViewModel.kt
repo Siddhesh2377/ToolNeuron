@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.HFRepository
+import com.dark.tool_neuron.model.VlmFileGroup
+import com.dark.tool_neuron.model.VlmFileGroups
 import com.dark.tool_neuron.repo.GatedFilter
 import com.dark.tool_neuron.repo.HfApiError
 import com.dark.tool_neuron.repo.HfFilters
@@ -250,8 +252,14 @@ class HfExplorerViewModel @Inject constructor(
         }
         val cap = _fileSizeBucket.value.maxBytes
         if (cap != Long.MAX_VALUE) list = list.filter { it.sizeBytes in 1..cap }
-        return list.sortedBy { it.sizeBytes }
+        return list.sortedWith(compareBy<HfSibling> { it.path.substringAfterLast('/').lowercase() }.thenBy { it.sizeBytes })
     }
+
+    fun visibleFileGroups(detail: HfModelDetail): List<VlmFileGroup> =
+        VlmFileGroups.fromFiles(visibleFiles(detail).filter {
+            it.path.endsWith(".gguf", ignoreCase = true) ||
+                it.path.contains("mmproj", ignoreCase = true)
+        })
 
     private fun loadTagsCatalog() {
         viewModelScope.launch {

@@ -25,7 +25,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -35,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dark.download_manager.HxdState
 import com.dark.download_manager.HxdStatus
 import com.dark.tool_neuron.model.HuggingFaceModel
+import com.dark.tool_neuron.model.ModelInstallProgress
 import com.dark.tool_neuron.ui.components.ActionButton
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.icons.TnIcons
@@ -50,12 +53,14 @@ internal fun BrowseModelsTab(
     isLoading: Boolean,
     error: String?,
     downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
     extractingIds: Set<String>,
     extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
     viewModel: ModelStoreViewModel,
     onDownload: (HuggingFaceModel) -> Unit,
     onCancelDownload: (String) -> Unit,
+    onClearDownload: (String) -> Unit,
     onRetry: () -> Unit
 ) {
     val dimens = LocalDimens.current
@@ -101,9 +106,9 @@ internal fun BrowseModelsTab(
                     label = "repo_nav"
                 ) { repoKey ->
                     if (repoKey == null) {
-                        RepoCardListView(viewModel, isLoading, downloadStates)
+                        RepoCardListView(viewModel, isLoading, downloadStates, installStates)
                     } else {
-                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload)
+                        RepoDetailView(repoKey, viewModel, isLoading, downloadStates, installStates, extractingIds, extractingFile, installedModelIds, onDownload, onCancelDownload, onClearDownload)
                     }
                 }
             }
@@ -119,7 +124,8 @@ internal fun BrowseModelsTab(
 internal fun RepoCardListView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
-    downloadStates: Map<String, HxdState>
+    downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
 ) {
     val dimens = LocalDimens.current
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
@@ -134,7 +140,9 @@ internal fun RepoCardListView(
             val repoModels = remember(filteredModels, repoKey) { viewModel.getModelsForRepo(repoKey) }
             val hasActiveDownload = repoModels.any { model ->
                 val state = downloadStates[model.id]
-                state != null && state.status in listOf(HxdStatus.QUEUED, HxdStatus.CONNECTING, HxdStatus.DOWNLOADING)
+                val install = installStates[model.id]
+                (state != null && state.status in listOf(HxdStatus.QUEUED, HxdStatus.CONNECTING, HxdStatus.DOWNLOADING)) ||
+                    install?.isActive == true
             }
 
             StoreRepoCard(info, hasActiveDownload) { viewModel.selectRepository(repoKey) }
@@ -199,15 +207,17 @@ internal fun RepoDetailView(
     viewModel: ModelStoreViewModel,
     isLoading: Boolean,
     downloadStates: Map<String, HxdState>,
+    installStates: Map<String, ModelInstallProgress>,
     extractingIds: Set<String>,
     extractingFile: Map<String, String>,
     installedModelIds: Set<String>,
     onDownload: (HuggingFaceModel) -> Unit,
-    onCancelDownload: (String) -> Unit
+    onCancelDownload: (String) -> Unit,
+    onClearDownload: (String) -> Unit,
 ) {
     val dimens = LocalDimens.current
     val filteredModels by viewModel.filteredModels.collectAsStateWithLifecycle()
-    val repoModels = remember(filteredModels, repoKey) { viewModel.getModelsForRepo(repoKey) }
+    val taskGroups = remember(filteredModels, repoKey) { viewModel.getTaskGroupsForRepo(repoKey) }
     val groupedRepos = remember(filteredModels) { viewModel.getGroupedRepos() }
     val repoInfo = groupedRepos[repoKey]
 
@@ -241,17 +251,57 @@ internal fun RepoDetailView(
             contentPadding = PaddingValues(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
-            items(repoModels, key = { it.id }) { model ->
-                CatalogModelCard(
-                    model = model,
-                    isInstalled = model.id in installedModelIds,
-                    downloadState = downloadStates[model.id],
-                    isExtracting = model.id in extractingIds,
-                    extractingEntryName = extractingFile[model.id],
-                    onDownload = { onDownload(model) },
-                    onCancel = { onCancelDownload(model.id) }
-                )
+            taskGroups.forEach { (taskName, modelsForTask) ->
+                item(key = "task_$repoKey$taskName") {
+                    TaskSectionHeader(
+                        title = taskName,
+                        count = modelsForTask.size,
+                    )
+                }
+                items(modelsForTask, key = { it.id }) { model ->
+                    CatalogModelCard(
+                        model = model,
+                        isInstalled = model.id in installedModelIds,
+                        downloadState = downloadStates[model.id],
+                        installProgress = installStates[model.id],
+                        isExtracting = model.id in extractingIds,
+                        extractingEntryName = extractingFile[model.id],
+                        onDownload = { onDownload(model) },
+                        onCancel = { onCancelDownload(model.id) },
+                        onClear = { onClearDownload(model.id) },
+                    )
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun TaskSectionHeader(
+    title: String,
+    count: Int,
+) {
+    val dimens = LocalDimens.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = dimens.spacingSm, bottom = dimens.spacingXs),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+    ) {
+        Icon(
+            imageVector = TnIcons.ArrowRight,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.primary,
+        )
+        Text(
+            text = title,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f),
+        )
+        CaptionText(text = "$count")
     }
 }

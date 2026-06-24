@@ -13,7 +13,9 @@ import java.util.concurrent.ConcurrentHashMap
 data class HxdOptions(
     val expectedSha256: String? = null,
     val userAgent: String = "",
-    val headers: Map<String, String> = emptyMap()
+    val headers: Map<String, String> = emptyMap(),
+    val maxAttempts: Int = 3,
+    val stallTimeoutMs: Long = 45_000L,
 )
 
 enum class HxdStatus { QUEUED, CONNECTING, DOWNLOADING, PAUSED, COMPLETED, FAILED, CANCELLED }
@@ -26,7 +28,11 @@ data class HxdState(
     val totalBytes: Long,
     val speedBps: Long,
     val status: HxdStatus,
-    val error: String? = null
+    val error: String? = null,
+    val attempt: Int = 1,
+    val maxAttempts: Int = 3,
+    val lastByteAtMs: Long = System.currentTimeMillis(),
+    val nextRetryAtMs: Long = 0L,
 ) {
     val progress: Float
         get() = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes.toFloat() else -1f
@@ -69,13 +75,30 @@ object HxdManager {
             taskRegistry[id] = task
             pendingQueue.add(task)
             _tasks.value    = _tasks.value + (id to HxdState(
-                id, url, destPath, 0L, -1L, 0L, HxdStatus.QUEUED
+                id, url, destPath, 0L, -1L, 0L, HxdStatus.QUEUED,
+                maxAttempts = options.maxAttempts.coerceAtLeast(1),
             ))
         }
 
         startService(context)
         return id
     }
+
+    fun activeFor(url: String, destPath: String): HxdState? {
+        val activeStatuses = setOf(
+            HxdStatus.QUEUED,
+            HxdStatus.CONNECTING,
+            HxdStatus.DOWNLOADING,
+            HxdStatus.PAUSED,
+        )
+        return _tasks.value.values.firstOrNull { state ->
+            state.destPath == destPath &&
+                state.url == url &&
+                state.status in activeStatuses
+        }
+    }
+
+    fun snapshot(): List<HxdState> = _tasks.value.values.toList()
 
     fun pause(id: Int) {
         HxdNative.nativePause(id)
@@ -99,6 +122,14 @@ object HxdManager {
         synchronized(lock) { taskRegistry.remove(id) }
     }
 
+    fun clear(id: Int) {
+        val task = synchronized(lock) { taskRegistry.remove(id) }
+        HxdNative.nativeCancel(id)
+        task?.let { File(it.destPath + ".hxd_tmp").delete() }
+        _tasks.value = _tasks.value - id
+        lastProgressUpdate.remove(id)
+    }
+
     fun cancelAll() {
         val ids = synchronized(lock) { taskRegistry.keys.toList() }
         ids.forEach { cancel(it) }
@@ -110,6 +141,7 @@ object HxdManager {
         val prog    = HxdNative.nativeGetProgress(id)
         val current = _tasks.value[id] ?: return
         val status  = HxdStatus.entries.getOrNull(prog[3].toInt()) ?: current.status
+        val lastByteAt = if (prog[0] > current.downloadedBytes) System.currentTimeMillis() else current.lastByteAtMs
 
         if (status == HxdStatus.DOWNLOADING) {
             val now = System.currentTimeMillis()
@@ -124,7 +156,8 @@ object HxdManager {
             downloadedBytes = prog[0],
             totalBytes      = prog[1],
             speedBps        = prog[2],
-            status          = status
+            status          = status,
+            lastByteAtMs    = lastByteAt,
         ))
     }
 
@@ -132,6 +165,17 @@ object HxdManager {
         val current = _tasks.value[id] ?: return
         _tasks.value = _tasks.value + (id to current.copy(status = status, error = error))
     }
+
+    internal fun updateAttempt(id: Int, attempt: Int, nextRetryAtMs: Long = 0L, error: String? = null) {
+        val current = _tasks.value[id] ?: return
+        _tasks.value = _tasks.value + (id to current.copy(
+            attempt = attempt,
+            nextRetryAtMs = nextRetryAtMs,
+            error = error,
+        ))
+    }
+
+    internal fun isRegistered(id: Int): Boolean = synchronized(lock) { taskRegistry.containsKey(id) }
 
     internal fun saveQueue(queueFile: File) {
         val snap = synchronized(lock) { taskRegistry.values.toList() }

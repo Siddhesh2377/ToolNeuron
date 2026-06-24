@@ -54,6 +54,10 @@ enum class SizeCategory(val displayName: String) {
     companion object {
         fun fromSize(sizeStr: String): SizeCategory? {
             val bytes = parseSizeToBytes(sizeStr)
+            return fromBytes(bytes)
+        }
+
+        fun fromBytes(bytes: Long): SizeCategory? {
             return when {
                 bytes <= 0 -> null
                 bytes < 1024L * 1024 * 1024 -> SMALL

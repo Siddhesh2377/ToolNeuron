@@ -4,26 +4,34 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,9 +44,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -49,17 +60,23 @@ import com.dark.tool_neuron.ui.components.ActionToggleGroup
 import com.dark.tool_neuron.ui.components.BodyLabel
 import com.dark.tool_neuron.ui.components.CaptionText
 import com.dark.tool_neuron.ui.components.StandardCard
+import com.dark.tool_neuron.ui.components.SwitchRow
 import com.dark.tool_neuron.ui.components.TnTextField
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
 import com.dark.tool_neuron.ui.theme.LocalTnShapes
+import com.dark.tool_neuron.repo.UpscaleProcessingMode
+import com.dark.tool_neuron.repo.UpscaleScalePreset
 import com.dark.tool_neuron.viewmodel.ImageTaskMode
 import com.dark.tool_neuron.viewmodel.ImageTaskUi
 import com.dark.tool_neuron.viewmodel.ImageTaskViewModel
+import com.dark.tool_neuron.viewmodel.ImageOutputAction
 import com.dark.tool_neuron.viewmodel.ModelLoadPhase
 import com.dark.tool_neuron.viewmodel.RuntimePhase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileInputStream
 
 @Composable
 fun ImageTaskScreen(
@@ -81,6 +98,26 @@ fun ImageTaskScreen(
     val pickImage = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument()
     ) { uri -> uri?.let(viewModel::setInputImage) }
+    var pendingSaveElsewhereBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var pendingSaveElsewhereFile by remember { mutableStateOf<File?>(null) }
+    var handledSaveElsewhereToken by remember { mutableStateOf("") }
+    val saveElsewhere = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("image/png"),
+    ) { uri ->
+        val bitmap = pendingSaveElsewhereBitmap
+        val file = pendingSaveElsewhereFile
+        pendingSaveElsewhereBitmap = null
+        pendingSaveElsewhereFile = null
+        if (uri != null && bitmap != null) {
+            val result = file?.let { copyFileToUri(context, it, uri) }
+                ?: writeBitmapToUri(context, bitmap, uri)
+            Toast.makeText(
+                context,
+                if (result.isSuccess) "Saved image" else "Save failed: ${result.exceptionOrNull()?.message}",
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+    }
 
     var showMaskPainter by remember { mutableStateOf(false) }
     var painterBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -95,6 +132,25 @@ fun ImageTaskScreen(
         }
         if (!showMaskPainter) {
             painterBitmap = null
+        }
+    }
+
+    LaunchedEffect(ui.outputToken, ui.outputAction, ui.diffusionResultImage, ui.upscaleResultImage) {
+        val image = ui.upscaleResultImage ?: ui.diffusionResultImage
+        if (ui.outputAction == ImageOutputAction.SAVE_ELSEWHERE &&
+            ui.outputToken.isNotBlank() &&
+            ui.outputToken != handledSaveElsewhereToken &&
+            image != null
+        ) {
+            handledSaveElsewhereToken = ui.outputToken
+            pendingSaveElsewhereFile = ui.upscaleOutput?.outputPath?.let(::File)?.takeIf { it.exists() }
+            pendingSaveElsewhereBitmap = image
+            val prefix = when (ui.mode) {
+                ImageTaskMode.GENERATE -> "tn_generate"
+                ImageTaskMode.INPAINT -> "tn_inpaint"
+                ImageTaskMode.UPSCALE -> "tn_upscale"
+            }
+            saveElsewhere.launch("${prefix}_${System.currentTimeMillis()}.png")
         }
     }
 
@@ -131,6 +187,12 @@ fun ImageTaskScreen(
                 onOpenStore = onOpenStore,
             )
         }
+        item("gpu") {
+            ImageGpuCard(
+                ui = ui,
+                onToggle = viewModel::setGpuAcceleration,
+            )
+        }
         if (ui.modelLoadPhase !is ModelLoadPhase.Idle && ui.modelLoadPhase !is ModelLoadPhase.Loaded) {
             item("model-load") {
                 ModelLoadCard(
@@ -162,6 +224,7 @@ private fun LazyListScope.generateBody(
 ) {
     item("g-prompt") { PromptCard(ui = ui, viewModel = viewModel) }
     item("g-knobs") { KnobsCard(ui = ui, viewModel = viewModel, showDenoise = false) }
+    item("g-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
     item("g-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("g-output") {
         DiffusionOutputCard(
@@ -190,6 +253,7 @@ private fun LazyListScope.inpaintBody(
     }
     item("i-prompt") { PromptCard(ui = ui, viewModel = viewModel) }
     item("i-knobs") { KnobsCard(ui = ui, viewModel = viewModel, showDenoise = true) }
+    item("i-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
     item("i-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("i-output") {
         DiffusionOutputCard(
@@ -215,8 +279,135 @@ private fun LazyListScope.upscaleBody(
             onClearMask = {},
         )
     }
+    item("u-output-policy") { OutputPolicyCard(ui = ui, viewModel = viewModel) }
+    item("u-scale") { UpscaleSettingsCard(ui = ui, viewModel = viewModel) }
     item("u-run") { RunCard(ui = ui, viewModel = viewModel) }
     item("u-output") { UpscaleOutputCard(ui = ui) }
+}
+
+@Composable
+private fun OutputPolicyCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
+    val dimens = LocalDimens.current
+    StandardCard(
+        title = "After completion",
+        icon = TnIcons.Download,
+        description = "Choose where the new image goes when the task finishes.",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            ActionToggleGroup(
+                items = listOf(
+                    ImageOutputAction.KEEP,
+                    ImageOutputAction.REPLACE_INPUT,
+                    ImageOutputAction.SAVE_PHOTOS,
+                    ImageOutputAction.SAVE_ELSEWHERE,
+                ),
+                selectedItem = ui.outputAction,
+                onItemSelected = viewModel::setOutputAction,
+                itemLabel = { action ->
+                    when (action) {
+                        ImageOutputAction.KEEP -> "Keep"
+                        ImageOutputAction.REPLACE_INPUT -> "Replace"
+                        ImageOutputAction.SAVE_PHOTOS -> "Photos"
+                        ImageOutputAction.SAVE_ELSEWHERE -> "Save as"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            CaptionText(
+            text = when (ui.outputAction) {
+                ImageOutputAction.KEEP -> "Keep the result in this screen. You can still Save Photos or Save as from the result card."
+                ImageOutputAction.REPLACE_INPUT -> "Use the new image as the next input and clear the mask."
+                    ImageOutputAction.SAVE_PHOTOS -> "Auto-save to Android Photos: Pictures/ToolNeuron."
+                    ImageOutputAction.SAVE_ELSEWHERE -> "Open Android's save dialog when the new image is ready."
+                },
+            )
+            if (ui.outputStatus.isNotBlank()) {
+                BodyLabel(text = ui.outputStatus)
+            }
+        }
+    }
+}
+
+@Composable
+private fun UpscaleSettingsCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
+    val dimens = LocalDimens.current
+    val targetText = ui.inputImagePath?.let { path ->
+        val context = LocalContext.current
+        val source by produceState<Pair<Int, Int>?>(initialValue = null, path) {
+            value = withContext(Dispatchers.IO) {
+                decodeBitmap(context, path)?.let { bitmap ->
+                    val size = bitmap.width to bitmap.height
+                    bitmap.recycle()
+                    size
+                }
+            }
+        }
+        source?.let { (w, h) ->
+            "${(w * ui.upscaleScale).toInt()}×${(h * ui.upscaleScale).toInt()}"
+        }
+    } ?: "Pick an image first"
+    StandardCard(
+        title = "Upscale",
+        icon = TnIcons.Zap,
+        description = "Choose output scale and processing mode.",
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            CaptionText(text = "Scale: ${"%.2f".format(ui.upscaleScale).trimEnd('0').trimEnd('.')}x · $targetText")
+            ActionToggleGroup(
+                items = listOf(
+                    UpscaleScalePreset.X2,
+                    UpscaleScalePreset.X4,
+                    UpscaleScalePreset.X8,
+                    UpscaleScalePreset.CUSTOM,
+                ),
+                selectedItem = ui.upscaleScalePreset,
+                onItemSelected = viewModel::setUpscaleScalePreset,
+                itemLabel = {
+                    when (it) {
+                        UpscaleScalePreset.X2 -> "2x"
+                        UpscaleScalePreset.X4 -> "4x"
+                        UpscaleScalePreset.X8 -> "8x"
+                        UpscaleScalePreset.CUSTOM -> "Custom"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            if (ui.upscaleScalePreset == UpscaleScalePreset.CUSTOM) {
+                Slider(
+                    value = ui.customUpscaleScale,
+                    onValueChange = viewModel::setCustomUpscaleScale,
+                    valueRange = 1.25f..8f,
+                    steps = 26,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+            CaptionText(text = "Processing")
+            ActionToggleGroup(
+                items = listOf(
+                    UpscaleProcessingMode.AUTO,
+                    UpscaleProcessingMode.FAST,
+                    UpscaleProcessingMode.SAFE_TILED,
+                ),
+                selectedItem = ui.upscaleProcessingMode,
+                onItemSelected = viewModel::setUpscaleProcessingMode,
+                itemLabel = {
+                    when (it) {
+                        UpscaleProcessingMode.AUTO -> "Auto"
+                        UpscaleProcessingMode.FAST -> "Fast"
+                        UpscaleProcessingMode.SAFE_TILED -> "Safe tiled"
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            CaptionText(
+                text = when (ui.upscaleProcessingMode) {
+                    UpscaleProcessingMode.AUTO -> "Automatically tiles only when needed."
+                    UpscaleProcessingMode.FAST -> "Uses one-shot processing when it is safe."
+                    UpscaleProcessingMode.SAFE_TILED -> "Slower, safer processing for large images."
+                },
+            )
+        }
+    }
 }
 
 @Composable
@@ -333,7 +524,7 @@ private fun RuntimeCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
         RuntimePhase.READY -> "Runtime — ready"
     }
     val description = when (ui.runtimePhase) {
-        RuntimePhase.NEEDS_DOWNLOAD -> "One-time ~30 MB download. Required to run any image model."
+        RuntimePhase.NEEDS_DOWNLOAD -> "One-time ~30 MB download. Required for SD generation, SD inpaint, and upscalers."
         RuntimePhase.DOWNLOADING -> {
             val total = ui.runtimeDownloadTotal
             val got = ui.runtimeDownloadBytes
@@ -342,7 +533,7 @@ private fun RuntimeCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
         }
         RuntimePhase.READY_TO_INITIALIZE -> "Initializing automatically…"
         RuntimePhase.INITIALIZING -> ui.statusText.ifBlank { "Extracting native libs…" }
-        RuntimePhase.READY -> "Image gen + upscale are ready."
+        RuntimePhase.READY -> "SD image gen + upscale are ready."
     }
     StandardCard(
         title = title,
@@ -384,6 +575,35 @@ private fun RuntimeCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
 }
 
 @Composable
+private fun ImageGpuCard(
+    ui: ImageTaskUi,
+    onToggle: (Boolean) -> Unit,
+) {
+    StandardCard(
+        title = "Acceleration",
+        icon = TnIcons.Zap,
+    ) {
+        SwitchRow(
+            title = "Use GPU / OpenCL",
+            description = when (ui.mode) {
+                ImageTaskMode.UPSCALE ->
+                    "Applies to non-MNN upscalers. MNN upscalers keep their own mobile backend."
+                else ->
+                    "Applies to image generation and inpaint when the runtime/model backend supports OpenCL."
+            },
+            checked = ui.useGpuAcceleration,
+            onCheckedChange = onToggle,
+            icon = TnIcons.Cpu,
+            enabled = !ui.isBusy,
+        )
+        CaptionText(
+            text = "If a model fails to load or the device gets unstable, turn this off and retry.",
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
 private fun ModeCard(
     ui: ImageTaskUi,
     onSelect: (ImageTaskMode) -> Unit,
@@ -394,25 +614,86 @@ private fun ModeCard(
         icon = TnIcons.Sparkles,
         description = "Pick what to do with image models",
     ) {
-        ActionToggleGroup(
-            items = listOf(
-                ImageTaskMode.GENERATE,
-                ImageTaskMode.INPAINT,
-                ImageTaskMode.UPSCALE,
-            ),
-            selectedItem = ui.mode,
-            onItemSelected = onSelect,
-            itemLabel = { mode ->
-                when (mode) {
-                    ImageTaskMode.GENERATE -> "Generate"
-                    ImageTaskMode.INPAINT -> "Inpaint"
-                    ImageTaskMode.UPSCALE -> "Upscale"
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
+            imageTaskRows.forEach { row ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                ) {
+                    row.forEach { mode ->
+                        ImageTaskTile(
+                            mode = mode,
+                            selected = ui.mode == mode,
+                            onClick = { onSelect(mode) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            height = dimens.toggleGroupHeight + 8.dp,
-        )
+            }
+        }
     }
+}
+
+private val imageTaskRows = listOf(
+    listOf(ImageTaskMode.GENERATE, ImageTaskMode.INPAINT),
+    listOf(ImageTaskMode.UPSCALE),
+)
+
+@Composable
+private fun ImageTaskTile(
+    mode: ImageTaskMode,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Surface(
+        modifier = modifier
+            .heightIn(min = 74.dp)
+            .clickable(onClick = onClick),
+        color = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.14f)
+            else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.34f),
+        shape = shapes.cardSmall,
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(dimens.spacingSm),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+        ) {
+            Icon(
+                imageVector = mode.taskIcon(),
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(dimens.iconMd),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                BodyLabel(text = mode.shortLabel())
+                CaptionText(text = mode.shortDescription())
+            }
+        }
+    }
+}
+
+private fun ImageTaskMode.shortLabel(): String = when (this) {
+    ImageTaskMode.GENERATE -> "Create"
+    ImageTaskMode.INPAINT -> "Inpaint"
+    ImageTaskMode.UPSCALE -> "Upscale"
+}
+
+private fun ImageTaskMode.shortDescription(): String = when (this) {
+    ImageTaskMode.GENERATE -> "Text to image"
+    ImageTaskMode.INPAINT -> "Prompt fill"
+    ImageTaskMode.UPSCALE -> "2x, 4x, 8x"
+}
+
+private fun ImageTaskMode.taskIcon() = when (this) {
+    ImageTaskMode.GENERATE -> TnIcons.Sparkles
+    ImageTaskMode.INPAINT -> TnIcons.Edit
+    ImageTaskMode.UPSCALE -> TnIcons.Zap
 }
 
 @Composable
@@ -423,14 +704,22 @@ private fun ModelPickCard(
     onOpenStore: () -> Unit,
 ) {
     val dimens = LocalDimens.current
-    val needsUpscaler = ui.mode == ImageTaskMode.UPSCALE
-    val list: List<ModelInfo> = if (needsUpscaler) ui.installedUpscalers else ui.installedDiffusionModels
-    val activeId = if (needsUpscaler) ui.activeUpscalerId else ui.activeModelId
+    val list: List<ModelInfo> = when (ui.mode) {
+        ImageTaskMode.UPSCALE -> ui.installedUpscalers
+        else -> ui.installedDiffusionModels
+    }
+    val activeId = when (ui.mode) {
+        ImageTaskMode.UPSCALE -> ui.activeUpscalerId
+        else -> ui.activeModelId
+    }
     val pendingId = (ui.modelLoadPhase as? ModelLoadPhase.Loading)
         ?.let { activeId } ?: ""
 
     StandardCard(
-        title = if (needsUpscaler) "Upscaler" else "Image model",
+        title = when (ui.mode) {
+            ImageTaskMode.UPSCALE -> "Upscaler"
+            else -> "Image model"
+        },
         icon = TnIcons.Photo,
         description = if (list.isEmpty())
             "Install one from the Store first"
@@ -451,7 +740,10 @@ private fun ModelPickCard(
                         selected = model.id == activeId,
                         loading = model.id == pendingId,
                         onClick = {
-                            if (needsUpscaler) onPickUpscaler(model.id) else onPickModel(model.id)
+                            when (ui.mode) {
+                                ImageTaskMode.UPSCALE -> onPickUpscaler(model.id)
+                                else -> onPickModel(model.id)
+                            }
                         },
                     )
                 }
@@ -514,6 +806,7 @@ private fun PromptCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
     val dimens = LocalDimens.current
     val promptPlaceholder = when (ui.mode) {
         ImageTaskMode.INPAINT -> "Describe what to fill in the painted area…"
+        ImageTaskMode.UPSCALE -> "Optional note for this upscale…"
         else -> "Describe the image you want…"
     }
     StandardCard(title = "Prompt", icon = TnIcons.Edit) {
@@ -725,6 +1018,7 @@ private fun InputImageCard(
 private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
     val dimens = LocalDimens.current
     Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+        ProgressMetricsCard(ui)
         if (ui.statusText.isNotBlank()) {
             CaptionText(text = ui.statusText)
         }
@@ -734,6 +1028,14 @@ private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.labelMedium,
             )
+            if (ui.mode == ImageTaskMode.UPSCALE && ui.upscaleProcessingMode == UpscaleProcessingMode.FAST) {
+                ActionTextButton(
+                    onClickListener = viewModel::switchToSafeTiled,
+                    icon = TnIcons.Zap,
+                    text = "Use Safe tiled",
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         if (ui.isBusy && ui.progress > 0f) {
             LinearProgressIndicator(
@@ -751,7 +1053,7 @@ private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
                 text = when (ui.mode) {
                     ImageTaskMode.GENERATE -> "Generate"
                     ImageTaskMode.INPAINT -> "Inpaint"
-                    ImageTaskMode.UPSCALE -> "Upscale 4×"
+                    ImageTaskMode.UPSCALE -> "Upscale ${"%.2f".format(ui.upscaleScale).trimEnd('0').trimEnd('.')}x"
                 },
                 enabled = !ui.isBusy,
                 modifier = Modifier.weight(1f),
@@ -763,6 +1065,64 @@ private fun RunCard(ui: ImageTaskUi, viewModel: ImageTaskViewModel) {
                     text = "Stop",
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun ProgressMetricsCard(ui: ImageTaskUi) {
+    val metrics = ui.metrics
+    if (!metrics.active && metrics.progress <= 0f) return
+    val dimens = LocalDimens.current
+    StandardCard(
+        title = metrics.label.ifBlank { "Progress" },
+        icon = TnIcons.Zap,
+        description = metrics.detail,
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingSm)) {
+            LinearProgressIndicator(
+                progress = { metrics.progress.coerceIn(0f, 1f) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                MetricPill("Elapsed", formatDuration(metrics.elapsedMs), Modifier.weight(1f))
+                MetricPill("ETA", metrics.etaMs?.let(::formatDuration) ?: "--", Modifier.weight(1f))
+                MetricPill("Done", "${(metrics.progress.coerceIn(0f, 1f) * 100).toInt()}%", Modifier.weight(1f))
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+            ) {
+                val step = if (metrics.currentStep != null && metrics.totalSteps != null)
+                    "${metrics.currentStep}/${metrics.totalSteps}" else "--"
+                MetricPill("Step", step, Modifier.weight(1f))
+                MetricPill("Step time", metrics.stepMs?.let(::formatDuration) ?: "--", Modifier.weight(1f))
+                val res = if (metrics.width > 0 && metrics.height > 0) "${metrics.width}×${metrics.height}" else "--"
+                MetricPill("Output", res, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun MetricPill(label: String, value: String, modifier: Modifier = Modifier) {
+    val dimens = LocalDimens.current
+    Surface(
+        modifier = modifier,
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f),
+        shape = LocalTnShapes.current.cardSmall,
+    ) {
+        Column(modifier = Modifier.padding(dimens.spacingSm)) {
+            CaptionText(text = label)
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
     }
 }
@@ -787,16 +1147,123 @@ private fun DiffusionOutputCard(
     )
 }
 
+private fun formatDuration(ms: Long): String {
+    val safe = ms.coerceAtLeast(0L)
+    val totalSec = (safe + 999L) / 1000L
+    val min = totalSec / 60L
+    val sec = totalSec % 60L
+    return if (min > 0) "${min}m ${sec}s" else "${sec}s"
+}
+
 @Composable
 private fun UpscaleOutputCard(ui: ImageTaskUi) {
-    val image = ui.upscaleResultImage ?: return
-    ImageViewerCard(
-        bitmap = image,
-        title = "Upscaled 4×",
-        saveNamePrefix = "tn_upscale",
-        showUpscale = false,
-        onUpscaleClick = null,
-    )
+    val output = ui.upscaleOutput ?: return
+    val context = LocalContext.current
+    val original by produceState<Bitmap?>(initialValue = null, ui.inputImagePath) {
+        value = withContext(Dispatchers.IO) {
+            ui.inputImagePath?.let { decodeBitmap(context, it) }
+        }
+    }
+    val source = original
+    if (source == null) {
+        ImageViewerCard(
+            bitmap = output.preview,
+            title = "Upscaled ${"%.2f".format(output.scale).trimEnd('0').trimEnd('.')}x",
+            saveNamePrefix = "tn_upscale",
+            showUpscale = false,
+            onUpscaleClick = null,
+            sourceFilePath = output.outputPath,
+            displayWidth = output.fullWidth,
+            displayHeight = output.fullHeight,
+        )
+        return
+    }
+    val dimens = LocalDimens.current
+    val shapes = LocalTnShapes.current
+    Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingMd)) {
+        StandardCard(
+            title = "Before / after",
+            icon = TnIcons.Eye,
+            description = if (output.tiled) "Safe tiled output · ${output.fullWidth}×${output.fullHeight}"
+                else "One-shot output · ${output.fullWidth}×${output.fullHeight}",
+        ) {
+            BeforeAfterSlider(
+                before = source,
+                after = output.preview,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shapes.cardSmall),
+            )
+        }
+        ImageViewerCard(
+            bitmap = output.preview,
+            title = "Upscaled ${"%.2f".format(output.scale).trimEnd('0').trimEnd('.')}x",
+            saveNamePrefix = "tn_upscale",
+            showUpscale = false,
+            onUpscaleClick = null,
+            sourceFilePath = output.outputPath,
+            displayWidth = output.fullWidth,
+            displayHeight = output.fullHeight,
+        )
+    }
+}
+
+@Composable
+private fun BeforeAfterSlider(
+    before: Bitmap,
+    after: Bitmap,
+    modifier: Modifier = Modifier,
+) {
+    var fraction by remember { mutableStateOf(0.5f) }
+    val density = LocalDensity.current
+    BoxWithConstraints(
+        modifier = modifier
+            .aspectRatio(after.width.toFloat() / after.height.toFloat())
+            .clipToBounds()
+            .pointerInput(Unit) {
+                detectDragGestures { change, dragAmount ->
+                    val width = size.width.toFloat().coerceAtLeast(1f)
+                    fraction = ((change.position.x + dragAmount.x) / width).coerceIn(0.05f, 0.95f)
+                }
+            },
+    ) {
+        Image(
+            bitmap = before.asImageBitmap(),
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxHeight()
+                .width(maxWidth * fraction)
+                .clipToBounds(),
+        ) {
+            Image(
+                bitmap = after.asImageBitmap(),
+                contentDescription = null,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop,
+            )
+        }
+        Surface(
+            modifier = Modifier
+                .offset(x = with(density) { (maxWidth.toPx() * fraction).toDp() } - 1.dp)
+                .width(2.dp)
+                .fillMaxHeight(),
+            color = MaterialTheme.colorScheme.primary,
+        ) {}
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+            CaptionText(text = "Upscaled")
+            CaptionText(text = "Original")
+        }
+    }
 }
 
 private fun decodeBitmap(context: android.content.Context, path: String): Bitmap? = try {
@@ -808,4 +1275,20 @@ private fun decodeBitmap(context: android.content.Context, path: String): Bitmap
     }
 } catch (_: Throwable) {
     null
+}
+
+private fun writeBitmapToUri(context: android.content.Context, bitmap: Bitmap, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)) {
+            throw IllegalStateException("Bitmap.compress returned false")
+        }
+    }
+}
+
+private fun copyFileToUri(context: android.content.Context, source: File, uri: Uri): Result<Unit> = runCatching {
+    context.contentResolver.openOutputStream(uri).use { out ->
+        requireNotNull(out) { "openOutputStream returned null" }
+        FileInputStream(source).use { input -> input.copyTo(out) }
+    }
 }

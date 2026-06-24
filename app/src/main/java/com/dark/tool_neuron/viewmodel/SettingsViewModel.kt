@@ -14,9 +14,13 @@ import com.dark.tool_neuron.model.NavScreens
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.repo.RagManager
+import com.dark.tool_neuron.repo.web_search.WebSearchMode
+import com.dark.tool_neuron.service.server.ServerModelRole
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.screens.crash_report.CrashReportActivity
 import com.dark.tool_neuron.voice.VoiceModelManager
+import com.dark.tool_neuron.voice.VoiceBackend
+import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsChoiceOption
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsDialog
 import com.dark.tool_neuron.ui.screens.settings.model.SettingsItem
@@ -36,6 +40,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -58,12 +64,18 @@ class SettingsViewModel @Inject constructor(
     private val _panicPinSet = MutableStateFlow(security.hasPanicPin)
     private val _activeTts = MutableStateFlow(prefs.activeTtsModelId)
     private val _activeStt = MutableStateFlow(prefs.activeSttModelId)
+    private val _voiceTtsBackend = MutableStateFlow(prefs.voiceTtsBackend)
+    private val _voiceSttBackend = MutableStateFlow(prefs.voiceSttBackend)
     private val _ragSmartRerank = MutableStateFlow(prefs.ragSmartRerank)
     private val _ragMultiQuery = MutableStateFlow(prefs.ragMultiQuery)
     private val _ragDeepResearch = MutableStateFlow(prefs.ragDeepResearch)
     private val _vlmImageQuality = MutableStateFlow(prefs.vlmImageQuality)
     private val _threadMode = MutableStateFlow(prefs.threadMode)
+    private val _idleUnloadMinutes = MutableStateFlow(prefs.idleUnloadMinutes)
     private val _pluginOnnxEp = MutableStateFlow(prefs.pluginOnnxEp)
+    private val _serverModelRolesJson = MutableStateFlow(prefs.serverModelRolesJson)
+    private val _serverRoleDefaultsJson = MutableStateFlow(prefs.serverRoleDefaultsJson)
+    private val _webSearchMode = MutableStateFlow(WebSearchMode.sanitizePref(prefs.webSearchMode))
     private val _installedPluginCount = pluginExecutor.registry.installed
     private val appVersion: String = resolveVersion()
 
@@ -75,14 +87,20 @@ class SettingsViewModel @Inject constructor(
         _snackbar,
         _activeTts,
         _activeStt,
+        _voiceTtsBackend,
+        _voiceSttBackend,
         _panicPinSet,
         _ragSmartRerank,
         _ragMultiQuery,
         _ragDeepResearch,
         _vlmImageQuality,
         _threadMode,
+        _idleUnloadMinutes,
         _pluginOnnxEp,
+        _serverModelRolesJson,
+        _serverRoleDefaultsJson,
         _installedPluginCount,
+        _webSearchMode,
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val models = values[0] as List<ModelInfo>
@@ -92,16 +110,22 @@ class SettingsViewModel @Inject constructor(
         val snackbar = values[4] as String?
         val activeTts = values[5] as String
         val activeStt = values[6] as String
-        val panicSet = values[7] as Boolean
-        val rerank = values[8] as Boolean
-        val multiQuery = values[9] as Boolean
-        val deepResearch = values[10] as Boolean
-        val vlmImageQuality = values[11] as String
-        val threadMode = values[12] as Int
-        val pluginOnnxEp = values[13] as String
+        val voiceTtsBackend = values[7] as String
+        val voiceSttBackend = values[8] as String
+        val panicSet = values[9] as Boolean
+        val rerank = values[10] as Boolean
+        val multiQuery = values[11] as Boolean
+        val deepResearch = values[12] as Boolean
+        val vlmImageQuality = values[13] as String
+        val threadMode = values[14] as Int
+        val idleUnloadMinutes = values[15] as Int
+        val pluginOnnxEp = values[16] as String
+        val serverModelRolesJson = values[17] as String
+        val serverRoleDefaultsJson = values[18] as String
         @Suppress("UNCHECKED_CAST")
-        val installedPlugins = values[14] as List<com.dark.plugin_exc.InstalledPlugin>
+        val installedPlugins = values[19] as List<com.dark.plugin_exc.InstalledPlugin>
         val pluginCount = installedPlugins.size
+        val webSearchMode = values[20] as String
 
         SettingsState(
             sections = buildSections(
@@ -110,14 +134,20 @@ class SettingsViewModel @Inject constructor(
                 lockEnabled = lockOn,
                 activeTts = activeTts,
                 activeStt = activeStt,
+                voiceTtsBackend = voiceTtsBackend,
+                voiceSttBackend = voiceSttBackend,
                 panicPinSet = panicSet,
                 ragSmartRerank = rerank,
                 ragMultiQuery = multiQuery,
                 ragDeepResearch = deepResearch,
                 vlmImageQuality = vlmImageQuality,
                 threadMode = threadMode,
+                idleUnloadMinutes = idleUnloadMinutes,
                 pluginOnnxEp = pluginOnnxEp,
+                serverModelRolesJson = serverModelRolesJson,
+                serverRoleDefaultsJson = serverRoleDefaultsJson,
                 pluginCount = pluginCount,
+                webSearchMode = webSearchMode,
             ),
             dialog = dialog,
             snackbarMessage = snackbar,
@@ -139,7 +169,7 @@ class SettingsViewModel @Inject constructor(
             title = item.title,
             options = item.options,
             selectedKey = item.selectedKey,
-            allowClear = item.id in CLEARABLE_CHOICE_IDS,
+            allowClear = item.id in CLEARABLE_CHOICE_IDS || item.id.startsWith(ID_SERVER_DEFAULT_PREFIX),
             onSelect = item.onSelect,
         )
     }
@@ -150,19 +180,27 @@ class SettingsViewModel @Inject constructor(
         lockEnabled: Boolean,
         activeTts: String,
         activeStt: String,
+        voiceTtsBackend: String,
+        voiceSttBackend: String,
         panicPinSet: Boolean,
         ragSmartRerank: Boolean,
         ragMultiQuery: Boolean,
         ragDeepResearch: Boolean,
         vlmImageQuality: String,
         threadMode: Int,
+        idleUnloadMinutes: Int,
         pluginOnnxEp: String,
+        serverModelRolesJson: String,
+        serverRoleDefaultsJson: String,
         pluginCount: Int,
+        webSearchMode: String,
     ): List<SettingsSection> = listOf(
         chatAndRagSection(models, defaultEmbedding, ragSmartRerank, ragMultiQuery, ragDeepResearch),
-        voiceSection(models, activeTts, activeStt),
+        webSearchSection(webSearchMode),
+        voiceSection(models, activeTts, activeStt, voiceTtsBackend, voiceSttBackend),
         visionSection(vlmImageQuality),
-        modelSection(),
+        serverRolesSection(models, serverModelRolesJson, serverRoleDefaultsJson, activeTts, activeStt),
+        modelSection(idleUnloadMinutes),
         performanceSection(threadMode),
         pluginsSection(pluginOnnxEp, pluginCount),
         privacySection(lockEnabled, panicPinSet),
@@ -170,12 +208,31 @@ class SettingsViewModel @Inject constructor(
         aboutSection(),
     )
 
-    private fun modelSection(): SettingsSection = SettingsSection(
+    private fun modelSection(idleUnloadMinutes: Int): SettingsSection = SettingsSection(
         id = SECTION_MODEL,
         title = "Model",
-        description = "Performance and per-model configuration.",
+        description = "Memory behavior and per-model configuration.",
         icon = TnIcons.Sliders,
         items = listOf(
+            SettingsItem.Choice(
+                id = ID_IDLE_UNLOAD_MINUTES,
+                title = "Idle unload",
+                subtitle = "Unload the active chat model after no chat activity to recover RAM.",
+                icon = TnIcons.Refresh,
+                selectedKey = idleUnloadMinutes.toString(),
+                options = listOf(
+                    SettingsChoiceOption("0", "Off", "Keep the active chat model loaded."),
+                    SettingsChoiceOption("15", "15 minutes", "Most aggressive RAM recovery."),
+                    SettingsChoiceOption("20", "20 minutes", "Balanced default."),
+                    SettingsChoiceOption("30", "30 minutes", "Less reloading, more RAM held."),
+                ),
+                onSelect = { key ->
+                    val v = key?.toIntOrNull() ?: AppPreferences.DEFAULT_IDLE_UNLOAD_MINUTES
+                    prefs.idleUnloadMinutes = v
+                    _idleUnloadMinutes.value = prefs.idleUnloadMinutes
+                    _dialog.value = null
+                },
+            ),
             SettingsItem.Action(
                 id = ID_OPEN_PERFORMANCE,
                 title = "Performance",
@@ -314,6 +371,177 @@ class SettingsViewModel @Inject constructor(
         ),
     )
 
+    private fun serverRolesSection(
+        models: List<ModelInfo>,
+        rolesJson: String,
+        defaultsJson: String,
+        activeTts: String,
+        activeStt: String,
+    ): SettingsSection {
+        val roles = parseServerModelRoles(rolesJson)
+        val defaults = parseServerRoleDefaults(defaultsJson).toMutableMap().apply {
+            if (get(ServerModelRole.TTS.token).isNullOrBlank() && activeTts.isNotBlank()) {
+                put(ServerModelRole.TTS.token, activeTts)
+            }
+            if (get(ServerModelRole.STT.token).isNullOrBlank() && activeStt.isNotBlank()) {
+                put(ServerModelRole.STT.token, activeStt)
+            }
+        }
+        val fileModels = models.filter { it.pathType == com.dark.tool_neuron.model.enums.PathType.FILE }
+        val serverKinds = listOf(
+            ServerModelRole.CHAT to "Default chat model",
+            ServerModelRole.VLM to "Default vision chat model",
+            ServerModelRole.EMBEDDING to "Default embedding model",
+            ServerModelRole.TTS to "Default text-to-speech model",
+            ServerModelRole.STT to "Default speech-to-text model",
+            ServerModelRole.IMAGE_GEN to "Default image generation model",
+            ServerModelRole.IMAGE_UPSCALER to "Default image upscaler",
+        )
+        val defaultItems = serverKinds.map { (role, title) ->
+            val candidates = serverRoleCandidates(fileModels, roles, role)
+            SettingsItem.Choice(
+                id = "$ID_SERVER_DEFAULT_PREFIX${role.token}",
+                title = title,
+                subtitle = "Used only when a remote request leaves model blank.",
+                icon = TnIcons.Server,
+                selectedKey = defaults[role.token],
+                options = candidates.map { model ->
+                    SettingsChoiceOption(model.id, model.name, model.id)
+                },
+                emptyMessage = if (candidates.isEmpty()) "No ${roleLabel(role)} models" else "Not set",
+                enabled = candidates.isNotEmpty(),
+                onSelect = { modelId ->
+                    setServerRoleDefault(role, modelId)
+                },
+            )
+        }
+        return SettingsSection(
+            id = SECTION_SERVER_ROLES,
+            title = "Server model roles",
+            description = "Choose the fallback models used when remote API requests leave model blank. Per-model identity lives in Model settings.",
+            icon = TnIcons.Server,
+            items = defaultItems + SettingsItem.Action(
+                id = ID_OPEN_MODEL_EDITOR_FROM_SERVER,
+                title = "Edit per-model identities",
+                subtitle = "Assign Chat, Embedding, Image, Voice, or hidden from each model's settings page.",
+                icon = TnIcons.Sliders,
+                onClick = { _navEvents.tryEmit(NavScreens.ModelManager.route) },
+            ),
+        )
+    }
+
+    private fun serverRoleCandidates(
+        models: List<ModelInfo>,
+        roles: Map<String, ServerModelRole>,
+        wanted: ServerModelRole,
+    ): List<ModelInfo> = models.filter { model ->
+        val role = roles[model.id] ?: defaultServerRole(model)
+        role == wanted
+    }
+
+    private fun defaultServerRole(model: ModelInfo): ServerModelRole? = when (model.providerType) {
+        ProviderType.GGUF -> {
+            inferRoleFromName(model)?.let { return it }
+            val modelsRoot = modelRepo.getModelsDir()
+            if (VlmPaths.isInsideVlmFolder(model.path, modelsRoot) &&
+                VlmPaths.colocatedMmproj(File(model.path)) != null
+            ) {
+                ServerModelRole.VLM
+            } else {
+                ServerModelRole.CHAT
+            }
+        }
+        ProviderType.VISION_CHAT -> ServerModelRole.VLM
+        ProviderType.TOOL_SEARCH -> ServerModelRole.CHAT
+        ProviderType.EMBEDDING -> ServerModelRole.EMBEDDING
+        ProviderType.TTS -> ServerModelRole.TTS
+        ProviderType.STT -> ServerModelRole.STT
+        ProviderType.IMAGE_GEN -> ServerModelRole.IMAGE_GEN
+        ProviderType.IMAGE_UPSCALER -> ServerModelRole.IMAGE_UPSCALER
+    }
+
+    private fun inferRoleFromName(model: ModelInfo): ServerModelRole? {
+        val haystack = "${model.name} ${model.id} ${model.path}".lowercase()
+        val ext = model.path.substringAfterLast('.', "").lowercase()
+        return when {
+            ext == "mnn" && listOf("upscale", "upscaler", "esrgan", "realesrgan", "upgif", "x2", "x3", "x4")
+                .any { it in haystack } -> ServerModelRole.IMAGE_UPSCALER
+            listOf("embed", "embedding", "bge-", "e5-", "nomic-embed", "gte-", "snowflake-arctic-embed")
+                .any { it in haystack } -> ServerModelRole.EMBEDDING
+            listOf("whisper", "speech-to-text", "stt", "transcrib")
+                .any { it in haystack } -> ServerModelRole.STT
+            listOf("piper", "kokoro", "text-to-speech", "tts")
+                .any { it in haystack } -> ServerModelRole.TTS
+            listOf("stable-diffusion", "sd-", "sd_", "diffusion", "unet", "inpaint")
+                .any { it in haystack } -> ServerModelRole.IMAGE_GEN
+            listOf("-vl-", "_vl_", "vision", "vlm", "mmproj", "llava", "moondream", "minicpm-v")
+                .any { it in haystack } -> ServerModelRole.VLM
+            else -> null
+        }
+    }
+
+    private fun roleLabel(role: ServerModelRole): String = when (role) {
+        ServerModelRole.CHAT -> "chat"
+        ServerModelRole.VLM -> "vision chat"
+        ServerModelRole.EMBEDDING -> "embedding"
+        ServerModelRole.TTS -> "text-to-speech"
+        ServerModelRole.STT -> "speech-to-text"
+        ServerModelRole.IMAGE_GEN -> "image generation"
+        ServerModelRole.IMAGE_UPSCALER -> "image upscaler"
+        ServerModelRole.AUTO -> "auto"
+        ServerModelRole.DISABLED -> "enabled"
+    }
+
+    private fun parseServerModelRoles(raw: String): Map<String, ServerModelRole> {
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, ServerModelRole>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val id = keys.next()
+            val role = ServerModelRole.fromToken(obj.optString(id))
+            if (id.isNotBlank() && role != ServerModelRole.AUTO) out[id] = role
+        }
+        return out
+    }
+
+    private fun parseServerRoleDefaults(raw: String): Map<String, String> {
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            val modelId = obj.optString(key)
+            if (key.isNotBlank() && modelId.isNotBlank()) out[key] = modelId
+        }
+        return out
+    }
+
+    private fun setServerModelRole(modelId: String, role: ServerModelRole) {
+        val obj = runCatching { JSONObject(prefs.serverModelRolesJson) }.getOrDefault(JSONObject())
+        if (role == ServerModelRole.AUTO) {
+            obj.remove(modelId)
+        } else {
+            obj.put(modelId, role.token)
+        }
+        val next = obj.toString()
+        prefs.serverModelRolesJson = next
+        _serverModelRolesJson.value = next
+        _dialog.value = null
+    }
+
+    private fun setServerRoleDefault(role: ServerModelRole, modelId: String?) {
+        val obj = runCatching { JSONObject(prefs.serverRoleDefaultsJson) }.getOrDefault(JSONObject())
+        if (modelId.isNullOrBlank()) {
+            obj.remove(role.token)
+        } else {
+            obj.put(role.token, modelId)
+        }
+        val next = obj.toString()
+        prefs.serverRoleDefaultsJson = next
+        _serverRoleDefaultsJson.value = next
+        _dialog.value = null
+    }
+
     private fun chatAndRagSection(
         models: List<ModelInfo>,
         defaultEmbedding: String?,
@@ -388,10 +616,53 @@ class SettingsViewModel @Inject constructor(
         )
     }
 
+    private fun webSearchSection(webSearchMode: String): SettingsSection {
+        val current = WebSearchMode.sanitizePref(webSearchMode)
+        val options = WebSearchMode.SELECTABLE_KEYS.map { key ->
+            SettingsChoiceOption(
+                key = key,
+                label = WebSearchMode.labelForKey(key),
+                description = webSearchModeDescription(key),
+            )
+        }
+        return SettingsSection(
+            id = SECTION_WEB_SEARCH,
+            title = "Web search",
+            description = "How deep web searches go by default.",
+            icon = TnIcons.Globe,
+            items = listOf(
+                SettingsItem.Choice(
+                    id = ID_WEB_SEARCH_DEPTH,
+                    title = "Default search depth",
+                    subtitle = "Auto picks per question. Slash commands (/deep, /exhaustive) override per message.",
+                    icon = TnIcons.Globe,
+                    selectedKey = current,
+                    options = options,
+                    onSelect = { key ->
+                        val k = WebSearchMode.sanitizePref(key)
+                        prefs.webSearchMode = k
+                        _webSearchMode.value = k
+                        _dialog.value = null
+                    },
+                ),
+            ),
+        )
+    }
+
+    private fun webSearchModeDescription(key: String): String = when (key) {
+        "quick" -> "Fastest, simple lookups"
+        "normal" -> "Balanced search"
+        "deep" -> "More rounds, may read pages (slower)"
+        "exhaustive" -> "Maximum research, slowest"
+        else -> "Pick depth from the question"
+    }
+
     private fun voiceSection(
         models: List<ModelInfo>,
         activeTts: String,
         activeStt: String,
+        voiceTtsBackend: String,
+        voiceSttBackend: String,
     ): SettingsSection {
         val ttsModels = models.filter { it.providerType == ProviderType.TTS }
         val sttModels = models.filter { it.providerType == ProviderType.STT }
@@ -403,12 +674,38 @@ class SettingsViewModel @Inject constructor(
         }
         val resolvedTts = activeTts.takeIf { it.isNotBlank() && ttsModels.any { m -> m.id == it } }
         val resolvedStt = activeStt.takeIf { it.isNotBlank() && sttModels.any { m -> m.id == it } }
+        val backendOptions = listOf(
+            SettingsChoiceOption(
+                key = VoiceBackend.AUTO.key,
+                label = VoiceBackend.AUTO.label,
+                description = "Offline model first; Android system fallback if no local voice model is installed.",
+            ),
+            SettingsChoiceOption(
+                key = VoiceBackend.OFFLINE.key,
+                label = VoiceBackend.OFFLINE.label,
+                description = "Use installed local Whisper/Piper models only.",
+            ),
+            SettingsChoiceOption(
+                key = VoiceBackend.ANDROID_SYSTEM.key,
+                label = VoiceBackend.ANDROID_SYSTEM.label,
+                description = "Uses the device/OEM speech service; it may use online Google/OEM services.",
+            ),
+        )
         return SettingsSection(
             id = "voice",
             title = "Voice",
             description = "Defaults for text-to-speech and speech-to-text.",
             icon = TnIcons.Volume,
             items = listOf(
+                SettingsItem.Choice(
+                    id = ID_TTS_BACKEND,
+                    title = "Text-to-speech backend",
+                    subtitle = "Auto keeps ToolNeuron local-first, then falls back to Android system TTS.",
+                    icon = TnIcons.Volume,
+                    selectedKey = VoiceBackend.fromKey(voiceTtsBackend).key,
+                    options = backendOptions,
+                    onSelect = { key -> applyVoiceTtsBackend(key) },
+                ),
                 SettingsItem.Choice(
                     id = ID_DEFAULT_TTS,
                     title = "Default text-to-speech model",
@@ -418,6 +715,15 @@ class SettingsViewModel @Inject constructor(
                     options = ttsOptions,
                     emptyMessage = if (ttsOptions.isEmpty()) "Install one from the Store" else "Auto-pick first",
                     onSelect = { key -> applyActiveTts(key) },
+                ),
+                SettingsItem.Choice(
+                    id = ID_STT_BACKEND,
+                    title = "Speech-to-text backend",
+                    subtitle = "Android system STT may use Google/OEM services depending on the device.",
+                    icon = TnIcons.Mic,
+                    selectedKey = VoiceBackend.fromKey(voiceSttBackend).key,
+                    options = backendOptions,
+                    onSelect = { key -> applyVoiceSttBackend(key) },
                 ),
                 SettingsItem.Choice(
                     id = ID_DEFAULT_STT,
@@ -431,6 +737,22 @@ class SettingsViewModel @Inject constructor(
                 ),
             ),
         )
+    }
+
+    private fun applyVoiceTtsBackend(key: String?) {
+        val next = VoiceBackend.fromKey(key.orEmpty()).key
+        prefs.voiceTtsBackend = next
+        _voiceTtsBackend.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadTts() }
+    }
+
+    private fun applyVoiceSttBackend(key: String?) {
+        val next = VoiceBackend.fromKey(key.orEmpty()).key
+        prefs.voiceSttBackend = next
+        _voiceSttBackend.value = next
+        _dialog.value = null
+        viewModelScope.launch { voiceManager.unloadStt() }
     }
 
     private fun applyActiveTts(key: String?) {
@@ -680,8 +1002,10 @@ class SettingsViewModel @Inject constructor(
 
     companion object {
         const val SECTION_CHAT_RAG = "chat_rag"
+        const val SECTION_WEB_SEARCH = "web_search"
         const val SECTION_VOICE = "voice"
         const val SECTION_VISION = "vision"
+        const val SECTION_SERVER_ROLES = "server_roles"
         const val SECTION_PERFORMANCE = "performance"
         const val SECTION_MODEL = "model"
         const val SECTION_PLUGINS = "plugins"
@@ -690,16 +1014,23 @@ class SettingsViewModel @Inject constructor(
         const val SECTION_ABOUT = "about"
 
         private const val ID_DEFAULT_EMBEDDING = "default_embedding_model"
+        private const val ID_TTS_BACKEND = "tts_backend"
         private const val ID_DEFAULT_TTS = "default_tts_model"
+        private const val ID_STT_BACKEND = "stt_backend"
         private const val ID_DEFAULT_STT = "default_stt_model"
         private const val ID_RAG_DEBUG = "rag_debug"
         private const val ID_RAG_RERANK = "rag_smart_rerank"
         private const val ID_RAG_MULTI_QUERY = "rag_multi_query"
         private const val ID_RAG_DEEP_RESEARCH = "rag_deep_research"
         private const val ID_VLM_IMAGE_QUALITY = "vlm_image_quality"
+        private const val ID_WEB_SEARCH_DEPTH = "web_search_depth"
+        private const val ID_SERVER_DEFAULT_PREFIX = "server_default_"
+        private const val ID_SERVER_ROLE_PREFIX = "server_role_"
         private const val ID_THREAD_MODE = "thread_mode"
+        private const val ID_IDLE_UNLOAD_MINUTES = "idle_unload_minutes"
         private const val ID_OPEN_PERFORMANCE = "open_performance"
         private const val ID_OPEN_MODEL_EDITOR = "open_model_editor"
+        private const val ID_OPEN_MODEL_EDITOR_FROM_SERVER = "open_model_editor_from_server"
         private const val ID_OPEN_CRASH_REPORTS = "open_crash_reports"
         private const val ID_PLUGINS_COUNT = "plugins_count"
         private const val ID_PLUGIN_ONNX_EP = "plugin_onnx_ep"

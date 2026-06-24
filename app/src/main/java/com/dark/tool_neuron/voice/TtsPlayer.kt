@@ -131,7 +131,8 @@ class TtsPlayer @Inject constructor() {
         val noEmphasis = noInlineCode.replace(EMPHASIS, "")
         val noLinks = noEmphasis.replace(LINK) { it.groupValues[1] }
         val noHeaders = noLinks.replace(HEADER, "")
-        return noHeaders.replace(WHITESPACE, " ").trim()
+        val noEmoji = noHeaders.replace(EMOJI, "")
+        return noEmoji.replace(WHITESPACE, " ").trim()
     }
 
     private fun splitIntoSentences(text: String): List<String> {
@@ -161,6 +162,7 @@ class TtsPlayer @Inject constructor() {
         private val EMPHASIS = Regex("[*_]{1,3}")
         private val LINK = Regex("\\[([^]]+)]\\([^)]+\\)")
         private val HEADER = Regex("(?m)^#+\\s*")
+        private val EMOJI = Regex("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}\\x{200D}]")
         private val WHITESPACE = Regex("\\s+")
     }
 }

@@ -52,6 +52,7 @@ object NativeServer {
     external fun nativeResetRateLimit()
 
     external fun nativeSetWebUiHtml(html: String)
+    external fun nativeSetWebUiCss(css: String)
     external fun nativeClearWebUi()
 
     external fun nativeSetDocsHtml(html: String)

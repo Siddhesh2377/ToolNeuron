@@ -18,6 +18,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -182,13 +183,13 @@ class ImageGenManager @Inject constructor(
         return cur
     }
 
-    suspend fun loadUpscaler(model: ModelInfo): Boolean {
+    suspend fun loadUpscaler(model: ModelInfo, useOpenCL: Boolean): Boolean {
         ensureRuntime()
         val isMnnFile = model.path.endsWith(".mnn", ignoreCase = true)
         return InferenceClient.sdLoadUpscaler(
             modelPath = model.path,
             useMnn = isMnnFile,
-            useOpenCL = !isMnnFile,
+            useOpenCL = useOpenCL && !isMnnFile,
         )
     }
 
@@ -206,6 +207,16 @@ class ImageGenManager @Inject constructor(
 
     fun upscale(bitmap: Bitmap) {
         InferenceClient.sdUpscale(bitmap)
+    }
+
+    suspend fun upscaleOnce(bitmap: Bitmap): Bitmap {
+        InferenceClient.sdResetUpscaleState()
+        InferenceClient.sdUpscale(bitmap)
+        return when (val state = upscaleState.first { it is UpscaleState.Complete || it is UpscaleState.Error }) {
+            is UpscaleState.Complete -> state.bitmap
+            is UpscaleState.Error -> throw IllegalStateException(state.message)
+            else -> throw IllegalStateException("Upscale stopped")
+        }
     }
 
     fun stop() {

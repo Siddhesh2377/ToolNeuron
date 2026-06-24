@@ -46,6 +46,11 @@ class RemoteServerService : Service() {
             scope.launch { handleStart(cfg) }
         }
 
+        override fun refreshCatalog(configJson: String) {
+            val cfg = runCatching { JSONObject(configJson) }.getOrNull() ?: return
+            scope.launch { handleRefreshCatalog(cfg) }
+        }
+
         override fun stop() {
             scope.launch { handleStop("stopped") }
         }
@@ -118,6 +123,7 @@ class RemoteServerService : Service() {
         val bindModeS  = cfg.optString("bindMode", BindMode.ALL_INTERFACES.name)
         val bindMode   = runCatching { BindMode.valueOf(bindModeS) }.getOrDefault(BindMode.ALL_INTERFACES)
         val webUiHtml  = cfg.optString("webUiHtml", "")
+        val webUiCss   = cfg.optString("webUiCss", "")
         val docsHtml   = cfg.optString("docsHtml", "")
         val engines    = cfg.optJSONArray("engines") ?: JSONArray()
 
@@ -141,14 +147,16 @@ class RemoteServerService : Service() {
             return
         }
 
-        val primary = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+        val displayEntry = catalog.primary()
+            ?: catalog.all.firstOrNull { it.defaultModel }
+            ?: catalog.firstOf(ServerEngineKind.CHAT_GGUF)
             ?: catalog.firstOf(ServerEngineKind.VLM)
             ?: catalog.all.first()
 
         publish(snapshot.copy(
-            phase = "loading_model",
-            modelId = primary.id,
-            modelName = primary.name,
+            phase = "starting",
+            modelId = displayEntry.id,
+            modelName = "catalog ready",
             bindModeName = bindMode.name,
         ))
 
@@ -156,7 +164,7 @@ class RemoteServerService : Service() {
             Log.w(TAG, "self-start failed", e)
         }
 
-        val notif = buildNotification(this, info(resolution, port, bindMode), primary.name)
+        val notif = buildNotification(this, info(resolution, port, bindMode), "catalog ready")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(NOTIFICATION_ID, notif, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
         } else {
@@ -165,24 +173,6 @@ class RemoteServerService : Service() {
 
         configureStagingDir()
         registry.setCatalog(catalog)
-
-        val preloadChat = catalog.firstOf(ServerEngineKind.CHAT_GGUF)
-        val preloadVlm  = catalog.firstOf(ServerEngineKind.VLM)
-        if (preloadChat != null) {
-            val loaded = registry.chatFor(preloadChat.id)
-            if (loaded == null) {
-                pushFailure("primary chat model failed to load")
-                stopForegroundSafe()
-                return
-            }
-        } else if (preloadVlm != null) {
-            val loaded = registry.vlmFor(preloadVlm.id)
-            if (loaded == null) {
-                pushFailure("primary VLM model failed to load")
-                stopForegroundSafe()
-                return
-            }
-        }
 
         publish(snapshot.copy(phase = "starting"))
 
@@ -196,6 +186,7 @@ class RemoteServerService : Service() {
         NativeServer.nativeSetToken(token)
         NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString())
         if (webUiHtml.isNotBlank()) NativeServer.nativeSetWebUiHtml(webUiHtml)
+        if (webUiCss.isNotBlank()) NativeServer.nativeSetWebUiCss(webUiCss)
         if (docsHtml.isNotBlank()) NativeServer.nativeSetDocsHtml(docsHtml)
 
         val ok = NativeServer.nativeStart(resolution.host, port)
@@ -210,8 +201,8 @@ class RemoteServerService : Service() {
 
         publish(ServerSnapshot(
             phase = "running",
-            modelId = primary.id,
-            modelName = primary.name,
+            modelId = displayEntry.id,
+            modelName = "catalog ready",
             host = resolution.host,
             displayHost = resolution.displayHost,
             lanHost = resolution.lanHost,
@@ -221,7 +212,36 @@ class RemoteServerService : Service() {
             reason = null,
         ))
 
-        Log.i(TAG, "server up host=${resolution.host} port=$effective primary=${primary.id} engines=${catalog.all.size}")
+        Log.i(TAG, "server up host=${resolution.host} port=$effective engines=${catalog.all.size}")
+    }
+
+    private suspend fun handleRefreshCatalog(cfg: JSONObject) {
+        if (snapshot.phase != "running") return
+        val engines = cfg.optJSONArray("engines") ?: JSONArray()
+        if (engines.length() == 0) return
+        val catalog = ServerCatalog.fromJsonArray(engines)
+        if (catalog.all.isEmpty()) return
+
+        registry.setCatalog(catalog)
+        try { NativeServer.nativeSetModelsCatalog(catalog.toJsonArray().toString()) } catch (_: Exception) {}
+
+        val webUiHtml = cfg.optString("webUiHtml", "")
+        val webUiCss = cfg.optString("webUiCss", "")
+        val docsHtml = cfg.optString("docsHtml", "")
+        if (webUiHtml.isNotBlank()) try { NativeServer.nativeSetWebUiHtml(webUiHtml) } catch (_: Exception) {}
+        if (webUiCss.isNotBlank()) try { NativeServer.nativeSetWebUiCss(webUiCss) } catch (_: Exception) {}
+        if (docsHtml.isNotBlank()) try { NativeServer.nativeSetDocsHtml(docsHtml) } catch (_: Exception) {}
+
+        val displayEntry = catalog.primary()
+            ?: catalog.all.firstOrNull { it.defaultModel }
+            ?: catalog.firstOf(ServerEngineKind.CHAT_GGUF)
+            ?: catalog.firstOf(ServerEngineKind.VLM)
+            ?: catalog.all.first()
+        publish(snapshot.copy(
+            modelId = displayEntry.id,
+            modelName = "catalog refreshed",
+        ))
+        Log.i(TAG, "server catalog refreshed engines=${catalog.all.size}")
     }
 
     private suspend fun handleStop(reason: String) {

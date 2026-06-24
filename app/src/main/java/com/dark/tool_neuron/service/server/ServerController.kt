@@ -111,12 +111,7 @@ class ServerController @Inject constructor(
     fun start() {
         if (isBusy) return
         val installed = modelRepo.models.value
-        val selectedChat = prefs.serverSelectedModelId.takeIf { it.isNotBlank() }
-            ?.let { id -> installed.firstOrNull { it.id == id && it.providerType == ProviderType.GGUF } }
-        val anyChat = installed.firstOrNull { it.providerType == ProviderType.GGUF }
-        val primaryChat = selectedChat ?: anyChat
-
-        val engines = buildEnginesCatalog(installed, primaryChat)
+        val engines = buildEnginesCatalog(installed)
         if (engines.length() == 0) {
             _state.value = ServerState.Failed("install at least one chat / VLM / embedding / voice / image model before starting the server")
             return
@@ -124,14 +119,7 @@ class ServerController @Inject constructor(
 
         _state.value = ServerState.Starting
         ensureBoundThen { s ->
-            val cfg = JSONObject().apply {
-                put("engines", engines)
-                put("token", ensureToken())
-                put("port", prefs.serverPort)
-                put("bindMode", prefs.serverBindMode)
-                put("webUiHtml", loadAsset("server_webui.html"))
-                put("docsHtml", loadAsset("server_docs.html"))
-            }
+            val cfg = buildServerConfig(engines)
             try { s.start(cfg.toString()) }
             catch (e: Exception) {
                 Log.e(TAG, "start failed", e)
@@ -140,10 +128,30 @@ class ServerController @Inject constructor(
         }
     }
 
+    fun refreshCatalogIfRunning() {
+        if (!isRunning) return
+        val engines = buildEnginesCatalog(modelRepo.models.value)
+        if (engines.length() == 0) return
+        ensureBoundThen { s ->
+            try { s.refreshCatalog(buildServerConfig(engines).toString()) }
+            catch (e: Exception) { Log.w(TAG, "catalog refresh failed", e) }
+        }
+    }
+
     fun stop() {
         ensureBoundThen { s ->
             try { s.stop() } catch (e: Exception) { Log.w(TAG, "stop failed", e) }
         }
+    }
+
+    private fun buildServerConfig(engines: JSONArray): JSONObject = JSONObject().apply {
+        put("engines", engines)
+        put("token", ensureToken())
+        put("port", prefs.serverPort)
+        put("bindMode", prefs.serverBindMode)
+        put("webUiHtml", loadAsset("server_webui.html"))
+        put("webUiCss", loadAsset("server_webui.css"))
+        put("docsHtml", loadAsset("server_docs.html"))
     }
 
     fun ensureToken(): String {
@@ -166,7 +174,26 @@ class ServerController @Inject constructor(
     fun currentToken(): String = prefs.serverToken
 
     fun selectedModelId(): String = prefs.serverSelectedModelId
+    fun selectedVlmModelId(): String =
+        readServerRoleDefaults()[ServerEngineKind.VLM.token].orEmpty()
+
     fun setSelectedModelId(modelId: String) { prefs.serverSelectedModelId = modelId }
+
+    fun setChatDefaultModelId(modelId: String) {
+        prefs.serverSelectedModelId = modelId
+        setRoleDefaultModelId(ServerEngineKind.CHAT_GGUF, modelId)
+    }
+
+    fun setVlmDefaultModelId(modelId: String) {
+        setRoleDefaultModelId(ServerEngineKind.VLM, modelId)
+    }
+
+    private fun setRoleDefaultModelId(kind: ServerEngineKind, modelId: String) {
+        val obj = runCatching { JSONObject(prefs.serverRoleDefaultsJson) }.getOrDefault(JSONObject())
+        if (modelId.isBlank()) obj.remove(kind.token)
+        else obj.put(kind.token, modelId)
+        prefs.serverRoleDefaultsJson = obj.toString()
+    }
 
     fun port(): Int = prefs.serverPort
     fun bindMode(): BindMode =
@@ -178,46 +205,132 @@ class ServerController @Inject constructor(
     fun markConfigured() { prefs.serverConfigured = true }
     val isConfigured: Boolean get() = prefs.serverConfigured
 
-    private fun buildEnginesCatalog(installed: List<ModelInfo>, primaryChat: ModelInfo?): JSONArray {
+    private fun buildEnginesCatalog(installed: List<ModelInfo>): JSONArray {
         val out = JSONArray()
         val modelsRoot = modelRepo.getModelsDir()
         val now = System.currentTimeMillis() / 1000
+        val roleOverrides = readServerModelRoles()
+        val roleDefaults = readServerRoleDefaults()
 
         installed.forEach { m ->
             if (m.pathType != PathType.FILE) return@forEach
             if (m.path.isBlank()) return@forEach
-            when (m.providerType) {
-                ProviderType.GGUF -> {
-                    if (VlmPaths.isInsideVlmFolder(m.path, modelsRoot)) {
-                        val mmproj = VlmPaths.colocatedMmproj(File(m.path))
-                        if (mmproj != null) {
-                            out.put(makeEntry(m, "vlm", now, mmprojPath = mmproj.absolutePath))
-                            return@forEach
-                        }
-                    }
-                    out.put(makeEntry(m, "gguf", now))
-                }
-                ProviderType.EMBEDDING -> out.put(makeEntry(m, "embedding", now))
-                ProviderType.TTS -> out.put(makeEntry(m, "tts", now))
-                ProviderType.STT -> out.put(makeEntry(m, "stt", now))
-                ProviderType.IMAGE_GEN -> out.put(makeEntry(m, "image_gen", now))
-                ProviderType.IMAGE_UPSCALER -> out.put(makeEntry(m, "image_upscaler", now))
+            val role = roleOverrides[m.id] ?: ServerModelRole.AUTO
+            if (role == ServerModelRole.DISABLED) return@forEach
+
+            val kind = when (role) {
+                ServerModelRole.CHAT -> ServerEngineKind.CHAT_GGUF
+                ServerModelRole.VLM -> ServerEngineKind.VLM
+                ServerModelRole.EMBEDDING -> ServerEngineKind.EMBEDDING
+                ServerModelRole.TTS -> ServerEngineKind.TTS
+                ServerModelRole.STT -> ServerEngineKind.STT
+                ServerModelRole.IMAGE_GEN -> ServerEngineKind.IMAGE_GEN
+                ServerModelRole.IMAGE_UPSCALER -> ServerEngineKind.IMAGE_UPSCALER
+                ServerModelRole.AUTO -> defaultServerKind(m, modelsRoot)
+                ServerModelRole.DISABLED -> null
+            } ?: return@forEach
+
+            val mmproj = if (kind == ServerEngineKind.VLM) {
+                VlmPaths.colocatedMmproj(File(m.path))?.absolutePath
+            } else {
+                null
             }
+            if (kind == ServerEngineKind.VLM && mmproj.isNullOrBlank()) return@forEach
+            val isDefault = roleDefaults[kind.token] == m.id ||
+                (kind == ServerEngineKind.CHAT_GGUF && roleDefaults[kind.token].isNullOrBlank() &&
+                    prefs.serverSelectedModelId == m.id)
+            out.put(makeEntry(m, kind.token, now, mmprojPath = mmproj, isDefault = isDefault))
+        }
+        return out
+    }
+
+    private fun defaultServerKind(model: ModelInfo, modelsRoot: File): ServerEngineKind? =
+        when (model.providerType) {
+            ProviderType.GGUF -> {
+                inferServerKindFromName(model)?.let { return it }
+                if (VlmPaths.isInsideVlmFolder(model.path, modelsRoot) &&
+                    VlmPaths.colocatedMmproj(File(model.path)) != null
+                ) {
+                    ServerEngineKind.VLM
+                } else {
+                    ServerEngineKind.CHAT_GGUF
+                }
+            }
+            ProviderType.VISION_CHAT -> ServerEngineKind.VLM
+            ProviderType.TOOL_SEARCH -> ServerEngineKind.CHAT_GGUF
+            ProviderType.EMBEDDING -> ServerEngineKind.EMBEDDING
+            ProviderType.TTS -> ServerEngineKind.TTS
+            ProviderType.STT -> ServerEngineKind.STT
+            ProviderType.IMAGE_GEN -> ServerEngineKind.IMAGE_GEN
+            ProviderType.IMAGE_UPSCALER -> ServerEngineKind.IMAGE_UPSCALER
         }
 
-        if (primaryChat != null) {
-            for (i in 0 until out.length()) {
-                val e = out.getJSONObject(i)
-                if (e.optString("id") == primaryChat.id) {
-                    e.put("primary", true)
-                    break
-                }
+    private fun inferServerKindFromName(model: ModelInfo): ServerEngineKind? {
+        val haystack = "${model.name} ${model.id} ${model.path}".lowercase()
+        val ext = model.path.substringAfterLast('.', "").lowercase()
+        return when {
+            ext == "mnn" && listOf("upscale", "upscaler", "esrgan", "realesrgan", "upgif", "x2", "x3", "x4")
+                .any { it in haystack } -> ServerEngineKind.IMAGE_UPSCALER
+            listOf("embed", "embedding", "bge-", "e5-", "nomic-embed", "gte-", "snowflake-arctic-embed")
+                .any { it in haystack } -> ServerEngineKind.EMBEDDING
+            listOf("whisper", "speech-to-text", "stt", "transcrib")
+                .any { it in haystack } -> ServerEngineKind.STT
+            listOf("piper", "kokoro", "text-to-speech", "tts")
+                .any { it in haystack } -> ServerEngineKind.TTS
+            listOf("stable-diffusion", "sd-", "sd_", "diffusion", "unet", "inpaint")
+                .any { it in haystack } -> ServerEngineKind.IMAGE_GEN
+            listOf("-vl-", "_vl_", "vision", "vlm", "mmproj", "llava", "moondream", "minicpm-v")
+                .any { it in haystack } -> ServerEngineKind.VLM
+            else -> null
+        }
+    }
+
+    private fun readServerModelRoles(): Map<String, ServerModelRole> {
+        val raw = prefs.serverModelRolesJson
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: return emptyMap()
+        val out = HashMap<String, ServerModelRole>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val id = keys.next()
+            val role = ServerModelRole.fromToken(obj.optString(id))
+            if (id.isNotBlank() && role != ServerModelRole.AUTO) {
+                out[id] = role
             }
         }
         return out
     }
 
-    private fun makeEntry(model: ModelInfo, type: String, createdUnix: Long, mmprojPath: String? = null): JSONObject =
+    private fun readServerRoleDefaults(): Map<String, String> {
+        val raw = prefs.serverRoleDefaultsJson
+        val obj = runCatching { JSONObject(raw) }.getOrNull() ?: JSONObject()
+        val out = HashMap<String, String>()
+        val keys = obj.keys()
+        while (keys.hasNext()) {
+            val kind = keys.next()
+            val modelId = obj.optString(kind)
+            if (kind.isNotBlank() && modelId.isNotBlank()) {
+                out[kind] = modelId
+            }
+        }
+        if (out[ServerEngineKind.CHAT_GGUF.token].isNullOrBlank() && prefs.serverSelectedModelId.isNotBlank()) {
+            out[ServerEngineKind.CHAT_GGUF.token] = prefs.serverSelectedModelId
+        }
+        if (out[ServerEngineKind.TTS.token].isNullOrBlank() && prefs.activeTtsModelId.isNotBlank()) {
+            out[ServerEngineKind.TTS.token] = prefs.activeTtsModelId
+        }
+        if (out[ServerEngineKind.STT.token].isNullOrBlank() && prefs.activeSttModelId.isNotBlank()) {
+            out[ServerEngineKind.STT.token] = prefs.activeSttModelId
+        }
+        return out
+    }
+
+    private fun makeEntry(
+        model: ModelInfo,
+        type: String,
+        createdUnix: Long,
+        mmprojPath: String? = null,
+        isDefault: Boolean = false,
+    ): JSONObject =
         JSONObject().apply {
             put("id", model.id)
             put("name", model.name)
@@ -226,6 +339,7 @@ class ServerController @Inject constructor(
             put("config_json", buildModelConfigJson(model.id))
             put("type", type)
             put("created", createdUnix)
+            if (isDefault) put("default", true)
         }
 
     private fun ensureBoundThen(block: (IRemoteServerService) -> Unit) {

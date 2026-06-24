@@ -24,6 +24,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.dark.tool_neuron.repo.web_search.WebSearchMode
+import com.dark.tool_neuron.ui.components.ActionToggleGroup
 import com.dark.tool_neuron.ui.components.SectionHeader
 import com.dark.tool_neuron.ui.icons.TnIcons
 import com.dark.tool_neuron.ui.theme.LocalDimens
@@ -35,11 +37,13 @@ fun ToolsPickerWindow(
     thinkingEnabled: Boolean,
     thinkingSupported: Boolean,
     webSearchEnabled: Boolean,
+    webSearchMode: String,
     canAttachImage: Boolean,
     canAttachFiles: Boolean,
     canCompact: Boolean,
     onToggleThinking: () -> Unit,
     onToggleWebSearch: () -> Unit,
+    onSetWebSearchMode: (String) -> Unit,
     onAttachImage: () -> Unit,
     onAttachFiles: () -> Unit,
     onCompactChat: () -> Unit,
@@ -81,10 +85,27 @@ fun ToolsPickerWindow(
                     Modifier.weight(1f),
                     icon = TnIcons.Globe,
                     label = "Web search",
-                    description = "3 queries, snippets, answer",
+                    description = "Multi-engine research",
                     enabled = true,
                     active = webSearchEnabled,
                     onClick = onToggleWebSearch,
+                )
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXxs)) {
+                Text(
+                    text = "Search depth",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = dimens.spacingXs),
+                )
+                ActionToggleGroup(
+                    items = WebSearchMode.SELECTABLE_KEYS,
+                    selectedItem = WebSearchMode.sanitizePref(webSearchMode),
+                    onItemSelected = onSetWebSearchMode,
+                    itemLabel = { WebSearchMode.labelForKey(it) },
+                    enabled = webSearchEnabled,
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 

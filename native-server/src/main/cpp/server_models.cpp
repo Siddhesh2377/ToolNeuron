@@ -90,6 +90,9 @@ namespace tn::server::models {
                     m.created_unix = (cIt != entry.end() && cIt->is_number_integer())
                         ? cIt->get<long long>() : 0;
 
+                    auto dIt = entry.find("default");
+                    m.default_model = (dIt != entry.end() && dIt->is_boolean() && dIt->get<bool>());
+
                     ids.insert(m.id);
                     by_id.emplace(m.id, parsed.size());
                     parsed.push_back(std::move(m));
@@ -144,6 +147,23 @@ namespace tn::server::models {
         return {};
     }
 
+    ModelRef default_of_kind(Kind k) {
+        std::lock_guard<std::mutex> lock(g_mu);
+        for (const auto& m : g_models) {
+            if (m.kind == k && m.default_model) return m;
+        }
+        return {};
+    }
+
+    size_t count_of_kind(Kind k) {
+        std::lock_guard<std::mutex> lock(g_mu);
+        size_t count = 0;
+        for (const auto& m : g_models) {
+            if (m.kind == k) ++count;
+        }
+        return count;
+    }
+
     bool has_any_of_kind(Kind k) {
         std::lock_guard<std::mutex> lock(g_mu);
         for (const auto& m : g_models) {
@@ -169,6 +189,7 @@ namespace tn::server::models {
             e["created"]  = m.created_unix;
             e["owned_by"] = kind_owner(m.kind);
             e["type"]     = kind_token(m.kind);
+            if (m.default_model) e["default"] = true;
             data.push_back(std::move(e));
         }
         root["data"] = std::move(data);

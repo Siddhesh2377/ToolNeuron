@@ -27,6 +27,8 @@ data class ServerCatalogEntry(
     val configJson: String,
     val kind: ServerEngineKind,
     val createdUnix: Long,
+    val primary: Boolean = false,
+    val defaultModel: Boolean = false,
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("id", id)
@@ -36,6 +38,8 @@ data class ServerCatalogEntry(
         put("config_json", configJson)
         put("type", kind.token)
         put("created", createdUnix)
+        if (primary) put("primary", true)
+        if (defaultModel) put("default", true)
     }
 }
 
@@ -48,6 +52,9 @@ class ServerCatalog(
 
     fun firstOf(kind: ServerEngineKind): ServerCatalogEntry? =
         entriesByKind[kind]?.firstOrNull()
+
+    fun primary(): ServerCatalogEntry? =
+        all.firstOrNull { it.primary }
 
     fun listOf(kind: ServerEngineKind): List<ServerCatalogEntry> =
         entriesByKind[kind].orEmpty()
@@ -73,6 +80,8 @@ class ServerCatalog(
                     configJson = o.optString("config_json", "{}"),
                     kind = kind,
                     createdUnix = o.optLong("created"),
+                    primary = o.optBoolean("primary", false),
+                    defaultModel = o.optBoolean("default", false),
                 )
                 if (entry.id.isBlank() || entry.path.isBlank()) continue
                 grouped.getOrPut(kind) { mutableListOf() }.add(entry)

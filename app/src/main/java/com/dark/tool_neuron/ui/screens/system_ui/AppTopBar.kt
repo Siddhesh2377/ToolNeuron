@@ -64,6 +64,11 @@ fun AppTopBar(
             title = "Chat & RAG",
             subtitle = "Defaults for indexing and retrieval",
         )
+        NavScreens.SettingsWebSearch.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Web search",
+            subtitle = "Default search depth",
+        )
         NavScreens.SettingsVoice.route -> SettingsTopBar(
             onBack = onBack,
             title = "Voice",
@@ -83,6 +88,11 @@ fun AppTopBar(
             onBack = onBack,
             title = "Vision",
             subtitle = "VLM image preprocessing",
+        )
+        NavScreens.SettingsServerRoles.route -> SettingsTopBar(
+            onBack = onBack,
+            title = "Server model roles",
+            subtitle = "Remote API model identities",
         )
         NavScreens.SettingsPerformance.route -> SettingsTopBar(
             onBack = onBack,

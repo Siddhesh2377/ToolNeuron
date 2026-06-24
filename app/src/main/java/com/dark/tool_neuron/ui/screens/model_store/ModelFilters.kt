@@ -56,6 +56,8 @@ private data class FilterOption<T>(val label: String, val value: T)
 private val MODEL_TYPE_OPTIONS: List<FilterOption<String?>> = listOf(
     FilterOption("All", null),
     FilterOption("Text", "gguf"),
+    FilterOption("VLM", "vlm"),
+    FilterOption("Embed", "embedding"),
     FilterOption("Image", "image_gen"),
     FilterOption("Upscale", "image_upscaler"),
     FilterOption("TTS", "tts"),
@@ -79,6 +81,16 @@ private val SORT_OPTIONS = listOf(
     FilterOption("Name", SortOption.NAME),
     FilterOption("Size", SortOption.SIZE),
     FilterOption("Recent", SortOption.RECENTLY_ADDED),
+)
+
+private val UPSCALER_USE_CASE_OPTIONS: List<FilterOption<String?>> = listOf(
+    FilterOption("Manual", null),
+    FilterOption("General", "General"),
+    FilterOption("Photo", "Photo"),
+    FilterOption("Portrait", "Portrait"),
+    FilterOption("Anime", "Anime"),
+    FilterOption("Sharp cleanup", "Sharp cleanup"),
+    FilterOption("Other", "Other"),
 )
 
 private val PARAMETER_BUCKETS = listOf("0.5B", "1B", "3B", "6.7B", "8B", "32B", "70B")
@@ -119,7 +131,9 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
     val selectedQuantizations by viewModel.selectedQuantizations.collectAsStateWithLifecycle()
     val selectedSizeCategory by viewModel.selectedSizeCategory.collectAsStateWithLifecycle()
     val selectedTags by viewModel.selectedTags.collectAsStateWithLifecycle()
+    val selectedUpscalerUseCase by viewModel.selectedUpscalerUseCase.collectAsStateWithLifecycle()
     val showNsfw by viewModel.showNsfw.collectAsStateWithLifecycle()
+    val showOver2GbModels by viewModel.showOver2GbModels.collectAsStateWithLifecycle()
     val executionTarget by viewModel.executionTarget.collectAsStateWithLifecycle()
     val sortBy by viewModel.sortBy.collectAsStateWithLifecycle()
 
@@ -133,7 +147,9 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
         selectedSizeCategory != null,
         selectedTags.isNotEmpty(),
         !showNsfw,
+        showOver2GbModels,
         executionTarget != null,
+        selectedUpscalerUseCase != null,
         sortBy != SortOption.NAME,
     ).count { it }
 
@@ -162,25 +178,55 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
             }
         }
 
-        FilterSection(label = "Category") {
-            FlowRow(
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = dimens.spacingLg),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
+            shape = MaterialTheme.shapes.medium,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = dimens.spacingMd, vertical = dimens.spacingSm),
                 horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
-                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                FilterChip(
-                    selected = selectedCategory == null,
-                    onClick = { viewModel.filterByCategory(null) },
-                    label = { Text("All") },
-                )
-                ModelCategory.entries.forEach { category ->
-                    FilterChip(
-                        selected = selectedCategory == category,
-                        onClick = {
-                            viewModel.filterByCategory(if (selectedCategory == category) null else category)
-                        },
-                        label = { Text(category.displayName) },
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hide models over 2 GB", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Default phone-friendly store view. Turn off to see heavier files.",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                ActionSwitch(
+                    checked = !showOver2GbModels,
+                    onCheckedChange = { checked -> viewModel.setShowOver2GbModels(!checked) },
+                )
+            }
+        }
+
+        if (selectedModelType == "image_upscaler") {
+            Column(
+                modifier = Modifier.padding(horizontal = dimens.spacingLg),
+                verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+            ) {
+                Text(
+                    text = "Upscale use case",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                    verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                ) {
+                    UPSCALER_USE_CASE_OPTIONS.forEach { option ->
+                        FilterChip(
+                            selected = selectedUpscalerUseCase == option.value,
+                            onClick = { viewModel.setUpscalerUseCase(option.value) },
+                            label = { Text(option.label) },
+                        )
+                    }
                 }
             }
         }
@@ -218,6 +264,29 @@ fun ModelFiltersSection(viewModel: ModelStoreViewModel) {
                     .padding(horizontal = dimens.spacingLg),
                 verticalArrangement = Arrangement.spacedBy(dimens.spacingMd),
             ) {
+                FilterSection(label = "Category") {
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(dimens.spacingSm),
+                        verticalArrangement = Arrangement.spacedBy(dimens.spacingXs),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        FilterChip(
+                            selected = selectedCategory == null,
+                            onClick = { viewModel.filterByCategory(null) },
+                            label = { Text("All") },
+                        )
+                        ModelCategory.entries.forEach { category ->
+                            FilterChip(
+                                selected = selectedCategory == category,
+                                onClick = {
+                                    viewModel.filterByCategory(if (selectedCategory == category) null else category)
+                                },
+                                label = { Text(category.displayName) },
+                            )
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,

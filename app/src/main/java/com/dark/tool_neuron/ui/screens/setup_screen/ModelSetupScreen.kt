@@ -56,6 +56,7 @@ import kotlinx.coroutines.delay
 
 private enum class SetupPath(val label: String) {
     Packs("Packs"),
+    Restore("Restore"),
     Custom("Custom")
 }
 
@@ -91,7 +92,9 @@ private val SETUP_PACKS = listOf(
 fun ModelSetupScreen(
     innerPadding: PaddingValues,
     onPackSelected: (packId: String) -> Unit,
+    setupBusy: Boolean = false,
     onOpenStore: () -> Unit,
+    onRestoreBackup: (uri: Uri) -> Unit,
     onLocalImport: (uri: Uri, name: String, size: Long, type: ProviderType) -> Unit,
     onSkip: () -> Unit,
 ) {
@@ -121,6 +124,10 @@ fun ModelSetupScreen(
             }
             pendingImport = Triple(uri, name, size)
         }
+    }
+
+    val backupPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) onRestoreBackup(uri)
     }
 
     LaunchedEffect(Unit) { delay(80); visible = true }
@@ -192,6 +199,11 @@ fun ModelSetupScreen(
                             selectedPack = selectedPack,
                             onPackChange = { selectedPack = it },
                             onContinue = { selectedPack?.let(onPackSelected) },
+                            enabled = !setupBusy,
+                        )
+
+                        SetupPath.Restore -> RestoreSection(
+                            onPickBackup = { backupPicker.launch(arrayOf("application/zip", "application/octet-stream", "*/*")) },
                         )
 
                         SetupPath.Custom -> CustomSection(
@@ -235,10 +247,33 @@ fun ModelSetupScreen(
 }
 
 @Composable
+private fun RestoreSection(
+    onPickBackup: () -> Unit,
+) {
+    val dimens = LocalDimens.current
+    Column {
+        Text(
+            text = "Restore a ToolNeuron backup ZIP with model files, roles, and saved configuration.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Spacer(Modifier.height(dimens.spacingLg))
+
+        ActionTextButton(
+            onClickListener = onPickBackup,
+            icon = TnIcons.Download,
+            text = "Restore from backup",
+        )
+    }
+}
+
+@Composable
 private fun PacksSection(
     selectedPack: String?,
     onPackChange: (String) -> Unit,
     onContinue: () -> Unit,
+    enabled: Boolean,
 ) {
     val dimens = LocalDimens.current
     Column {
@@ -249,6 +284,7 @@ private fun PacksSection(
                 subtitle = pack.subtitle,
                 selected = selectedPack == pack.id,
                 onClick = { onPackChange(pack.id) },
+                enabled = enabled,
             )
             if (index != SETUP_PACKS.lastIndex) {
                 Spacer(Modifier.height(dimens.spacingSm))
@@ -261,7 +297,7 @@ private fun PacksSection(
             onClickListener = onContinue,
             icon = TnIcons.ArrowRight,
             text = "Continue",
-            enabled = selectedPack != null,
+            enabled = selectedPack != null && enabled,
         )
     }
 }
@@ -303,7 +339,8 @@ private fun PackCard(
     title: String,
     subtitle: String,
     selected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    enabled: Boolean = true,
 ) {
     val tnShapes = LocalTnShapes.current
     val dimens = LocalDimens.current
@@ -323,7 +360,7 @@ private fun PackCard(
     )
 
     Surface(
-        onClick = onClick,
+        onClick = { if (enabled) onClick() },
         modifier = Modifier.fillMaxWidth(),
         shape = tnShapes.card,
         color = containerColor,

@@ -62,11 +62,12 @@ fun ModelStoreScreen(
     val downloadStates by viewModel.downloadStates.collectAsStateWithLifecycle()
     val extractingIds by viewModel.extractingIds.collectAsStateWithLifecycle()
     val extractingFile by viewModel.extractingFile.collectAsStateWithLifecycle()
+    val installStates by viewModel.installStates.collectAsStateWithLifecycle()
     val installedModels by viewModel.installedModels.collectAsStateWithLifecycle()
     val installedMmprojIds by viewModel.installedMmprojIds.collectAsStateWithLifecycle()
     val deviceInfo by viewModel.deviceInfo.collectAsStateWithLifecycle()
     val deleteInProgress by viewModel.deleteInProgress.collectAsStateWithLifecycle()
-    val activeDownloadCount by viewModel.activeDownloadCount.collectAsStateWithLifecycle()
+    val activeWorkCount by viewModel.activeWorkCount.collectAsStateWithLifecycle()
 
     var searchQuery by remember { mutableStateOf("") }
     var showSearch by remember { mutableStateOf(false) }
@@ -127,7 +128,7 @@ fun ModelStoreScreen(
                                 icon = TnIcons.Download,
                                 contentDescription = "Downloads",
                             )
-                            if (activeDownloadCount > 0) {
+                            if (activeWorkCount > 0) {
                                 Box(
                                     modifier = Modifier
                                         .offset(x = (-4).dp, y = 4.dp)
@@ -198,12 +199,14 @@ fun ModelStoreScreen(
                         isLoading = isLoading,
                         error = error,
                         downloadStates = downloadStates,
+                        installStates = installStates,
                         extractingIds = extractingIds,
                         extractingFile = extractingFile,
                         installedModelIds = installedModels.map { it.id }.toSet() + installedMmprojIds,
                         viewModel = viewModel,
                         onDownload = { viewModel.downloadModel(it) },
                         onCancelDownload = { viewModel.cancelDownload(it) },
+                        onClearDownload = { viewModel.clearDownloadState(it) },
                         onRetry = { viewModel.loadModels() }
                     )
                     StoreTab.INSTALLED -> InstalledModelsTab(

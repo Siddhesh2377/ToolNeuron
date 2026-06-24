@@ -1,5 +1,6 @@
 package com.dark.tool_neuron.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.dark.download_manager.HxdManager
@@ -10,6 +11,7 @@ import com.dark.tool_neuron.repo.DownloadCoordinator
 import com.dark.tool_neuron.repo.DownloadHistoryRepository
 import com.dark.tool_neuron.repo.DownloadLabel
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -26,6 +28,7 @@ data class ActiveDownloadItem(
 
 @HiltViewModel
 class DownloadsViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val coordinator: DownloadCoordinator,
     private val historyRepo: DownloadHistoryRepository,
 ) : ViewModel() {
@@ -39,7 +42,8 @@ class DownloadsViewModel @Inject constructor(
                 it.status == HxdStatus.QUEUED ||
                     it.status == HxdStatus.CONNECTING ||
                     it.status == HxdStatus.DOWNLOADING ||
-                    it.status == HxdStatus.PAUSED
+                    it.status == HxdStatus.PAUSED ||
+                    it.status == HxdStatus.FAILED
             }
             .map { state ->
                 val label = labels[state.id] ?: DownloadLabel.fromUrl(state.url)
@@ -62,7 +66,16 @@ class DownloadsViewModel @Inject constructor(
         HxdManager.cancel(hxdId)
     }
 
+    fun retry(hxdId: Int) {
+        HxdManager.resume(context, hxdId)
+    }
+
+    fun clear(hxdId: Int) {
+        HxdManager.clear(hxdId)
+    }
+
     fun clearHistory() {
         historyRepo.clearAll()
     }
+
 }

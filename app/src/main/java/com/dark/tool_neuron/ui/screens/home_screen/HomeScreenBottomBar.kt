@@ -87,6 +87,7 @@ fun HomeScreenBottomBar(
 
     val thinkingEnabled by viewModel.thinkingEnabled.collectAsStateWithLifecycle()
     val webSearchEnabled by viewModel.webSearchEnabled.collectAsStateWithLifecycle()
+    val webSearchMode by viewModel.webSearchMode.collectAsStateWithLifecycle()
     val supportsThinking by viewModel.supportsThinking.collectAsStateWithLifecycle()
     val isModelLoaded by InferenceClient.isModelLoaded.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
@@ -235,6 +236,7 @@ fun HomeScreenBottomBar(
                 thinkingEnabled = thinkingEnabled,
                 thinkingSupported = supportsThinking,
                 webSearchEnabled = webSearchEnabled,
+                webSearchMode = webSearchMode,
                 canAttachImage = isVlmLoaded,
                 canAttachFiles = embeddingModelInstalled,
                 canCompact = isModelLoaded
@@ -245,6 +247,7 @@ fun HomeScreenBottomBar(
                         ?.kind != com.dark.tool_neuron.model.MessageKind.CompactSummary,
                 onToggleThinking = viewModel::toggleThinking,
                 onToggleWebSearch = viewModel::toggleWebSearch,
+                onSetWebSearchMode = viewModel::setWebSearchMode,
                 onAttachImage = {
                     if (isVlmLoaded) {
                         toolsWindowOpen = false
@@ -844,14 +847,5 @@ private fun ContextIndicator(
 }
 
 private val STORAGE_MIME_FILTER = arrayOf(
-    "text/*",
-    "application/pdf",
-    "application/json",
-    "application/xml",
-    "application/rtf",
-    "application/epub+zip",
-    "application/vnd.oasis.opendocument.text",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "*/*",
 )
