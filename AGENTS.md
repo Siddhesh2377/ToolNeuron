@@ -456,7 +456,7 @@ Payload mechanics:
 
 Bundled at `app/src/main/assets/server_webui.html`. Single Material-3 SPA with a sidebar tab strip that swaps the main panel between four workspaces:
 
-- **Chat** — preserved from the prior build: localStorage history, markdown rendering, streaming with blinking cursor, settings dialog, connection indicator. The attach-image button converts uploads to `data:image/...;base64,...` URLs. The Web UI sends image parts only for the current image turn, or for a later turn whose text explicitly refers back to a previous image; unrelated follow-up text stays on the selected chat model. If the selected model is not VLM, Web UI switches per request to the default VLM, the only VLM, or prompts the user when multiple VLMs exist and no default is set.
+- **Chat** — preserved from the prior build: localStorage history, markdown rendering, streaming with blinking cursor, settings dialog, connection indicator. The attach-image button converts uploads to `data:image/...;base64,...` URLs. The Web UI sends image parts only for the current image turn, or for a later turn whose text explicitly refers back to a previous image; unrelated follow-up text stays on the selected chat model. If the selected model is not VLM, Web UI switches per request to the default VLM, the only VLM, or prompts the user when multiple VLMs exist and no default is set. Non-image attachments are attempted as text by reading bytes and rejecting binary-looking payloads; do not reintroduce extension-only gating because `.ps1`, `.sql`, `.gradle`, unknown-extension notes, and similar files must work when they decode as readable text.
 - **Embeddings** — model select, multi-line input (one row per line), runs `/v1/embeddings`, shows vector count + first 8 dims of each row.
 - **Voice** — two cards. TTS: model + text + voice id + speed, plays the returned WAV inline. STT: model + WAV upload, shows transcribed text.
 - **Image** — segmented switch (Generate / Edit / Inpaint / Upscale). Prompt + negative + steps/CFG/width/height for diffusion modes. Input image file for Edit/Inpaint/Upscale. Mask file for Inpaint. Result is rendered inline from `b64_json`.
@@ -587,6 +587,8 @@ Every attached document is stored content-addressed by SHA-256 of its bytes:
 - `id` is the compound `<chatId>:<sourceId>`. Same content attached to two chats produces two records sharing one `sourceId.bin` blob.
 
 `RagManager.hydrateChat(chatId)` re-ingests persisted records into the live RAG engine on chat-open (the engine itself is rebuilt fresh per process). It tracks `ingestedDocIds: MutableSet<String>` to avoid duplicate ingests; the set clears on `engine.close()`. Hydration also re-populates the FTS5 BM25 index for text-format documents (idempotent — `keywordIndex.docCount(docId) > 0` check skips already-indexed).
+
+Text-file handling is optimistic: first try the native parser, then readable-text fallback (UTF-8 / UTF-16 and binary-control checks). Unknown extensions are accepted when the bytes look like text, and binary-looking files are rejected. Keyword indexing uses the same readable-text fallback so scripts/configs without a friendly MIME type still participate in BM25 retrieval.
 
 `RagManager.attachExisting(currentChatId, source)` is the prev-chat re-attach: builds the new compound docId, re-reads `<sourceId>.bin`, calls `engine.ingestBytes(...)`, persists the new record. Idempotent — if the chat already has the same `sourceId`, returns the existing record.
 

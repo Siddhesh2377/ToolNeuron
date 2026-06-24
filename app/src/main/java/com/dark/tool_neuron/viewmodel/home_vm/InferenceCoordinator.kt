@@ -340,11 +340,20 @@ class InferenceCoordinator @Inject constructor(
             q.contains("doc") ||
             q.contains("attachment") ||
             q.contains("attached") ||
+            q.contains("syllabus") ||
+            q.contains("subject") ||
+            q.contains("topic") ||
             q.contains("based on") ||
             q.contains("this")
         if (!mentionsDocument) return false
         return q.contains("summar") ||
             q.contains("overview") ||
+            q.contains("syllabus") ||
+            q.contains("subject") ||
+            q.contains("subjects") ||
+            q.contains("topic") ||
+            q.contains("topics") ||
+            q.contains("list all") ||
             q.contains("learn") ||
             q.contains("teach") ||
             q.contains("explain") ||

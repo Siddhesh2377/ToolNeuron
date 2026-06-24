@@ -542,6 +542,7 @@ namespace tn::server {
                 parsed.request.messages = sanitized;
                 handle_chat_vlm(res, parsed.request, model_id, images, created);
             } else {
+                parsed.request.messages = oai::flatten_text_parts(parsed.request.messages);
                 handle_chat_text_only(res, parsed.request, model_id, created);
             }
         });

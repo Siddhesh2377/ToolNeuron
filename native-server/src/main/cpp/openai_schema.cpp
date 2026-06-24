@@ -24,6 +24,28 @@ namespace tn::server::oai {
             if (raw.empty()) return prefix + "000000";
             return prefix + tn::server::crypto::to_base64url(raw);
         }
+
+        std::string flatten_parts_to_text(const json& parts) {
+            if (!parts.is_array()) return {};
+            std::string flat_text;
+            for (const auto& part : parts) {
+                if (!part.is_object()) continue;
+                auto tIt = part.find("type");
+                if (tIt == part.end() || !tIt->is_string()) continue;
+                const std::string type = tIt->get<std::string>();
+                if (type == "text") {
+                    auto vIt = part.find("text");
+                    if (vIt != part.end() && vIt->is_string()) {
+                        if (!flat_text.empty()) flat_text.push_back('\n');
+                        flat_text += vIt->get<std::string>();
+                    }
+                } else if (type == "image_url") {
+                    if (!flat_text.empty()) flat_text.push_back('\n');
+                    flat_text += "[Image attached]";
+                }
+            }
+            return flat_text;
+        }
     }
 
     ParseResult parse_chat_request(const std::string& body) {
@@ -192,6 +214,26 @@ namespace tn::server::oai {
             sanitized_messages.push_back(new_msg);
         }
         return true;
+    }
+
+    json flatten_text_parts(const json& messages) {
+        if (!messages.is_array()) return messages;
+        json sanitized = json::array();
+        for (const auto& msg : messages) {
+            if (!msg.is_object()) {
+                sanitized.push_back(msg);
+                continue;
+            }
+            auto cIt = msg.find("content");
+            if (cIt == msg.end() || !cIt->is_array()) {
+                sanitized.push_back(msg);
+                continue;
+            }
+            json new_msg = msg;
+            new_msg["content"] = flatten_parts_to_text(*cIt);
+            sanitized.push_back(std::move(new_msg));
+        }
+        return sanitized;
     }
 
     std::string build_chat_response_nonstream(

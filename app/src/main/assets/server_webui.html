@@ -97,7 +97,7 @@
           <button type="button" id="attach" class="c-btn" title="Attach files" aria-label="Attach files">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
           </button>
-          <input id="fileInput" type="file" hidden multiple accept="image/*,text/*,.txt,.md,.json,.xml,.csv,.tsv,.log,.html,.htm,.yaml,.yml,.kt,.java,.py,.js,.ts,.c,.cpp,.h,.rs,.go,.rb,.php,.sh,.css" />
+          <input id="fileInput" type="file" hidden multiple accept="image/*,*/*" />
           <textarea id="prompt" rows="1" placeholder="Message your model…" aria-label="Message"></textarea>
           <button type="button" id="micBtn" class="c-btn voice" title="Dictate (voice input)" aria-label="Dictate" style="display:none">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg>
@@ -671,7 +671,7 @@
       if(m.role==="user"&&m.files&&m.files.length){
         var parts=[];if(m.text)parts.push({type:"text",text:m.text});
         m.files.forEach(function(f){
-          if(f.content)parts.push({type:"text",text:"Attached file \""+f.name+"\":\n"+f.content.slice(0,16000)});
+          if(f.content)parts.push({type:"text",text:"Attached file \""+f.name+"\":\n"+f.content});
           else if(isImageFile(f)&&i!==lastUser)parts.push({type:"text",text:"Previously attached image: "+(f.name||"image")});
         });
         if(i===lastUser&&(visionImages||[]).length){
@@ -798,13 +798,59 @@
   }
 
   /* ---------- attachments ---------- */
+  var MAX_TEXT_FILE_BYTES=2*1024*1024,MAX_TEXT_INLINE_CHARS=60000;
+  function isKnownTextName(name){
+    return /\.(txt|md|markdown|json|xml|csv|tsv|log|html?|ya?ml|kt|kts|java|py|pyw|js|jsx|ts|tsx|c|cc|cpp|cxx|h|hpp|hh|rs|go|rb|php|sh|bash|zsh|fish|ps1|psm1|psd1|bat|cmd|css|scss|sass|less|ini|toml|properties|gradle|sql|r|m|swift|scala|lua|pl|pm|dart|vue|svelte|dockerfile|gitignore|env|conf|cfg)$/i.test(name||"")||/^(dockerfile|makefile|rakefile|gemfile|procfile|license|readme)$/i.test(name||"");
+  }
+  function isReadableText(s){
+    if(!s||!s.trim())return false;
+    var sample=s.slice(0,20000),bad=0,rep=0,read=0;
+    for(var i=0;i<sample.length;i++){
+      var c=sample.charCodeAt(i);
+      if(c===65533)rep++;
+      if(c<32&&c!==9&&c!==10&&c!==13)bad++;
+      if(c>=32||c===9||c===10||c===13)read++;
+    }
+    var total=Math.max(1,sample.length);
+    return bad/total<0.02&&rep/total<0.03&&read/total>0.85;
+  }
+  function decodeTextBuffer(buf,name,type){
+    var bytes=new Uint8Array(buf);
+    if(!bytes.length)return null;
+    var sample=bytes.slice(0,Math.min(bytes.length,20000)),zeros=0;
+    for(var i=0;i<sample.length;i++){if(sample[i]===0)zeros++;}
+    if(zeros/Math.max(1,sample.length)>0.01)return null;
+    var text="";
+    try{text=new TextDecoder("utf-8",{fatal:true}).decode(bytes);}catch(e){try{text=new TextDecoder("utf-8").decode(bytes);}catch(e2){text="";}}
+    if(!isReadableText(text)){
+      try{text=new TextDecoder("utf-16le").decode(bytes);}catch(e3){}
+    }
+    text=text.replace(/^\uFEFF/,"");
+    if(!isReadableText(text)&&!(type&&type.indexOf("text/")===0)&&!isKnownTextName(name))return null;
+    return text;
+  }
+  function addTextAttachment(f,text){
+    var body=String(text||"");
+    var truncated=body.length>MAX_TEXT_INLINE_CHARS;
+    if(truncated)body=body.slice(0,MAX_TEXT_INLINE_CHARS)+"\n\n[File truncated in Web UI preview; first "+MAX_TEXT_INLINE_CHARS+" characters attached.]";
+    atts.push({kind:"text",name:f.name||"file.txt",content:body,size:f.size||0,truncated:truncated});
+    renderPending();syncSend();
+  }
   function addFiles(files){
     Array.prototype.forEach.call(files,function(f){
       if(f.type&&f.type.indexOf("image/")===0){
         var rd=new FileReader();rd.onload=function(){atts.push({kind:"image",name:f.name||"image.png",dataUrl:rd.result,thumb:rd.result});renderPending();syncSend();};rd.readAsDataURL(f);
-      }else if((f.type&&f.type.indexOf("text/")===0)||/\.(txt|md|markdown|json|xml|csv|tsv|log|html?|ya?ml|kt|java|py|js|ts|c|cpp|h|rs|go|rb|php|sh|css|ini|toml)$/i.test(f.name||"")){
-        var rt=new FileReader();rt.onload=function(){atts.push({kind:"text",name:f.name||"file.txt",content:String(rt.result||"")});renderPending();syncSend();};rt.readAsText(f);
-      }else{toast("Unsupported file: "+(f.name||"file"));}
+      }else{
+        if((f.size||0)>MAX_TEXT_FILE_BYTES){toast("Text file too large: "+(f.name||"file"));return;}
+        var rt=new FileReader();
+        rt.onload=function(){
+          var text=decodeTextBuffer(rt.result,f.name||"",f.type||"");
+          if(text==null){toast("Not readable as text: "+(f.name||"file"));return;}
+          addTextAttachment(f,text);
+        };
+        rt.onerror=function(){toast("Could not read: "+(f.name||"file"));};
+        rt.readAsArrayBuffer(f);
+      }
     });
   }
   function renderPending(){

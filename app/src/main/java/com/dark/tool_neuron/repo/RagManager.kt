@@ -339,9 +339,6 @@ class RagManager @Inject constructor(
         val doc = documentRepo.getDocument(docId)
             ?: return@withContext Result.failure(IllegalStateException("Document not found"))
         if (doc.isDeepIndexed) return@withContext Result.success(doc)
-        if (!isTextLike(doc.mimeType, doc.name)) {
-            return@withContext Result.failure(IllegalStateException("Deep Index only supports text-format documents (txt, md, json, code, etc.)"))
-        }
         if (doc.sourceId.isBlank()) {
             return@withContext Result.failure(IllegalStateException("Source bytes missing"))
         }
@@ -354,8 +351,8 @@ class RagManager @Inject constructor(
 
         val bytes = sourceVault.read(doc.sourceId)
             ?: return@withContext Result.failure(IllegalStateException("Failed to read source"))
-            val text = extractReadableText(bytes, doc.mimeType, doc.name)
-                ?: return@withContext Result.failure(IllegalStateException("Source contains no text"))
+        val text = extractReadableText(bytes, doc.mimeType, doc.name)
+            ?: return@withContext Result.failure(IllegalStateException("Source contains no readable text"))
 
         _deepIndexing.value = _deepIndexing.value + docId
         try {
@@ -401,9 +398,6 @@ class RagManager @Inject constructor(
             ?: return@withLock Result.failure(IllegalStateException("Document not found"))
         if (doc.isRaptorIndexed) return@withLock Result.success(doc)
         if (doc.sourceId.isBlank()) return@withLock Result.failure(IllegalStateException("Document source unavailable"))
-        if (!isTextLike(doc.mimeType, doc.name)) {
-            return@withLock Result.failure(IllegalStateException("RAPTOR currently supports text-format documents only"))
-        }
         if (!ensureReady()) {
             return@withLock Result.failure(IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store."))
         }
@@ -646,6 +640,8 @@ class RagManager @Inject constructor(
             append("Answer the user's document request directly using the attached document context below. ")
             append("Do not describe the request itself; do not start with phrases like \"the question is asking\" or \"the passages highlight\". ")
             append("If the user asks for a summary, provide a concise summary of the document content. ")
+            append("If the document is a syllabus, course plan, checklist, or topic list, preserve course codes, section headings, and bullet-level topics instead of merging everything into a vague paragraph. ")
+            append("If the user asks to list subjects or topics, list every subject or topic group visible in the context. ")
             append("If the user asks to learn, teach from the basics first, then expand into the main sections. ")
             append("Cover the main topics, definitions, examples, and notable sections that appear in the context. ")
             append("Do not ask for a follow-up just because the excerpts are not the full file; answer from the available document context. ")
@@ -884,10 +880,13 @@ class RagManager @Inject constructor(
         mime: String,
         bytes: ByteArray,
     ) {
-        if (!isTextLike(mime, name)) return
         if (keywordIndex.docCount(docId) > 0) return
-        val text = runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()?.takeIf { it.isNotBlank() } ?: return
-        if (text.contains('�') && text.count { it == '�' }.toFloat() / text.length > 0.05f) return
+        val text = if (isTextLike(mime, name)) {
+            runCatching { bytes.toString(Charsets.UTF_8) }.getOrNull()
+                ?.takeIf { it.isNotBlank() && isMostlyReadableText(it) }
+        } else {
+            plainTextFallback(bytes)
+        } ?: return
         val chunks = RagChunker.chunk(text)
         if (chunks.isEmpty()) return
         val n = keywordIndex.ingest(docId, chatId, sourceId, chunks)
@@ -945,6 +944,10 @@ class RagManager @Inject constructor(
         val TEXT_LIKE_EXTS = setOf(
             "txt", "md", "markdown", "json", "xml", "csv", "tsv", "html", "htm", "rtf",
             "yaml", "yml", "log", "ini", "toml", "properties", "kt", "java", "py", "js", "ts",
+            "tsx", "jsx", "kts", "gradle", "ps1", "psm1", "psd1", "bat", "cmd", "sh", "bash",
+            "zsh", "fish", "sql", "css", "scss", "sass", "less", "dockerfile", "env", "conf",
+            "cfg", "rs", "go", "rb", "php", "swift", "scala", "lua", "pl", "pm", "dart", "vue",
+            "svelte", "c", "cc", "cpp", "cxx", "h", "hh", "hpp",
         )
     }
 }

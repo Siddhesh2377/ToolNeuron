@@ -43,6 +43,8 @@ namespace tn::server::oai {
                                       nlohmann::json& sanitized_messages,
                                       std::string& parse_error);
 
+    nlohmann::json flatten_text_parts(const nlohmann::json& messages);
+
     std::string build_chat_response_nonstream(
         const std::string& model_id,
         const std::string& content,
