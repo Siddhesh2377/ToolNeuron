@@ -40,6 +40,7 @@ namespace tn::server::models {
     ModelRef              get(const std::string& id);
     ModelRef              first_of_kind(Kind k);
     ModelRef              default_of_kind(Kind k);
+    size_t                count_of_kind(Kind k);
     bool                  has_any_of_kind(Kind k);
 
     std::string build_list_response();

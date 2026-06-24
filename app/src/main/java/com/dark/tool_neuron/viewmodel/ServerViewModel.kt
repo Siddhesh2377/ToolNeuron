@@ -12,6 +12,7 @@ import com.dark.tool_neuron.repo.ModelRepository
 import com.dark.tool_neuron.service.server.ServerController
 import com.dark.tool_neuron.service.server.ServerRequestEvent
 import com.dark.tool_neuron.service.server.ServerState
+import com.dark.tool_neuron.util.VlmPaths
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -19,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
+import java.io.File
 import javax.inject.Inject
 
 @HiltViewModel
@@ -46,12 +48,23 @@ class ServerViewModel @Inject constructor(
 
     val chatModels: StateFlow<List<ModelInfo>> = modelRepo.models
         .map { list ->
-            list.filter { it.pathType == PathType.FILE && it.providerType == ProviderType.GGUF }
+            list.filter {
+                it.pathType == PathType.FILE &&
+                    it.providerType == ProviderType.GGUF &&
+                    !isVlmCandidate(it)
+            }
         }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    val vlmModels: StateFlow<List<ModelInfo>> = modelRepo.models
+        .map { list -> list.filter { it.pathType == PathType.FILE && isVlmCandidate(it) } }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _selectedChatModelId = MutableStateFlow(controller.selectedModelId())
     val selectedChatModelId: StateFlow<String> = _selectedChatModelId.asStateFlow()
+
+    private val _selectedVlmModelId = MutableStateFlow(controller.selectedVlmModelId())
+    val selectedVlmModelId: StateFlow<String> = _selectedVlmModelId.asStateFlow()
 
     fun start() {
         controller.setPort(_port.value)
@@ -81,6 +94,11 @@ class ServerViewModel @Inject constructor(
         controller.setChatDefaultModelId(modelId)
     }
 
+    fun setVlmDefaultModel(modelId: String) {
+        _selectedVlmModelId.value = modelId
+        controller.setVlmDefaultModelId(modelId)
+    }
+
     fun revealToken(): Boolean {
         if (!session.isAllowed(PolicyEngine.Feature.AUTH_VERIFY)) return false
         _tokenVisible.value = true
@@ -105,5 +123,12 @@ class ServerViewModel @Inject constructor(
         if (raw.isBlank()) return ""
         val head = raw.take(6)
         return "$head${"•".repeat(8)}"
+    }
+
+    private fun isVlmCandidate(model: ModelInfo): Boolean {
+        if (model.providerType == ProviderType.VISION_CHAT) return true
+        if (model.providerType != ProviderType.GGUF) return false
+        return VlmPaths.isInsideVlmFolder(model.path, modelRepo.getModelsDir()) &&
+            VlmPaths.colocatedMmproj(File(model.path)) != null
     }
 }

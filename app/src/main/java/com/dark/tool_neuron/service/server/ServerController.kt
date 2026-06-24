@@ -174,12 +174,24 @@ class ServerController @Inject constructor(
     fun currentToken(): String = prefs.serverToken
 
     fun selectedModelId(): String = prefs.serverSelectedModelId
+    fun selectedVlmModelId(): String =
+        readServerRoleDefaults()[ServerEngineKind.VLM.token].orEmpty()
+
     fun setSelectedModelId(modelId: String) { prefs.serverSelectedModelId = modelId }
+
     fun setChatDefaultModelId(modelId: String) {
         prefs.serverSelectedModelId = modelId
+        setRoleDefaultModelId(ServerEngineKind.CHAT_GGUF, modelId)
+    }
+
+    fun setVlmDefaultModelId(modelId: String) {
+        setRoleDefaultModelId(ServerEngineKind.VLM, modelId)
+    }
+
+    private fun setRoleDefaultModelId(kind: ServerEngineKind, modelId: String) {
         val obj = runCatching { JSONObject(prefs.serverRoleDefaultsJson) }.getOrDefault(JSONObject())
-        if (modelId.isBlank()) obj.remove(ServerEngineKind.CHAT_GGUF.token)
-        else obj.put(ServerEngineKind.CHAT_GGUF.token, modelId)
+        if (modelId.isBlank()) obj.remove(kind.token)
+        else obj.put(kind.token, modelId)
         prefs.serverRoleDefaultsJson = obj.toString()
     }
 

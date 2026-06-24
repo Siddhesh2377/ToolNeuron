@@ -427,7 +427,7 @@ native-server/src/main/cpp/
   server_auth.{h,cpp}        — bearer token store + constant-time compare + 401/403
   server_crypto.{h,cpp}      — getrandom(2) RNG, const_time_eq, base64url, base64 std, base64 decoder, secure_zero
   server_models.{h,cpp}      — typed catalog: id + display_name + path + mmproj_path + config_json + Kind + created
-                                + has_id_of_kind / first_of_kind / has_any_of_kind / build_list_response
+                                + has_id_of_kind / first_of_kind / default_of_kind / count_of_kind / build_list_response
   server_audit.{h,cpp}       — 128-entry ring buffer of request events
   server_rate_limit.{h,cpp}  — per-client token bucket (cap=30, refill=1/s) + auth-fail ban (20 fails → 1 h)
   server_webui.{h,cpp}       — set/clear/get/has HTML (mutex-protected std::string)
@@ -450,18 +450,18 @@ Payload mechanics:
 - **Single-response** (embeddings / TTS / STT / image): `reply_session` — bridge calls `nativeFeedReplyText(replyId, body, mime)` for JSON/text or `nativeFeedReplyBinary(replyId, path, mime)` for staged binary; the route handler blocks on `session->wait(timeout)`.
 - **Big binary upload** (multipart image, mask, wav): cpp-httplib decodes multipart natively; the route writes each part to `<cacheDir>/server-staging/tn_<rand>_<name>` via `server_staging::write_bytes`, hands the path to Java via JNI string (avoids byte[] JNI copies), and unlinks on response.
 - **Big binary download** (TTS wav, generated PNG): Kotlin writes the bytes to the staged path, hands the path back via `nativeFeedReplyBinary(path, mime)`, the C++ side reads + sends + unlinks. PNG responses are base64-encoded into JSON `b64_json` per OpenAI; WAV is sent as raw `audio/wav`.
-- **VLM image_url parts**: only `data:image/...;base64,...` URLs are accepted. Network URLs return 400 (offline-only scope). Decoded bytes are staged to tmpfiles and the paths passed to `InferenceBridge.startGeneration(..., imagePaths=[...])`. Sanitised messages (image parts collapsed into text-only `content`) are forwarded to the engine alongside the path list — the Kotlin bridge reads each tmpfile and feeds the bytes to `GGMLEngine.generateVlmFlow(imageData = [...])`.
+- **VLM image_url parts**: only `data:image/...;base64,...` URLs are accepted. Network URLs return 400 (offline-only scope). Decoded bytes are staged to tmpfiles and the paths passed to `InferenceBridge.startGeneration(..., imagePaths=[...])`. Sanitised messages (image parts collapsed into text-only `content`) are forwarded to the engine alongside the path list — the Kotlin bridge reads each tmpfile and feeds the bytes to `GGMLEngine.generateVlmFlow(imageData = [...])`. If an image-bearing request names a non-VLM model, native routing switches to the default VLM; if no default exists and exactly one VLM is enabled, it uses that single VLM. Multiple VLMs with no default return a clear model error.
 
 ### Web UI
 
 Bundled at `app/src/main/assets/server_webui.html`. Single Material-3 SPA with a sidebar tab strip that swaps the main panel between four workspaces:
 
-- **Chat** — preserved from the prior build: localStorage history, markdown rendering, streaming with blinking cursor, settings dialog, connection indicator. Adds an attach-image button (📎) that converts the uploaded image to a `data:image/...;base64,...` URL and appends it as an OpenAI multi-part `image_url` content entry on the next send. Server auto-detects and routes to the VLM engine.
+- **Chat** — preserved from the prior build: localStorage history, markdown rendering, streaming with blinking cursor, settings dialog, connection indicator. The attach-image button converts uploads to `data:image/...;base64,...` URLs. The Web UI sends image parts only for the current image turn, or for a later turn whose text explicitly refers back to a previous image; unrelated follow-up text stays on the selected chat model. If the selected model is not VLM, Web UI switches per request to the default VLM, the only VLM, or prompts the user when multiple VLMs exist and no default is set.
 - **Embeddings** — model select, multi-line input (one row per line), runs `/v1/embeddings`, shows vector count + first 8 dims of each row.
 - **Voice** — two cards. TTS: model + text + voice id + speed, plays the returned WAV inline. STT: model + WAV upload, shows transcribed text.
 - **Image** — segmented switch (Generate / Edit / Inpaint / Upscale). Prompt + negative + steps/CFG/width/height for diffusion modes. Input image file for Edit/Inpaint/Upscale. Mask file for Inpaint. Result is rendered inline from `b64_json`.
 
-`refreshModelCache()` hits `/v1/models` once per tab activation and filters per-kind for the model dropdowns. JNI: `nativeSetWebUiHtml(html)` pushes the bundled file at server start; `nativeClearWebUi()` clears on stop. Same applies to `/docs` via `nativeSetDocsHtml` + `app/src/main/assets/server_docs.html`. The docs file documents every endpoint with copy-pasteable curl examples.
+`refreshModelCache()` hits `/v1/models` once per tab activation and filters per-kind for the model dropdowns. Chat keeps `chatModels` and `vlmModels` separate even though both can answer `/v1/chat/completions`; `vlmModels` exists for per-turn image routing and the multi-VLM chooser. JNI: `nativeSetWebUiHtml(html)` pushes the bundled file at server start; `nativeClearWebUi()` clears on stop. Same applies to `/docs` via `nativeSetDocsHtml` + `app/src/main/assets/server_docs.html`. The docs file documents every endpoint with copy-pasteable curl examples.
 
 ### Start config (`configJson`) schema
 

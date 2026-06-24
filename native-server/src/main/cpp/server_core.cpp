@@ -100,6 +100,25 @@ namespace tn::server {
             return true;
         }
 
+        bool ensure_vlm_model_for_image_request(httplib::Response& res, std::string& model_id) {
+            if (!model_id.empty() && m::has_id_of_kind(model_id, m::Kind::Vlm)) return true;
+
+            auto fallback = m::default_of_kind(m::Kind::Vlm);
+            if (fallback.id.empty() && m::count_of_kind(m::Kind::Vlm) == 1) {
+                fallback = m::first_of_kind(m::Kind::Vlm);
+            }
+            if (!fallback.id.empty()) {
+                model_id = fallback.id;
+                return true;
+            }
+
+            std::string msg = m::has_any_of_kind(m::Kind::Vlm)
+                ? "image request needs a VLM model; choose one or set a default vision model"
+                : "no VLM model installed";
+            respond_error(res, 404, "model_not_found", msg, "invalid_request_error");
+            return false;
+        }
+
         bool ensure_text_chat_model(httplib::Response& res, std::string& model_id) {
             if (model_id.empty()) model_id = resolve_model_id(model_id, m::Kind::ChatGguf);
             if (model_id.empty()) model_id = resolve_model_id(model_id, m::Kind::Vlm);
@@ -504,7 +523,7 @@ namespace tn::server {
 
             std::string model_id = parsed.request.model;
             if (route_vlm) {
-                if (!ensure_model_for(res, model_id, m::Kind::Vlm, "VLM")) return;
+                if (!ensure_vlm_model_for_image_request(res, model_id)) return;
             } else {
                 if (!ensure_text_chat_model(res, model_id)) return;
             }

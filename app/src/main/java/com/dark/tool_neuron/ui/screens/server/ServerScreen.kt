@@ -76,7 +76,9 @@ fun ServerScreen(
     val tokenVisible by vm.tokenVisible.collectAsStateWithLifecycle()
     val anyEngineInstalled by vm.anyEngineInstalled.collectAsStateWithLifecycle()
     val chatModels by vm.chatModels.collectAsStateWithLifecycle()
+    val vlmModels by vm.vlmModels.collectAsStateWithLifecycle()
     val selectedChatModelId by vm.selectedChatModelId.collectAsStateWithLifecycle()
+    val selectedVlmModelId by vm.selectedVlmModelId.collectAsStateWithLifecycle()
 
     val dimens = LocalDimens.current
     val busy = state is ServerState.Running ||
@@ -99,11 +101,24 @@ fun ServerScreen(
             EndpointsCard(state as ServerState.Running)
         }
 
-        ServerChatModelCard(
+        ServerDefaultModelCard(
+            title = "Chat model",
+            description = "Used by the bundled Web UI and by API requests with a blank/default chat model.",
+            emptyMessage = "No GGUF chat model installed. Import or download a chat model first.",
             models = chatModels,
             selectedId = selectedChatModelId,
             disabled = busy,
             onPick = vm::setChatDefaultModel,
+        )
+
+        ServerDefaultModelCard(
+            title = "Vision model",
+            description = "Used when the Web UI or API receives image attachments. The selected VLM loads with its projector automatically.",
+            emptyMessage = "No VLM with a colocated projector is installed. Download a vision model first.",
+            models = vlmModels,
+            selectedId = selectedVlmModelId,
+            disabled = busy,
+            onPick = vm::setVlmDefaultModel,
         )
 
         ConfigCard(
@@ -277,7 +292,10 @@ private fun UrlRow(label: String, url: String, onCopy: () -> Unit) {
 }
 
 @Composable
-private fun ServerChatModelCard(
+private fun ServerDefaultModelCard(
+    title: String,
+    description: String,
+    emptyMessage: String,
     models: List<ModelInfo>,
     selectedId: String,
     disabled: Boolean,
@@ -285,14 +303,14 @@ private fun ServerChatModelCard(
 ) {
     val dimens = LocalDimens.current
     StandardCard(
-        title = "Chat model",
-        description = "Used by the bundled Web UI and by API requests with a blank/default chat model.",
+        title = title,
+        description = description,
         icon = TnIcons.Cpu,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(dimens.spacingXs)) {
             if (models.isEmpty()) {
                 CaptionText(
-                    text = "No GGUF chat model installed. Import or download a chat model first.",
+                    text = emptyMessage,
                     color = MaterialTheme.colorScheme.error,
                 )
             } else {
@@ -305,7 +323,6 @@ private fun ServerChatModelCard(
                     )
                 }
             }
-            CaptionText("Other endpoint defaults, like embeddings, voice, image generation, and upscaling, live in Settings > Server model roles.")
         }
     }
 }

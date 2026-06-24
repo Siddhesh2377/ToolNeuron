@@ -251,13 +251,13 @@
   var $=function(id){return document.getElementById(id);};
   var KEY="tn.webui.v4";
   var state=load();
-  var chatModels=[],ttsModels=[],sttModels=[],embedModels=[],imageModels=[];
+  var chatModels=[],vlmModels=[],ttsModels=[],sttModels=[],embedModels=[],imageModels=[];
   var active=null,abort=null,generating=false;
   var atts=[];
   var pendingVoiceReply=false;
   var mq=window.matchMedia("(max-width:980px), (pointer:coarse) and (max-width:1180px)");
 
-  function defaults(){return{serverUrl:location.origin,token:"",model:"",systemPrompt:"",maxTokens:1024,temp:0.7,stream:true,theme:"",
+  function defaults(){return{serverUrl:location.origin,token:"",model:"",vlmModel:"",systemPrompt:"",maxTokens:1024,temp:0.7,stream:true,theme:"",
     sttModel:"",ttsModel:"",ttsVoice:0,ttsSpeed:1,tucked:false,chats:[],workspace:"chat",embedModel:"",imageModel:""};}
   function load(){try{return Object.assign(defaults(),JSON.parse(localStorage.getItem(KEY)||"{}"));}catch(e){return defaults();}}
   function save(){try{localStorage.setItem(KEY,JSON.stringify(state));}catch(e){}}
@@ -584,6 +584,7 @@
       return r.json();
     }).then(function(j){
       var all=j.data||[];
+      vlmModels=all.filter(function(m){return m.type==="vlm";});
       chatModels=all.filter(function(m){return m.type==="gguf"||m.type==="vlm";});
       ttsModels=all.filter(function(m){return m.type==="tts";});
       sttModels=all.filter(function(m){return m.type==="stt";});
@@ -592,30 +593,90 @@
       fillVoiceSelects();
       fillStudioSelects();
       if(!chatModels.length){setConn("bad","No chat models","Assign one in the app");note("Linked, but no chat or vision models are exposed. Assign one in the app.","bad");renderModelMenu();render();return;}
-      if(!state.model||!chatModels.some(function(m){return m.id===state.model;})){var d=chatModels.find(function(m){return m.default;});setModel(d?d.id:chatModels[0].id);}
+      if(state.vlmModel&&!vlmModels.some(function(m){return m.id===state.vlmModel;})){state.vlmModel="";save();}
+      if(!state.model||!chatModels.some(function(m){return m.id===state.model;})){
+        var d=chatModels.find(function(m){return m.default&&m.type==="gguf";})||chatModels.find(function(m){return m.type==="gguf";})||vlmModels.find(function(m){return m.default;})||vlmModels[0];
+        setModel(d?d.id:chatModels[0].id);
+      }
       else setModel(state.model);
       setConn("ok","Connected",hostShort());
       note("Connected to "+hostShort()+" · "+chatModels.length+" chat model"+(chatModels.length>1?"s":"")+" ready.","ok");
       renderModelMenu();render();
     }).catch(function(e){
-      chatModels=[];ttsModels=[];sttModels=[];fillVoiceSelects();renderModelMenu();
+      chatModels=[];vlmModels=[];ttsModels=[];sttModels=[];fillVoiceSelects();renderModelMenu();
       setConn("bad","Can't connect",hostShort());
       note(e&&e.soft?e.soft:"Can't reach "+hostShort()+". Check the address and that the server is running.","bad");
     });
   }
 
   /* ---------- compose / send ---------- */
-  function buildMessages(){
+  function isImageFile(f){return f&&f.kind==="image"&&f.dataUrl;}
+  function isVlmModel(id){return !!vlmModels.find(function(m){return m.id===id;});}
+  function lastUserMessage(){
+    if(!active)return null;
+    for(var i=active.msgs.length-1;i>=0;i--){
+      var m=active.msgs[i];
+      if(m.role==="user"&&!m.pending)return m;
+    }
+    return null;
+  }
+  function imageRefText(text){
+    return /\b(image|photo|picture|screenshot|diagram|chart|attached file|attachment|the attached|this visual|that visual|previous visual|last visual)\b/i.test(text||"");
+  }
+  function lastImageFiles(){
+    if(!active)return[];
+    for(var i=active.msgs.length-1;i>=0;i--){
+      var m=active.msgs[i];
+      if(m.role==="user"&&m.files){
+        var imgs=m.files.filter(isImageFile);
+        if(imgs.length)return imgs;
+      }
+    }
+    return[];
+  }
+  function chooseVlmModel(){
+    if(!vlmModels.length){openSettings();note("Install or expose a VLM model before sending images.","bad");return"";}
+    if(isVlmModel(state.model))return state.model;
+    if(state.vlmModel&&isVlmModel(state.vlmModel))return state.vlmModel;
+    var d=vlmModels.find(function(m){return m.default;});
+    if(d)return d.id;
+    if(vlmModels.length===1)return vlmModels[0].id;
+    var list=vlmModels.map(function(m,i){return (i+1)+". "+m.id;}).join("\n");
+    var pick=prompt("Choose a vision model for this image request:\n\n"+list+"\n\nType a number or model id.");
+    if(!pick)return"";
+    pick=pick.trim();
+    var byNum=/^\d+$/.test(pick)?vlmModels[Number(pick)-1]:null;
+    var byId=vlmModels.find(function(m){return m.id===pick;});
+    var chosen=byNum||byId;
+    if(!chosen){toast("Vision model not changed");return"";}
+    state.vlmModel=chosen.id;save();
+    return chosen.id;
+  }
+  function visionPlanFor(text,files){
+    var imgs=(files||[]).filter(isImageFile);
+    if(imgs.length)return{images:imgs,reason:"attached"};
+    if(imageRefText(text)){
+      var prior=lastImageFiles();
+      if(prior.length)return{images:prior,reason:"referenced"};
+    }
+    return{images:[],reason:""};
+  }
+  function buildMessages(visionImages){
     var out=[];
+    var lastUser=-1;
+    for(var j=active.msgs.length-1;j>=0;j--){if(active.msgs[j].role==="user"&&!active.msgs[j].pending){lastUser=j;break;}}
     if((state.systemPrompt||"").trim())out.push({role:"system",content:state.systemPrompt.trim()});
-    active.msgs.forEach(function(m){
+    active.msgs.forEach(function(m,i){
       if(m.pending)return;
       if(m.role==="user"&&m.files&&m.files.length){
         var parts=[];if(m.text)parts.push({type:"text",text:m.text});
         m.files.forEach(function(f){
-          if(f.kind==="image"&&f.dataUrl)parts.push({type:"image_url",image_url:{url:f.dataUrl}});
-          else if(f.content)parts.push({type:"text",text:"Attached file \""+f.name+"\":\n"+f.content.slice(0,16000)});
+          if(f.content)parts.push({type:"text",text:"Attached file \""+f.name+"\":\n"+f.content.slice(0,16000)});
+          else if(isImageFile(f)&&i!==lastUser)parts.push({type:"text",text:"Previously attached image: "+(f.name||"image")});
         });
+        if(i===lastUser&&(visionImages||[]).length){
+          visionImages.forEach(function(f){parts.push({type:"image_url",image_url:{url:f.dataUrl}});});
+        }
         out.push({role:"user",content:parts.length?parts:(m.text||"")});
       }else{
         out.push({role:m.role,content:m.role==="assistant"?answerOf(m):(m.text||"")});
@@ -639,15 +700,32 @@
     if(!state.token){openSettings();note("Paste your access token to start chatting.","bad");return;}
     if(!chatModels.length){openSettings();note("Connect to a server with a chat model first.","bad");return;}
     if(!state.model){openSettings();note("Pick a model — none is selected.","bad");return;}
+    var vision=visionPlanFor(text,atts);
+    var routeModel=state.model;
+    if(vision.images.length){
+      routeModel=chooseVlmModel();
+      if(!routeModel)return;
+      if(routeModel!==state.model)toast("Switching to vision model: "+routeModel);
+    }
     if(!active)newChat();
     var speakBack=pendingVoiceReply;pendingVoiceReply=false;
     active.msgs.push({role:"user",text:text,files:atts.slice()});
     titleFrom(active);
     $("prompt").value="";atts=[];renderPending();autosize();
-    save();render();respond(speakBack);
+    save();render();respond(speakBack,{model:routeModel,images:vision.images,reason:vision.reason});
   }
-  function respond(autoSpeak){
-    var ph={role:"assistant",text:"",reasoning:"",pending:true,model:state.model,autoSpeak:!!autoSpeak};
+  function respond(autoSpeak,route){
+    if(!route){
+      var lu=lastUserMessage(),vp=lu?visionPlanFor(lu.text,lu.files):{images:[],reason:""};
+      var rm=state.model;
+      if(vp.images.length){
+        rm=chooseVlmModel();
+        if(!rm)return;
+        if(rm!==state.model)toast("Switching to vision model: "+rm);
+      }
+      route={model:rm,images:vp.images,reason:vp.reason};
+    }
+    var ph={role:"assistant",text:"",reasoning:"",pending:true,model:route.model,autoSpeak:!!autoSpeak};
     active.msgs.push(ph);save();render();
     var el=$("list").firstChild.lastChild,prose=el._prose,thinkBody=el._think,thinkWrap=el._thinkWrap;
     setGenerating(true);
@@ -667,7 +745,7 @@
       if(stuck)scrollEnd();
     }
     function bump(){if(!raf)raf=requestAnimationFrame(paint);}
-    var body={model:state.model,messages:buildMessages(),temperature:Number(state.temp)||0,max_tokens:Number(state.maxTokens)||1024,stream:!!state.stream};
+    var body={model:route.model,messages:buildMessages(route.images||[]),temperature:Number(state.temp)||0,max_tokens:Number(state.maxTokens)||1024,stream:!!state.stream};
     var url=base()+"/v1/chat/completions",p;
     if(state.stream){
       p=fetch(url,{method:"POST",headers:headers(),body:JSON.stringify(body),signal:abort.signal}).then(function(r){

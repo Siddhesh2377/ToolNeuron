@@ -155,6 +155,15 @@ namespace tn::server::models {
         return {};
     }
 
+    size_t count_of_kind(Kind k) {
+        std::lock_guard<std::mutex> lock(g_mu);
+        size_t count = 0;
+        for (const auto& m : g_models) {
+            if (m.kind == k) ++count;
+        }
+        return count;
+    }
+
     bool has_any_of_kind(Kind k) {
         std::lock_guard<std::mutex> lock(g_mu);
         for (const auto& m : g_models) {
