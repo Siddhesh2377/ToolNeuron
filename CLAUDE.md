@@ -22,7 +22,7 @@ Package `com.dark.tool_neuron` · minSdk 29 · targetSdk 36 · abiFilters `arm64
 - `:plugin-exc` — plugin host: `PluginExecutor`, `PluginLoader` (DexClassLoader from `<filesDir>/plugins/<id>/classes.dex`), `PluginRegistry`, `CapabilityGate` (PolicyEngine session + manifest cap), `PluginContainerActivity`, `PluginDock`, `OnnxApiImpl` (onnxruntime-android 1.20.0, AI_ONNX), `HxsApiImpl` (collection `plugin_<id>`, HXS_READ/WRITE), `NetworkApiImpl` (INTERNET).
 - `:download_manager` (`HxdManager`), `:networking` (`WebNative`, curl-impersonate) — ancillary.
 
-Prebuilt AARs in `libs/`: `gguf_lib-release.aar` (chat/VLM/embedding), `ai_sherpa-release.aar` (TTS/STT), `ai_sd-release.aar` (Stable Diffusion; currently the **debug** AAR copied under the release name because R8 mangled `StableDiffusionManager.Companion.getInstance`; swap once `:ai_sd` consumer-rules keep `com.dark.ai_sd.StableDiffusionManager$Companion`).
+Prebuilt AARs in `libs/`: `gguf_lib-release.aar` (chat/VLM/embedding; built from `Ai-Systems-New` `:gguf_lib`, which compiles `llama.cpp-android` = upstream llama.cpp plus `engine/`; its CMake links `libunwind.a` ahead of `libpdfium.so`, and without that every exception inside llama.cpp, including an ordinary load failure, kills `:inference`), `ai_sherpa-release.aar` (TTS/STT), `ai_sd-release.aar` (Stable Diffusion; currently the **debug** AAR copied under the release name because R8 mangled `StableDiffusionManager.Companion.getInstance`; swap once `:ai_sd` consumer-rules keep `com.dark.ai_sd.StableDiffusionManager$Companion`).
 
 ---
 
@@ -31,7 +31,7 @@ Prebuilt AARs in `libs/`: `gguf_lib-release.aar` (chat/VLM/embedding), `ai_sherp
 - Verify: `./gradlew :app:compileDebugKotlin`. Install: `./gradlew :app:installDebug`. Never `assemble + adb install`.
 - Release is built from Android Studio, signed via `local.properties` keys `TN_KEYSTORE_PATH / TN_KEYSTORE_PASSWORD / TN_KEY_ALIAS / TN_KEY_PASSWORD`; missing keys fall back to unsigned.
 - Native: `./gradlew :hxs_encryptor:externalNativeBuildDebug`. clangd `'openssl/mem.h' not found` is a false positive; build-green is truth.
-- Instrumented tests: `./gradlew :app:connectedDebugAndroidTest`. Tests that mutate native global state call `PolicyEngine.resetForTesting()` in `@Before` and `BootIntegrity.setRelaxedForTesting(true)` before any `hardFail` path, otherwise the process `_exit(1)`s.
+- Instrumented tests: `./gradlew :app:connectedDebugAndroidTest`. `GgufBackendDeviceTest` drives the AAR's JNI directly and skips any test whose model is not in `<cacheDir>/tn-smoke/`; run it after every AAR refresh. Tests that mutate native global state call `PolicyEngine.resetForTesting()` in `@Before` and `BootIntegrity.setRelaxedForTesting(true)` before any `hardFail` path, otherwise the process `_exit(1)`s.
 
 ---
 
