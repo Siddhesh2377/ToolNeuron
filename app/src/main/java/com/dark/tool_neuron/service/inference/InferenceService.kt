@@ -353,12 +353,13 @@ class InferenceService : Service() {
                     val modelSize = File(modelPath).length()
                     val memAvail = readMemAvailableBytes()
                     Log.i(TAG, "loadModel path=$modelPath sizeMb=${modelSize / (1024 * 1024)} memAvailMb=${memAvail / (1024 * 1024)}")
-                    if (memAvail in 1 until (modelSize * 6 / 5)) {
-                        val msg = "Not enough free memory: model needs ~${modelSize / (1024 * 1024)} MB, " +
-                            "device has ~${memAvail / (1024 * 1024)} MB free. Close other apps or pick a smaller quant."
+                    ModelMemoryCheck.blockReason(modelSize, readMemTotalBytes())?.let { msg ->
                         captureKt("loadModel", "path=$modelPath", "InsufficientRam", msg)
                         safeCallback(callback) { it.onError(msg) }
                         return@launch
+                    }
+                    if (ModelMemoryCheck.isTight(modelSize, memAvail)) {
+                        Log.w(TAG, "loadModel: free memory is below 1.2x the model size, loading anyway")
                     }
 
                     if (engine.isLoaded) engine.unload()
