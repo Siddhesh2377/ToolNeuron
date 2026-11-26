@@ -114,6 +114,7 @@ fun TNavigation(
                 actionWindowExpanded = actionWindowExpanded,
                 onActionWindowDismiss = onActionWindowDismiss,
                 onOpenModelManager = { navController.navigate(NavScreens.ModelManager.route) },
+                onNavigateToStore = { navController.navigate(NavScreens.ModelStore.route) },
                 viewModel = homeViewModel,
             )
         }

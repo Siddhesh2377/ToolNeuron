@@ -33,6 +33,7 @@ fun HomeScreen(
     actionWindowExpanded: Boolean,
     onActionWindowDismiss: () -> Unit,
     onOpenModelManager: () -> Unit = {},
+    onNavigateToStore: () -> Unit = {},
     viewModel: HomeViewModel = hiltViewModel(),
 ) {
     val lastCrash by InferenceClient.lastCrashInfo.collectAsStateWithLifecycle()
@@ -126,6 +127,10 @@ fun HomeScreen(
             lastMemoryMetrics = lastMemoryMetrics,
             onLoadModel = { viewModel.loadModel(it) },
             onUnloadModel = { viewModel.unloadModel() },
+            onStoreClick = {
+                onActionWindowDismiss()
+                onNavigateToStore()
+            },
             onAddAttachment = { showPickerDialog = true },
             documents = chatDocuments,
             onRemoveDocument = { viewModel.removeDocument(it) },

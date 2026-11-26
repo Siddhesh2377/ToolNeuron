@@ -151,7 +151,7 @@ fun ActionWindowOverlay(
     lastMemoryMetrics: MemoryMetrics?,
     onLoadModel: (ModelInfo) -> Unit,
     onUnloadModel: (ModelInfo) -> Unit,
-    onStoreClick: () -> Unit = {},
+    onStoreClick: () -> Unit,
     onAddAttachment: () -> Unit = {},
     documents: List<ChatDocument> = emptyList(),
     onRemoveDocument: (String) -> Unit = {},

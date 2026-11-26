@@ -102,14 +102,8 @@ internal fun InstalledModelsTab(
     }
 
     if (models.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
-            ) {
-                Icon(TnIcons.Database, null, Modifier.size(64.dp), MaterialTheme.colorScheme.onSurfaceVariant)
-                Text("No installed models", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        InstalledModelsEmptyState {
+            filePicker.launch(arrayOf("application/octet-stream", "*/*"))
         }
     } else {
         LazyColumn(
@@ -171,6 +165,22 @@ internal fun InstalledModelsTab(
             },
             onDismiss = { pendingImport = null },
         )
+    }
+}
+
+@Composable
+internal fun InstalledModelsEmptyState(onImport: () -> Unit) {
+    val dimens = LocalDimens.current
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.padding(horizontal = dimens.spacingMd),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(dimens.spacingLg)
+        ) {
+            Icon(TnIcons.Database, null, Modifier.size(64.dp), MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("No installed models", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            ImportLocalCard(onImport)
+        }
     }
 }
 
