@@ -14,6 +14,7 @@ import com.dark.tool_neuron.model.ModelCategory
 import com.dark.tool_neuron.model.ModelConfig
 import com.dark.tool_neuron.model.ModelInfo
 import com.dark.tool_neuron.model.SizeCategory
+import com.dark.tool_neuron.model.sortedBySize
 import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.repo.DownloadCoordinator
@@ -251,7 +252,7 @@ class ModelStoreViewModel @Inject constructor(
         }
 
         _selectedSizeCategory.value?.let { size ->
-            filtered = filtered.filter { SizeCategory.fromSize(it.approximateSize) == size }
+            filtered = filtered.filter { SizeCategory.fromBytes(it.effectiveSizeBytes) == size }
         }
 
         if (_selectedTags.value.isNotEmpty()) {
@@ -282,7 +283,7 @@ class ModelStoreViewModel @Inject constructor(
 
         filtered = when (_sortBy.value) {
             SortOption.NAME -> filtered.sortedBy { it.name.lowercase() }
-            SortOption.SIZE -> filtered.sortedBy { SizeCategory.parseSizeToBytes(it.approximateSize) }
+            SortOption.SIZE -> filtered.sortedBySize()
             SortOption.RECENTLY_ADDED -> filtered.reversed()
         }
 

@@ -26,7 +26,13 @@ data class HuggingFaceModel(
     val defaultPrompt: String = "",
     val defaultNegativePrompt: String = "",
     val generationSize: Int = 512,
-)
+) {
+    val effectiveSizeBytes: Long
+        get() = if (sizeBytes > 0) sizeBytes else SizeCategory.parseSizeToBytes(approximateSize)
+}
+
+fun List<HuggingFaceModel>.sortedBySize(): List<HuggingFaceModel> =
+    sortedWith(compareBy({ it.effectiveSizeBytes <= 0 }, { it.effectiveSizeBytes }))
 
 data class HFRepository(
     val id: String,
@@ -52,8 +58,9 @@ enum class SizeCategory(val displayName: String) {
     LARGE("Large (>5GB)");
 
     companion object {
-        fun fromSize(sizeStr: String): SizeCategory? {
-            val bytes = parseSizeToBytes(sizeStr)
+        fun fromSize(sizeStr: String): SizeCategory? = fromBytes(parseSizeToBytes(sizeStr))
+
+        fun fromBytes(bytes: Long): SizeCategory? {
             return when {
                 bytes <= 0 -> null
                 bytes < 1024L * 1024 * 1024 -> SMALL
@@ -63,7 +70,8 @@ enum class SizeCategory(val displayName: String) {
         }
 
         fun parseSizeToBytes(sizeStr: String): Long {
-            val cleaned = sizeStr.trim().uppercase()
+            // formatBytes is locale-formatted, so "1,25 GB" must parse like "1.25 GB".
+            val cleaned = sizeStr.trim().uppercase().replace(',', '.')
             val number = cleaned.filter { it.isDigit() || it == '.' }.toDoubleOrNull() ?: return 0
             return when {
                 cleaned.endsWith("GB") -> (number * 1024 * 1024 * 1024).toLong()
