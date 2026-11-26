@@ -6,7 +6,6 @@ import android.os.Build
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyInfo
 import android.security.keystore.KeyProperties
-import android.security.keystore.StrongBoxUnavailableException
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
@@ -14,6 +13,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.ProviderException
 import java.security.SecureRandom
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
@@ -206,7 +206,7 @@ class AppKeyStore @Inject constructor(
         return try {
             kg.init(buildKeySpec(preferStrongBox = true))
             kg.generateKey()
-        } catch (_: StrongBoxUnavailableException) {
+        } catch (_: ProviderException) {
             kg.init(buildKeySpec(preferStrongBox = false))
             kg.generateKey()
         }

@@ -62,7 +62,7 @@ Prebuilt AARs in `libs/`: `gguf_lib-release.aar` (chat/VLM/embedding), `ai_sherp
 ### Keystore DEK
 
 - `AppKeyStore` reads/writes `filesDir/app_bootstrap/k.bin`: `[magic "TNDK"(4)][version(1)][iv_len(2)][iv][ct_len(2)][ct]`, byte-XOR masked with a hardcoded 32-byte key. The XOR is obfuscation; protection is the Keystore-wrapped `ct`.
-- Alias `toolneuron_vault_dek_v1`: AES-256-GCM, StrongBox with TEE fallback. NOT `setUserAuthenticationRequired(true)` (chicken-and-egg with setup).
+- Alias `toolneuron_vault_dek_v1`: AES-256-GCM, StrongBox with TEE fallback (the fallback catches any `ProviderException` from the StrongBox attempt, since some vendor keystores don't throw `StrongBoxUnavailableException`). NOT `setUserAuthenticationRequired(true)` (chicken-and-egg with setup).
 - First launch generates a 32-byte DEK; every launch reads, unmasks, unwraps. `backing()` classifies STRONGBOX / TEE / SOFTWARE_FALLBACK / UNKNOWN.
 - `migrateLegacyIfNeeded()` runs in `AppKeyStore.init`. It fires when `app_bootstrap/` has stale files OR `app_prefs/` has files but `k.bin` is missing (post-`hardWipe` state); it wipes bootstrap + prefs + alias and re-bootstraps. Don't tighten it to bootstrap-only.
 - `wipe()` is scorched-earth: null the cached DEK reference (**never zero it in place** — HXS holds the same array via `NewGlobalRef`), delete everything under `filesDir` and `cacheDir`, delete the alias.
