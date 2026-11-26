@@ -10,6 +10,7 @@ import com.dark.tn_security.TnStage
 import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.model.ChatDocument
 import com.dark.tool_neuron.model.ModelInfo
+import com.dark.tool_neuron.model.enums.PathType
 import com.dark.tool_neuron.model.enums.ProviderType
 import com.dark.tool_neuron.service.inference.InferenceClient
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -26,6 +27,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "RagManager"
+private const val EMBEDDING_NOT_LOADED =
+    "No embedding model could be loaded. Install one from Model Store, or import a GGUF as Embedding."
+
+internal fun orderEmbeddingCandidates(models: List<ModelInfo>, preferredId: String?): List<ModelInfo> {
+    val installed = models.filter { it.providerType == ProviderType.EMBEDDING }
+    return installed.filter { it.id == preferredId } + installed.filter { it.id != preferredId }
+}
 
 @Singleton
 class RagManager @Inject constructor(
@@ -106,30 +114,33 @@ class RagManager @Inject constructor(
             return@withLock false
         }
 
-        val model = pickEmbeddingModel() ?: run {
+        val candidates = orderEmbeddingCandidates(modelRepo.models.value, ragPrefs.defaultEmbeddingModelId.value)
+        if (candidates.isEmpty()) {
             Log.w(TAG, "No embedding model installed")
             TnSecurity.error(
                 code = TnCode.MODEL_LOAD_FAIL,
                 stage = TnStage.INIT,
                 module = TnModule.TN_APP,
                 message = "No embedding model installed; RAG cannot start",
-                suggestion = "Install EmbeddingGemma (or any embedding GGUF) from Model Store",
+                suggestion = "Install an embedding GGUF from Model Store, or import one as Embedding",
             )
             return@withLock false
         }
 
-        val loaded = InferenceClient.ragLoadEmbeddingModel(model.path)
-        if (!loaded) {
-            Log.e(TAG, "Failed to load embedding model at ${model.path}")
-            TnSecurity.error(
-                code = TnCode.MODEL_LOAD_FAIL,
-                stage = TnStage.LOAD,
-                module = TnModule.TN_APP,
-                message = "Failed to load embedding model at ${model.path}",
-                suggestion = "Verify the file exists, isn't truncated, and matches the dims expected by the RAG index",
-            )
-            return@withLock false
-        }
+        val model = candidates.firstOrNull { candidate ->
+            val loaded = loadEmbeddingModel(candidate)
+            if (!loaded) {
+                Log.e(TAG, "Failed to load embedding model ${candidate.name}")
+                TnSecurity.error(
+                    code = TnCode.MODEL_LOAD_FAIL,
+                    stage = TnStage.LOAD,
+                    module = TnModule.TN_APP,
+                    message = "Failed to load embedding model ${candidate.name} at ${candidate.path}",
+                    suggestion = "Verify the file exists, isn't truncated, and is an embedding GGUF",
+                )
+            }
+            loaded
+        } ?: return@withLock false
 
         _activeEmbeddingName.value = model.name
         _isReady.value = true
@@ -193,12 +204,12 @@ class RagManager @Inject constructor(
         runCatching { snapshotFile.delete() }
     }
 
-    private fun pickEmbeddingModel(): ModelInfo? {
-        val installed = modelRepo.models.value.filter { it.providerType == ProviderType.EMBEDDING }
-        if (installed.isEmpty()) return null
-        val preferredId = ragPrefs.defaultEmbeddingModelId.value
-        return installed.firstOrNull { it.id == preferredId } ?: installed.first()
-    }
+    private suspend fun loadEmbeddingModel(model: ModelInfo): Boolean =
+        if (model.pathType == PathType.CONTENT_URI) {
+            InferenceClient.ragLoadEmbeddingModelFromUri(context, Uri.parse(model.path))
+        } else {
+            InferenceClient.ragLoadEmbeddingModel(model.path)
+        }
 
     suspend fun hydrateChat(chatId: String): List<ChatDocument> = withContext(Dispatchers.IO) {
         val records = documentRepo.getDocumentsForChat(chatId)
@@ -234,7 +245,7 @@ class RagManager @Inject constructor(
     ): Result<ChatDocument> = withContext(Dispatchers.IO) {
         if (!ensureReady()) {
             return@withContext Result.failure(
-                IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store.")
+                IllegalStateException(EMBEDDING_NOT_LOADED)
             )
         }
 
@@ -305,7 +316,7 @@ class RagManager @Inject constructor(
         }
         if (!ensureReady()) {
             return@withContext Result.failure(
-                IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store.")
+                IllegalStateException(EMBEDDING_NOT_LOADED)
             )
         }
         if (!sourceVault.exists(source.sourceId)) {
@@ -410,7 +421,7 @@ class RagManager @Inject constructor(
             return@withLock Result.failure(IllegalStateException("RAPTOR currently supports text-format documents only"))
         }
         if (!ensureReady()) {
-            return@withLock Result.failure(IllegalStateException("Embedding model not loaded. Install EmbeddingGemma from Model Store."))
+            return@withLock Result.failure(IllegalStateException(EMBEDDING_NOT_LOADED))
         }
 
         _raptorBuilding.value = _raptorBuilding.value + docId

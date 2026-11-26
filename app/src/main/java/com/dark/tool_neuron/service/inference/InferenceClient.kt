@@ -784,6 +784,13 @@ object InferenceClient {
         catch (e: Throwable) { Log.e(TAG, "ragLoadEmbeddingModel failed", e); false }
     }
 
+    suspend fun ragLoadEmbeddingModelFromUri(context: Context, uri: Uri): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val pfd = context.contentResolver.openFileDescriptor(uri, "r") ?: return@withContext false
+            pfd.use { ensureBound().ragLoadEmbeddingModelFromFd(it) }
+        } catch (e: Throwable) { Log.e(TAG, "ragLoadEmbeddingModelFromUri failed", e); false }
+    }
+
     suspend fun ragIsLoaded(): Boolean = withContext(Dispatchers.IO) {
         try { ensureBound().ragIsLoaded() } catch (_: Throwable) { false }
     }

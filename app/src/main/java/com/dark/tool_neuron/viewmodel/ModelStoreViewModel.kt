@@ -33,6 +33,7 @@ import com.dark.tool_neuron.data.AppPreferences
 import com.dark.tool_neuron.service.inference.InferenceClient
 import com.dark.tool_neuron.util.extractParameterCount
 import com.dark.tool_neuron.util.extractQuantization
+import com.dark.tool_neuron.util.looksLikeEmbeddingModel
 import com.dark.tool_neuron.voice.VoiceArchive
 import com.dark.tool_neuron.voice.VoiceKind
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -690,7 +691,7 @@ class ModelStoreViewModel @Inject constructor(
             "tts" -> ProviderType.TTS
             "stt" -> ProviderType.STT
             "embedding" -> ProviderType.EMBEDDING
-            else -> ProviderType.GGUF
+            else -> if (looksLikeEmbeddingModel(model.repoPath, model.fileName)) ProviderType.EMBEDDING else ProviderType.GGUF
         }
         modelRepo.insert(ModelInfo(
             id = model.id, name = model.name,

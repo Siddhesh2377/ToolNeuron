@@ -6,6 +6,7 @@ import com.dark.tool_neuron.model.HFRepository
 import com.dark.tool_neuron.model.HuggingFaceModel
 import com.dark.tool_neuron.util.VlmPaths
 import com.dark.tool_neuron.util.extractQuantization
+import com.dark.tool_neuron.util.looksLikeEmbeddingModel
 import com.dark.download_manager.formatBytes
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -235,6 +236,7 @@ class ModelCatalog @Inject constructor(
             }
             val mmprojFile = allFiles.firstOrNull { VlmPaths.isMmprojFileName(it.first) }
             val isVlmRepo = mmprojFile != null
+            val pipelineTag = meta.optString("pipeline_tag", "")
 
             val models = mutableListOf<HuggingFaceModel>()
             for ((path, size) in allFiles) {
@@ -242,6 +244,7 @@ class ModelCatalog @Inject constructor(
 
                 val isMmproj = VlmPaths.isMmprojFileName(path)
                 val quant = if (isMmproj) "mmproj" else (extractQuantization(path) ?: "")
+                val isEmbedding = !isVlmRepo && looksLikeEmbeddingModel(repo.repoPath, path, pipelineTag)
 
                 models.add(HuggingFaceModel(
                     id = "${repo.id}__$path",
@@ -259,8 +262,9 @@ class ModelCatalog @Inject constructor(
                         if (downloads > 1000) add("${downloads / 1000}k+ downloads")
                         if (isVlmRepo) add("VLM")
                         if (isMmproj) add("mmproj")
+                        if (isEmbedding) add("Embedding")
                     },
-                    modelType = "gguf",
+                    modelType = if (isEmbedding) "embedding" else "gguf",
                     isVlm = isVlmRepo,
                     isMmproj = isMmproj,
                     mmprojFileName = mmprojFile?.first.orEmpty(),
